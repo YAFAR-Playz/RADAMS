@@ -55,7 +55,7 @@ export async function listMyOfferings(): Promise<OfferingOption[]> {
       .filter((x): x is OfferingOption => !!x);
   }
 
-  if (profile.role === "admin" && profile.org) {
+  if ((profile.role === "admin" || profile.role === "registration") && profile.org) {
     const { data } = await supabase
       .from("course_offerings")
       .select("id, session, unit, courses(name)")

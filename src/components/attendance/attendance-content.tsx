@@ -29,7 +29,8 @@ function statusMeta(status: AttendanceStatus) {
 }
 
 export function AttendanceContent({ role }: { role: Role }) {
-  const canEdit = role === "head";
+  const canEdit = role === "registration";
+  const useCourseDropdown = role === "registration";
 
   const [offerings, setOfferings] = useState<OfferingOption[] | null>(null);
   const [offeringId, setOfferingId] = useState<string | null>(null);
@@ -201,10 +202,14 @@ export function AttendanceContent({ role }: { role: Role }) {
           <div>
             <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Attendance</div>
             <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">
-              {canEdit ? "Take attendance" : "My students' attendance"}
+              {canEdit ? "Take attendance" : role === "assistant" ? "My students' attendance" : "Attendance records"}
             </h1>
             <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">
-              {canEdit ? "Create a session for a course and mark each student." : "Attendance for your assigned students, per session."}
+              {canEdit
+                ? "Create a session for a course and mark each student."
+                : role === "assistant"
+                  ? "Attendance for your assigned students, per session."
+                  : "Attendance recorded by the Registration team, per session."}
             </p>
           </div>
           {canEdit && (
@@ -227,24 +232,41 @@ export function AttendanceContent({ role }: { role: Role }) {
               <SkeletonRow className="h-[36px] w-[130px]" />
             </>
           ) : offerings && offerings.length ? (
-            offerings.map((o) => {
-              const active = o.id === offeringId;
-              return (
-                <button
-                  key={o.id}
-                  onClick={() => setOfferingId(o.id)}
-                  className="flex flex-none items-center gap-[7px] rounded-full border px-[13px] py-2 text-[13px] font-semibold"
-                  style={
-                    active
-                      ? { borderColor: "var(--brand)", background: "var(--brand)", color: "var(--brandfg)" }
-                      : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
-                  }
+            useCourseDropdown ? (
+              <div className="flex h-[38px] min-w-[240px] max-w-[320px] items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3">
+                <Icon name="book" size={15} className="text-[var(--subtle)]" />
+                <select
+                  value={offeringId ?? ""}
+                  onChange={(e) => setOfferingId(e.target.value)}
+                  className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[13px] font-semibold text-[var(--text)] outline-none"
                 >
-                  <span className="h-[7px] w-[7px] rounded-full" style={{ background: active ? "var(--brandfg)" : "var(--subtle)" }} />
-                  {o.label}
-                </button>
-              );
-            })
+                  {offerings.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              offerings.map((o) => {
+                const active = o.id === offeringId;
+                return (
+                  <button
+                    key={o.id}
+                    onClick={() => setOfferingId(o.id)}
+                    className="flex flex-none items-center gap-[7px] rounded-full border px-[13px] py-2 text-[13px] font-semibold"
+                    style={
+                      active
+                        ? { borderColor: "var(--brand)", background: "var(--brand)", color: "var(--brandfg)" }
+                        : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
+                    }
+                  >
+                    <span className="h-[7px] w-[7px] rounded-full" style={{ background: active ? "var(--brandfg)" : "var(--subtle)" }} />
+                    {o.label}
+                  </button>
+                );
+              })
+            )
           ) : (
             <span className="text-[13px] text-[var(--subtle)]">No courses yet.</span>
           )}

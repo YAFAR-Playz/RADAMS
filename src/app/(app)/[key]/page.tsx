@@ -37,7 +37,7 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
     return <StudentsContent role={profile.role} />;
   }
 
-  if (key === "attendance" && (profile.role === "head" || profile.role === "assistant")) {
+  if (key === "attendance" && (profile.role === "head" || profile.role === "assistant" || profile.role === "registration")) {
     return <AttendanceContent role={profile.role} />;
   }
 
