@@ -55,6 +55,19 @@ export async function listMyOfferings(): Promise<OfferingOption[]> {
       .filter((x): x is OfferingOption => !!x);
   }
 
+  if (profile.role === "admin" && profile.org) {
+    const { data } = await supabase
+      .from("course_offerings")
+      .select("id, session, unit, courses(name)")
+      .eq("org_id", profile.org.id);
+    return (data ?? [])
+      .map((o) => {
+        const course = Array.isArray(o.courses) ? o.courses[0] : o.courses;
+        return { id: o.id, label: [course?.name, o.session, o.unit].filter(Boolean).join(" · ") };
+      })
+      .filter((x): x is OfferingOption => !!x);
+  }
+
   return [];
 }
 
