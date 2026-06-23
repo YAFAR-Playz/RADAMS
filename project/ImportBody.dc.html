@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:flex;flex-direction:column;gap:16px">
+
+  <!-- HEADER + STEPPER -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:17px 18px">
+    <div style="font-size:12px;color:var(--subtle);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Registration</div>
+    <h1 style="margin:4px 0 0;font-size:20px;font-weight:600;color:var(--text);letter-spacing:-.01em">Bulk import students</h1>
+    <p style="margin:3px 0 0;font-size:13px;color:var(--muted)">Upload a CSV or Excel file, map its columns, then review before importing.</p>
+    <div style="display:flex;align-items:center;gap:0;margin-top:18px;flex-wrap:wrap;row-gap:10px">
+      <sc-for list="{{ steps }}" as="s" hint-placeholder-count="4"><div style="display:flex;align-items:center;flex:none">
+        <div style="display:flex;align-items:center;gap:9px;padding:0 4px">
+          <div style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700;background:{{ s.bg }};color:{{ s.fg }};border:1.5px solid {{ s.bd }}"><sc-if value="{{ s.done }}" hint-placeholder-val="{{ false }}"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"></use></svg></sc-if><sc-if value="{{ s.showNum }}" hint-placeholder-val="{{ true }}">{{ s.num }}</sc-if></div>
+          <span style="font-size:13px;font-weight:{{ s.weight }};color:{{ s.labelColor }};white-space:nowrap">{{ s.label }}</span>
+        </div>
+        <sc-if value="{{ s.connector }}" hint-placeholder-val="{{ true }}"><div style="width:34px;height:2px;background:var(--border);margin:0 4px"></div></sc-if>
+      </div></sc-for>
+    </div>
+  </div>
+
+  <!-- STEP 0: UPLOAD -->
+  <sc-if value="{{ isUpload }}" hint-placeholder-val="{{ true }}">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:20px">
+      <h3 style="margin:0 0 4px;font-size:15px;font-weight:600;color:var(--text)">Course offering</h3>
+      <p style="margin:0 0 14px;font-size:13px;color:var(--muted)">Students will be enrolled into this course + session + unit combination.</p>
+      <div style="display:grid;gap:12px;grid-template-columns:{{ selectCols }};margin-bottom:22px">
+        <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Course</label><div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rad-sm);padding:0 12px;height:42px"><select style="appearance:none;border:none;background:none;font-family:inherit;font-size:13.5px;font-weight:500;color:var(--text);cursor:pointer;width:100%;height:100%;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 fill=%22none%22 stroke=%22%2397a1b0%22 stroke-width=%222%22><path d=%22m3 4.5 3 3 3-3%22/></svg>');background-repeat:no-repeat;background-position:right center"><option>Physics — IGCSE</option><option>Chemistry — IGCSE</option><option>Mathematics — IGCSE</option></select></div></div>
+        <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Session</label><div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rad-sm);padding:0 12px;height:42px"><select style="appearance:none;border:none;background:none;font-family:inherit;font-size:13.5px;font-weight:500;color:var(--text);cursor:pointer;width:100%;height:100%;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 fill=%22none%22 stroke=%22%2397a1b0%22 stroke-width=%222%22><path d=%22m3 4.5 3 3 3-3%22/></svg>');background-repeat:no-repeat;background-position:right center"><option>June 2026</option><option>November 2026</option></select></div></div>
+        <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Unit</label><div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rad-sm);padding:0 12px;height:42px"><select style="appearance:none;border:none;background:none;font-family:inherit;font-size:13.5px;font-weight:500;color:var(--text);cursor:pointer;width:100%;height:100%;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 fill=%22none%22 stroke=%22%2397a1b0%22 stroke-width=%222%22><path d=%22m3 4.5 3 3 3-3%22/></svg>');background-repeat:no-repeat;background-position:right center"><option>Unit 1 — Mechanics</option><option>Unit 2 — Electricity</option><option>Whole course</option></select></div></div>
+      </div>
+      <h3 style="margin:0 0 12px;font-size:15px;font-weight:600;color:var(--text)">Upload file</h3>
+      <sc-if value="{{ noFile }}" hint-placeholder-val="{{ true }}">
+        <div style="border:2px dashed var(--border);border-radius:var(--rad);background:var(--surface2);padding:34px 20px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px">
+          <div style="width:50px;height:50px;border-radius:14px;background:var(--brands);color:var(--brand);display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-upload"></use></svg></div>
+          <div><div style="font-size:14px;font-weight:600;color:var(--text)">Drag &amp; drop your file here</div><div style="font-size:12.5px;color:var(--muted);margin-top:2px">CSV or Excel (.xlsx), up to 5,000 rows</div></div>
+          <button onClick="{{ onPick }}" style="margin-top:4px;display:flex;align-items:center;gap:7px;background:var(--brand);color:var(--brandfg);border:none;border-radius:var(--rad-sm);padding:9px 16px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer" style-hover="filter:brightness(.96)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-file-up"></use></svg>Browse files</button>
+        </div>
+      </sc-if>
+      <sc-if value="{{ hasFile }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;align-items:center;gap:12px;border:1px solid var(--border);border-radius:var(--rad);background:var(--surface);padding:14px 16px">
+          <div style="width:42px;height:42px;border-radius:10px;background:var(--oks);color:var(--ok);display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-file-up"></use></svg></div>
+          <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600;color:var(--text)">{{ fileName }}</div><div style="font-size:12px;color:var(--muted)">120 rows detected · 18 KB</div></div>
+          <button onClick="{{ onRemove }}" style="width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none" style-hover="background:var(--surface2)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-x"></use></svg></button>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <!-- STEP 1: MAP COLUMNS -->
+  <sc-if value="{{ isMap }}" hint-placeholder-val="{{ false }}">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden">
+      <div style="padding:16px 18px;border-bottom:1px solid var(--border2)"><h3 style="margin:0;font-size:15px;font-weight:600;color:var(--text)">Map columns</h3><p style="margin:3px 0 0;font-size:13px;color:var(--muted)">Match each column from your file to a RadAMS field.</p></div>
+      <div style="overflow-x:auto"><div style="min-width:560px">
+        <div style="display:flex;align-items:center;gap:14px;padding:10px 18px;border-bottom:1px solid var(--border2);font-size:11px;font-weight:700;color:var(--subtle);text-transform:uppercase;letter-spacing:.04em"><span style="width:170px;flex:none">File column</span><span style="width:160px;flex:none">Sample</span><span style="flex:1">RadAMS field</span></div>
+        <sc-for list="{{ columns }}" as="c" hint-placeholder-count="5"><div style="display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1px solid var(--border2)">
+          <span style="width:170px;flex:none;font-size:13.5px;font-weight:600;color:var(--text);font-family:'Geist Mono',monospace">{{ c.src }}</span>
+          <span style="width:160px;flex:none;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.sample }}</span>
+          <div style="flex:1;display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0 11px;height:38px;max-width:240px"><select value="{{ c.mapped }}" onChange="{{ onMap }}" data-src="{{ c.src }}" style="appearance:none;border:none;background:none;font-family:inherit;font-size:13px;font-weight:500;color:var(--text);cursor:pointer;width:100%;height:100%;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 fill=%22none%22 stroke=%22%2397a1b0%22 stroke-width=%222%22><path d=%22m3 4.5 3 3 3-3%22/></svg>');background-repeat:no-repeat;background-position:right center"><sc-for list="{{ c.fieldOpts }}" as="f" hint-placeholder-count="6"><option value="{{ f.label }}">{{ f.label }}</option></sc-for></select></div>
+        </div></sc-for>
+      </div></div>
+    </div>
+  </sc-if>
+
+  <!-- STEP 2: PREVIEW -->
+  <sc-if value="{{ isPreview }}" hint-placeholder-val="{{ false }}">
+    <div style="display:grid;gap:12px;grid-template-columns:{{ summaryCols }}">
+      <sc-for list="{{ summary }}" as="s" hint-placeholder-count="3"><div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:14px 16px;display:flex;align-items:center;gap:12px"><div style="width:38px;height:38px;border-radius:10px;background:{{ s.bg }};color:{{ s.fg }};display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ s.icon }}"></use></svg></div><div><div style="font-size:21px;font-weight:700;color:var(--text);line-height:1">{{ s.value }}</div><div style="font-size:12px;color:var(--muted);margin-top:2px">{{ s.label }}</div></div></div></sc-for>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border2)"><h3 style="margin:0;font-size:15px;font-weight:600;color:var(--text)">Preview &amp; validation</h3><button onClick="{{ onToggleErrors }}" style="display:flex;align-items:center;gap:7px;background:{{ errBtnBg }};color:{{ errBtnFg }};border:1px solid {{ errBtnBd }};border-radius:8px;padding:7px 12px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-alert"></use></svg>{{ errBtnText }}</button></div>
+      <div style="overflow-x:auto"><div style="min-width:620px">
+        <div style="display:flex;align-items:center;gap:14px;padding:10px 18px;border-bottom:1px solid var(--border2);font-size:11px;font-weight:700;color:var(--subtle);text-transform:uppercase;letter-spacing:.04em"><span style="width:30px;flex:none">#</span><span style="width:160px;flex:none">Student</span><span style="width:140px;flex:none">Phone</span><span style="width:110px;flex:none">Student ID</span><span style="flex:1">Status</span></div>
+        <sc-for list="{{ rows }}" as="r" hint-placeholder-count="6"><div style="display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:1px solid var(--border2);background:{{ r.rowBg }}">
+          <span style="width:30px;flex:none;font-size:12.5px;color:var(--subtle);font-family:'Geist Mono',monospace">{{ r.n }}</span>
+          <span style="width:160px;flex:none;font-size:13.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.name }}</span>
+          <span style="width:140px;flex:none;font-size:13px;color:var(--muted);font-family:'Geist Mono',monospace">{{ r.phone }}</span>
+          <span style="width:110px;flex:none;font-size:13px;color:var(--muted);font-family:'Geist Mono',monospace">{{ r.ref }}</span>
+          <span style="flex:1;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:{{ r.statusColor }}"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ r.statusIcon }}"></use></svg>{{ r.statusText }}</span>
+        </div></sc-for>
+      </div></div>
+    </div>
+  </sc-if>
+
+  <!-- STEP 3: DONE -->
+  <sc-if value="{{ isDone }}" hint-placeholder-val="{{ false }}">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:34px 24px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px">
+      <div style="width:62px;height:62px;border-radius:50%;background:var(--oks);color:var(--ok);display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"></use></svg></div>
+      <div><h2 style="margin:0 0 6px;font-size:21px;font-weight:600;color:var(--text);letter-spacing:-.01em">116 students imported</h2><p style="margin:0;font-size:14px;color:var(--muted);max-width:380px;line-height:1.5">Enrolled into <span style="color:var(--text);font-weight:600">Physics · June 2026 · Unit 1</span>. 4 rows were skipped due to errors.</p></div>
+      <div style="display:flex;gap:10px;margin-top:4px;flex-wrap:wrap;justify-content:center">
+        <button style="display:flex;align-items:center;gap:7px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--rad-sm);padding:10px 15px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer" style-hover="background:var(--surface2)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-alert"></use></svg>Download error report (4)</button>
+        <button onClick="{{ onRestart }}" style="display:flex;align-items:center;gap:7px;background:var(--brand);color:var(--brandfg);border:none;border-radius:var(--rad-sm);padding:10px 15px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer" style-hover="filter:brightness(.96)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-upload"></use></svg>Import another file</button>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- NAV BUTTONS -->
+  <sc-if value="{{ showNav }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <button onClick="{{ onBack }}" disabled="{{ backDisabled }}" style="display:flex;align-items:center;gap:7px;background:var(--surface);color:{{ backColor }};border:1px solid var(--border);border-radius:var(--rad-sm);padding:10px 16px;font-family:inherit;font-size:13.5px;font-weight:600;cursor:{{ backCursor }}" style-hover="background:var(--surface2)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(180deg)"><use href="#i-arrow-r"></use></svg>Back</button>
+      <button onClick="{{ onNext }}" disabled="{{ nextDisabled }}" style="display:flex;align-items:center;gap:7px;background:{{ nextBg }};color:var(--brandfg);border:none;border-radius:var(--rad-sm);padding:10px 18px;font-family:inherit;font-size:13.5px;font-weight:600;cursor:{{ nextCursor }}" style-hover="filter:brightness(.96)">{{ nextText }}<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-arrow-r"></use></svg></button>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:980,&quot;height&quot;:720},&quot;compact&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;role&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state={ step:0, fileName:'', onlyErrors:false, mapping:{} };
+  onPick=()=>this.setState({fileName:'students_june2026.csv'});
+  onMap=(e)=>{ const src=e.currentTarget.dataset.src, v=e.target.value; this.setState(s=>({mapping:{...s.mapping,[src]:v}})); };
+  onRemove=()=>this.setState({fileName:''});
+  onToggleErrors=()=>this.setState(s=>({onlyErrors:!s.onlyErrors}));
+  onNext=()=>this.setState(s=>({step:Math.min(3,s.step+1)}));
+  onBack=()=>this.setState(s=>({step:Math.max(0,s.step-1)}));
+  onRestart=()=>this.setState({step:0,fileName:'',onlyErrors:false});
+
+  renderVals(){
+    const compact=!!this.props.compact;
+    const step=this.state.step;
+    const labels=['Upload','Map columns','Preview','Done'];
+    const steps=labels.map((label,i)=>{ const done=i<step, current=i===step; return {label,num:String(i+1),done,showNum:!done,
+      bg: done?'var(--brand)':(current?'var(--brands)':'var(--surface)'), fg: done?'var(--brandfg)':(current?'var(--brand)':'var(--subtle)'),
+      bd: (done||current)?'var(--brand)':'var(--border)', labelColor: current?'var(--text)':'var(--muted)', weight: current?600:500,
+      connector: i<labels.length-1 }; });
+
+    const columns=[
+      {src:'Full Name',sample:'Liam Carter',field:'name'},
+      {src:'Mobile',sample:'7700 900123',field:'phone'},
+      {src:'Email',sample:'liam@email.com',field:'email'},
+      {src:'Student Ref',sample:'CB-1042',field:'studentId'},
+      {src:'Guardian Phone',sample:'7700 900999',field:'guardianPhone'},
+    ];
+    const fields=['Student name','Phone','Email','Student ID','Guardian phone','— Ignore —'];
+    const fieldKey={name:'Student name',phone:'Phone',email:'Email',studentId:'Student ID',guardianPhone:'Guardian phone'};
+    const columnsVM=columns.map(c=>({src:c.src,sample:c.sample,mapped:this.state.mapping[c.src]||fieldKey[c.field],fieldOpts:fields.map(f=>({label:f}))}));
+
+    const rowsAll=[
+      {n:1,name:'Liam Carter',phone:'7700 900123',ref:'CB-1042',status:'valid'},
+      {n:2,name:'Mei Wong',phone:'7700 900145',ref:'CB-1043',status:'valid'},
+      {n:14,name:'Hannah Mills',phone:'—',ref:'CB-1055',status:'error',err:'Missing phone number'},
+      {n:15,name:'Raj Patel',phone:'7700 900210',ref:'CB-1056',status:'valid'},
+      {n:27,name:'Lucas Silva',phone:'7700 900233',ref:'CB-1031',status:'error',err:'Invalid session code'},
+      {n:31,name:'Amara Obi',phone:'7700 900250',ref:'CB-1043',status:'error',err:'Duplicate student ID'},
+      {n:32,name:'Sofia Rossi',phone:'7700 900261',ref:'CB-1071',status:'valid'},
+      {n:42,name:'Ethan Park',phone:'7700 900272',ref:'CB-1072',status:'error',err:'Unknown unit reference'},
+    ];
+    const rows=(this.state.onlyErrors?rowsAll.filter(r=>r.status==='error'):rowsAll).map(r=>{
+      const err=r.status==='error';
+      return {n:r.n,name:r.name,phone:r.phone,ref:r.ref,
+        rowBg: err?'var(--dangers)':'transparent',
+        statusColor: err?'var(--danger)':'var(--ok)', statusIcon: err?'alert':'check', statusText: err?r.err:'Valid'};
+    });
+    const summary=[
+      {value:'120',label:'Total rows',icon:'users',bg:'var(--brands)',fg:'var(--brand)'},
+      {value:'116',label:'Ready to import',icon:'check',bg:'var(--oks)',fg:'var(--ok)'},
+      {value:'4',label:'Rows with errors',icon:'alert',bg:'var(--dangers)',fg:'var(--danger)'},
+    ];
+
+    const hasFile=!!this.state.fileName;
+    const nextOk = step===0 ? hasFile : true;
+    const nextText = step===2 ? 'Import 116 students' : 'Continue';
+    return {
+      compact, steps, isUpload:step===0, isMap:step===1, isPreview:step===2, isDone:step===3,
+      selectCols: compact?'1fr':'1fr 1fr 1fr', summaryCols: compact?'1fr':'1fr 1fr 1fr',
+      noFile:!hasFile, hasFile, fileName:this.state.fileName, onPick:this.onPick, onRemove:this.onRemove,
+      columns:columnsVM, onMap:this.onMap,
+      rows, summary,
+      onlyErrors:this.state.onlyErrors, onToggleErrors:this.onToggleErrors,
+      errBtnText: this.state.onlyErrors?'Show all rows':'Show errors only',
+      errBtnBg: this.state.onlyErrors?'var(--dangers)':'var(--surface)', errBtnFg: this.state.onlyErrors?'var(--danger)':'var(--muted)', errBtnBd: this.state.onlyErrors?'var(--danger)':'var(--border)',
+      showNav: step!==3,
+      onNext:this.onNext, onBack:this.onBack, onRestart:this.onRestart,
+      backDisabled: step===0, backColor: step===0?'var(--subtle)':'var(--text)', backCursor: step===0?'not-allowed':'pointer',
+      nextDisabled:!nextOk, nextBg: nextOk?'var(--brand)':'var(--subtle)', nextCursor: nextOk?'pointer':'not-allowed', nextText,
+    };
+  }
+}
+</script>
+</body>
+</html>

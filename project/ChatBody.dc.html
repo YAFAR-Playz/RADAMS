@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:flex;flex-direction:column;gap:0">
+  <div style="display:flex;height:{{ chatH }};background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden">
+
+    <!-- LIST PANE -->
+    <sc-if value="{{ showList }}" hint-placeholder-val="{{ true }}">
+      <div style="width:{{ listW }};flex:none;border-right:1px solid var(--border);display:flex;flex-direction:column;min-width:0">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border2)">
+          <h3 style="margin:0;font-size:16px;font-weight:700;color:var(--text);letter-spacing:-.01em">Messages</h3>
+          <button onClick="{{ onNewTeam }}" style="display:flex;align-items:center;gap:6px;background:var(--brand);color:var(--brandfg);border:none;border-radius:8px;padding:7px 11px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer" style-hover="filter:brightness(.96)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-plus"></use></svg>New team</button>
+        </div>
+        <div style="padding:10px 12px;border-bottom:1px solid var(--border2)"><div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0 11px;height:36px"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="var(--subtle)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-search"></use></svg><input placeholder="Search messages…" style="border:none;outline:none;background:none;font-family:inherit;font-size:13px;color:var(--text);width:100%;height:100%"/></div></div>
+        <div style="flex:1;overflow-y:auto;padding:6px">
+          <sc-for list="{{ threads }}" as="t" hint-placeholder-count="5"><div onClick="{{ onOpenThread }}" data-id="{{ t.id }}" style="display:flex;align-items:center;gap:11px;padding:10px 11px;border-radius:10px;cursor:pointer;background:{{ t.activeBg }}" style-hover="background:var(--surface2)">
+            <sc-if value="{{ t.isGroup }}" hint-placeholder-val="{{ false }}"><div style="width:42px;height:42px;border-radius:12px;background:var(--brands);color:var(--brand);display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-users"></use></svg></div></sc-if>
+            <sc-if value="{{ t.isDm }}" hint-placeholder-val="{{ true }}"><div style="width:42px;height:42px;border-radius:50%;background:var(--surface2);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex:none">{{ t.i }}</div></sc-if>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="font-size:13.5px;font-weight:{{ t.nameWeight }};color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.name }}</span><span style="font-size:11px;color:var(--subtle);flex:none">{{ t.time }}</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:2px"><span style="font-size:12.5px;color:{{ t.msgColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.lastMsg }}</span><sc-if value="{{ t.unread }}" hint-placeholder-val="{{ false }}"><span style="background:var(--brand);color:var(--brandfg);font-size:10.5px;font-weight:700;min-width:18px;height:18px;border-radius:999px;display:flex;align-items:center;justify-content:center;padding:0 5px;flex:none">{{ t.unread }}</span></sc-if></div>
+            </div>
+          </div></sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- THREAD PANE -->
+    <sc-if value="{{ showThread }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+        <div style="display:flex;align-items:center;gap:11px;padding:12px 16px;border-bottom:1px solid var(--border2)">
+          <sc-if value="{{ showBack }}" hint-placeholder-val="{{ false }}"><button onClick="{{ onBack }}" style="width:34px;height:34px;border-radius:8px;border:none;background:none;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none" style-hover="background:var(--surface2)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(180deg)"><use href="#i-cr"></use></svg></button></sc-if>
+          <sc-if value="{{ active.isGroup }}" hint-placeholder-val="{{ false }}"><div style="width:38px;height:38px;border-radius:11px;background:var(--brands);color:var(--brand);display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-users"></use></svg></div></sc-if>
+          <sc-if value="{{ active.isDm }}" hint-placeholder-val="{{ true }}"><div style="width:38px;height:38px;border-radius:50%;background:var(--surface2);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex:none">{{ active.i }}</div></sc-if>
+          <div style="flex:1;min-width:0"><div style="font-size:14.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ active.name }}</div><div style="font-size:12px;color:var(--subtle);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ active.sub }}</div></div>
+          <button style="width:36px;height:36px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none" style-hover="background:var(--surface2)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-settings"></use></svg></button>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:12px;background:var(--bg)">
+          <sc-if value="{{ hasMore }}" hint-placeholder-val="{{ false }}"><div style="display:flex;justify-content:center"><button onClick="{{ onLoadEarlier }}" style="background:var(--surface);border:1px solid var(--border);color:var(--muted);border-radius:999px;padding:6px 14px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer" style-hover="background:var(--surface2)">Load earlier messages</button></div></sc-if>
+          <sc-for list="{{ messages }}" as="m" hint-placeholder-count="6"><div style="display:flex;flex-direction:column;align-items:{{ m.align }};max-width:100%">
+            <sc-if value="{{ m.showName }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;font-weight:600;color:var(--subtle);margin:0 0 3px 4px">{{ m.from }}</span></sc-if>
+            <div style="max-width:78%;padding:9px 13px;border-radius:{{ m.radius }};background:{{ m.bg }};color:{{ m.color }};font-size:13.5px;line-height:1.45;border:{{ m.border }}">{{ m.text }}</div>
+            <span style="font-size:10.5px;color:var(--subtle);margin:3px 4px 0">{{ m.time }}</span>
+          </div></sc-for>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--border2)">
+          <input value="{{ composer }}" onInput="{{ onCompose }}" onKeyDown="{{ onComposeKey }}" placeholder="Write a message…" style="flex:1;min-width:0;height:42px;padding:0 14px;border:1px solid var(--border);border-radius:999px;background:var(--surface2);font-family:inherit;font-size:13.5px;color:var(--text);outline:none" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/>
+          <button onClick="{{ onSend }}" style="width:42px;height:42px;border-radius:50%;border:none;background:var(--brand);color:var(--brandfg);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none" style-hover="filter:brightness(.96)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-send"></use></svg></button>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+
+  <!-- CREATE TEAM MODAL -->
+  <sc-if value="{{ createOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;background:rgba(8,12,22,.5);display:flex;align-items:center;justify-content:center;padding:20px;z-index:60">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:0 24px 70px rgba(8,12,22,.34);width:100%;max-width:460px;max-height:86vh;display:flex;flex-direction:column;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:11px;padding:16px 18px;border-bottom:1px solid var(--border2)">
+          <div style="width:38px;height:38px;border-radius:10px;background:var(--brands);color:var(--brand);display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-users"></use></svg></div>
+          <div style="flex:1;min-width:0"><h3 style="margin:0;font-size:15px;font-weight:600;color:var(--text)">Create a team</h3><div style="font-size:12px;color:var(--muted)">Add anyone in your organization, across any role</div></div>
+          <button onClick="{{ onCloseCreate }}" style="width:32px;height:32px;border-radius:8px;border:none;background:none;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none" style-hover="background:var(--surface2)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-x"></use></svg></button>
+        </div>
+        <div style="padding:16px 18px;overflow-y:auto">
+          <label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:7px">Team name</label>
+          <input value="{{ teamName }}" onInput="{{ onTeamName }}" placeholder="e.g. June · Unit 1 Team" style="width:100%;height:42px;padding:0 13px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);font-family:inherit;font-size:13.5px;color:var(--text);outline:none;margin-bottom:16px" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/>
+          <label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:7px">Members <span style="color:var(--subtle);font-weight:500">({{ selectedCount }} selected)</span></label>
+          <sc-if value="{{ hasSelected }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"><sc-for list="{{ selectedChips }}" as="c" hint-placeholder-count="2"><span style="display:inline-flex;align-items:center;gap:6px;background:var(--brands);color:var(--brand);border-radius:999px;padding:4px 6px 4px 10px;font-size:12px;font-weight:600">{{ c.name }}<button onClick="{{ onToggleMember }}" data-name="{{ c.name }}" style="width:16px;height:16px;border:none;border-radius:50%;background:var(--brand);color:var(--brandfg);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><use href="#i-x"></use></svg></button></span></sc-for></div></sc-if>
+          <div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0 11px;height:38px;margin-bottom:8px"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="var(--subtle)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-search"></use></svg><input value="{{ pickerSearch }}" onInput="{{ onPickerSearch }}" placeholder="Search people by name or role…" style="border:none;outline:none;background:none;font-family:inherit;font-size:13px;color:var(--text);width:100%;height:100%"/></div>
+          <div style="border:1px solid var(--border);border-radius:var(--rad-sm);overflow:hidden">
+            <sc-for list="{{ pickerUsers }}" as="u" hint-placeholder-count="6"><div onClick="{{ onToggleMember }}" data-name="{{ u.name }}" style="display:flex;align-items:center;gap:11px;padding:9px 12px;border-bottom:1px solid var(--border2);cursor:{{ u.rowCursor }};opacity:{{ u.rowOpacity }};background:{{ u.rowBg }}" style-hover="background:var(--surface2)">
+              <div style="width:34px;height:34px;border-radius:50%;background:var(--surface2);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none">{{ u.i }}</div>
+              <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600;color:var(--text)">{{ u.name }}</div><div style="font-size:11.5px;color:var(--subtle)">{{ u.role }}</div></div>
+              <sc-if value="{{ u.locked }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:600;background:var(--surface2);color:var(--muted);flex:none"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-shield"></use></svg>{{ u.lockNote }}</span></sc-if>
+              <sc-if value="{{ u.showCheck }}" hint-placeholder-val="{{ true }}"><div style="width:22px;height:22px;border-radius:6px;border:1.5px solid {{ u.checkBd }};background:{{ u.checkBg }};color:var(--brandfg);display:flex;align-items:center;justify-content:center;flex:none"><sc-if value="{{ u.selected }}" hint-placeholder-val="{{ false }}"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"></use></svg></sc-if></div></sc-if>
+            </div></sc-for>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;padding:14px 18px;border-top:1px solid var(--border2)">
+          <button onClick="{{ onCloseCreate }}" style="flex:1;height:44px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface);color:var(--text);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer" style-hover="background:var(--surface2)">Cancel</button>
+          <button onClick="{{ onCreateTeam }}" disabled="{{ createDisabled }}" style="flex:1.3;display:flex;align-items:center;justify-content:center;gap:8px;height:44px;background:{{ createBg }};color:var(--brandfg);border:none;border-radius:var(--rad-sm);font-family:inherit;font-size:13.5px;font-weight:600;cursor:{{ createCursor }}"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-plus"></use></svg>Create team</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:980,&quot;height&quot;:700},&quot;compact&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;role&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  orgUsers=[
+    {name:'Marcus Bell',role:'Course Head',i:'MB'},{name:'Elena Voss',role:'Course Head',i:'EV'},
+    {name:'Aisha Rahman',role:'Teaching Assistant',i:'AR'},{name:'Tom Becker',role:'Teaching Assistant',i:'TB'},
+    {name:'Yuki Tanaka',role:'Teaching Assistant',i:'YT'},{name:'Carlos Diaz',role:'Teaching Assistant',i:'CD'},
+    {name:'Grace Lim',role:'Finance Team',i:'GL'},{name:'Omar Haddad',role:'Registration Team',i:'OH'},
+    {name:'Lena Farouk',role:'Human Resources',i:'LF'},{name:'Sara Mensah',role:'Administrator',i:'SM'},
+    {name:'Nadia Saleh',role:'Teaching Assistant',i:'NS'},{name:'Daniel Okafor',role:'Owner',i:'DO'},
+  ];
+  state={
+    activeId:1, view:'list', shown:5, composer:'',
+    createOpen:false, teamName:'', pickerSearch:'', selected:[],
+    threads:[
+      {id:1,type:'group',name:'June · Unit 1 Team',sub:'Marcus, Aisha, Tom, Priya +2',i:'U1',lastMsg:'Aisha: Logged all of paper 3 today',time:'09:24',unread:2},
+      {id:2,type:'dm',name:'Marcus Bell',sub:'Course Head',i:'MB',lastMsg:'Can you check Sofia? Her last two were missing.',time:'08:51',unread:0},
+      {id:3,type:'group',name:'Finance ↔ Heads',sub:'Grace, Marcus, Elena',i:'F',lastMsg:'Grace: June payroll is ready for review',time:'Yesterday',unread:1},
+      {id:4,type:'dm',name:'Grace Lim',sub:'Finance Team',i:'GL',lastMsg:'You: Got it, thank you!',time:'Yesterday',unread:0},
+      {id:5,type:'group',name:'Registration Team',sub:'Omar, Sara +2',i:'R',lastMsg:'Omar: 23 new registrations imported',time:'Mon',unread:0},
+    ],
+    messages:{
+      1:[
+        {from:'Marcus Bell',i:'MB',me:false,text:'Morning team — reminder that Paper 3 marks are due to parents by Friday.',time:'08:02'},
+        {from:'Aisha Rahman',i:'AR',me:false,text:'Noted. I have 12 left to log.',time:'08:10'},
+        {from:'You',i:'PN',me:true,text:'I can take Sofia and Ethan if that helps.',time:'08:14'},
+        {from:'Tom Becker',i:'TB',me:false,text:"Thanks Priya. I'll cover the Nov group.",time:'08:20'},
+        {from:'Marcus Bell',i:'MB',me:false,text:'Great. Flag anyone at risk so I can follow up with parents.',time:'08:25'},
+        {from:'Aisha Rahman',i:'AR',me:false,text:'Carlos is behind — only 21 of 45 messages sent.',time:'08:40'},
+        {from:'You',i:'PN',me:true,text:"I'll check in with him today.",time:'08:44'},
+        {from:'Aisha Rahman',i:'AR',me:false,text:'Logged all of paper 3 today ✓',time:'09:24'},
+      ],
+      2:[
+        {from:'Marcus Bell',i:'MB',me:false,text:"Hi Priya, how's the Unit 1 group going?",time:'08:30'},
+        {from:'You',i:'PN',me:true,text:'Good! Most are checked, a few still pending.',time:'08:42'},
+        {from:'Marcus Bell',i:'MB',me:false,text:'Can you check Sofia? Her last two were missing.',time:'08:51'},
+        {from:'You',i:'PN',me:true,text:'On it — will message her guardian after class.',time:'08:55'},
+      ],
+      3:[
+        {from:'Grace Lim',i:'GL',me:false,text:'Hi all, June payroll is ready for review.',time:'16:10'},
+        {from:'Marcus Bell',i:'MB',me:false,text:'Thanks Grace. Aisha had extra sessions this month.',time:'16:22'},
+        {from:'Grace Lim',i:'GL',me:false,text:"Noted — I've added the bonus to her breakdown.",time:'16:30'},
+      ],
+      4:[
+        {from:'Grace Lim',i:'GL',me:false,text:'Your June pay has been processed.',time:'15:00'},
+        {from:'You',i:'PN',me:true,text:'Got it, thank you!',time:'15:04'},
+      ],
+      5:[
+        {from:'Omar Haddad',i:'OH',me:false,text:'23 new registrations imported for June.',time:'Mon 11:00'},
+        {from:'Sara Mensah',i:'SM',me:false,text:'Nice — any errors in the file?',time:'Mon 11:15'},
+        {from:'Omar Haddad',i:'OH',me:false,text:'4 rows skipped, fixing them now.',time:'Mon 11:20'},
+      ],
+    },
+  };
+
+  onOpenThread=(e)=>{ const id=+e.currentTarget.dataset.id; this.setState(s=>({activeId:id,view:'thread',shown:5,threads:s.threads.map(t=>t.id===id?{...t,unread:0}:t)})); };
+  onBack=()=>this.setState({view:'list'});
+  onLoadEarlier=()=>this.setState(s=>({shown:s.shown+5}));
+  onCompose=(e)=>this.setState({composer:e.target.value});
+  onComposeKey=(e)=>{ if(e.key==='Enter') this.onSend(); };
+  onSend=()=>{ const txt=this.state.composer.trim(); if(!txt) return; this.setState(s=>{ const id=s.activeId; const msgs=(s.messages[id]||[]).concat([{from:'You',i:'PN',me:true,text:txt,time:'now'}]); return {messages:{...s.messages,[id]:msgs},composer:''}; }); };
+  onNewTeam=()=>this.setState({createOpen:true,teamName:'',pickerSearch:'',selected:[]});
+  onCloseCreate=()=>this.setState({createOpen:false});
+  onTeamName=(e)=>this.setState({teamName:e.target.value});
+  onPickerSearch=(e)=>this.setState({pickerSearch:e.target.value});
+  onToggleMember=(e)=>{ const name=e.currentTarget.dataset.name; const u=this.orgUsers.find(x=>x.name===name); if(this._ownerLocked(u)) return; this.setState(s=>({selected:s.selected.includes(name)?s.selected.filter(x=>x!==name):s.selected.concat([name])})); };
+  _ownerLocked=(u)=>{ const role=this.props.role||'head'; return u&&u.role==='Owner'&&role!=='admin'&&role!=='owner'; };
+  onCreateTeam=()=>{ if(this.state.selected.length<1) return; this.setState(s=>{ const id=Math.max(...s.threads.map(t=>t.id))+1; const nm=s.teamName.trim()||'New team'; const subNames=s.selected.slice(0,3).join(', ')+(s.selected.length>3?` +${s.selected.length-3}`:''); const t={id,type:'group',name:nm,sub:subNames,i:'NT',lastMsg:'Team created',time:'now',unread:0}; return {threads:[t,...s.threads],messages:{...s.messages,[id]:[{from:'System',i:'',me:false,text:`${nm} created with ${s.selected.length} member${s.selected.length>1?'s':''}.`,time:'now'}]},activeId:id,view:'thread',createOpen:false,teamName:'',selected:[],pickerSearch:''}; }); };
+
+  renderVals(){
+    const compact=!!this.props.compact, s=this.state;
+    const active=s.threads.find(t=>t.id===s.activeId)||s.threads[0];
+    const threads=s.threads.map(t=>({...t, isGroup:t.type==='group', isDm:t.type==='dm',
+      activeBg:(t.id===s.activeId&&!compact)?'var(--brands)':'transparent', nameWeight:t.unread>0?700:600,
+      msgColor:t.unread>0?'var(--text)':'var(--subtle)' }));
+    const allMsgs=s.messages[s.activeId]||[];
+    const start=Math.max(0,allMsgs.length-s.shown);
+    const msgs=allMsgs.slice(start).map((m,idx,arr)=>{ const prev=arr[idx-1];
+      return {from:m.from,text:m.text,time:m.time,align:m.me?'flex-end':'flex-start',
+        bg:m.me?'var(--brand)':'var(--surface)', color:m.me?'var(--brandfg)':'var(--text)',
+        border:m.me?'none':'1px solid var(--border)',
+        radius:m.me?'14px 14px 4px 14px':'14px 14px 14px 4px',
+        showName: active.type==='group'&&!m.me&&(!prev||prev.from!==m.from) }; });
+    const q=s.pickerSearch.toLowerCase();
+    const pickerUsers=this.orgUsers.filter(u=>!q||u.name.toLowerCase().includes(q)||u.role.toLowerCase().includes(q)).map(u=>{ const locked=this._ownerLocked(u); const sel=s.selected.includes(u.name); return {...u, locked, lockNote: locked?'Via Admin only':'', selected:sel&&!locked, showCheck:!locked, rowOpacity:locked?'.6':'1', rowCursor:locked?'not-allowed':'pointer', rowBg:sel?'var(--brands)':'transparent', checkBg:sel?'var(--brand)':'transparent', checkBd:sel?'var(--brand)':'var(--border)'}; });
+    const can=s.selected.length>=1;
+    return {
+      compact, chatH: compact?'560px':'664px', listW: compact?'100%':'304px',
+      showList: !compact || s.view==='list', showThread: !compact || s.view==='thread',
+      showBack: compact, threads, active:{...active,isGroup:active.type==='group',isDm:active.type==='dm'},
+      messages:msgs, hasMore:start>0,
+      composer:s.composer, onCompose:this.onCompose, onComposeKey:this.onComposeKey, onSend:this.onSend,
+      onOpenThread:this.onOpenThread, onBack:this.onBack, onLoadEarlier:this.onLoadEarlier,
+      createOpen:s.createOpen, onNewTeam:this.onNewTeam, onCloseCreate:this.onCloseCreate,
+      teamName:s.teamName, onTeamName:this.onTeamName, pickerSearch:s.pickerSearch, onPickerSearch:this.onPickerSearch,
+      onToggleMember:this.onToggleMember, pickerUsers,
+      selectedChips:s.selected.map(n=>({name:n})), selectedCount:s.selected.length, hasSelected:s.selected.length>0,
+      onCreateTeam:this.onCreateTeam, createDisabled:!can, createBg:can?'var(--brand)':'var(--subtle)', createCursor:can?'pointer':'not-allowed',
+    };
+  }
+}
+</script>
+</body>
+</html>

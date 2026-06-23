@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:flex;flex-direction:column;gap:16px">
+
+  <!-- HEADER -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:17px 18px">
+    <div style="font-size:12px;color:var(--subtle);font-weight:600;text-transform:uppercase;letter-spacing:.04em">{{ kicker }}</div>
+    <h1 style="margin:4px 0 0;font-size:20px;font-weight:600;color:var(--text);letter-spacing:-.01em">{{ title }}</h1>
+    <p style="margin:3px 0 0;font-size:13px;color:var(--muted);max-width:560px;line-height:1.5">{{ subtitle }}</p>
+    <sc-if value="{{ isAdmin }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;align-items:flex-start;gap:10px;margin-top:14px;background:var(--infos);border:1px solid var(--border);border-radius:var(--rad-sm);padding:11px 13px">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="var(--info)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:1px"><use href="#i-building"></use></svg>
+        <span style="font-size:12.5px;color:var(--text);line-height:1.45">These settings apply to <span style="font-weight:600">Cambridge Prep Center</span> only. They override the system default for everyone in your organization, but never affect other organizations.</span>
+      </div>
+    </sc-if>
+  </div>
+
+  <div style="display:grid;gap:16px;grid-template-columns:{{ mainCols }};align-items:start">
+
+    <!-- CONTROLS -->
+    <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+
+      <!-- LOGO + NAME -->
+      <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:17px 18px">
+        <h3 style="margin:0 0 14px;font-size:14px;font-weight:600;color:var(--text)">Logo &amp; name</h3>
+        <div style="display:flex;align-items:center;gap:15px;flex-wrap:wrap">
+          <div style="width:64px;height:64px;border-radius:16px;background:{{ draft.primary }};color:{{ draft.onPrimary }};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:30px;flex:none;letter-spacing:-.02em">{{ logoLetter }}</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <button style="display:flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:var(--rad-sm);padding:9px 14px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer" style-hover="background:var(--surface2)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-upload"></use></svg>Upload logo</button>
+            <span style="font-size:11.5px;color:var(--subtle)">PNG or SVG, square, at least 128×128px</span>
+          </div>
+        </div>
+        <div style="margin-top:16px"><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:7px">Brand name</label><input value="{{ draft.name }}" onInput="{{ onName }}" style="width:100%;height:44px;padding:0 13px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);font-family:inherit;font-size:14px;font-weight:500;color:var(--text);outline:none" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/></div>
+      </section>
+
+      <!-- COLORS -->
+      <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:17px 18px">
+        <h3 style="margin:0 0 4px;font-size:14px;font-weight:600;color:var(--text)">Colors</h3>
+        <p style="margin:0 0 15px;font-size:12px;color:var(--subtle)">Stored as tokens — every screen updates automatically.</p>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px"><label style="font-size:12.5px;font-weight:600;color:var(--text)">Primary</label><span style="font-size:12px;color:var(--muted);font-family:'Geist Mono',monospace">{{ draft.primary }}</span></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap"><sc-for list="{{ primarySwatches }}" as="s" hint-placeholder-count="6"><button onClick="{{ onPrimary }}" data-c="{{ s.color }}" title="{{ s.color }}" style="width:36px;height:36px;border-radius:10px;background:{{ s.color }};border:2px solid {{ s.bd }};cursor:pointer;display:flex;align-items:center;justify-content:center" style-hover="transform:scale(1.06)"><sc-if value="{{ s.active }}" hint-placeholder-val="{{ false }}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"></use></svg></sc-if></button></sc-for>
+              <div style="position:relative;width:36px;height:36px;border-radius:10px;border:1.5px dashed var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--subtle)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-plus"></use></svg><input type="color" value="{{ draft.primary }}" onInput="{{ onPrimaryPick }}" style="position:absolute;inset:0;opacity:0;cursor:pointer"/></div>
+            </div>
+          </div>
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px"><label style="font-size:12.5px;font-weight:600;color:var(--text)">Secondary / accent</label><span style="font-size:12px;color:var(--muted);font-family:'Geist Mono',monospace">{{ draft.secondary }}</span></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap"><sc-for list="{{ secondarySwatches }}" as="s" hint-placeholder-count="6"><button onClick="{{ onSecondary }}" data-c="{{ s.color }}" title="{{ s.color }}" style="width:36px;height:36px;border-radius:10px;background:{{ s.color }};border:2px solid {{ s.bd }};cursor:pointer;display:flex;align-items:center;justify-content:center" style-hover="transform:scale(1.06)"><sc-if value="{{ s.active }}" hint-placeholder-val="{{ false }}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"></use></svg></sc-if></button></sc-for></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TYPE + CORNER -->
+      <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:17px 18px">
+        <h3 style="margin:0 0 14px;font-size:14px;font-weight:600;color:var(--text)">Typography &amp; shape</h3>
+        <label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:8px">Font family</label>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <sc-for list="{{ fonts }}" as="f" hint-placeholder-count="4"><button onClick="{{ onFont }}" data-v="{{ f.value }}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 14px;border-radius:var(--rad-sm);border:1.5px solid {{ f.bd }};background:{{ f.bg }};cursor:pointer;text-align:left" style-hover="border-color:var(--brand)"><span style="font-size:15px;font-weight:600;color:var(--text);font-family:{{ f.stack }}">{{ f.label }}</span><span style="font-size:12px;color:var(--subtle);font-family:{{ f.stack }}">{{ f.sample }}</span><sc-if value="{{ f.active }}" hint-placeholder-val="{{ true }}"><div style="width:20px;height:20px;border-radius:50%;background:var(--brand);color:var(--brandfg);display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"></use></svg></div></sc-if></button></sc-for>
+        </div>
+        <label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin:16px 0 8px">Corner radius</label>
+        <div style="display:flex;gap:8px">
+          <sc-for list="{{ corners }}" as="c" hint-placeholder-count="3"><button onClick="{{ onCorner }}" data-v="{{ c.value }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;padding:13px;border-radius:10px;border:1.5px solid {{ c.bd }};background:{{ c.bg }};cursor:pointer" style-hover="border-color:var(--brand)"><div style="width:38px;height:24px;background:var(--surface2);border:2px solid var(--brand);border-radius:{{ c.demo }}"></div><span style="font-size:12px;font-weight:600;color:var(--text)">{{ c.label }}</span></button></sc-for>
+        </div>
+      </section>
+    </div>
+
+    <!-- LIVE PREVIEW (token-scoped) -->
+    <aside style="position:{{ stickyPos }};top:18px;min-width:0">
+      <div style="{{ previewVars }}">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid var(--border2)"><h3 style="margin:0;font-size:13px;font-weight:600;color:var(--text)">Live preview</h3><span style="font-size:11px;color:var(--subtle);font-family:'Geist Mono',monospace">tokens</span></div>
+          <div style="padding:18px;background:var(--bg)">
+            <!-- mini app card -->
+            <div style="border-radius:var(--rad);overflow:hidden;border:1px solid var(--border);background:var(--surface)">
+              <div style="display:flex;align-items:center;gap:9px;padding:11px 13px;border-bottom:1px solid var(--border2)">
+                <div style="width:30px;height:30px;border-radius:8px;background:var(--brand);color:var(--brandfg);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px">{{ logoLetter }}</div>
+                <span style="font-size:14px;font-weight:700;color:var(--text);font-family:var(--pv-font)">{{ draft.name }}</span>
+                <div style="margin-left:auto;width:26px;height:26px;border-radius:50%;background:var(--brands);color:var(--brand);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">MB</div>
+              </div>
+              <div style="padding:14px;display:flex;flex-direction:column;gap:11px">
+                <div style="font-size:15px;font-weight:600;color:var(--text);font-family:var(--pv-font)">Good morning, Marcus</div>
+                <div style="display:flex;gap:8px">
+                  <div style="flex:1;background:var(--brands);border-radius:var(--rad-sm);padding:11px"><div style="font-size:18px;font-weight:700;color:var(--brand);font-family:var(--pv-font)">76%</div><div style="font-size:10.5px;color:var(--muted)">Completion</div></div>
+                  <div style="flex:1;background:var(--surface2);border-radius:var(--rad-sm);padding:11px"><div style="font-size:18px;font-weight:700;color:var(--text);font-family:var(--pv-font)">12</div><div style="font-size:10.5px;color:var(--muted)">Assistants</div></div>
+                </div>
+                <div style="display:flex;align-items:center;gap:7px">
+                  <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;font-size:10.5px;font-weight:600;background:var(--secs);color:var(--sec)"><span style="width:6px;height:6px;border-radius:50%;background:var(--sec)"></span>Accent</span>
+                  <button style="margin-left:auto;background:var(--brand);color:var(--brandfg);border:none;border-radius:var(--rad-sm);padding:8px 14px;font-family:var(--pv-font);font-size:12px;font-weight:600;cursor:default">Primary action</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p style="margin:11px 4px 0;font-size:11.5px;color:var(--subtle);line-height:1.5">{{ previewNote }}</p>
+    </aside>
+  </div>
+
+  <!-- ACTION BAR -->
+  <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:13px 18px;position:sticky;bottom:0">
+    <div style="display:flex;align-items:center;gap:9px"><sc-if value="{{ dirty }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--warn);font-weight:600"><span style="width:7px;height:7px;border-radius:50%;background:var(--warn)"></span>Unsaved changes</span></sc-if><sc-if value="{{ clean }}" hint-placeholder-val="{{ true }}"><span style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);font-weight:500"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="var(--ok)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"></use></svg>All changes saved</span></sc-if></div>
+    <div style="display:flex;gap:10px">
+      <button onClick="{{ onReset }}" style="display:flex;align-items:center;gap:7px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--rad-sm);padding:10px 15px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer" style-hover="background:var(--surface2)">{{ resetLabel }}</button>
+      <button onClick="{{ onSave }}" style="display:flex;align-items:center;gap:7px;background:var(--brand);color:var(--brandfg);border:none;border-radius:var(--rad-sm);padding:10px 17px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer" style-hover="filter:brightness(.96)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"></use></svg>{{ saveLabel }}</button>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:980,&quot;height&quot;:820},&quot;compact&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;role&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;owner&quot;,&quot;admin&quot;],&quot;default&quot;:&quot;owner&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  PRIMARIES=['#2563eb','#0d9488','#4f46e5','#db2777','#ea580c','#16a34a','#0891b2','#1e293b'];
+  SECONDARIES=['#7c3aed','#0d9488','#f59e0b','#e11d48','#2563eb','#64748b'];
+  FONTS=[
+    {value:'geist',label:'Geist',sample:'Aa Bb Cc 123',stack:"'Geist',system-ui,sans-serif"},
+    {value:'inter',label:'Inter',sample:'Aa Bb Cc 123',stack:"'Inter',system-ui,sans-serif"},
+    {value:'system',label:'System UI',sample:'Aa Bb Cc 123',stack:"system-ui,-apple-system,sans-serif"},
+    {value:'mono',label:'IBM Plex Mono',sample:'Aa Bb Cc 123',stack:"'Geist Mono',ui-monospace,monospace"},
+  ];
+  DEFAULT={ name:'RadAMS', primary:'#2563eb', secondary:'#7c3aed', font:'geist', corner:'soft' };
+
+  state={ draft:{...this.DEFAULT}, saved:{...this.DEFAULT} };
+
+  onName=(e)=>this.setState(s=>({draft:{...s.draft,name:e.target.value}}));
+  onPrimary=(e)=>{ const c=e.currentTarget.dataset.c; this.setState(s=>({draft:{...s.draft,primary:c}})); };
+  onPrimaryPick=(e)=>{ const c=e.target.value; this.setState(s=>({draft:{...s.draft,primary:c}})); };
+  onSecondary=(e)=>{ const c=e.currentTarget.dataset.c; this.setState(s=>({draft:{...s.draft,secondary:c}})); };
+  onFont=(e)=>{ const v=e.currentTarget.dataset.v; this.setState(s=>({draft:{...s.draft,font:v}})); };
+  onCorner=(e)=>{ const v=e.currentTarget.dataset.v; this.setState(s=>({draft:{...s.draft,corner:v}})); };
+  onSave=()=>this.setState(s=>({saved:{...s.draft}}));
+  onReset=()=>{ const isAdmin=this.props.role==='admin'; this.setState({draft:{...this.DEFAULT}}); };
+
+  hex2rgb(h){ h=h.replace('#',''); if(h.length===3)h=h.split('').map(x=>x+x).join(''); return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)]; }
+  mix(hex,pct,light){ const [r,g,b]=this.hex2rgb(hex); const t=light?255:0; const f=v=>Math.round(v*(pct/100)+t*(1-pct/100)); return `rgb(${f(r)},${f(g)},${f(b)})`; }
+
+  renderVals(){
+    const compact=!!this.props.compact;
+    const isAdmin=this.props.role==='admin';
+    const d=this.state.draft, sv=this.state.saved;
+    const onPrimary=this.mix(d.primary,72,true)? '#ffffff':'#ffffff';
+    const fontStack=(this.FONTS.find(f=>f.value===d.font)||this.FONTS[0]).stack;
+    const cornerRad={soft:'13px',sharp:'6px',round:'22px'}[d.corner]||'13px';
+    const cornerSm={soft:'9px',sharp:'5px',round:'16px'}[d.corner]||'9px';
+    const primarySwatches=this.PRIMARIES.map(color=>({color, active:color.toLowerCase()===d.primary.toLowerCase(), bd: color.toLowerCase()===d.primary.toLowerCase()?'var(--text)':'transparent'}));
+    const secondarySwatches=this.SECONDARIES.map(color=>({color, active:color.toLowerCase()===d.secondary.toLowerCase(), bd: color.toLowerCase()===d.secondary.toLowerCase()?'var(--text)':'transparent'}));
+    const fonts=this.FONTS.map(f=>({...f, active:f.value===d.font, bg:f.value===d.font?'var(--brands)':'var(--surface)', bd:f.value===d.font?'var(--brand)':'var(--border)'}));
+    const cornerDefs=[['soft','Soft','12px'],['sharp','Sharp','4px'],['round','Round','20px']];
+    const corners=cornerDefs.map(([value,label,demo])=>({value,label,demo, bg:value===d.corner?'var(--brands)':'var(--surface)', bd:value===d.corner?'var(--brand)':'var(--border)'}));
+
+    // preview token overrides — scoped to the preview subtree only
+    const previewVars={
+      '--brand':d.primary, '--brandfg':'#ffffff',
+      '--brands':this.mix(d.primary,9,true),
+      '--sec':d.secondary, '--secs':this.mix(d.secondary,12,true),
+      '--pv-font':fontStack, '--rad':cornerRad, '--rad-sm':cornerSm,
+      fontFamily:fontStack,
+    };
+    const dirty=JSON.stringify(d)!==JSON.stringify(sv);
+    return {
+      compact, isAdmin, isOwner:!isAdmin,
+      kicker: isAdmin?'Organization branding':'System branding',
+      title: isAdmin?'Customize your organization':'Default system branding',
+      subtitle: isAdmin?'Pre-filled with the system default set by the platform owner. Adjust any of it for your organization.':'This is the baseline every organization starts from. Org admins can override it for their own organization.',
+      mainCols: compact?'1fr':'1.25fr 1fr', stickyPos: compact?'static':'sticky',
+      draft:d, logoLetter:(d.name.trim()[0]||'R').toUpperCase(),
+      primarySwatches, secondarySwatches, fonts, corners,
+      onName:this.onName, onPrimary:this.onPrimary, onPrimaryPick:this.onPrimaryPick, onSecondary:this.onSecondary, onFont:this.onFont, onCorner:this.onCorner, onSave:this.onSave, onReset:this.onReset,
+      previewVars, previewNote: isAdmin?'Everyone in Cambridge Prep Center sees these colors, font and shape.':'Every organization inherits this until they set their own.',
+      dirty, clean:!dirty,
+      saveLabel: isAdmin?'Save org branding':'Save default',
+      resetLabel: isAdmin?'Reset to system default':'Reset to original',
+    };
+  }
+}
+</script>
+</body>
+</html>

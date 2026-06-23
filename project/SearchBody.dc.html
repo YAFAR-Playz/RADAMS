@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="position:fixed;inset:0;z-index:70;display:flex;flex-direction:column;align-items:center;padding:0 16px;background:rgba(8,12,22,.45)">
+  <div style="width:100%;max-width:620px;margin-top:{{ topGap }};background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:0 24px 80px rgba(8,12,22,.4);overflow:hidden;display:flex;flex-direction:column;max-height:78vh">
+
+    <!-- SEARCH INPUT -->
+    <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border2)">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--subtle)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><use href="#i-search"></use></svg>
+      <input value="{{ query }}" onInput="{{ onQuery }}" placeholder="Search students, assistants, courses across the organization…" autofocus="true" style="flex:1;min-width:0;border:none;outline:none;background:none;font-family:inherit;font-size:15px;color:var(--text);height:28px"/>
+      <button onClick="{{ onClose }}" style="display:flex;align-items:center;gap:5px;flex:none;background:var(--surface2);border:1px solid var(--border);color:var(--muted);border-radius:7px;padding:5px 9px;font-family:inherit;font-size:11px;font-weight:600;cursor:pointer" style-hover="background:var(--border2)">Esc</button>
+    </div>
+
+    <!-- SCOPE FILTERS -->
+    <div style="display:flex;align-items:center;gap:7px;padding:11px 18px;border-bottom:1px solid var(--border2);flex-wrap:wrap">
+      <sc-for list="{{ scopes }}" as="sc" hint-placeholder-count="4"><button onClick="{{ onScope }}" data-v="{{ sc.value }}" style="flex:none;display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;border:1px solid {{ sc.bd }};background:{{ sc.bg }};color:{{ sc.fg }};font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ sc.icon }}"></use></svg>{{ sc.label }}<span style="font-size:11px;opacity:.7">{{ sc.count }}</span></button></sc-for>
+    </div>
+
+    <!-- RESULTS -->
+    <div style="flex:1;overflow-y:auto;padding:8px">
+      <sc-for list="{{ groups }}" as="g" hint-placeholder-count="2"><div style="margin-bottom:6px">
+        <div style="font-size:11px;font-weight:700;color:var(--subtle);text-transform:uppercase;letter-spacing:.05em;padding:8px 12px 5px">{{ g.label }}</div>
+        <sc-for list="{{ g.items }}" as="r" hint-placeholder-count="3"><div style="display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:10px;cursor:pointer" style-hover="background:var(--surface2)">
+          <div style="width:36px;height:36px;border-radius:{{ r.avatarRad }};background:{{ r.avatarBg }};color:{{ r.avatarFg }};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none"><sc-if value="{{ r.isIcon }}" hint-placeholder-val="{{ false }}"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ r.icon }}"></use></svg></sc-if><sc-if value="{{ r.isInitials }}" hint-placeholder-val="{{ true }}">{{ r.i }}</sc-if></div>
+          <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.name }}</div><div style="font-size:12px;color:var(--subtle);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.meta }}</div></div>
+          <sc-if value="{{ r.locked }}" hint-placeholder-val="{{ false }}"><span title="Visible org-wide; editing stays in their organization" style="display:inline-flex;align-items:center;gap:5px;flex:none;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:600;background:var(--surface2);color:var(--muted)"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-shield"></use></svg>{{ r.org }}</span></sc-if>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--subtle)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><use href="#i-cr"></use></svg>
+        </div></sc-for>
+      </div></sc-for>
+      <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}"><div style="padding:40px 18px;text-align:center"><div style="font-size:13.5px;color:var(--muted)">No matches for "<span style="color:var(--text);font-weight:600">{{ query }}</span>"</div></div></sc-if>
+    </div>
+
+    <!-- FOOTER NOTE -->
+    <div style="display:flex;align-items:center;gap:9px;padding:11px 18px;border-top:1px solid var(--border2);background:var(--surface2)">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><use href="#i-shield"></use></svg>
+      <span style="font-size:12px;color:var(--muted);line-height:1.45">Search spans the whole organization. <span style="color:var(--text);font-weight:600">Editing remains scoped</span> — you can open any record, but changes are limited to your own organization.</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:680,&quot;height&quot;:620},&quot;compact&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;onClose&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}">
+class Component extends DCLogic {
+  ALL=[
+    {type:'student',name:'Liam Carter',meta:'Physics · June · Unit 1 · ID CB-1042',i:'LC',org:'Cambridge Prep'},
+    {type:'student',name:'Mei Wong',meta:'Physics · June · Unit 1 · ID CB-1043',i:'MW',org:'Cambridge Prep'},
+    {type:'student',name:'Liana Brooks',meta:'Chemistry · Nov · Unit 2 · ID OX-2210',i:'LB',org:'Oxford Tutorials',ext:true},
+    {type:'student',name:'Sofia Rossi',meta:'Physics · Nov · Unit 1 · ID CB-1071',i:'SR',org:'Cambridge Prep'},
+    {type:'assistant',name:'Aisha Rahman',meta:'Teaching Assistant · 2 courses',i:'AR',org:'Cambridge Prep'},
+    {type:'assistant',name:'Tom Becker',meta:'Teaching Assistant · Physics Nov',i:'TB',org:'Cambridge Prep'},
+    {type:'assistant',name:'Liam Foster',meta:'Teaching Assistant · Oxford',i:'LF',org:'Oxford Tutorials',ext:true},
+    {type:'course',name:'Physics · June · Unit 1',meta:'48 students · 4 assistants',i:'',org:'Cambridge Prep'},
+    {type:'course',name:'Physics · Nov · Unit 1',meta:'40 students · 3 assistants',i:'',org:'Cambridge Prep'},
+    {type:'course',name:'Chemistry · June · Unit 1',meta:'36 students · 3 assistants',i:'',org:'Cambridge Prep'},
+  ];
+  state={ query:'li', scope:'all' };
+  onQuery=(e)=>this.setState({query:e.target.value});
+  onScope=(e)=>this.setState({scope:e.currentTarget.dataset.v});
+  onClose=()=>{ if(this.props.onClose) this.props.onClose(); };
+
+  renderVals(){
+    const compact=!!this.props.compact;
+    const q=this.state.query.trim().toLowerCase();
+    const match=this.ALL.filter(r=>!q||r.name.toLowerCase().includes(q)||r.meta.toLowerCase().includes(q));
+    const byScope=this.state.scope==='all'?match:match.filter(r=>r.type===this.state.scope);
+    const counts={ all:match.length, student:match.filter(r=>r.type==='student').length, assistant:match.filter(r=>r.type==='assistant').length, course:match.filter(r=>r.type==='course').length };
+    const scopeDefs=[['all','All','search'],['student','Students','grad'],['assistant','Assistants','user-check'],['course','Courses','book']];
+    const scopes=scopeDefs.map(([value,label,icon])=>{ const a=this.state.scope===value; return {value,label,icon,count:String(counts[value]||0), bg:a?'var(--brand)':'var(--surface)', fg:a?'var(--brandfg)':'var(--muted)', bd:a?'var(--brand)':'var(--border)'}; });
+    const typeLabel={student:'Students',assistant:'Assistants',course:'Courses'};
+    const order=['student','assistant','course'];
+    const groups=order.map(t=>({t,label:typeLabel[t],items:byScope.filter(r=>r.type===t)})).filter(g=>g.items.length>0).map(g=>({label:g.label,items:g.items.map(r=>{
+      const isCourse=r.type==='course';
+      return {name:r.name, meta:r.meta, i:r.i, isIcon:isCourse, isInitials:!isCourse, icon:'book',
+        avatarRad:isCourse?'10px':(r.type==='assistant'?'50%':'50%'),
+        avatarBg:isCourse?'var(--brands)':'var(--surface2)', avatarFg:isCourse?'var(--brand)':'var(--muted)',
+        locked:!!r.ext, org:r.org };
+    })}));
+    return {
+      compact, topGap:compact?'14vh':'11vh',
+      query:this.state.query, onQuery:this.onQuery, onClose:this.onClose,
+      scopes, onScope:this.onScope, groups, noResults:byScope.length===0,
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:flex;flex-direction:column;gap:16px">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:17px 18px">
+    <div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px">
+      <div>
+        <div style="font-size:12px;color:var(--subtle);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Registration</div>
+        <h1 style="margin:4px 0 0;font-size:20px;font-weight:600;color:var(--text);letter-spacing:-.01em">Students</h1>
+        <p style="margin:3px 0 0;font-size:13px;color:var(--muted)">Core data, enrolled courses, and a payment summary for every student.</p>
+      </div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:15px">
+      <div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rad-sm);padding:0 12px;height:40px;flex:1;min-width:200px;max-width:320px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--subtle)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-search"></use></svg><input value="{{ search }}" onInput="{{ onSearch }}" placeholder="Search students…" style="border:none;outline:none;background:none;font-family:inherit;font-size:13.5px;color:var(--text);width:100%;height:100%"/></div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><sc-for list="{{ filters }}" as="f" hint-placeholder-count="3"><button onClick="{{ onFilter }}" data-v="{{ f.value }}" style="padding:7px 12px;border-radius:999px;border:1px solid {{ f.bd }};background:{{ f.bg }};color:{{ f.fg }};font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer">{{ f.label }}</button></sc-for></div>
+    </div>
+    <div style="display:grid;gap:12px;grid-template-columns:{{ statCols }};margin-top:16px">
+      <sc-for list="{{ stats }}" as="s" hint-placeholder-count="4"><div style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--rad-sm);padding:12px 14px"><div style="font-size:20px;font-weight:700;color:{{ s.color }};letter-spacing:-.02em;line-height:1.1">{{ s.value }}</div><div style="font-size:12px;color:var(--muted);font-weight:500;margin-top:2px">{{ s.label }}</div></div></sc-for>
+    </div>
+  </div>
+
+  <div style="display:grid;gap:12px;grid-template-columns:{{ cardCols }}">
+    <sc-for list="{{ rows }}" as="r" hint-placeholder-count="6"><div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:14px 15px;display:flex;flex-direction:column;gap:11px">
+      <div style="display:flex;align-items:center;gap:11px">
+        <div style="width:38px;height:38px;border-radius:50%;background:var(--brands);color:var(--brand);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex:none">{{ r.i }}</div>
+        <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:var(--text)">{{ r.name }}</div><div style="font-size:11.5px;color:var(--subtle);font-family:'Geist Mono',monospace">{{ r.idText }}</div></div>
+        <span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:600;background:{{ r.badge.bg }};color:{{ r.badge.fg }};flex:none"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ r.badge.icon }}"></use></svg>{{ r.badge.text }}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px 12px">
+        <div style="min-width:0"><div style="font-size:10px;font-weight:700;color:var(--subtle);text-transform:uppercase;letter-spacing:.04em">Phone</div><div style="font-size:12.5px;color:var(--text);font-family:'Geist Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.phone }}</div></div>
+        <div style="min-width:0"><div style="font-size:10px;font-weight:700;color:var(--subtle);text-transform:uppercase;letter-spacing:.04em">Guardian</div><div style="font-size:12.5px;color:var(--text);font-family:'Geist Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.guardian }}</div></div>
+        <div style="grid-column:1/3;min-width:0"><div style="font-size:10px;font-weight:700;color:var(--subtle);text-transform:uppercase;letter-spacing:.04em">Email</div><div style="font-size:12.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.email }}</div></div>
+      </div>
+      <div><div style="font-size:10px;font-weight:700;color:var(--subtle);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px">Enrolled courses</div><div style="display:flex;flex-wrap:wrap;gap:5px"><sc-for list="{{ r.courses }}" as="c" hint-placeholder-count="2"><span style="font-size:11.5px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px">{{ c }}</span></sc-for></div></div>
+      <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--rad-sm);padding:10px 12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px"><span style="font-size:11.5px;font-weight:600;color:var(--text)">{{ r.planLabel }}</span><span style="font-size:11.5px;font-weight:700;color:{{ r.payColor }}">{{ r.payText }}</span></div>
+        <div style="height:7px;background:var(--surface);border:1px solid var(--border);border-radius:999px;overflow:hidden;margin-bottom:7px"><div style="height:100%;width:{{ r.barW }};background:{{ r.barColor }};border-radius:999px"></div></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:11.5px"><span style="color:var(--ok);font-weight:600;font-family:'Geist Mono',monospace">{{ r.paidStr }} paid</span><sc-if value="{{ r.isInst }}" hint-placeholder-val="{{ false }}"><span style="color:var(--muted)">{{ r.instText }}</span></sc-if><span style="color:{{ r.pendColor }};font-weight:600;font-family:'Geist Mono',monospace">{{ r.pendStr }} {{ r.pendWord }}</span></div>
+      </div>
+    </div></sc-for>
+  </div>
+  <sc-if value="{{ showPagination }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);padding:11px 16px"><span style="font-size:12.5px;color:var(--subtle)">{{ pageInfo }}</span><div style="display:flex;align-items:center;gap:5px"><sc-for list="{{ pages }}" as="pg" hint-placeholder-count="3"><button onClick="{{ onPage }}" data-p="{{ pg.p }}" style="min-width:32px;height:32px;padding:0 8px;border-radius:7px;border:1px solid {{ pg.bd }};background:{{ pg.bg }};color:{{ pg.fg }};font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer">{{ pg.n }}</button></sc-for></div></div></sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:980,&quot;height&quot;:720},&quot;compact&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;role&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  CUR={GBP:'£',USD:'$',EUR:'€',EGP:'E£',AED:'AED ',SAR:'SAR ',INR:'₹'};
+  cur(){ try{ return this.CUR[localStorage.getItem('radams_currency')]||'£'; }catch(e){ return '£'; } }
+  tone(t){ const m={ok:['var(--oks)','var(--ok)'],warn:['var(--warns)','var(--warn)'],danger:['var(--dangers)','var(--danger)']}; const [bg,fg]=m[t]||m.warn; return {bg,fg}; }
+  ALLCOURSES=['Physics · Jun · U1','Chemistry · Jun · U1','Maths · Nov · U1','Physics · Nov · U1','Biology · Jun · U2'];
+  state={ search:'', filter:'all', page:0, rows:(()=>{
+    const FN=['Aria','Ben','Chloe','Diego','Ella','Faris','Grace','Henry','Iris','Jack','Karim','Lucy','Marco','Nadia','Omar','Priya','Quinn','Rana','Sam','Tara','Uma','Victor','Wendy','Yara','Zane'];
+    const LN=['Khan','Cohen','Park','Kim','Carter','Wong','Sayed','Rossi','Bauer','Haddad','Lee','Adel','Luna','Owusu','Walsh','Murphy','Reyes','Menon','Foster','Saleh'];
+    const out=[]; for(let k=1;k<=240;k++){ const f=FN[(k*3)%FN.length],l=LN[(k*7)%LN.length]; const plan=k%3===0?'full':'inst';
+      const fee=480+((k*20)%320); const insts=plan==='full'?1:3; const per=Math.round(fee/insts); const paidN=plan==='full'?(k%4===0?0:insts):(k%insts);
+      out.push({id:k,name:f+' '+l,phone:'7700 '+(900000+k*7),guardian:'7700 '+(900500+k*5),plan,fee,insts,paidN,
+        courses:[1,(k%4===0?2:0)].filter((n,i)=>i===0||n).map(()=>'').length?this.ALLCOURSES.slice(0,k%4===0?2:1):[this.ALLCOURSES[k%5]]}); }
+    return out; })() };
+  onSearch=(e)=>this.setState({search:e.target.value,page:0});
+  onFilter=(e)=>this.setState({filter:e.currentTarget.dataset.v,page:0});
+  onPage=(e)=>this.setState({page:+e.currentTarget.dataset.p});
+  fmt(n){ return this.cur()+(+n||0).toLocaleString('en-US'); }
+  payState(r){ const per=Math.round(r.fee/r.insts); const paid=r.paidN===r.insts?r.fee:per*r.paidN; const pend=r.fee-paid; if(pend<=0) return {key:'paid'}; if(paid>0) return {key:'partial'}; return {key:'unpaid'}; }
+  renderVals(){
+    const compact=!!this.props.compact, s=this.state;
+    const q=(s.search||'').trim().toLowerCase(), flt=s.filter;
+    const withState=s.rows.map(r=>({r,st:this.payState(r).key}));
+    const all=withState.filter(o=>(!q||o.r.name.toLowerCase().includes(q))&&(flt==='all'||(flt==='paid'&&o.st==='paid')||(flt==='pending'&&o.st!=='paid')||(flt==='inst'&&o.r.plan==='inst'))).map(o=>o.r).sort((a,b)=>a.name.localeCompare(b.name));
+    const PAGE=12, pageCount=Math.max(1,Math.ceil(all.length/PAGE)), page=Math.min(s.page,pageCount-1);
+    const rows=all.slice(page*PAGE,page*PAGE+PAGE).map(r=>{
+      const per=Math.round(r.fee/r.insts); const paid=r.paidN===r.insts?r.fee:per*r.paidN; const pend=r.fee-paid; const pct=r.fee?Math.round(paid/r.fee*100):0;
+      const st=this.payState(r).key; const isInst=r.plan==='inst';
+      let badge,barColor; if(st==='paid'){badge={text:'Paid',icon:'check',...this.tone('ok')};barColor='var(--ok)';}else if(st==='partial'){badge={text:'Partial',icon:'clock',...this.tone('warn')};barColor='var(--warn)';}else{badge={text:'Unpaid',icon:'alert',...this.tone('danger')};barColor='var(--danger)';}
+      return {id:r.id,name:r.name,i:r.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase(),idText:'CB-'+(1040+r.id),
+        phone:'+44 '+r.phone, guardian:'+44 '+r.guardian, email:r.name.toLowerCase().replace(/[^a-z]+/g,'.')+'@student.cpc.edu',
+        courses:r.courses, badge, planLabel:isInst?('Installments · '+r.insts+'×'):'Full payment',
+        payText:pct+'%', payColor:st==='paid'?'var(--ok)':'var(--warn)', barW:pct+'%', barColor,
+        paidStr:this.fmt(paid), pendStr:this.fmt(pend>0?pend:0), pendWord:pend>0?'pending':'settled', pendColor:pend>0?'var(--warn)':'var(--ok)',
+        isInst, instText:r.paidN+'/'+r.insts+' paid'};
+    });
+    const paidCount=withState.filter(o=>o.st==='paid').length;
+    const instCount=s.rows.filter(r=>r.plan==='inst').length;
+    return {
+      compact, cardCols:compact?'1fr':'repeat(2,minmax(0,1fr))', statCols:compact?'1fr 1fr':'repeat(4,1fr)',
+      search:s.search, onSearch:this.onSearch, onPage:this.onPage,
+      filters:[['all','All'],['paid','Fully paid'],['pending','Pending'],['inst','Installments']].map(([value,label])=>{ const a=flt===value; return {value,label,bg:a?'var(--brand)':'var(--surface)',fg:a?'var(--brandfg)':'var(--muted)',bd:a?'var(--brand)':'var(--border)'}; }),
+      stats:[{value:String(s.rows.length),label:'Students',color:'var(--brand)'},{value:String(paidCount),label:'Fully paid',color:'var(--ok)'},{value:String(s.rows.length-paidCount),label:'With balance',color:'var(--warn)'},{value:String(instCount),label:'On installments',color:'var(--text)'}],
+      rows, showPagination:pageCount>1, pageInfo:`${all.length?page*PAGE+1:0}–${Math.min((page+1)*PAGE,all.length)} of ${all.length}`,
+      pages:(()=>{ const lo=Math.max(0,page-2),hi=Math.min(pageCount-1,page+2),w=[]; for(let i=lo;i<=hi;i++) w.push({n:i+1,p:i,bg:i===page?'var(--brand)':'var(--surface)',fg:i===page?'var(--brandfg)':'var(--muted)',bd:i===page?'var(--brand)':'var(--border)'}); return w; })(),
+    };
+  }
+}
+</script>
+</body>
+</html>

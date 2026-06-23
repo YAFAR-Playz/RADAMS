@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:flex;flex-direction:column;gap:16px">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:17px 18px">
+    <div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px">
+      <div><div style="font-size:12px;color:var(--subtle);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Finance</div>
+      <h1 style="margin:4px 0 0;font-size:20px;font-weight:600;color:var(--text);letter-spacing:-.01em">Pay categories &amp; rates</h1>
+      <p style="margin:3px 0 0;font-size:13px;color:var(--muted);max-width:560px;line-height:1.5">Pick the course(s) these rates apply to, then define the options heads choose from. Select more than one course to share the same values.</p></div>
+      <button onClick="{{ onSave }}" disabled="{{ saveDisabled }}" style="display:flex;align-items:center;gap:7px;flex:none;background:{{ saveBg }};color:var(--brandfg);border:none;border-radius:var(--rad-sm);padding:10px 16px;font-family:inherit;font-size:13px;font-weight:600;cursor:{{ saveCursor }}" style-hover="filter:brightness(.96)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"></use></svg>{{ saveLabel }}</button>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:14px">
+      <span style="font-size:12.5px;font-weight:600;color:var(--muted)">Applies to</span>
+      <div style="position:relative;min-width:240px"><button onClick="{{ onToggleScopeMenu }}" style="display:flex;align-items:center;gap:8px;width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rad-sm);padding:0 12px;height:40px;cursor:pointer;font-family:inherit"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="var(--subtle)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><use href="#i-book"></use></svg><span style="flex:1;text-align:left;font-size:13px;font-weight:600;color:{{ scopeLabelColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ scopeLabel }}</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="var(--subtle)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><use href="#i-cd"></use></svg></button>
+        <sc-if value="{{ scopeMenuOpen }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;top:46px;left:0;right:0;z-index:20;background:var(--surface);border:1px solid var(--border);border-radius:var(--rad-sm);box-shadow:0 12px 36px rgba(8,12,22,.18);padding:6px;max-height:240px;overflow-y:auto"><sc-for list="{{ scopeChips }}" as="c" hint-placeholder-count="4"><button onClick="{{ onToggleScope }}" data-c="{{ c.name }}" style="display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border:none;background:none;cursor:pointer;border-radius:8px;font-family:inherit" style-hover="background:var(--surface2)"><div style="width:20px;height:20px;border-radius:6px;border:1.5px solid {{ c.bd }};background:{{ c.box }};color:var(--brandfg);display:flex;align-items:center;justify-content:center;flex:none"><sc-if value="{{ c.sel }}" hint-placeholder-val="{{ false }}"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"></use></svg></sc-if></div><span style="font-size:13px;font-weight:600;color:var(--text)">{{ c.name }}</span></button></sc-for></div></sc-if>
+      </div>
+    </div>
+  </div>
+
+  <sc-if value="{{ noScope }}" hint-placeholder-val="{{ false }}"><div style="background:var(--surface);border:1px dashed var(--border);border-radius:var(--rad);padding:40px 22px;text-align:center"><div style="width:48px;height:48px;border-radius:13px;background:var(--surface2);color:var(--subtle);display:flex;align-items:center;justify-content:center;margin:0 auto 12px"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-book"></use></svg></div><div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px">Choose a course to begin</div><p style="margin:0;font-size:13px;color:var(--muted)">Select one or more courses above — the rates, categories and brackets you set will apply to them.</p></div></sc-if>
+
+  <sc-if value="{{ hasScope }}" hint-placeholder-val="{{ true }}">
+
+  <!-- EXTRA WORK + DEDUCTION CATEGORIES -->
+  <div style="display:grid;gap:14px;grid-template-columns:{{ twoCol }}">
+    <sc-for list="{{ groups }}" as="g" hint-placeholder-count="2"><section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden">
+      <header style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border2)"><div style="display:flex;align-items:center;gap:9px"><div style="width:30px;height:30px;border-radius:8px;background:{{ g.iconBg }};color:{{ g.iconFg }};display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ g.icon }}"></use></svg></div><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">{{ g.title }}</h3></div><button onClick="{{ onAddCat }}" data-kind="{{ g.kind }}" style="display:flex;align-items:center;gap:5px;background:var(--surface);border:1px solid var(--border);color:var(--brand);border-radius:8px;padding:6px 11px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer" style-hover="background:var(--brands)"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-plus"></use></svg>Add</button></header>
+      <div style="padding:8px">
+        <sc-for list="{{ g.cats }}" as="c" hint-placeholder-count="3"><div style="padding:11px;border-radius:10px;border:1px solid var(--border2);margin:4px 0">
+          <div style="display:flex;align-items:center;gap:10px"><span style="flex:1;font-size:13.5px;font-weight:600;color:var(--text)">{{ c.label }}</span>
+            <div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:0 9px;height:32px"><select value="{{ c.mode }}" onChange="{{ onMode }}" data-kind="{{ g.kind }}" data-id="{{ c.id }}" style="appearance:none;border:none;background:none;font-family:inherit;font-size:11.5px;font-weight:600;color:var(--text);cursor:pointer;padding-right:16px;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2210%22 height=%2210%22 fill=%22none%22 stroke=%22%2397a1b0%22 stroke-width=%222%22><path d=%22m3 4.5 3 3 3-3%22/></svg>');background-repeat:no-repeat;background-position:right center"><option value="number">Number × rate</option><option value="dropdown">Sub-options</option><option value="fixed">Fixed amount</option></select></div>
+            <button onClick="{{ onDelCat }}" data-kind="{{ g.kind }}" data-id="{{ c.id }}" style="width:30px;height:30px;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--subtle);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none" style-hover="background:var(--dangers);color:var(--danger);border-color:var(--danger)"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-x"></use></svg></button>
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-top:7px;line-height:1.5">{{ c.detail }}</div>
+          <sc-if value="{{ c.isNumber }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:9px;margin-top:9px;border-top:1px dashed var(--border);padding-top:9px"><span style="font-size:11.5px;font-weight:600;color:var(--muted)">Per-1 rate (head enters a count × this)</span><div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:0 9px;height:32px;width:84px;margin-left:auto"><span style="font-size:12px;color:var(--subtle);font-weight:600">{{ cs }}</span><input value="{{ c.rate }}" onInput="{{ onCatRate }}" data-kind="{{ g.kind }}" data-id="{{ c.id }}" inputmode="numeric" style="border:none;outline:none;background:none;font-family:'Geist Mono',monospace;font-size:12.5px;font-weight:700;color:var(--ok);width:100%;height:100%"/></div></div></sc-if>
+          <sc-if value="{{ c.isFixed }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:9px;margin-top:9px;border-top:1px dashed var(--border);padding-top:9px"><span style="font-size:11.5px;font-weight:600;color:var(--muted)">Fixed amount applied</span><div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:0 9px;height:32px;width:84px;margin-left:auto"><span style="font-size:12px;color:var(--subtle);font-weight:600">{{ cs }}</span><input value="{{ c.rate }}" onInput="{{ onCatRate }}" data-kind="{{ g.kind }}" data-id="{{ c.id }}" inputmode="numeric" style="border:none;outline:none;background:none;font-family:'Geist Mono',monospace;font-size:12.5px;font-weight:700;color:var(--text);width:100%;height:100%"/></div></div></sc-if>
+          <sc-if value="{{ c.isDropdown }}" hint-placeholder-val="{{ false }}"><div style="margin-top:9px;border-top:1px dashed var(--border);padding-top:9px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><span style="font-size:10.5px;font-weight:700;color:var(--subtle);text-transform:uppercase;letter-spacing:.04em">Sub-options the head picks</span><button onClick="{{ onAddOption }}" data-kind="{{ g.kind }}" data-id="{{ c.id }}" style="display:flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--border);color:var(--brand);border-radius:7px;padding:4px 9px;font-family:inherit;font-size:11px;font-weight:600;cursor:pointer" style-hover="background:var(--brands)"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-plus"></use></svg>Add option</button></div><div style="display:flex;flex-direction:column;gap:6px"><sc-for list="{{ c.options }}" as="o" hint-placeholder-count="2"><div style="display:flex;align-items:center;gap:7px"><input value="{{ o.label }}" onInput="{{ onOptLabel }}" data-kind="{{ g.kind }}" data-id="{{ c.id }}" data-oi="{{ o.i }}" placeholder="Option name" style="flex:1;min-width:0;height:32px;padding:0 9px;border:1px solid var(--border);border-radius:7px;background:var(--surface2);font-family:inherit;font-size:12px;color:var(--text);outline:none" style-focus="border-color:var(--brand)"/><div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:0 8px;height:32px;width:80px;flex:none"><span style="font-size:11.5px;color:var(--subtle);font-weight:600">{{ cs }}</span><input value="{{ o.amt }}" onInput="{{ onOptAmt }}" data-kind="{{ g.kind }}" data-id="{{ c.id }}" data-oi="{{ o.i }}" inputmode="numeric" style="border:none;outline:none;background:none;font-family:'Geist Mono',monospace;font-size:12px;font-weight:700;color:var(--ok);width:100%;height:100%"/></div><button onClick="{{ onDelOption }}" data-kind="{{ g.kind }}" data-id="{{ c.id }}" data-oi="{{ o.i }}" style="width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--subtle);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none" style-hover="background:var(--dangers);color:var(--danger);border-color:var(--danger)"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-x"></use></svg></button></div></sc-for></div></div></sc-if>
+        </div></sc-for>
+      </div>
+    </section></sc-for>
+  </div>
+
+  <!-- PER-PAPER RATE PER COURSE -->
+  <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden">
+    <header style="padding:14px 16px;border-bottom:1px solid var(--border2)"><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">Per-paper rate by course</h3></header>
+    <div style="padding:10px;display:grid;gap:10px;grid-template-columns:{{ rateCols }}">
+      <sc-for list="{{ courseRates }}" as="c" hint-placeholder-count="3"><div style="display:flex;align-items:center;gap:10px;border:1px solid var(--border2);border-radius:9px;padding:10px 12px"><span style="flex:1;font-size:13px;font-weight:600;color:var(--text)">{{ c.course }}</span><span style="font-size:11.5px;color:var(--subtle)">per paper</span><div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:0 9px;height:34px;width:88px"><span style="font-size:12.5px;color:var(--subtle);font-weight:600">{{ cs }}</span><input value="{{ c.rate }}" onInput="{{ onRate }}" data-id="{{ c.id }}" inputmode="numeric" style="border:none;outline:none;background:none;font-family:'Geist Mono',monospace;font-size:13px;font-weight:700;color:var(--ok);width:100%;height:100%"/></div></div></sc-for>
+    </div>
+  </section>
+
+  <!-- BRACKET RANGES -->
+  <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden">
+    <header style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border2)"><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">Average-paper brackets</h3><button onClick="{{ onAddBracket }}" style="display:flex;align-items:center;gap:5px;background:var(--surface);border:1px solid var(--border);color:var(--brand);border-radius:8px;padding:6px 11px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer" style-hover="background:var(--brands)"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-plus"></use></svg>Add range</button></header>
+    <div style="padding:8px">
+      <sc-for list="{{ brackets }}" as="b" hint-placeholder-count="3"><div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:9px 11px;border-radius:9px" style-hover="background:var(--surface2)">
+        <span style="font-size:13px;font-weight:600;color:var(--text);width:80px;flex:none">{{ b.name }}</span>
+        <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:150px"><span style="font-size:11.5px;color:var(--subtle)">papers</span><input value="{{ b.lo }}" inputmode="numeric" style="width:56px;height:32px;text-align:center;border:1px solid var(--border);border-radius:7px;background:var(--surface2);font-family:'Geist Mono',monospace;font-size:12.5px;color:var(--text);outline:none"/><span style="color:var(--subtle)">–</span><input value="{{ b.hi }}" inputmode="numeric" style="width:56px;height:32px;text-align:center;border:1px solid var(--border);border-radius:7px;background:var(--surface2);font-family:'Geist Mono',monospace;font-size:12.5px;color:var(--text);outline:none"/></div>
+        <div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:0 9px;height:34px;width:100px;flex:none"><span style="font-size:12.5px;color:var(--subtle);font-weight:600">{{ cs }}</span><input value="{{ b.pay }}" inputmode="numeric" style="border:none;outline:none;background:none;font-family:'Geist Mono',monospace;font-size:13px;font-weight:700;color:var(--ok);width:100%;height:100%"/></div>
+      </div></sc-for>
+    </div>
+  </section>
+
+  <!-- OTHER RATES -->
+  <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden">
+    <header style="padding:14px 16px;border-bottom:1px solid var(--border2)"><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">Other rates</h3></header>
+    <div style="padding:10px;display:grid;gap:10px;grid-template-columns:{{ rateCols }}">
+      <sc-for list="{{ otherRates }}" as="o" hint-placeholder-count="2"><div style="display:flex;align-items:center;gap:10px;border:1px solid var(--border2);border-radius:9px;padding:10px 12px"><span style="flex:1;font-size:13px;font-weight:600;color:var(--text)">{{ o.label }}</span><span style="font-size:11.5px;color:var(--subtle)">{{ o.unit }}</span><div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:0 9px;height:34px;width:88px"><span style="font-size:12.5px;color:var(--subtle);font-weight:600">{{ cs }}</span><input value="{{ o.rate }}" inputmode="numeric" style="border:none;outline:none;background:none;font-family:'Geist Mono',monospace;font-size:13px;font-weight:700;color:var(--ok);width:100%;height:100%"/></div></div></sc-for>
+    </div>
+  </section>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:980,&quot;height&quot;:760},&quot;compact&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;role&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  CUR={GBP:'£',USD:'$',EUR:'€',EGP:'E£',AED:'AED ',SAR:'SAR ',INR:'₹'};
+  cur(){ try{ return this.CUR[localStorage.getItem('radams_currency')]||'£'; }catch(e){ return '£'; } }
+  state={ scope:[], scopeMenuOpen:false,
+    extra:[
+      {id:1,label:'Extra papers checked',mode:'number'},
+      {id:2,label:'Office hours',mode:'number'},
+      {id:3,label:'Mock exam marking',mode:'dropdown',options:[['Half day','40'],['Full day','80']]},
+      {id:4,label:'Cover for absent TA',mode:'fixed'},
+    ],
+    deduction:[
+      {id:1,label:'Lack of consistency',mode:'dropdown',options:[['Late checking','20'],['Late replies','30'],['Both','45']]},
+      {id:2,label:'Missed session',mode:'fixed'},
+      {id:3,label:'Policy breach',mode:'number'},
+    ],
+    courseRates:[{id:1,course:'Physics · Jun · U1',rate:'8'},{id:2,course:'Chemistry · Jun · U1',rate:'8'},{id:3,course:'Maths · Nov · U1',rate:'7'},{id:4,course:'Physics · Nov · U1',rate:'9'}],
+    brackets:[{name:'Bracket A',lo:'80',hi:'120',pay:'720'},{name:'Bracket B',lo:'120',hi:'160',pay:'980'},{name:'Bracket C',lo:'160',hi:'200',pay:'1240'}],
+    otherRates:[{label:'Office hour',unit:'per hour',rate:'15'},{label:'Per paper (default)',unit:'per paper',rate:'8'}],
+    nextId:10,
+  };
+  onMode=(e)=>{ const kind=e.currentTarget.dataset.kind, id=+e.currentTarget.dataset.id, v=e.target.value; this.setState(s=>({[kind]:s[kind].map(c=>c.id===id?{...c,mode:v}:c)})); };
+  onDelCat=(e)=>{ const kind=e.currentTarget.dataset.kind, id=+e.currentTarget.dataset.id; this.setState(s=>({[kind]:s[kind].filter(c=>c.id!==id)})); };
+  onAddCat=(e)=>{ const kind=e.currentTarget.dataset.kind; this.setState(s=>({[kind]:s[kind].concat([{id:s.nextId,label:'New category',mode:'number'}]),nextId:s.nextId+1})); };
+  onRate=(e)=>{ const id=+e.target.dataset.id,v=e.target.value.replace(/[^0-9]/g,''); this.setState(s=>({courseRates:s.courseRates.map(c=>c.id===id?{...c,rate:v}:c)})); };
+  onAddBracket=()=>this.setState(s=>({brackets:s.brackets.concat([{name:'Bracket '+String.fromCharCode(65+s.brackets.length),lo:'0',hi:'0',pay:'0'}])}));
+  onAddOption=(e)=>{ const kind=e.currentTarget.dataset.kind, id=+e.currentTarget.dataset.id; this.setState(s=>({[kind]:s[kind].map(c=>c.id===id?{...c,options:(c.options||[]).concat([['New option','0']])}:c)})); };
+  onDelOption=(e)=>{ const kind=e.currentTarget.dataset.kind, id=+e.currentTarget.dataset.id, oi=+e.currentTarget.dataset.oi; this.setState(s=>({[kind]:s[kind].map(c=>c.id===id?{...c,options:(c.options||[]).filter((_,i)=>i!==oi)}:c)})); };
+  onOptLabel=(e)=>{ const kind=e.target.dataset.kind, id=+e.target.dataset.id, oi=+e.target.dataset.oi, v=e.target.value; this.setState(s=>({[kind]:s[kind].map(c=>c.id===id?{...c,options:(c.options||[]).map((o,i)=>i===oi?[v,o[1]]:o)}:c)})); };
+  onOptAmt=(e)=>{ const kind=e.target.dataset.kind, id=+e.target.dataset.id, oi=+e.target.dataset.oi, v=e.target.value.replace(/[^0-9]/g,''); this.setState(s=>({[kind]:s[kind].map(c=>c.id===id?{...c,options:(c.options||[]).map((o,i)=>i===oi?[o[0],v]:o)}:c)})); };
+  onCatRate=(e)=>{ const kind=e.target.dataset.kind, id=+e.target.dataset.id, v=e.target.value.replace(/[^0-9]/g,''); this.setState(s=>({[kind]:s[kind].map(c=>c.id===id?{...c,rate:v}:c)})); };
+  onToggleScopeMenu=()=>this.setState(s=>({scopeMenuOpen:!s.scopeMenuOpen}));
+  onToggleScope=(e)=>{ const c=e.currentTarget.dataset.c; this.setState(s=>{ const cur=s.scope||[]; const scope=cur.includes(c)?cur.filter(x=>x!==c):cur.concat([c]); return {scope}; }); };
+  onSave=()=>this.setState({scopeMenuOpen:false});
+  renderVals(){
+    const compact=!!this.props.compact, cs=this.cur();
+    const detail=(c)=>{ if(c.mode==='number') return 'Head enters a number; multiplied by the per-1 rate (course-specific).'; if(c.mode==='dropdown') return 'Head picks one finance-defined sub-option below.'; return 'Fixed amount applied when the head selects this category.'; };
+    const mk=(list)=>list.map(c=>({id:c.id,label:c.label,mode:c.mode,detail:detail(c),isDropdown:c.mode==='dropdown',isNumber:c.mode==='number',isFixed:c.mode==='fixed',rate:c.rate||'8',options:(c.options||[]).map(([label,amt],i)=>({label,amt,i,amount:cs+amt}))}));
+    return {
+      compact, cs, twoCol:compact?'1fr':'repeat(2,minmax(0,1fr))', rateCols:compact?'1fr':'repeat(2,minmax(0,1fr))',
+      groups:[
+        {kind:'extra',title:'Extra work',icon:'trend',iconBg:'var(--oks)',iconFg:'var(--ok)',cats:mk(this.state.extra)},
+        {kind:'deduction',title:'Deductions',icon:'minus',iconBg:'var(--dangers)',iconFg:'var(--danger)',cats:mk(this.state.deduction)},
+      ],
+      courseRates:this.state.courseRates, brackets:this.state.brackets, otherRates:this.state.otherRates,
+      onMode:this.onMode, onDelCat:this.onDelCat, onAddCat:this.onAddCat, onRate:this.onRate, onAddBracket:this.onAddBracket,
+      onAddOption:this.onAddOption, onDelOption:this.onDelOption, onOptLabel:this.onOptLabel, onOptAmt:this.onOptAmt, onCatRate:this.onCatRate,
+      scopeChips:['Physics · Jun · U1','Chemistry · Jun · U1','Maths · Nov · U1','Physics · Nov · U1'].map(name=>{ const sel=(this.state.scope||[]).includes(name); return {name,sel,box:sel?'var(--brand)':'transparent',bd:sel?'var(--brand)':'var(--border)'}; }),
+      onToggleScope:this.onToggleScope, onToggleScopeMenu:this.onToggleScopeMenu, scopeMenuOpen:this.state.scopeMenuOpen,
+      hasScope:(this.state.scope||[]).length>0, noScope:(this.state.scope||[]).length===0,
+      scopeLabel:(this.state.scope||[]).length?((this.state.scope.length===1)?this.state.scope[0]:this.state.scope.length+' courses selected'):'Select course(s)…',
+      scopeLabelColor:(this.state.scope||[]).length?'var(--text)':'var(--subtle)',
+      onSave:this.onSave, saveDisabled:(this.state.scope||[]).length===0, saveBg:(this.state.scope||[]).length?'var(--brand)':'var(--subtle)', saveCursor:(this.state.scope||[]).length?'pointer':'not-allowed', saveLabel:'Save rates',
+    };
+  }
+}
+</script>
+</body>
+</html>

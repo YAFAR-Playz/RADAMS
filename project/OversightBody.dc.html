@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:flex;flex-direction:column;gap:16px">
+
+  <!-- HEADER CARD -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:17px 18px">
+    <div style="font-size:12px;color:var(--subtle);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Course oversight</div>
+    <h1 style="margin:4px 0 0;font-size:20px;font-weight:600;color:var(--text);letter-spacing:-.01em">Assistant message tracking</h1>
+    <p style="margin:3px 0 0;font-size:13px;color:var(--muted)">Switch between your course offerings and drill into any assistant's logged comments.</p>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:15px;flex-wrap:wrap">
+      <span style="font-size:12.5px;font-weight:600;color:var(--muted);flex:none;margin-right:2px">Offering</span>
+      <sc-for list="{{ offerings }}" as="o" hint-placeholder-count="4"><button onClick="{{ onOffering }}" data-i="{{ o.i }}" style="flex:none;display:flex;align-items:center;gap:7px;padding:8px 14px;border-radius:999px;border:1px solid {{ o.bd }};background:{{ o.bg }};color:{{ o.fg }};font-family:inherit;font-size:13px;font-weight:600;cursor:pointer"><span style="width:7px;height:7px;border-radius:50%;background:{{ o.dot }}"></span>{{ o.label }}</button></sc-for>
+    </div>
+    <div style="display:grid;gap:12px;grid-template-columns:{{ statCols }};margin-top:16px">
+      <sc-for list="{{ stats }}" as="s" hint-placeholder-count="4"><div style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--rad-sm);padding:13px 14px"><div style="font-size:23px;font-weight:700;color:{{ s.color }};letter-spacing:-.02em;line-height:1.1">{{ s.value }}</div><div style="font-size:12px;color:var(--muted);font-weight:500;margin-top:3px">{{ s.label }}</div></div></sc-for>
+    </div>
+  </div>
+
+  <!-- ASSISTANTS -->
+  <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden">
+    <header style="display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--border2)">
+      <h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">Assistants · messages sent vs pending</h3>
+      <span style="font-size:12.5px;color:var(--subtle)">{{ offeringLabel }}</span>
+    </header>
+    <sc-for list="{{ assistants }}" as="a" hint-placeholder-count="4"><div style="border-bottom:1px solid var(--border2)">
+      <div onClick="{{ onToggle }}" data-id="{{ a.id }}" style="display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:14px 18px;cursor:pointer" style-hover="background:var(--surface2)">
+        <div style="display:flex;align-items:center;gap:11px;flex:1;min-width:170px">
+          <div style="width:38px;height:38px;border-radius:50%;background:var(--brands);color:var(--brand);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex:none">{{ a.i }}</div>
+          <div style="min-width:0"><div style="font-size:14px;font-weight:600;color:var(--text)">{{ a.name }}</div><div style="font-size:12px;color:var(--subtle)">{{ a.students }} students</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;min-width:200px;flex:1">
+          <div style="flex:1;min-width:90px"><div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:11.5px;color:var(--muted);font-weight:500">Messages</span><span style="font-size:12px;font-weight:700;color:var(--text)">{{ a.sent }}/{{ a.total }}</span></div><div style="height:6px;background:var(--surface2);border-radius:999px;overflow:hidden"><div style="height:100%;width:{{ a.barW }};background:{{ a.barColor }};border-radius:999px"></div></div></div>
+          <span style="display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:999px;font-size:11.5px;font-weight:600;background:var(--warns);color:var(--warn);flex:none"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-clock"></use></svg>{{ a.pending }} pending</span>
+        </div>
+        <span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;font-size:11.5px;font-weight:600;background:{{ a.track.bg }};color:{{ a.track.fg }};flex:none"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ a.track.icon }}"></use></svg>{{ a.track.text }}</span>
+        <button style="display:flex;align-items:center;gap:6px;flex:none;background:var(--surface);color:var(--brand);border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer" style-hover="background:var(--brands)"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:{{ a.chevR }}"><use href="#i-cd"></use></svg>{{ a.toggleText }}</button>
+      </div>
+      <sc-if value="{{ a.expanded }}" hint-placeholder-val="{{ false }}">
+        <div style="background:var(--surface2);border-top:1px solid var(--border2);padding:6px 0">
+          <sc-for list="{{ a.comments }}" as="c" hint-placeholder-count="5"><div style="display:flex;flex-wrap:wrap;align-items:center;gap:11px;padding:11px 18px;border-top:1px solid var(--border2)">
+            <div style="display:flex;align-items:center;gap:9px;width:160px;flex:none"><div style="width:28px;height:28px;border-radius:50%;background:var(--surface);border:1px solid var(--border);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;flex:none">{{ c.i }}</div><div style="min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.student }}</div><div style="font-size:11px;color:var(--subtle);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.assignment }}</div></div></div>
+            <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:600;background:{{ c.badge.bg }};color:{{ c.badge.fg }};flex:none"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ c.badge.icon }}"></use></svg>{{ c.badge.text }}</span>
+            <span style="font-size:12.5px;font-weight:700;color:var(--text);width:38px;flex:none">{{ c.grade }}</span>
+            <span style="flex:1;min-width:150px;font-size:12.5px;color:var(--muted);line-height:1.4">{{ c.comment }}</span>
+            <span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:{{ c.sentColor }};flex:none"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ c.sentIcon }}"></use></svg>{{ c.sentText }}</span>
+          </div></sc-for>
+          <sc-if value="{{ a.showCPages }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 18px;border-top:1px solid var(--border2)"><span style="font-size:11.5px;color:var(--subtle)">{{ a.cRange }}</span><div style="display:flex;gap:5px"><sc-for list="{{ a.cPages }}" as="pg" hint-placeholder-count="2"><button onClick="{{ onCommentPage }}" data-id="{{ a.id }}" data-p="{{ pg.p }}" style="min-width:28px;height:28px;padding:0 7px;border-radius:7px;border:1px solid {{ pg.bd }};background:{{ pg.bg }};color:{{ pg.fg }};font-family:inherit;font-size:12px;font-weight:600;cursor:pointer">{{ pg.n }}</button></sc-for></div></div></sc-if>
+        </div>
+      </sc-if>
+    </div></sc-for>
+  </section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:980,&quot;height&quot;:720},&quot;compact&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;role&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  STAT={checked:['Checked','ok','check'],submitted:['Submitted','ok','check2'],late:['Late','warn','clock'],missing:['Missing','danger','alert'],excused:['Excused','neutral','minus']};
+  state={ offering:0, open:{} };
+  tone(t){ const m={ok:['var(--oks)','var(--ok)'],warn:['var(--warns)','var(--warn)'],danger:['var(--dangers)','var(--danger)'],neutral:['var(--surface2)','var(--muted)'],brand:['var(--brands)','var(--brand)']}; const [bg,fg]=m[t]||m.neutral; return {bg,fg}; }
+
+  FIRST=['Liam','Mei','Omar','Sofia','Ethan','Hana','Noah','Yara','Aria','Ben','Chloe','Diego','Fatima','Grace','Henry','Isla','Jack','Karim','Lucy','Marco','Nadia','Oscar','Priya','Quinn','Rana','Sam','Tara','Uma','Victor','Wendy','Adam','Bella','Caleb','Dina','Elias','Farah','Gabe','Huda','Ivan','Jana','Kai','Lina','Musa','Nora','Owen','Pia','Rami','Suki','Theo','Vera'];
+  LAST=['Carter','Wong','Sayed','Rossi','Park','Kim','Bauer','Haddad','Khan','Cohen','Adeyemi','Luna','Zahra','Owusu','Walsh','Murphy','Lee','Adel','Brennan','Ricci','Petrov','Reyes','Menon','Foster','Saleh','Okonkwo','Vidal','Desai','Hugo','Park','Nasser','Silva','Tan','Ahmed','Bauer','Costa','Diallo','Erdem','Frost','Gupta'];
+  CMTS={checked:['Strong work this round','Consistent performer','Exemplar answer','Solid reasoning shown','Top of the group'],submitted:['Good attempt — minor revisions','Needs work on units','Decent, watch algebra slips','Improving steadily','Review key topic'],late:['Handed in late; flag timing','Late again — encourage earlier','Improving but slow','Time management to watch'],missing:['No submission — parent contacted','Awaiting submission','No contact yet',''],excused:['Approved absence, will resit','Medical absence','Excused — family reason','']};
+  ASTNAMES=['Aisha Rahman','Tom Becker','Yuki Tanaka','Carlos Diaz','Nadia Saleh','Elena Voss','Marco Bianchi','Priya Nair','Hassan Ali','Sara Mensah','Daniel Cole','Fatima Noor'];
+
+  initials(name){ return name.split(' ').map(w=>w[0]).join('').toUpperCase(); }
+  mkRoster(seed,count){ const out=[]; for(let k=0;k<count;k++){ const f=this.FIRST[(seed*7+k*13)%this.FIRST.length]; const l=this.LAST[(seed*11+k*5)%this.LAST.length]; out.push(f+' '+l); } return out; }
+  mkComments(seed,count){ const ASG=['Paper 3 — Mechanics','Paper 1 — MCQ','Paper 2 — Structured','Homework — Forces']; const STK=['checked','submitted','late','missing','excused']; const names=this.mkRoster(seed,count);
+    return names.map((student,idx)=>{ const status=STK[(seed*3+idx)%STK.length]; const sent=(seed*7+idx)%5!==0; const hasGrade=status==='checked'||status==='submitted'||status==='late';
+      const grade=hasGrade?String(55+((seed*13+idx*7)%44)):''; const pool=this.CMTS[status]; const comment=pool[(seed+idx)%pool.length];
+      return {student,i:this.initials(student),status,grade,comment,sent,assignment:ASG[idx%ASG.length]}; }); }
+
+  offeringsData(){ const STUDENTS_PER_AST=30, ASSISTANTS=10;
+    const O=(label,base)=>({label,assistants:Array.from({length:ASSISTANTS},(_,idx)=>{ const seed=base*100+idx; const total=STUDENTS_PER_AST; const sent=Math.max(0,total-((seed*3+idx*5)%14)); const name=this.ASTNAMES[idx%this.ASTNAMES.length];
+      return {id:idx+1,name,i:this.initials(name),students:STUDENTS_PER_AST,sent,total,comments:this.mkComments(seed,STUDENTS_PER_AST)}; })});
+    return [
+      O('Physics · June · Unit 1',1),
+      O('Physics · Nov · Unit 1',2),
+      O('Physics · June · Unit 2',3),
+      O('Chemistry · June · Unit 1',4),
+    ];
+  }
+
+  track(pct){ if(pct===100) return {text:'Complete',icon:'check2',...this.tone('ok')}; if(pct>=80) return {text:'On track',icon:'check2',...this.tone('brand')}; if(pct>=55) return {text:'Behind',icon:'clock',...this.tone('warn')}; return {text:'At risk',icon:'alert',...this.tone('danger')}; }
+
+  onOffering=(e)=>this.setState({offering:+e.currentTarget.dataset.i, open:{}, cpage:{}});
+  onToggle=(e)=>{ const id=+e.currentTarget.dataset.id; this.setState(s=>({open:{...s.open,[id]:!s.open[id]}})); };
+  onCommentPage=(e)=>{ const id=+e.currentTarget.dataset.id, p=+e.currentTarget.dataset.p; this.setState(s=>({cpage:{...s.cpage,[id]:p}})); };
+
+  renderVals(){
+    const compact=!!this.props.compact;
+    const all=this.offeringsData();
+    const offerings=all.map((o,i)=>{ const a=i===this.state.offering; return {label:o.label,i,bg:a?'var(--brand)':'var(--surface)',fg:a?'var(--brandfg)':'var(--muted)',bd:a?'var(--brand)':'var(--border)',dot:a?'var(--brandfg)':'var(--subtle)'}; });
+    const cur=all[this.state.offering];
+    const totSent=cur.assistants.reduce((x,a)=>x+a.sent,0), totMsg=cur.assistants.reduce((x,a)=>x+a.total,0);
+    const pending=totMsg-totSent, completion=Math.round(totSent/totMsg*100);
+    const stats=[
+      {value:String(cur.assistants.length),label:'Assistants',color:'var(--text)'},
+      {value:String(totSent),label:'Messages sent',color:'var(--ok)'},
+      {value:String(pending),label:'Pending',color:'var(--warn)'},
+      {value:completion+'%',label:'Completion',color:'var(--brand)'},
+    ];
+    const PAGE=10;
+    const assistants=cur.assistants.map(a=>{ const pct=Math.round(a.sent/a.total*100); const expanded=!!this.state.open[a.id];
+      const sortedAll=a.comments.slice().sort((x,y)=>x.student.localeCompare(y.student));
+      const cp=(this.state.cpage&&this.state.cpage[a.id])||0;
+      const pageCount=Math.max(1,Math.ceil(sortedAll.length/PAGE));
+      const page=Math.min(cp,pageCount-1);
+      const slice=expanded?sortedAll.slice(page*PAGE,page*PAGE+PAGE):[];
+      const comments=slice.map(c=>{ const [t,tone,icon]=this.STAT[c.status]; const {bg,fg}=this.tone(tone); return {student:c.student,i:c.i,assignment:c.assignment,grade:c.grade||'—',comment:c.comment||'No comment yet',badge:{text:t,icon,bg,fg}, sentColor:c.sent?'var(--ok)':'var(--warn)', sentIcon:c.sent?'check2':'clock', sentText:c.sent?'Sent':'Pending'}; });
+      const cPages=Array.from({length:pageCount},(_,i)=>({n:i+1,p:i, bg:i===page?'var(--brand)':'var(--surface)', fg:i===page?'var(--brandfg)':'var(--muted)', bd:i===page?'var(--brand)':'var(--border)'}));
+      return {id:a.id,name:a.name,i:a.i,students:a.students,sent:a.sent,total:a.total,pending:a.total-a.sent,barW:pct+'%',barColor:this.track(pct).fg,track:this.track(pct),expanded,chevR:expanded?'rotate(180deg)':'none',toggleText:expanded?'Hide':'Comments',comments, showCPages:sortedAll.length>PAGE, cPages, cRange:`${page*PAGE+1}–${Math.min(page*PAGE+PAGE,sortedAll.length)} of ${sortedAll.length}`};
+    });
+    return { compact, offerings, offeringLabel:cur.label, stats, statCols: compact?'1fr 1fr':'repeat(4,1fr)', assistants, onOffering:this.onOffering, onToggle:this.onToggle, onCommentPage:this.onCommentPage };
+  }
+}
+</script>
+</body>
+</html>

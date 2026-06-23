@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:flex;flex-direction:column;gap:16px">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:17px 18px">
+    <div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px">
+      <div>
+        <div style="font-size:12px;color:var(--subtle);font-weight:600;text-transform:uppercase;letter-spacing:.04em">HR</div>
+        <h1 style="margin:4px 0 0;font-size:20px;font-weight:600;color:var(--text);letter-spacing:-.01em">Hiring &amp; staffing</h1>
+        <p style="margin:3px 0 0;font-size:13px;color:var(--muted)">Add, replace or remove any staff member — heads, assistants, registration, finance or HR. Every action records full details and dates.</p>
+      </div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:15px">
+      <button onClick="{{ onNew }}" data-kind="add" style="display:flex;align-items:center;gap:7px;background:var(--brand);color:var(--brandfg);border:none;border-radius:var(--rad-sm);padding:10px 15px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer" style-hover="filter:brightness(.96)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-user-plus"></use></svg>Add staff</button>
+      <button onClick="{{ onNew }}" data-kind="replace" style="display:flex;align-items:center;gap:7px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--rad-sm);padding:10px 15px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer" style-hover="background:var(--surface2)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-users"></use></svg>Replace</button>
+      <button onClick="{{ onNew }}" data-kind="remove" style="display:flex;align-items:center;gap:7px;background:var(--surface);color:var(--danger);border:1px solid var(--border);border-radius:var(--rad-sm);padding:10px 15px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer" style-hover="background:var(--dangers);border-color:var(--danger)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-x"></use></svg>Remove</button>
+    </div>
+  </div>
+
+  <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden">
+    <header style="padding:14px 18px;border-bottom:1px solid var(--border2)"><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">Recent staffing actions</h3></header>
+    <div style="padding:7px 8px">
+      <sc-for list="{{ log }}" as="l" hint-placeholder-count="3"><div style="display:flex;flex-wrap:wrap;align-items:center;gap:11px;padding:10px 11px;border-radius:10px" style-hover="background:var(--surface2)">
+        <div style="width:32px;height:32px;border-radius:8px;background:var(--surface2);color:{{ l.color }};display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ l.icon }}"></use></svg></div>
+        <div style="flex:1;min-width:150px"><div style="font-size:13px;font-weight:600;color:var(--text)">{{ l.title }}</div><div style="font-size:12px;color:var(--subtle)">{{ l.detail }}</div></div>
+        <span style="font-size:11.5px;color:var(--subtle);flex:none">{{ l.date }}</span>
+      </div></sc-for>
+    </div>
+  </section>
+
+  <sc-if value="{{ modalOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;background:rgba(8,12,22,.5);display:flex;align-items:center;justify-content:center;padding:20px;z-index:60">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:0 24px 70px rgba(8,12,22,.34);width:100%;max-width:470px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:11px;padding:16px 18px;border-bottom:1px solid var(--border2)">
+          <div style="width:38px;height:38px;border-radius:10px;background:var(--brands);color:var(--brand);display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ modalIcon }}"></use></svg></div>
+          <div style="flex:1;min-width:0"><h3 style="margin:0;font-size:15px;font-weight:600;color:var(--text)">{{ modalTitle }}</h3><div style="font-size:12px;color:var(--muted)">Applied by HR — recorded with dates</div></div>
+          <button onClick="{{ onClose }}" style="width:32px;height:32px;border-radius:8px;border:none;background:none;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none" style-hover="background:var(--surface2)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-x"></use></svg></button>
+        </div>
+        <div style="padding:16px 18px;overflow-y:auto;display:flex;flex-direction:column;gap:13px">
+          <div style="display:flex;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:3px">
+            <sc-for list="{{ kindTabs }}" as="k" hint-placeholder-count="3"><button onClick="{{ onKind }}" data-v="{{ k.value }}" style="flex:1;height:36px;border:none;border-radius:8px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;background:{{ k.bg }};color:{{ k.fg }};box-shadow:{{ k.sh }}">{{ k.label }}</button></sc-for>
+          </div>
+          <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Staff role</label><div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rad-sm);padding:0 12px;height:42px"><select value="{{ form.role }}" onChange="{{ onField }}" data-f="role" style="appearance:none;border:none;background:none;font-family:inherit;font-size:13.5px;font-weight:600;color:var(--text);cursor:pointer;width:100%;height:100%;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 fill=%22none%22 stroke=%22%2397a1b0%22 stroke-width=%222%22><path d=%22m3 4.5 3 3 3-3%22/></svg>');background-repeat:no-repeat;background-position:right center"><sc-for list="{{ roleOpts }}" as="ro" hint-placeholder-count="5"><option value="{{ ro }}">{{ ro }}</option></sc-for></select></div></div>
+          <sc-if value="{{ needsExisting }}" hint-placeholder-val="{{ false }}"><div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">{{ existingLabel }}</label><div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rad-sm);padding:0 12px;height:42px"><select value="{{ form.existing }}" onChange="{{ onField }}" data-f="existing" style="appearance:none;border:none;background:none;font-family:inherit;font-size:13.5px;font-weight:600;color:var(--text);cursor:pointer;width:100%;height:100%;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 fill=%22none%22 stroke=%22%2397a1b0%22 stroke-width=%222%22><path d=%22m3 4.5 3 3 3-3%22/></svg>');background-repeat:no-repeat;background-position:right center"><sc-for list="{{ staffOpts }}" as="st" hint-placeholder-count="4"><option value="{{ st }}">{{ st }}</option></sc-for></select></div></div></sc-if>
+          <sc-if value="{{ needsNew }}" hint-placeholder-val="{{ true }}">
+            <div style="font-size:11px;font-weight:700;color:var(--subtle);text-transform:uppercase;letter-spacing:.04em">{{ newSectionLabel }}</div>
+            <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Full name</label><input value="{{ form.name }}" onInput="{{ onField }}" data-f="name" placeholder="e.g. Jordan Hale" style="width:100%;height:40px;padding:0 12px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);font-family:inherit;font-size:13px;color:var(--text);outline:none" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Phone</label><input value="{{ form.phone }}" onInput="{{ onField }}" data-f="phone" inputmode="tel" placeholder="7700 900000" style="width:100%;height:40px;padding:0 12px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);font-family:'Geist Mono',monospace;font-size:12.5px;color:var(--text);outline:none" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/></div>
+              <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Email</label><input value="{{ form.email }}" onInput="{{ onField }}" data-f="email" type="email" placeholder="name@email.com" style="width:100%;height:40px;padding:0 12px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);font-family:inherit;font-size:12.5px;color:var(--text);outline:none" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/></div>
+            </div>
+            <sc-if value="{{ showCourses }}" hint-placeholder-val="{{ true }}"><div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Assign to course(s)</label><div style="display:flex;flex-wrap:wrap;gap:6px"><sc-for list="{{ courseChips }}" as="c" hint-placeholder-count="3"><button onClick="{{ onToggleCourse }}" data-c="{{ c.name }}" style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:999px;border:1px solid {{ c.bd }};background:{{ c.bg }};color:{{ c.fg }};font-family:inherit;font-size:12px;font-weight:600;cursor:pointer"><sc-if value="{{ c.sel }}" hint-placeholder-val="{{ false }}"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"></use></svg></sc-if>{{ c.name }}</button></sc-for></div></div></sc-if>
+          </sc-if>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <sc-if value="{{ showHire }}" hint-placeholder-val="{{ true }}"><div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Hire date</label><input value="{{ form.hire }}" onInput="{{ onField }}" data-f="hire" type="date" style="width:100%;height:40px;padding:0 11px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);font-family:inherit;font-size:12.5px;color:var(--text);outline:none" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/></div></sc-if>
+            <sc-if value="{{ showLeave }}" hint-placeholder-val="{{ false }}"><div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Leave date</label><input value="{{ form.leave }}" onInput="{{ onField }}" data-f="leave" type="date" style="width:100%;height:40px;padding:0 11px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);font-family:inherit;font-size:12.5px;color:var(--text);outline:none" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/></div></sc-if>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;padding:14px 18px 18px;border-top:1px solid var(--border2)">
+          <button onClick="{{ onClose }}" style="flex:1;height:44px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface);color:var(--text);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer" style-hover="background:var(--surface2)">Cancel</button>
+          <button onClick="{{ onSubmit }}" style="flex:1.3;display:flex;align-items:center;justify-content:center;gap:8px;height:44px;background:var(--brand);color:var(--brandfg);border:none;border-radius:var(--rad-sm);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer" style-hover="filter:brightness(.96)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"></use></svg>{{ submitLabel }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:900,&quot;height&quot;:680},&quot;compact&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;role&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  ROLES=['Course Head','Teaching Assistant','Registration','Finance','HR'];
+  COURSES=['Physics · Jun · U1','Physics · Nov · U1','Chemistry · Jun · U1','Maths · Nov · U1'];
+  STAFF=['Aisha Rahman (Assistant)','Tom Becker (Assistant)','Marcus Bell (Head)','Elena Voss (Head)','Carlos Diaz (Assistant)','Grace Lim (Finance)','Omar Haddad (Registration)'];
+  KIND={add:{title:'Add staff member',icon:'user-plus'},replace:{title:'Replace staff member',icon:'users'},remove:{title:'Remove staff member',icon:'x'}};
+  state={ modalOpen:false, kind:'add', form:{role:'Teaching Assistant',existing:'',name:'',phone:'',email:'',hire:'2026-07-01',leave:'2026-06-30',courses:[]},
+    log:[
+      {kind:'add',title:'Added Teaching Assistant — Priya Nair',detail:'Physics · Jun · U1 · hired 1 Jun 2026',date:'2 Jun',icon:'user-plus',color:'var(--brand)'},
+      {kind:'replace',title:'Replaced Carlos Diaz → Aria Khan',detail:'Chemistry · Jun · U1',date:'28 May',icon:'users',color:'var(--warn)'},
+      {kind:'remove',title:'Removed Course Head — Sara Lin',detail:'left 15 May 2026',date:'15 May',icon:'x',color:'var(--danger)'},
+    ] };
+  onNew=(e)=>{ const kind=e.currentTarget.dataset.kind||'add'; this.setState({modalOpen:true,kind,form:{role:'Teaching Assistant',existing:this.STAFF[0],name:'',phone:'',email:'',hire:'2026-07-01',leave:'2026-06-30',courses:[]}}); };
+  onClose=()=>this.setState({modalOpen:false});
+  onKind=(e)=>this.setState({kind:e.currentTarget.dataset.v});
+  onField=(e)=>{ const f=e.currentTarget.dataset.f, v=e.target.value; this.setState(s=>({form:{...s.form,[f]:v}})); };
+  onToggleCourse=(e)=>{ const c=e.currentTarget.dataset.c; this.setState(s=>{ const cur=s.form.courses||[]; const courses=cur.includes(c)?cur.filter(x=>x!==c):cur.concat([c]); return {form:{...s.form,courses}}; }); };
+  onSubmit=()=>{ this.setState(s=>{ const k=s.kind, f=s.form; const titleMap={add:'Added '+f.role+' — '+(f.name||'New hire'),replace:'Replaced '+(f.existing||'')+' → '+(f.name||'New hire'),remove:'Removed '+(f.existing||'')}; const detail=k==='remove'?('left '+f.leave):((f.courses[0]||'—')+' · '+(k==='add'?'hired '+f.hire:'effective '+f.hire)); return {log:[{kind:k,title:titleMap[k],detail,date:'now',icon:this.KIND[k].icon,color:k==='add'?'var(--brand)':(k==='remove'?'var(--danger)':'var(--warn)')}].concat(s.log),modalOpen:false}; }); };
+  renderVals(){
+    const compact=!!this.props.compact, s=this.state, k=s.kind;
+    const showCourses=s.form.role==='Course Head'||s.form.role==='Teaching Assistant';
+    return { compact, log:s.log,
+      modalOpen:s.modalOpen, modalTitle:this.KIND[k].title, modalIcon:this.KIND[k].icon,
+      kindTabs:[['add','Add'],['replace','Replace'],['remove','Remove']].map(([value,label])=>{ const a=k===value; return {value,label,bg:a?'var(--surface)':'transparent',fg:a?'var(--text)':'var(--muted)',sh:a?'var(--shadow)':'none'}; }),
+      roleOpts:this.ROLES, staffOpts:this.STAFF, form:s.form, onField:this.onField,
+      needsExisting:k==='replace'||k==='remove', existingLabel:k==='remove'?'Staff member to remove':'Staff member to replace',
+      needsNew:k==='add'||k==='replace', newSectionLabel:k==='replace'?'New hire details':'New staff details',
+      showCourses, courseChips:this.COURSES.map(c=>{ const sel=(s.form.courses||[]).includes(c); return {name:c,sel,bg:sel?'var(--brands)':'var(--surface)',fg:sel?'var(--brand)':'var(--muted)',bd:sel?'var(--brand)':'var(--border)'}; }),
+      showHire:k!=='remove', showLeave:k==='remove'||k==='replace',
+      onNew:this.onNew, onClose:this.onClose, onKind:this.onKind, onToggleCourse:this.onToggleCourse, onSubmit:this.onSubmit,
+      submitLabel:k==='add'?'Add staff':(k==='replace'?'Replace':'Remove'),
+    };
+  }
+}
+</script>
+</body>
+</html>

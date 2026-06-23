@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:flex;flex-direction:column;gap:16px">
+
+  <!-- HEADER -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:17px 18px">
+    <div style="font-size:12px;color:var(--subtle);font-weight:600;text-transform:uppercase;letter-spacing:.04em">{{ kicker }}</div>
+    <h1 style="margin:4px 0 0;font-size:20px;font-weight:600;color:var(--text);letter-spacing:-.01em">WhatsApp message templates</h1>
+    <p style="margin:3px 0 0;font-size:13px;color:var(--muted);max-width:600px;line-height:1.5">{{ subtitle }}</p>
+    <sc-if value="{{ isAdmin }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;align-items:flex-start;gap:10px;margin-top:14px;background:var(--infos);border:1px solid var(--border);border-radius:var(--rad-sm);padding:11px 13px">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="var(--info)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:1px"><use href="#i-building"></use></svg>
+        <span style="font-size:12.5px;color:var(--text);line-height:1.45">These templates apply to <span style="font-weight:600">Cambridge Prep Center</span> only. Each starts from the platform default set by the Owner — edit to override, or reset to fall back to the default.</span>
+      </div>
+    </sc-if>
+  </div>
+
+  <div style="display:grid;gap:16px;grid-template-columns:{{ cols }};align-items:start">
+
+    <!-- TEMPLATE LIST -->
+    <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden;align-self:start">
+      <header style="padding:14px 16px;border-bottom:1px solid var(--border2)"><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">Templates</h3></header>
+      <div style="padding:7px 8px">
+        <sc-for list="{{ list }}" as="t" hint-placeholder-count="4"><div onClick="{{ onSelect }}" data-k="{{ t.key }}" style="display:flex;align-items:center;gap:11px;padding:11px;border-radius:10px;cursor:pointer;background:{{ t.activeBg }}" style-hover="background:var(--surface2)">
+          <div style="width:34px;height:34px;border-radius:9px;background:{{ t.iconBg }};color:{{ t.iconFg }};display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ t.icon }}"></use></svg></div>
+          <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text)">{{ t.label }}</div><div style="font-size:11.5px;color:var(--subtle)">{{ t.usage }}</div></div>
+          <sc-if value="{{ t.customized }}" hint-placeholder-val="{{ false }}"><span title="Overrides the default" style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:700;background:var(--brands);color:var(--brand);flex:none">EDITED</span></sc-if>
+        </div></sc-for>
+      </div>
+    </section>
+
+    <!-- EDITOR -->
+    <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden">
+      <header style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border2)">
+        <div><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">{{ current.label }}</h3><p style="margin:2px 0 0;font-size:12px;color:var(--subtle)">{{ editorHint }}</p></div>
+        <sc-if value="{{ canReset }}" hint-placeholder-val="{{ false }}"><button onClick="{{ onReset }}" style="display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:7px 12px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer" style-hover="background:var(--surface2)"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-clock"></use></svg>{{ resetLabel }}</button></sc-if>
+      </header>
+      <div style="padding:16px 18px;display:flex;flex-direction:column;gap:13px">
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px"><label style="font-size:12.5px;font-weight:600;color:var(--text)">Message body</label><span style="font-size:11px;color:var(--subtle)">{{ charCount }} chars</span></div>
+          <textarea value="{{ current.body }}" onInput="{{ onBody }}" style="width:100%;height:170px;resize:vertical;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);padding:12px;font-family:inherit;font-size:13.5px;color:var(--text);outline:none;line-height:1.6" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"></textarea>
+        </div>
+        <div>
+          <div style="font-size:11.5px;font-weight:600;color:var(--muted);margin-bottom:7px">Insert a variable</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            <sc-for list="{{ vars }}" as="v" hint-placeholder-count="5"><button onClick="{{ onInsertVar }}" data-v="{{ v.token }}" style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--brand);font-family:'Geist Mono',monospace;font-size:11.5px;font-weight:600;cursor:pointer" style-hover="background:var(--brands)">{{ v.token }}</button></sc-for>
+          </div>
+        </div>
+        <!-- preview -->
+        <div>
+          <div style="font-size:11.5px;font-weight:600;color:var(--muted);margin-bottom:7px">Preview</div>
+          <div style="background:#0b141a;border-radius:10px;padding:14px;display:flex;justify-content:flex-end">
+            <div style="max-width:90%;background:#005c4b;color:#e9edef;border-radius:10px 10px 2px 10px;padding:9px 12px;font-size:13px;line-height:1.5;white-space:pre-wrap">{{ preview }}<div style="text-align:right;font-size:10px;color:#8aa6a0;margin-top:3px">12:04 ✓✓</div></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:2px">
+          <button onClick="{{ onSave }}" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;height:44px;background:var(--brand);color:var(--brandfg);border:none;border-radius:var(--rad-sm);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer" style-hover="filter:brightness(.96)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"></use></svg>{{ saveLabel }}</button>
+        </div>
+        <p style="margin:0;font-size:11.5px;color:var(--subtle);line-height:1.5">{{ footnote }}</p>
+      </div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:980,&quot;height&quot;:740},&quot;compact&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;role&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;owner&quot;,&quot;admin&quot;],&quot;default&quot;:&quot;owner&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  TEMPLATES=[
+    {key:'assignment',label:'Assignment update',icon:'clipboard-list',usage:'Sent from assignment logging',
+     def:'Assalamu alaikum, this is {org}.\n\nUpdate for {student} on "{assignment}":\nStatus: {status}{grade}\n\n{comment}\n\nThank you.'},
+    {key:'attendance',label:'Attendance update',icon:'cal-check',usage:'Sent per session',
+     def:'Assalamu alaikum, this is {org}.\n\n{student} was marked {status} for {session} on {date}.\n\nThank you.'},
+    {key:'payment',label:'Payment reminder',icon:'wallet',usage:'Sent by Finance/Registration',
+     def:'Dear parent, this is a reminder that {student}\u2019s fee for {course} is due on {date}. Please contact us with any questions.'},
+    {key:'welcome',label:'Welcome message',icon:'user-plus',usage:'Sent by assistant on enrollment',
+     def:'Assalamu alaikum, I’m {assistant_name}, {student}’s teaching assistant for {course} at {org}. I’ll be sharing their progress with you this term. Please feel free to reach out any time.'},
+  ];
+  VARS=[{token:'{student}'},{token:'{org}'},{token:'{course}'},{token:'{assistant_name}'},{token:'{assignment}'},{token:'{status}'},{token:'{grade}'},{token:'{session}'},{token:'{date}'},{token:'{comment}'}];
+  SAMPLE={student:'Liam Carter',org:'Cambridge Prep Center',course:'Physics · June · U1',assistant_name:'Aisha Rahman',assignment:'Paper 3 — Mechanics',status:'Submitted',grade:' (85/100)',session:'Week 7 — Lecture',date:'18 Jun',comment:'Strong on kinematics.'};
+  state={ sel:'assignment', overrides:{} };
+  onSelect=(e)=>this.setState({sel:e.currentTarget.dataset.k});
+  body(key){ const o=this.state.overrides[key]; if(o!==undefined) return o; const t=this.TEMPLATES.find(t=>t.key===key); return t?t.def:''; }
+  onBody=(e)=>{ const key=this.state.sel, v=e.target.value; this.setState(s=>({overrides:{...s.overrides,[key]:v}})); };
+  onInsertVar=(e)=>{ const tok=e.currentTarget.dataset.v; const key=this.state.sel; this.setState(s=>({overrides:{...s.overrides,[key]:this.body(key)+tok}})); };
+  onReset=()=>{ const key=this.state.sel; this.setState(s=>{ const o={...s.overrides}; delete o[key]; return {overrides:o}; }); };
+  onSave=()=>{};
+  fill(tpl){ return tpl.replace(/\{(\w+)\}/g,(m,k)=>this.SAMPLE[k]!==undefined?this.SAMPLE[k]:m); }
+
+  renderVals(){
+    const compact=!!this.props.compact;
+    const isAdmin=this.props.role==='admin';
+    const sel=this.state.sel;
+    const list=this.TEMPLATES.map(t=>{ const active=t.key===sel; const customized=this.state.overrides[t.key]!==undefined;
+      return {key:t.key,label:t.label,icon:t.icon,usage:t.usage, customized,
+        activeBg:active?'var(--brands)':'transparent',
+        iconBg:active?'var(--brand)':'var(--surface2)', iconFg:active?'var(--brandfg)':'var(--muted)'}; });
+    const cur=this.TEMPLATES.find(t=>t.key===sel);
+    const body=this.body(sel);
+    const customized=this.state.overrides[sel]!==undefined;
+    return {
+      compact, isAdmin, isOwner:!isAdmin,
+      kicker: isAdmin?'Admin · Organization templates':'Owner · Platform defaults',
+      subtitle: isAdmin?'Customize the WhatsApp messages your organization sends. Each starts from the Owner\u2019s default.':'Set the default WhatsApp message templates every organization starts from. Admins can override these for their own org.',
+      cols: compact?'1fr':'300px 1fr',
+      list, current:{label:cur.label, body},
+      editorHint: isAdmin?(customized?'Customized for your organization':'Using platform default'):'Platform default for all organizations',
+      canReset: customized, resetLabel: isAdmin?'Reset to default':'Reset',
+      charCount: body.length,
+      vars:this.VARS, onSelect:this.onSelect, onBody:this.onBody, onInsertVar:this.onInsertVar, onReset:this.onReset, onSave:this.onSave,
+      preview:this.fill(body),
+      saveLabel: isAdmin?'Save for my organization':'Save platform default',
+      footnote: isAdmin?'Saved changes apply only to Cambridge Prep Center.':'Saved as the starting template for every organization that hasn\u2019t set its own.',
+    };
+  }
+}
+</script>
+</body>
+</html>

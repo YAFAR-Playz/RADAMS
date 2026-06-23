@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:flex;flex-direction:column;gap:16px">
+
+  <!-- HEADER -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:17px 18px">
+    <div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px">
+      <div>
+        <div style="font-size:12px;color:var(--subtle);font-weight:600;text-transform:uppercase;letter-spacing:.04em">{{ kicker }}</div>
+        <h1 style="margin:4px 0 0;font-size:20px;font-weight:600;color:var(--text);letter-spacing:-.01em">{{ title }}</h1>
+        <p style="margin:3px 0 0;font-size:13px;color:var(--muted)">{{ subtitle }}</p>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rad-sm);padding:0 12px;height:40px"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="var(--subtle)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-cal-check"></use></svg><select style="appearance:none;border:none;background:none;font-family:inherit;font-size:13.5px;font-weight:600;color:var(--text);cursor:pointer;padding-right:18px;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 fill=%22none%22 stroke=%22%2397a1b0%22 stroke-width=%222%22><path d=%22m3 4.5 3 3 3-3%22/></svg>');background-repeat:no-repeat;background-position:right center"><option>June 2026</option><option>May 2026</option><option>April 2026</option></select></div>
+        <sc-if value="{{ isReadonly }}" hint-placeholder-val="{{ false }}"><button onClick="{{ onOpenMsg }}" style="display:flex;align-items:center;gap:7px;background:var(--brand);color:var(--brandfg);border:none;border-radius:var(--rad-sm);padding:10px 14px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer" style-hover="filter:brightness(.96)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-message"></use></svg>Message Finance</button></sc-if>
+      </div>
+    </div>
+    <div style="display:grid;gap:12px;grid-template-columns:{{ statCols }};margin-top:16px">
+      <sc-for list="{{ stats }}" as="s" hint-placeholder-count="3"><div style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--rad-sm);padding:13px 15px"><div style="font-size:22px;font-weight:700;color:{{ s.color }};letter-spacing:-.02em;line-height:1.1">{{ s.value }}</div><div style="font-size:12px;color:var(--muted);font-weight:500;margin-top:3px">{{ s.label }}</div></div></sc-for>
+    </div>
+  </div>
+
+  <!-- FINANCE: assistant list (accordion, editable) -->
+  <sc-if value="{{ isFinance }}" hint-placeholder-val="{{ true }}">
+    <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden">
+      <header style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 18px;border-bottom:1px solid var(--border2)"><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">Assistant salaries · June 2026</h3><span style="font-size:12px;color:var(--subtle)">Tap a row to edit adjustments</span></header>
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:11px 18px;border-bottom:1px solid var(--border2);background:var(--infos)">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--info)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:1px"><use href="#i-trend"></use></svg>
+        <span style="font-size:12px;color:var(--text);line-height:1.45">Adjustments are <span style="font-weight:600">auto-filled from Heads' monthly evaluations</span> and amounts are auto-calculated from preset categories (e.g. papers × rate, session bonus). Everything below stays editable before you release payment.</span>
+      </div>
+      <sc-for list="{{ assistants }}" as="a" hint-placeholder-count="5"><div style="border-bottom:1px solid var(--border2)">
+        <div onClick="{{ onToggle }}" data-id="{{ a.id }}" style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:14px 18px;cursor:pointer" style-hover="background:var(--surface2)">
+          <div style="display:flex;align-items:center;gap:11px;flex:1;min-width:160px">
+            <div style="width:38px;height:38px;border-radius:50%;background:var(--brands);color:var(--brand);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex:none">{{ a.i }}</div>
+            <div style="min-width:0"><div style="font-size:14px;font-weight:600;color:var(--text)">{{ a.name }}</div><div style="font-size:12px;color:var(--subtle)">{{ a.coursesText }} · {{ a.payMethod }}</div></div>
+          </div>
+          <div style="font-size:17px;font-weight:700;color:var(--text);flex:none">{{ a.total }}</div>
+          <span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;font-size:11.5px;font-weight:600;background:{{ a.status.bg }};color:{{ a.status.fg }};flex:none"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ a.status.icon }}"></use></svg>{{ a.status.text }}</span>
+          <button onClick="{{ onToggleStatus }}" data-id="{{ a.id }}" style="display:flex;align-items:center;gap:6px;flex:none;border-radius:8px;padding:7px 12px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;border:1px solid {{ a.payBtnBd }};background:{{ a.payBtnBg }};color:{{ a.payBtnFg }}" style-hover="filter:brightness(.97)"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ a.payBtnIcon }}"></use></svg>{{ a.payBtnText }}</button>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--subtle)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;transform:{{ a.chevR }}"><use href="#i-cd"></use></svg>
+        </div>
+        <sc-if value="{{ a.expanded }}" hint-placeholder-val="{{ false }}">
+          <div style="background:var(--surface2);border-top:1px solid var(--border2)"><div style="{{ bdWrap }}">
+            <sc-if value="{{ showBdHeader }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:12px;padding:9px 18px;border-bottom:1px solid var(--border2);font-size:10.5px;font-weight:700;color:var(--subtle);text-transform:uppercase;letter-spacing:.04em"><span style="width:148px;flex:none">Course</span><span style="width:86px;flex:none">Method</span><span style="flex:1;min-width:120px">Basis</span><span style="width:80px;flex:none;text-align:right">Base</span><span style="width:78px;flex:none;text-align:right">Bonus</span><span style="width:82px;flex:none;text-align:right">Deduction</span><span style="width:80px;flex:none;text-align:right">Subtotal</span></div></sc-if>
+            <sc-for list="{{ a.courses }}" as="c" hint-placeholder-count="2"><div style="border-bottom:1px solid var(--border2);padding:11px 18px">
+              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px">
+                <span style="width:148px;flex:none;font-size:12.5px;font-weight:600;color:var(--text)">{{ c.course }}<sc-if value="{{ c.fromHead }}" hint-placeholder-val="{{ true }}"><span title="Auto-filled from the Head's evaluation" style="display:inline-flex;align-items:center;gap:3px;margin-top:3px;padding:1px 6px;border-radius:5px;font-size:9.5px;font-weight:700;background:var(--infos);color:var(--info);width:fit-content"><svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-trend"></use></svg>FROM HEAD</span></sc-if></span>
+                <span style="width:86px;flex:none"><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:{{ c.methodBg }};color:{{ c.methodFg }}">{{ c.method }}</span></span>
+                <span style="flex:1;min-width:120px;font-size:12.5px;color:var(--muted)">{{ c.basis }}</span>
+                <div style="width:80px;flex:none;display:flex;align-items:center;gap:1px;background:var(--surface);border:1px solid var(--border);border-radius:7px;height:32px;padding:0 7px"><span style="font-size:11px;color:var(--subtle);font-weight:700">$</span><input value="{{ c.baseNum }}" onInput="{{ onEditNum }}" data-id="{{ a.id }}" data-idx="{{ c.idx }}" data-field="base" inputmode="numeric" style="border:none;outline:none;background:none;width:100%;text-align:right;font-family:'Geist Mono',monospace;font-size:12px;font-weight:600;color:var(--text)"/></div>
+                <div style="width:78px;flex:none;display:flex;align-items:center;gap:1px;background:var(--surface);border:1px solid var(--border);border-radius:7px;height:32px;padding:0 7px"><span style="font-size:11px;color:var(--ok);font-weight:700">+$</span><input value="{{ c.bonus }}" onInput="{{ onEditNum }}" data-id="{{ a.id }}" data-idx="{{ c.idx }}" data-field="bonus" inputmode="numeric" style="border:none;outline:none;background:none;width:100%;text-align:right;font-family:'Geist Mono',monospace;font-size:12px;font-weight:600;color:var(--ok)"/></div>
+                <div style="width:82px;flex:none;display:flex;align-items:center;gap:1px;background:var(--surface);border:1px solid var(--border);border-radius:7px;height:32px;padding:0 7px"><span style="font-size:11px;color:var(--danger);font-weight:700">−$</span><input value="{{ c.deduction }}" onInput="{{ onEditNum }}" data-id="{{ a.id }}" data-idx="{{ c.idx }}" data-field="deduction" inputmode="numeric" style="border:none;outline:none;background:none;width:100%;text-align:right;font-family:'Geist Mono',monospace;font-size:12px;font-weight:600;color:var(--danger)"/></div>
+                <span style="width:80px;flex:none;text-align:right;font-size:12.5px;font-weight:700;color:var(--text);font-family:'Geist Mono',monospace">{{ c.subtotal }}</span>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
+                <div style="flex:1;min-width:200px;display:flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:0 10px;height:34px"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="var(--ok)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><use href="#i-trend"></use></svg><input value="{{ c.bonusReason }}" onInput="{{ onEditReason }}" data-id="{{ a.id }}" data-idx="{{ c.idx }}" data-field="bonusReason" placeholder="Reason for bonus…" style="border:none;outline:none;background:none;width:100%;font-family:inherit;font-size:12px;color:var(--text)"/></div>
+                <div style="flex:1;min-width:200px;display:flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:0 10px;height:34px"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="var(--danger)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><use href="#i-minus"></use></svg><input value="{{ c.dedReason }}" onInput="{{ onEditReason }}" data-id="{{ a.id }}" data-idx="{{ c.idx }}" data-field="dedReason" placeholder="Reason for deduction…" style="border:none;outline:none;background:none;width:100%;font-family:inherit;font-size:12px;color:var(--text)"/></div>
+              </div>
+            </div></sc-for>
+            <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:12px 18px"><span style="font-size:12.5px;color:var(--muted);font-weight:500">Paid via {{ a.payMethod }} · edits save to this month's payroll</span><div style="display:flex;align-items:center;gap:10px"><span style="font-size:12.5px;color:var(--muted)">Total</span><span style="font-size:17px;font-weight:700;color:var(--text);font-family:'Geist Mono',monospace">{{ a.total }}</span></div></div>
+          </div></div>
+        </sc-if>
+      </div></sc-for>
+    </section>
+  </sc-if>
+
+  <!-- ASSISTANT read-only -->
+  <sc-if value="{{ isReadonly }}" hint-placeholder-val="{{ false }}">
+    <sc-if value="{{ mePaid }}" hint-placeholder-val="{{ true }}">
+      <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden">
+        <header style="display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--border2)"><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">Breakdown · June 2026</h3><span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;font-size:11.5px;font-weight:600;background:{{ me.status.bg }};color:{{ me.status.fg }}"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ me.status.icon }}"></use></svg>{{ me.status.text }}</span></header>
+        <div><div style="{{ bdWrap }}">
+          <sc-if value="{{ showBdHeader }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:12px;padding:9px 18px;border-bottom:1px solid var(--border2);font-size:10.5px;font-weight:700;color:var(--subtle);text-transform:uppercase;letter-spacing:.04em"><span style="width:150px;flex:none">Course</span><span style="width:92px;flex:none">Method</span><span style="flex:1;min-width:110px">Basis</span><span style="width:78px;flex:none;text-align:right">Base</span><span style="width:64px;flex:none;text-align:right">Bonus</span><span style="width:72px;flex:none;text-align:right">Deduct.</span><span style="width:84px;flex:none;text-align:right">Subtotal</span></div></sc-if>
+          <sc-for list="{{ me.courses }}" as="c" hint-placeholder-count="2"><div style="padding:11px 18px;border-bottom:1px solid var(--border2)">
+            <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px"><span style="width:150px;flex:none;font-size:12.5px;font-weight:600;color:var(--text)">{{ c.course }}</span><span style="width:92px;flex:none"><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:{{ c.methodBg }};color:{{ c.methodFg }}">{{ c.method }}</span></span><span style="flex:1;min-width:110px;font-size:12.5px;color:var(--muted)">{{ c.basis }}</span><span style="width:78px;flex:none;text-align:right;font-size:12.5px;color:var(--text);font-family:'Geist Mono',monospace">{{ c.base }}</span><span style="width:64px;flex:none;text-align:right;font-size:12.5px;color:var(--ok);font-family:'Geist Mono',monospace">{{ c.bonusStr }}</span><span style="width:72px;flex:none;text-align:right;font-size:12.5px;color:var(--danger);font-family:'Geist Mono',monospace">{{ c.dedStr }}</span><span style="width:84px;flex:none;text-align:right;font-size:12.5px;font-weight:700;color:var(--text);font-family:'Geist Mono',monospace">{{ c.subtotal }}</span></div>
+            <sc-if value="{{ c.hasReason }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;padding-left:2px">
+              <sc-if value="{{ c.bonusReason }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:500;background:var(--oks);color:var(--ok)"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-trend"></use></svg>{{ c.bonusReason }}</span></sc-if>
+              <sc-if value="{{ c.dedReason }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:500;background:var(--dangers);color:var(--danger)"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-minus"></use></svg>{{ c.dedReason }}</span></sc-if>
+            </div></sc-if>
+          </div></sc-for>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 18px;background:var(--surface2)"><span style="font-size:12.5px;color:var(--muted);font-weight:500">Paid via {{ me.payMethod }}</span><div style="display:flex;align-items:center;gap:10px"><span style="font-size:13px;color:var(--muted)">Total this month</span><span style="font-size:19px;font-weight:700;color:var(--text);font-family:'Geist Mono',monospace">{{ me.total }}</span></div></div>
+        </div></div>
+      </section>
+    </sc-if>
+    <sc-if value="{{ mePending }}" hint-placeholder-val="{{ false }}">
+      <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:34px 24px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:13px">
+        <div style="width:56px;height:56px;border-radius:15px;background:var(--warns);color:var(--warn);display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-clock"></use></svg></div>
+        <div><h2 style="margin:0 0 6px;font-size:18px;font-weight:600;color:var(--text)">Your June pay isn't finalized yet</h2><p style="margin:0;font-size:13.5px;color:var(--muted);max-width:380px;line-height:1.55">Finance is still reviewing this month's adjustments. Your full breakdown will appear here once your salary is marked as paid.</p></div>
+      </section>
+    </sc-if>
+    <div style="display:flex;align-items:center;gap:11px;background:var(--brands);border:1px solid var(--border);border-radius:var(--rad);padding:13px 16px">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><use href="#i-message"></use></svg>
+      <span style="flex:1;font-size:13px;color:var(--text);line-height:1.45">Question about your pay or a deduction? <span style="color:var(--muted)">Message the Finance team and they'll review it.</span></span>
+      <button onClick="{{ onOpenMsg }}" style="flex:none;background:var(--brand);color:var(--brandfg);border:none;border-radius:var(--rad-sm);padding:8px 13px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer" style-hover="filter:brightness(.96)">Message Finance</button>
+    </div>
+  </sc-if>
+
+  <!-- MESSAGE FINANCE MODAL -->
+  <sc-if value="{{ msgOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;background:rgba(8,12,22,.5);display:flex;align-items:center;justify-content:center;padding:20px;z-index:60">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:0 24px 70px rgba(8,12,22,.34);width:100%;max-width:440px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:11px;padding:16px 18px;border-bottom:1px solid var(--border2)">
+          <div style="width:38px;height:38px;border-radius:10px;background:var(--brands);color:var(--brand);display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-message"></use></svg></div>
+          <div style="flex:1;min-width:0"><h3 style="margin:0;font-size:15px;font-weight:600;color:var(--text)">Message Finance team</h3><div style="font-size:12px;color:var(--muted)">Re: June 2026 pay</div></div>
+          <button onClick="{{ onCloseMsg }}" style="width:32px;height:32px;border-radius:8px;border:none;background:none;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none" style-hover="background:var(--surface2)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-x"></use></svg></button>
+        </div>
+        <div style="padding:18px">
+          <textarea placeholder="Describe your question for the Finance team…" style="width:100%;height:120px;resize:none;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);padding:12px;font-family:inherit;font-size:13.5px;color:var(--text);outline:none;line-height:1.5" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"></textarea>
+        </div>
+        <div style="display:flex;gap:10px;padding:0 18px 16px">
+          <button onClick="{{ onCloseMsg }}" style="flex:1;height:44px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface);color:var(--text);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer" style-hover="background:var(--surface2)">Cancel</button>
+          <button onClick="{{ onCloseMsg }}" style="flex:1.3;display:flex;align-items:center;justify-content:center;gap:8px;height:44px;background:var(--brand);color:var(--brandfg);border:none;border-radius:var(--rad-sm);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer" style-hover="filter:brightness(.96)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-send"></use></svg>Send message</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:980,&quot;height&quot;:720},&quot;compact&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;role&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;finance&quot;,&quot;assistant&quot;],&quot;default&quot;:&quot;finance&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  tone(t){ const m={ok:['var(--oks)','var(--ok)'],warn:['var(--warns)','var(--warn)'],brand:['var(--brands)','var(--brand)'],info:['var(--infos)','var(--info)'],neutral:['var(--surface2)','var(--muted)']}; const [bg,fg]=m[t]||m.neutral; return {bg,fg}; }
+  fmt(n){ const neg=n<0; return (neg?'−$':'$')+Math.abs(n).toLocaleString('en-US'); }
+  statusBadge(s){ return s==='paid'?{text:'Paid',icon:'check2',...this.tone('ok')}:{text:'Pending',icon:'clock',...this.tone('warn')}; }
+  methodChip(m){ return m==='Per paper'?this.tone('info'):this.tone('neutral'); }
+
+  // Finance preset categories — auto-calculate amounts from Head's report quantities
+  PRESET={ 'Per paper':8, 'Per paper U2':9, 'Extra session':60, 'Cover for absent TA':100, 'Mock exam marking':2, 'Materials prep':40, 'Late submissions':40, 'Missed session':80 };
+  C(course,method,basis,base,bonus,deduction,bonusReason,dedReason,fromHead){ return {course,method,basis,base,bonus,deduction,bonusReason:bonusReason||'',dedReason:dedReason||'',fromHead:fromHead!==false}; }
+  A(id,name,i,payMethod,status,courses){ return {id,name,i,payMethod,status,courses}; }
+
+  seed(){ return [
+    this.A(1,'Aisha Rahman','AR','Bank transfer','pending',[this.C('Physics · Jun · U1','Per paper','142 papers checked × $8',1136,120,0,'2 weekend revision sessions',''),this.C('Chemistry · Jun · U1','Bracket','Bracket A (80–120 papers)',720,0,40,'','3 logs submitted late')]),
+    this.A(2,'Tom Becker','TB','Mobile wallet','paid',[this.C('Physics · Nov · U1','Bracket','Bracket B (120–160 papers)',980,60,0,'Covered 2 sessions for absent TA','')]),
+    this.A(3,'Yuki Tanaka','YT','Bank transfer','paid',[this.C('Physics · Jun · U2','Per paper','168 papers checked × $9',1512,80,0,'Mock exam marking (48 papers)','')]),
+    this.A(4,'Carlos Diaz','CD','Cash','pending',[this.C('Physics · Jun · U1','Bracket','Bracket A (80–120 papers)',720,0,80,'','Missed deadline; 21/45 messages sent')]),
+    this.A(5,'Nadia Saleh','NS','Bank transfer','paid',[this.C('Chemistry · Nov · U2','Per paper','110 papers checked × $8',880,40,0,'Materials prep',''),this.C('Physics · Nov · U1','Bracket','Bracket A (80–120 papers)',720,0,0,'','')]),
+  ]; }
+  seedMe(){ return this.A(9,'Priya Nair','PN','Bank transfer','paid',[this.C('Physics · Jun · U1','Per paper','156 papers checked × $8',1248,100,0,'Extra weekend session',''),this.C('Physics · Nov · U1','Bracket','Bracket B (120–160 papers)',980,0,30,'','2 logs submitted late')]); }
+
+  state={ open:{}, msgOpen:false, assistants:this.seed(), me:this.seedMe() };
+
+  subtotal(c){ return c.base+(+c.bonus||0)-(+c.deduction||0); }
+  total(a){ return a.courses.reduce((x,c)=>x+this.subtotal(c),0); }
+
+  vm(a){
+    return {id:a.id,name:a.name,i:a.i,payMethod:a.payMethod,total:this.fmt(this.total(a)),
+      coursesText:a.courses.length+(a.courses.length>1?' courses':' course'),
+      status:this.statusBadge(a.status), statusRaw:a.status,
+      expanded:!!this.state.open[a.id], chevR:this.state.open[a.id]?'rotate(180deg)':'none',
+      payBtnText: a.status==='paid'?'Mark pending':'Mark as paid',
+      payBtnIcon: a.status==='paid'?'clock':'check',
+      payBtnBg: a.status==='paid'?'var(--surface)':'var(--ok)',
+      payBtnFg: a.status==='paid'?'var(--muted)':'#ffffff',
+      payBtnBd: a.status==='paid'?'var(--border)':'var(--ok)',
+      courses:a.courses.map((c,idx)=>{ const ch=this.methodChip(c.method); return {idx,course:c.course,method:c.method,methodBg:ch.bg,methodFg:ch.fg,basis:c.basis, fromHead:c.fromHead,
+        base:this.fmt(c.base), baseNum:String(c.base||0), bonus:String(c.bonus||0), deduction:String(c.deduction||0),
+        bonusStr:c.bonus?'+'+this.fmt(c.bonus):'—', dedStr:c.deduction?'−'+this.fmt(c.deduction):'—',
+        bonusReason:c.bonusReason, dedReason:c.dedReason, hasReason:!!(c.bonusReason||c.dedReason),
+        subtotal:this.fmt(this.subtotal(c)) }; }) };
+  }
+
+  onToggle=(e)=>{ const id=+e.currentTarget.dataset.id; this.setState(s=>({open:{...s.open,[id]:!s.open[id]}})); };
+  onToggleStatus=(e)=>{ e.stopPropagation(); const id=+e.currentTarget.dataset.id; this.setState(s=>({assistants:s.assistants.map(a=>a.id===id?{...a,status:a.status==='paid'?'pending':'paid'}:a)})); };
+  onEditNum=(e)=>{ const id=+e.target.dataset.id, idx=+e.target.dataset.idx, f=e.target.dataset.field, v=+(e.target.value.replace(/[^0-9]/g,''))||0; this.setState(s=>({assistants:s.assistants.map(a=>a.id===id?{...a,courses:a.courses.map((c,i)=>i===idx?{...c,[f]:v}:c)}:a)})); };
+  onEditReason=(e)=>{ const id=+e.target.dataset.id, idx=+e.target.dataset.idx, f=e.target.dataset.field, v=e.target.value; this.setState(s=>({assistants:s.assistants.map(a=>a.id===id?{...a,courses:a.courses.map((c,i)=>i===idx?{...c,[f]:v}:c)}:a)})); };
+  onOpenMsg=()=>this.setState({msgOpen:true});
+  onCloseMsg=()=>this.setState({msgOpen:false});
+
+  renderVals(){
+    const compact=!!this.props.compact;
+    const readonly=this.props.role!=='finance';
+    const list=this.state.assistants;
+    const assistants=list.map(a=>this.vm(a));
+    const me=this.vm(this.state.me);
+    const totalPayroll=list.reduce((x,a)=>x+this.total(a),0);
+    const paidAmt=list.filter(a=>a.status==='paid').reduce((x,a)=>x+this.total(a),0);
+    const pendingCount=list.filter(a=>a.status!=='paid').length;
+    const mePaid=this.state.me.status==='paid';
+    const stats = readonly ? [
+      {value: mePaid?this.fmt(this.total(this.state.me)):'—',label:'Total this month',color:'var(--brand)'},
+      {value:String(this.state.me.courses.length),label:'Courses',color:'var(--text)'},
+      {value: mePaid?'Paid':'Pending',label:'Payment status',color: mePaid?'var(--ok)':'var(--warn)'},
+    ] : [
+      {value:this.fmt(totalPayroll),label:'Total payroll',color:'var(--brand)'},
+      {value:this.fmt(paidAmt),label:'Paid out',color:'var(--ok)'},
+      {value:String(pendingCount),label:'Pending payment',color:'var(--warn)'},
+    ];
+    return {
+      compact, isFinance:!readonly, isReadonly:readonly,
+      bdWrap: '', showBdHeader:!compact&&!readonly,
+      kicker: readonly?'My pay':'Finance', title: readonly?'My salary breakdown':'Salary breakdown',
+      subtitle: readonly?'How your pay was calculated this month.':'Edit per-course adjustments and release payments when ready.',
+      statCols: compact?'1fr':'repeat(3,1fr)',
+      stats, assistants, me, mePaid, mePending:!mePaid,
+      onToggle:this.onToggle, onToggleStatus:this.onToggleStatus, onEditNum:this.onEditNum, onEditReason:this.onEditReason,
+      onOpenMsg:this.onOpenMsg, onCloseMsg:this.onCloseMsg, msgOpen:this.state.msgOpen,
+    };
+  }
+}
+</script>
+</body>
+</html>

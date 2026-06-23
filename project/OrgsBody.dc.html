@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:flex;flex-direction:column;gap:16px">
+
+  <!-- HEADER -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:17px 18px">
+    <div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px">
+      <div>
+        <div style="font-size:12px;color:var(--subtle);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Owner · Platform</div>
+        <h1 style="margin:4px 0 0;font-size:20px;font-weight:600;color:var(--text);letter-spacing:-.01em">Organizations</h1>
+        <p style="margin:3px 0 0;font-size:13px;color:var(--muted)">Manage every organization, its admins, and monitor activity. Sign in as any admin to troubleshoot.</p>
+      </div>
+      <button onClick="{{ onAdd }}" style="display:flex;align-items:center;gap:7px;flex:none;background:var(--brand);color:var(--brandfg);border:none;border-radius:var(--rad-sm);padding:10px 15px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer" style-hover="filter:brightness(.96)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-plus"></use></svg>New organization</button>
+    </div>
+    <div style="display:grid;gap:12px;grid-template-columns:{{ statCols }};margin-top:16px">
+      <sc-for list="{{ stats }}" as="s" hint-placeholder-count="4"><div style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--rad-sm);padding:12px 14px"><div style="font-size:21px;font-weight:700;color:{{ s.color }};letter-spacing:-.02em;line-height:1.1">{{ s.value }}</div><div style="font-size:12px;color:var(--muted);font-weight:500;margin-top:2px">{{ s.label }}</div></div></sc-for>
+    </div>
+  </div>
+
+  <!-- ORG CARDS -->
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <sc-for list="{{ orgs }}" as="o" hint-placeholder-count="3"><section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden">
+      <header style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border2)">
+        <div style="width:42px;height:42px;border-radius:11px;background:{{ o.logoBg }};color:{{ o.logoFg }};display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex:none">{{ o.mark }}</div>
+        <div style="flex:1 1 150px;min-width:130px"><div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-.01em">{{ o.name }}</div><div style="font-size:12px;color:var(--subtle)">Admin: {{ o.admin }} · {{ o.adminPhone }}</div></div>
+        <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:11.5px;font-weight:600;background:{{ o.badge.bg }};color:{{ o.badge.fg }};flex:none"><span style="width:6px;height:6px;border-radius:50%;background:{{ o.badge.fg }}"></span>{{ o.badge.text }}</span>
+        <button onClick="{{ onLoginAs }}" data-id="{{ o.id }}" style="display:flex;align-items:center;gap:6px;flex:none;background:var(--surface);border:1px solid var(--border);color:var(--brand);border-radius:8px;padding:7px 12px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer" style-hover="background:var(--brands)"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-logout"></use></svg>Login as admin</button>
+        <button onClick="{{ onEdit }}" data-id="{{ o.id }}" title="Edit organization" style="width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none" style-hover="background:var(--surface2);color:var(--text)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-settings"></use></svg></button>
+        <button onClick="{{ onDelete }}" data-id="{{ o.id }}" title="Delete organization" style="width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--subtle);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none" style-hover="background:var(--dangers);color:var(--danger);border-color:var(--danger)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-x"></use></svg></button>
+      </header>
+      <div style="padding:14px 16px;display:grid;gap:10px;grid-template-columns:{{ metricCols }}">
+        <sc-for list="{{ o.metrics }}" as="m" hint-placeholder-count="5"><div style="display:flex;align-items:center;gap:9px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--rad-sm);padding:10px 11px"><div style="width:30px;height:30px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--muted);display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ m.icon }}"></use></svg></div><div style="min-width:0"><div style="font-size:15px;font-weight:700;color:var(--text);line-height:1.1">{{ m.value }}</div><div style="font-size:10.5px;color:var(--subtle)">{{ m.label }}</div></div></div></sc-for>
+      </div>
+    </section></sc-for>
+  </div>
+
+  <!-- LOGIN-AS BANNER -->
+  <sc-if value="{{ impersonating }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:65;display:flex;align-items:center;gap:12px;background:var(--text);color:var(--surface);border-radius:999px;padding:10px 12px 10px 18px;box-shadow:0 12px 40px rgba(8,12,22,.34)">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-shield"></use></svg>
+      <span style="font-size:13px;font-weight:500">Viewing as admin of <span style="font-weight:700">{{ impersonatingName }}</span></span>
+      <button onClick="{{ onExit }}" style="background:var(--surface);color:var(--text);border:none;border-radius:999px;padding:6px 13px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer">Exit</button>
+    </div>
+  </sc-if>
+  <!-- ADD/EDIT ORG MODAL -->
+  <sc-if value="{{ modalOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;background:rgba(8,12,22,.5);display:flex;align-items:center;justify-content:center;padding:20px;z-index:60">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:0 24px 70px rgba(8,12,22,.34);width:100%;max-width:460px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:11px;padding:16px 18px;border-bottom:1px solid var(--border2)">
+          <div style="width:38px;height:38px;border-radius:10px;background:var(--brands);color:var(--brand);display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-building"></use></svg></div>
+          <div style="flex:1;min-width:0"><h3 style="margin:0;font-size:15px;font-weight:600;color:var(--text)">{{ modalTitle }}</h3><div style="font-size:12px;color:var(--muted)">Set the organization and its main admin</div></div>
+          <button onClick="{{ onClose }}" style="width:32px;height:32px;border-radius:8px;border:none;background:none;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none" style-hover="background:var(--surface2)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-x"></use></svg></button>
+        </div>
+        <div style="padding:16px 18px;display:flex;flex-direction:column;gap:13px">
+          <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Organization name</label><input value="{{ form.name }}" onInput="{{ onField }}" data-f="name" placeholder="e.g. Riverside Tutoring" style="width:100%;height:42px;padding:0 13px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);font-family:inherit;font-size:13.5px;color:var(--text);outline:none" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/></div>
+          <div style="height:1px;background:var(--border2)"></div>
+          <div style="font-size:11px;font-weight:700;color:var(--subtle);text-transform:uppercase;letter-spacing:.04em">Main admin</div>
+          <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Admin name</label><input value="{{ form.admin }}" onInput="{{ onField }}" data-f="admin" placeholder="e.g. Sara Mensah" style="width:100%;height:42px;padding:0 13px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);font-family:inherit;font-size:13.5px;color:var(--text);outline:none" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Admin phone</label><input value="{{ form.adminPhone }}" onInput="{{ onField }}" data-f="adminPhone" inputmode="tel" placeholder="7700 900000" style="width:100%;height:42px;padding:0 13px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);font-family:'Geist Mono',monospace;font-size:12.5px;color:var(--text);outline:none" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/></div>
+            <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Admin email</label><input value="{{ form.adminEmail }}" onInput="{{ onField }}" data-f="adminEmail" type="email" placeholder="admin@org.edu" style="width:100%;height:42px;padding:0 13px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);font-family:inherit;font-size:12.5px;color:var(--text);outline:none" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;padding:14px 18px 18px;border-top:1px solid var(--border2)">
+          <button onClick="{{ onClose }}" style="flex:1;height:44px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface);color:var(--text);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer" style-hover="background:var(--surface2)">Cancel</button>
+          <button onClick="{{ onSave }}" disabled="{{ saveDisabled }}" style="flex:1.3;display:flex;align-items:center;justify-content:center;gap:8px;height:44px;background:{{ saveBg }};color:var(--brandfg);border:none;border-radius:var(--rad-sm);font-family:inherit;font-size:13.5px;font-weight:600;cursor:{{ saveCursor }}"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"></use></svg>{{ saveLabel }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:980,&quot;height&quot;:700},&quot;compact&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;role&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  tone(t){ const m={ok:['var(--oks)','var(--ok)'],warn:['var(--warns)','var(--warn)'],info:['var(--infos)','var(--info)']}; const [bg,fg]=m[t]||m.ok; return {bg,fg}; }
+  ORGS=[
+    {id:1,name:'Cambridge Prep Center',mark:'CP',admin:'Sara Mensah',adminPhone:'+44 7700 900002',status:'active',hue:'var(--brand)',m:[842,36,5,18,124]},
+    {id:2,name:'Oxford Tutorials',mark:'OT',admin:'James Hartley',adminPhone:'+44 7700 901002',status:'active',hue:'#0d9488',m:[610,28,4,12,98]},
+    {id:3,name:'Bright Future Academy',mark:'BF',admin:'Nadia Hassan',adminPhone:'+44 7700 902002',status:'trial',hue:'#db2777',m:[210,11,2,6,33]},
+    {id:4,name:'Elite IGCSE Hub',mark:'EH',admin:'Karim Saleh',adminPhone:'+44 7700 903002',status:'active',hue:'#ea580c',m:[388,19,3,9,61]},
+  ];
+  HUES=['var(--brand)','#0d9488','#db2777','#ea580c','#7c3aed','#0891b2'];
+  state={ impId:null, modalOpen:false, editId:null, nextId:5,
+    orgs:[
+      {id:1,name:'Cambridge Prep Center',mark:'CP',admin:'Sara Mensah',adminPhone:'+44 7700 900002',adminEmail:'sara@cambridgeprep.edu',status:'active',hue:'var(--brand)',m:[842,36,5,18,124]},
+      {id:2,name:'Oxford Tutorials',mark:'OT',admin:'James Hartley',adminPhone:'+44 7700 901002',adminEmail:'james@oxfordtut.edu',status:'active',hue:'#0d9488',m:[610,28,4,12,98]},
+      {id:3,name:'Bright Future Academy',mark:'BF',admin:'Nadia Hassan',adminPhone:'+44 7700 902002',adminEmail:'nadia@brightfuture.edu',status:'trial',hue:'#db2777',m:[210,11,2,6,33]},
+      {id:4,name:'Elite IGCSE Hub',mark:'EH',admin:'Karim Saleh',adminPhone:'+44 7700 903002',adminEmail:'karim@eliteigcse.edu',status:'active',hue:'#ea580c',m:[388,19,3,9,61]},
+    ],
+    form:{name:'',admin:'',adminPhone:'',adminEmail:''},
+  };
+  onLoginAs=(e)=>this.setState({impId:+e.currentTarget.dataset.id});
+  onExit=()=>this.setState({impId:null});
+  onAdd=()=>this.setState({modalOpen:true,editId:null,form:{name:'',admin:'',adminPhone:'',adminEmail:''}});
+  onEdit=(e)=>{ const id=+e.currentTarget.dataset.id; const o=this.state.orgs.find(x=>x.id===id); if(!o) return; this.setState({modalOpen:true,editId:id,form:{name:o.name,admin:o.admin,adminPhone:o.adminPhone,adminEmail:o.adminEmail||''}}); };
+  onDelete=(e)=>{ const id=+e.currentTarget.dataset.id; this.setState(s=>({orgs:s.orgs.filter(o=>o.id!==id)})); };
+  onClose=()=>this.setState({modalOpen:false,editId:null});
+  onField=(e)=>{ const f=e.currentTarget.dataset.f, v=e.target.value; this.setState(s=>({form:{...s.form,[f]:v}})); };
+  onSave=()=>{ this.setState(s=>{ const f=s.form; if(!f.name.trim()) return {}; const mark=f.name.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase(); const phone=/^\+/.test(f.adminPhone)?f.adminPhone:('+44 '+(f.adminPhone||'7700 900000'));
+    if(s.editId){ return {orgs:s.orgs.map(o=>o.id===s.editId?{...o,name:f.name.trim(),mark,admin:f.admin,adminPhone:phone,adminEmail:f.adminEmail}:o),modalOpen:false,editId:null}; }
+    const id=s.nextId; const hue=this.HUES[(id-1)%this.HUES.length]; return {orgs:[{id,name:f.name.trim(),mark,admin:f.admin||'Unassigned',adminPhone:phone,adminEmail:f.adminEmail,status:'trial',hue,m:[0,0,0,0,0]},...s.orgs],nextId:id+1,modalOpen:false}; }); };
+  renderVals(){
+    const compact=!!this.props.compact;
+    const metricDefs=[['users','Students'],['user-check','Assistants'],['grad','Heads'],['book','Courses'],['clipboard-list','Assignments']];
+    const orgs=this.state.orgs.map(o=>({ id:o.id,name:o.name,mark:o.mark,admin:o.admin,adminPhone:o.adminPhone,
+      logoBg:o.hue, logoFg:'#fff',
+      badge:o.status==='active'?{text:'Active',...this.tone('ok')}:{text:'Trial',...this.tone('info')},
+      metrics:metricDefs.map(([icon,label],idx)=>({icon,label,value:o.m[idx].toLocaleString('en-US')})) }));
+    const totals=this.state.orgs.reduce((a,o)=>[a[0]+o.m[0],a[1]+o.m[1]+o.m[3],a[2]+o.m[3]],[0,0,0]);
+    const imp=this.state.impId?this.state.orgs.find(o=>o.id===this.state.impId):null;
+    const can=this.state.form.name.trim().length>0;
+    return {
+      compact, statCols: compact?'1fr 1fr':'repeat(4,1fr)', metricCols: compact?'1fr 1fr':'repeat(5,1fr)',
+      stats:[{value:String(this.state.orgs.length),label:'Organizations',color:'var(--brand)'},{value:String(this.state.orgs.filter(o=>o.status==='active').length),label:'Active',color:'var(--ok)'},{value:totals[0].toLocaleString('en-US'),label:'Total students',color:'var(--text)'},{value:String(totals[2]),label:'Total courses',color:'var(--text)'}],
+      orgs, onLoginAs:this.onLoginAs, onExit:this.onExit, onAdd:this.onAdd, onEdit:this.onEdit, onDelete:this.onDelete,
+      impersonating:!!imp, impersonatingName:imp?imp.name:'',
+      modalOpen:this.state.modalOpen, modalTitle:this.state.editId?'Edit organization':'New organization', saveLabel:this.state.editId?'Save changes':'Create organization',
+      form:this.state.form, onField:this.onField, onClose:this.onClose, onSave:this.onSave,
+      saveDisabled:!can, saveBg:can?'var(--brand)':'var(--subtle)', saveCursor:can?'pointer':'not-allowed',
+    };
+  }
+}
+</script>
+</body>
+</html>

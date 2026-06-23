@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:flex;flex-direction:column;gap:16px">
+
+  <!-- HEADER -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:17px 18px">
+    <div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px">
+      <div>
+        <div style="font-size:12px;color:var(--subtle);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Registration</div>
+        <h1 style="margin:4px 0 0;font-size:20px;font-weight:600;color:var(--text);letter-spacing:-.01em">Courses &amp; payments</h1>
+        <p style="margin:3px 0 0;font-size:13px;color:var(--muted)">Enrol or remove students, set the payment plan, apply discounts, and track what's paid.</p>
+      </div>
+      <button onClick="{{ onAddStudent }}" style="display:flex;align-items:center;gap:7px;flex:none;background:var(--brand);color:var(--brandfg);border:none;border-radius:var(--rad-sm);padding:10px 15px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer" style-hover="filter:brightness(.96)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-user-plus"></use></svg>Enrol student</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:9px;margin-top:15px;flex-wrap:wrap">
+      <span style="font-size:12.5px;font-weight:600;color:var(--muted)">Course</span>
+      <div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rad-sm);padding:0 12px;height:40px;min-width:240px"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="var(--subtle)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-right:8px"><use href="#i-book"></use></svg><select value="{{ courseValue }}" onChange="{{ onCourse }}" style="appearance:none;border:none;background:none;font-family:inherit;font-size:13.5px;font-weight:600;color:var(--text);cursor:pointer;width:100%;height:100%;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 fill=%22none%22 stroke=%22%2397a1b0%22 stroke-width=%222%22><path d=%22m3 4.5 3 3 3-3%22/></svg>');background-repeat:no-repeat;background-position:right center"><sc-for list="{{ courseOpts }}" as="c" hint-placeholder-count="3"><option value="{{ c.value }}">{{ c.label }}</option></sc-for></select></div>
+      <div style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);margin-left:6px">Course fee <span style="font-weight:700;color:var(--text);font-family:'Geist Mono',monospace">{{ courseFeeStr }}</span></div>
+      <div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rad-sm);padding:0 12px;height:40px;flex:1;min-width:160px;max-width:280px;margin-left:auto"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="var(--subtle)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-search"></use></svg><input value="{{ search }}" onInput="{{ onSearch }}" placeholder="Search students…" style="border:none;outline:none;background:none;font-family:inherit;font-size:13px;color:var(--text);width:100%;height:100%"/></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:11px"><sc-for list="{{ filters }}" as="f" hint-placeholder-count="5"><button onClick="{{ onFilter }}" data-v="{{ f.value }}" style="padding:7px 12px;border-radius:999px;border:1px solid {{ f.bd }};background:{{ f.bg }};color:{{ f.fg }};font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer">{{ f.label }}</button></sc-for></div>
+    <div style="display:grid;gap:12px;grid-template-columns:{{ statCols }};margin-top:16px">
+      <sc-for list="{{ stats }}" as="s" hint-placeholder-count="4"><div style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--rad-sm);padding:12px 14px"><div style="font-size:20px;font-weight:700;color:{{ s.color }};letter-spacing:-.02em;line-height:1.1">{{ s.value }}</div><div style="font-size:12px;color:var(--muted);font-weight:500;margin-top:2px">{{ s.label }}</div></div></sc-for>
+    </div>
+  </div>
+
+  <!-- STUDENT PAYMENT CARDS -->
+  <div style="display:grid;gap:12px;grid-template-columns:{{ cardCols }}">
+    <sc-for list="{{ rows }}" as="r" hint-placeholder-count="6"><div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:14px 15px;display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:11px">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--surface2);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none">{{ r.i }}</div>
+        <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600;color:var(--text)">{{ r.name }}</div><div style="font-size:11.5px;color:var(--subtle)">{{ r.idText }}</div></div>
+        <button onClick="{{ onRemoveStudent }}" data-id="{{ r.id }}" title="Remove from course" style="width:32px;height:32px;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--subtle);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none" style-hover="background:var(--dangers);color:var(--danger);border-color:var(--danger)"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-x"></use></svg></button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <div style="flex:1;min-width:120px"><div style="font-size:10.5px;font-weight:700;color:var(--subtle);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px">Plan</div><div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0 10px;height:36px"><select value="{{ r.plan }}" onChange="{{ onPlan }}" data-id="{{ r.id }}" style="appearance:none;border:none;background:none;font-family:inherit;font-size:12.5px;font-weight:600;color:var(--text);cursor:pointer;width:100%;height:100%;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2210%22 height=%2210%22 fill=%22none%22 stroke=%22%2397a1b0%22 stroke-width=%222%22><path d=%22m3 4.5 3 3 3-3%22/></svg>');background-repeat:no-repeat;background-position:right center"><option value="full">Full payment</option><option value="installments">Installments</option></select></div></div>
+        <div style="flex:1;min-width:120px"><div style="font-size:10.5px;font-weight:700;color:var(--subtle);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px">Discount (%)</div><div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0 10px;height:36px"><input value="{{ r.discount }}" onInput="{{ onDiscount }}" data-id="{{ r.id }}" inputmode="numeric" placeholder="0" style="border:none;outline:none;background:none;font-family:'Geist Mono',monospace;font-size:13px;font-weight:700;color:var(--text);width:100%;height:100%" style-focus="color:var(--brand)"/><span style="font-size:12px;color:var(--subtle)">%</span></div></div>
+      </div>
+      <!-- payment progress -->
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:11.5px;color:var(--muted);font-weight:500">Paid <span style="color:var(--ok);font-weight:700;font-family:'Geist Mono',monospace">{{ r.paidStr }}</span> of <span style="color:var(--text);font-weight:700;font-family:'Geist Mono',monospace">{{ r.netStr }}</span></span><span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:600;background:{{ r.badge.bg }};color:{{ r.badge.fg }}"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ r.badge.icon }}"></use></svg>{{ r.badge.text }}</span></div>
+        <div style="height:7px;background:var(--surface2);border-radius:999px;overflow:hidden"><div style="height:100%;width:{{ r.barW }};background:{{ r.barColor }};border-radius:999px"></div></div>
+        <sc-if value="{{ r.hasPending }}" hint-placeholder-val="{{ true }}"><div style="font-size:11.5px;color:var(--warn);font-weight:600;margin-top:6px">Pending: {{ r.pendingStr }}</div></sc-if>
+      </div>
+      <!-- installment ticks -->
+      <sc-if value="{{ r.isInstallments }}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:6px;flex-wrap:wrap">
+        <sc-for list="{{ r.insts }}" as="x" hint-placeholder-count="3"><button onClick="{{ onToggleInst }}" data-id="{{ r.id }}" data-k="{{ x.k }}" style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;border:1px solid {{ x.bd }};background:{{ x.bg }};color:{{ x.fg }};font-family:inherit;font-size:11.5px;font-weight:600;cursor:pointer"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ x.icon }}"></use></svg>{{ x.amountStr }}</button></sc-for>
+      </div></sc-if>
+      <sc-if value="{{ r.isFull }}" hint-placeholder-val="{{ true }}"><button onClick="{{ onToggleFull }}" data-id="{{ r.id }}" style="display:flex;align-items:center;justify-content:center;gap:7px;height:40px;border-radius:9px;border:1px solid {{ r.fullBd }};background:{{ r.fullBg }};color:{{ r.fullFg }};font-family:inherit;font-size:13px;font-weight:600;cursor:pointer"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ r.fullIcon }}"></use></svg>{{ r.fullLabel }}</button></sc-if>
+    </div></sc-for>
+  </div>
+  <sc-if value="{{ showPagination }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);padding:11px 16px"><span style="font-size:12.5px;color:var(--subtle)">{{ pageInfo }} students</span><div style="display:flex;align-items:center;gap:5px"><sc-for list="{{ pages }}" as="pg" hint-placeholder-count="3"><button onClick="{{ onPage }}" data-p="{{ pg.p }}" style="min-width:32px;height:32px;padding:0 8px;border-radius:7px;border:1px solid {{ pg.bd }};background:{{ pg.bg }};color:{{ pg.fg }};font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer">{{ pg.n }}</button></sc-for></div></div></sc-if>
+
+  <!-- ENROL MODAL -->
+  <sc-if value="{{ enrolOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;background:rgba(8,12,22,.5);display:flex;align-items:center;justify-content:center;padding:20px;z-index:60">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:0 24px 70px rgba(8,12,22,.34);width:100%;max-width:440px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:11px;padding:16px 18px;border-bottom:1px solid var(--border2)">
+          <div style="width:38px;height:38px;border-radius:10px;background:var(--brands);color:var(--brand);display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-user-plus"></use></svg></div>
+          <div style="flex:1;min-width:0"><h3 style="margin:0;font-size:15px;font-weight:600;color:var(--text)">Enrol student</h3><div style="font-size:12px;color:var(--muted)">Into {{ courseLabel }}</div></div>
+          <button onClick="{{ onCloseEnrol }}" style="width:32px;height:32px;border-radius:8px;border:none;background:none;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none" style-hover="background:var(--surface2)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-x"></use></svg></button>
+        </div>
+        <div style="padding:16px 18px;display:flex;flex-direction:column;gap:13px">
+          <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Student name</label><input value="{{ form.name }}" onInput="{{ onField }}" data-f="name" placeholder="e.g. Jordan Hale" style="width:100%;height:42px;padding:0 13px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);font-family:inherit;font-size:13.5px;color:var(--text);outline:none" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Email</label><input value="{{ form.email }}" onInput="{{ onField }}" data-f="email" type="email" placeholder="name@email.com" style="width:100%;height:42px;padding:0 13px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);font-family:inherit;font-size:12.5px;color:var(--text);outline:none" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/></div>
+            <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Phone</label><input value="{{ form.phone }}" onInput="{{ onField }}" data-f="phone" inputmode="tel" placeholder="7700 900000" style="width:100%;height:42px;padding:0 13px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);font-family:'Geist Mono',monospace;font-size:12.5px;color:var(--text);outline:none" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Guardian phone</label><input value="{{ form.guardian }}" onInput="{{ onField }}" data-f="guardian" inputmode="tel" placeholder="7700 900000" style="width:100%;height:42px;padding:0 13px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);font-family:'Geist Mono',monospace;font-size:12.5px;color:var(--text);outline:none" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/></div>
+            <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Plan</label><div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rad-sm);padding:0 12px;height:42px"><select value="{{ form.plan }}" onChange="{{ onField }}" data-f="plan" style="appearance:none;border:none;background:none;font-family:inherit;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;width:100%;height:100%;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 fill=%22none%22 stroke=%22%2397a1b0%22 stroke-width=%222%22><path d=%22m3 4.5 3 3 3-3%22/></svg>');background-repeat:no-repeat;background-position:right center"><option value="full">Full payment</option><option value="installments">Installments</option></select></div></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;padding:14px 18px 18px;border-top:1px solid var(--border2)">
+          <button onClick="{{ onCloseEnrol }}" style="flex:1;height:44px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface);color:var(--text);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer" style-hover="background:var(--surface2)">Cancel</button>
+          <button onClick="{{ onCreateStudent }}" disabled="{{ enrolDisabled }}" style="flex:1.3;display:flex;align-items:center;justify-content:center;gap:8px;height:44px;background:{{ enrolBg }};color:var(--brandfg);border:none;border-radius:var(--rad-sm);font-family:inherit;font-size:13.5px;font-weight:600;cursor:{{ enrolCursor }}"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"></use></svg>Enrol</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:980,&quot;height&quot;:720},&quot;compact&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;role&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  CUR={GBP:'£',USD:'$',EUR:'€',EGP:'E£',AED:'AED ',SAR:'SAR ',INR:'₹'};
+  cur(){ try{ return this.CUR[localStorage.getItem('radams_currency')]||'£'; }catch(e){ return '£'; } }
+  tone(t){ const m={ok:['var(--oks)','var(--ok)'],warn:['var(--warns)','var(--warn)'],danger:['var(--dangers)','var(--danger)'],brand:['var(--brands)','var(--brand)']}; const [bg,fg]=m[t]||m.warn; return {bg,fg}; }
+  COURSES=[{value:'0',label:'Physics · June · Unit 1',fee:600},{value:'1',label:'Chemistry · June · Unit 1',fee:540},{value:'2',label:'Maths · Nov · Unit 1',fee:480}];
+  mkRow(id,name,plan,discount,paidUnits){ return {id,name,plan,discount,paidUnits}; }
+  bigList(seed){ const FN=['Aria','Ben','Chloe','Diego','Ella','Faris','Grace','Henry','Iris','Jack','Karim','Lucy','Marco','Nadia','Omar','Priya','Quinn','Rana','Sam','Tara','Uma','Victor','Wendy','Yara','Zane']; const LN=['Khan','Cohen','Park','Kim','Carter','Wong','Sayed','Rossi','Bauer','Haddad','Lee','Adel','Luna','Owusu','Walsh','Murphy','Reyes','Menon','Foster','Saleh']; const out=[]; for(let k=0;k<seed.count;k++){ const f=FN[(k*3+seed.s)%FN.length],l=LN[(k*7+seed.s)%LN.length]; const plan=k%3===0?'full':'installments'; const pu=plan==='full'?[k%4!==0]:[true,k%2===0,k%5===0]; out.push(this.mkRow(seed.base+k,f+' '+l,plan,(k%6)*5,pu)); } return out; }
+  state={
+    course:0, page:0, filter:'all', enrolOpen:false, form:{name:'',email:'',phone:'',guardian:'',plan:'full'}, nextId:5000,
+    students:{
+      0:this.bigList({count:1240,base:1000,s:1}),
+      1:this.bigList({count:480,base:3000,s:4}),
+      2:this.bigList({count:60,base:4000,s:7}),
+    },
+  };
+  onCourse=(e)=>this.setState({course:+e.target.value,page:0,search:'',filter:'all'});
+  onSearch=(e)=>this.setState({search:e.target.value,page:0});
+  onFilter=(e)=>this.setState({filter:e.currentTarget.dataset.v,page:0});
+  onPage=(e)=>this.setState({page:+e.currentTarget.dataset.p});
+  onPlan=(e)=>{ const id=+e.currentTarget.dataset.id, v=e.target.value; this.upd(id,r=>({...r,plan:v,paidUnits:v==='full'?[false]:[false,false,false]})); };
+  onDiscount=(e)=>{ const id=+e.target.dataset.id, v=Math.min(100,+e.target.value.replace(/[^0-9]/g,'')||0); this.upd(id,r=>({...r,discount:v})); };
+  onToggleInst=(e)=>{ const id=+e.currentTarget.dataset.id, k=+e.currentTarget.dataset.k; this.upd(id,r=>{ const pu=r.paidUnits.slice(); pu[k]=!pu[k]; return {...r,paidUnits:pu}; }); };
+  onToggleFull=(e)=>{ const id=+e.currentTarget.dataset.id; this.upd(id,r=>({...r,paidUnits:[!r.paidUnits[0]]})); };
+  onRemoveStudent=(e)=>{ const id=+e.currentTarget.dataset.id; this.setState(s=>{ const c=s.course; return {students:{...s.students,[c]:s.students[c].filter(r=>r.id!==id)}}; }); };
+  onAddStudent=()=>this.setState({enrolOpen:true,form:{name:'',email:'',phone:'',guardian:'',plan:'full'}});
+  onCloseEnrol=()=>this.setState({enrolOpen:false});
+  onField=(e)=>{ const f=e.currentTarget.dataset.f, v=e.target.value; this.setState(s=>({form:{...s.form,[f]:v}})); };
+  onCreateStudent=()=>{ this.setState(s=>{ const f=s.form; if(!f.name.trim()) return {}; const c=s.course; const id=s.nextId; const i=f.name.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase(); const row=this.mkRow(id,f.name.trim(),f.plan,0,f.plan==='full'?[false]:[false,false,false]); return {students:{...s.students,[c]:[row,...s.students[c]]},nextId:id+1,enrolOpen:false}; }); };
+  upd(id,fn){ this.setState(s=>{ const c=s.course; return {students:{...s.students,[c]:s.students[c].map(r=>r.id===id?fn(r):r)}}; }); }
+
+  renderVals(){
+    const compact=!!this.props.compact, s=this.state;
+    const enrolValid = s.form.name.trim() && /^\S+@\S+\.\S+$/.test(s.form.email||'') && (s.form.phone||'').replace(/\D/g,'').length>=6 && (s.form.guardian||'').replace(/\D/g,'').length>=6;
+    const course=this.COURSES[s.course]; const fee=course.fee;
+    const list=s.students[s.course]||[];
+    const q=(s.search||'').trim().toLowerCase(); const flt=s.filter||'all';
+    const stOf=(r)=>{ const net=Math.round((r.fee||course.fee)*(1-(+r.discount||0)/100)); const units=r.paidUnits.length; const per=Math.round(net/units); const paid=r.paidUnits.filter(Boolean).length===units?net:r.paidUnits.reduce((x,p,k)=>x+(p?(k===units-1?(net-per*(units-1)):per):0),0); const pend=net-paid; if(pend<=0)return 'paid'; if(paid>0)return 'partial'; return 'unpaid'; };
+    const sortedAll=list.slice().sort((a,b)=>a.name.localeCompare(b.name)).filter(r=>(!q||r.name.toLowerCase().includes(q))&&(flt==='all'||(flt==='paid'&&stOf(r)==='paid')||(flt==='pending'&&stOf(r)!=='paid')||(flt==='inst'&&r.plan==='installments')||(flt==='full'&&r.plan==='full')));
+    const RP=12, rpc=Math.max(1,Math.ceil(sortedAll.length/RP)), rpage=Math.min(s.page||0,rpc-1);
+    const rows=sortedAll.slice(rpage*RP,rpage*RP+RP).map((r,idx)=>{
+      const net=Math.round(fee*(1-(+r.discount||0)/100));
+      const isFull=r.plan==='full';
+      const units=r.paidUnits.length; const per=Math.round(net/units);
+      const paidCount=r.paidUnits.filter(Boolean).length;
+      const paid=isFull?(r.paidUnits[0]?net:0):r.paidUnits.reduce((x,p,k)=>x+(p?(k===units-1?(net-per*(units-1)):per):0),0);
+      const pending=net-paid; const pct=net?Math.round(paid/net*100):0;
+      let badge, barColor;
+      if(pending<=0){ badge={text:'Fully paid',icon:'check',...this.tone('ok')}; barColor='var(--ok)'; }
+      else if(paid>0){ badge={text:'Partially paid',icon:'clock',...this.tone('warn')}; barColor='var(--warn)'; }
+      else { badge={text:'Unpaid',icon:'alert',...this.tone('danger')}; barColor='var(--danger)'; }
+      const insts=isFull?[]:r.paidUnits.map((p,k)=>{ const amt=k===units-1?(net-per*(units-1)):per; const {bg,fg}=p?this.tone('ok'):this.tone('warn'); return {k,amount:amt, amountStr:this.cur()+amt, bg:p?bg:'transparent', fg:p?fg:'var(--muted)', bd:p?fg:'var(--border)', icon:p?'check':'clock'}; });
+      const full0=r.paidUnits[0];
+      return {id:r.id,name:r.name,i:r.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase(),idText:'ID CB-'+(1040+r.id),
+        plan:r.plan, discount:String(r.discount||0), net,paid,pending, paidStr:this.cur()+paid, netStr:this.cur()+net, pendingStr:this.cur()+pending, hasPending:pending>0, barW:pct+'%', barColor, badge,
+        isFull, isInstallments:!isFull, insts,
+        fullLabel:full0?'Marked fully paid':'Mark fully paid', fullIcon:full0?'check':'card', fullBg:full0?'var(--oks)':'var(--surface2)', fullFg:full0?'var(--ok)':'var(--text)', fullBd:full0?'var(--ok)':'var(--border)'};
+    });
+    const totalNet=rows.reduce((x,r)=>x+r.net,0), totalPaid=rows.reduce((x,r)=>x+r.paid,0);
+    const fullyPaid=rows.filter(r=>r.pending<=0).length;
+    return {
+      compact, cardCols: compact?'1fr':'repeat(2,minmax(0,1fr))', statCols: compact?'1fr 1fr':'repeat(4,1fr)',
+      showPagination:rpc>1, onPage:this.onPage, pageInfo:`${sortedAll.length?rpage*RP+1:0}–${Math.min((rpage+1)*RP,sortedAll.length)} of ${sortedAll.length}`,
+      pages:(()=>{ const lo=Math.max(0,rpage-2),hi=Math.min(rpc-1,rpage+2),w=[]; for(let i=lo;i<=hi;i++) w.push({n:i+1,p:i,bg:i===rpage?'var(--brand)':'var(--surface)',fg:i===rpage?'var(--brandfg)':'var(--muted)',bd:i===rpage?'var(--brand)':'var(--border)'}); return w; })(),
+      courseOpts:this.COURSES, courseValue:String(s.course), courseLabel:course.label, courseFee:fee, courseFeeStr:this.cur()+fee, onCourse:this.onCourse, search:s.search||'', onSearch:this.onSearch,
+      filters:[['all','All'],['paid','Fully paid'],['pending','Pending'],['inst','Installments'],['full','Full payment']].map(([value,label])=>{ const a=flt===value; return {value,label,bg:a?'var(--brand)':'var(--surface)',fg:a?'var(--brandfg)':'var(--muted)',bd:a?'var(--brand)':'var(--border)'}; }), onFilter:this.onFilter,
+      stats:[{value:String(rows.length),label:'Enrolled',color:'var(--brand)'},{value:String(fullyPaid),label:'Fully paid',color:'var(--ok)'},{value:this.cur()+totalPaid.toLocaleString('en-US'),label:'Collected',color:'var(--text)'},{value:this.cur()+(totalNet-totalPaid).toLocaleString('en-US'),label:'Outstanding',color:'var(--warn)'}],
+      rows, onPlan:this.onPlan, onDiscount:this.onDiscount, onToggleInst:this.onToggleInst, onToggleFull:this.onToggleFull, onRemoveStudent:this.onRemoveStudent,
+      enrolOpen:s.enrolOpen, onAddStudent:this.onAddStudent, onCloseEnrol:this.onCloseEnrol, form:s.form, onField:this.onField, onCreateStudent:this.onCreateStudent,
+      enrolDisabled:!enrolValid, enrolBg:enrolValid?'var(--brand)':'var(--subtle)', enrolCursor:enrolValid?'pointer':'not-allowed',
+    };
+  }
+}
+</script>
+</body>
+</html>

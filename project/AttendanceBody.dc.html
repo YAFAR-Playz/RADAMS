@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:flex;flex-direction:column;gap:16px">
+
+  <!-- HEADER -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:17px 18px">
+    <div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px">
+      <div>
+        <div style="font-size:12px;color:var(--subtle);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Attendance</div>
+        <h1 style="margin:4px 0 0;font-size:20px;font-weight:600;color:var(--text);letter-spacing:-.01em">{{ title }}</h1>
+        <p style="margin:3px 0 0;font-size:13px;color:var(--muted)">{{ subtitle }}</p>
+      </div>
+      <sc-if value="{{ canEdit }}" hint-placeholder-val="{{ false }}"><button onClick="{{ onNewSession }}" style="display:flex;align-items:center;gap:7px;flex:none;background:var(--brand);color:var(--brandfg);border:none;border-radius:var(--rad-sm);padding:10px 15px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer" style-hover="filter:brightness(.96)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-plus"></use></svg>New session</button></sc-if>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:15px;flex-wrap:wrap">
+      <span style="font-size:12.5px;font-weight:600;color:var(--muted);flex:none;margin-right:2px">Course</span>
+      <sc-if value="{{ useCourseDropdown }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rad-sm);padding:0 12px;height:38px;min-width:240px;max-width:320px"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="var(--subtle)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-right:8px"><use href="#i-book"></use></svg><select value="{{ offeringValue }}" onChange="{{ onOffering }}" style="appearance:none;border:none;background:none;font-family:inherit;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;width:100%;height:100%;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 fill=%22none%22 stroke=%22%2397a1b0%22 stroke-width=%222%22><path d=%22m3 4.5 3 3 3-3%22/></svg>');background-repeat:no-repeat;background-position:right center"><sc-for list="{{ offerings }}" as="o" hint-placeholder-count="3"><option value="{{ o.value }}">{{ o.label }}</option></sc-for></select></div></sc-if>
+      <sc-if value="{{ useCourseChips }}" hint-placeholder-val="{{ true }}"><sc-for list="{{ offerings }}" as="o" hint-placeholder-count="3"><button onClick="{{ onOffering }}" data-i="{{ o.i }}" style="flex:none;display:flex;align-items:center;gap:7px;padding:8px 13px;border-radius:999px;border:1px solid {{ o.bd }};background:{{ o.bg }};color:{{ o.fg }};font-family:inherit;font-size:13px;font-weight:600;cursor:pointer"><span style="width:7px;height:7px;border-radius:50%;background:{{ o.dot }}"></span>{{ o.label }}</button></sc-for></sc-if>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
+
+    <!-- SESSIONS LIST -->
+    <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden;flex:1 1 300px;min-width:0">
+      <header style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border2)"><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">Sessions</h3><span style="font-size:11px;color:var(--subtle);font-weight:500">Latest first</span></header>
+      <div style="padding:7px 8px">
+        <sc-for list="{{ sessions }}" as="s" hint-placeholder-count="4"><div onClick="{{ onPickSession }}" data-id="{{ s.id }}" style="display:flex;align-items:center;gap:11px;padding:11px;border-radius:10px;cursor:pointer;background:{{ s.activeBg }}" style-hover="background:var(--surface2)">
+          <div style="width:42px;height:42px;border-radius:11px;background:{{ s.dateBg }};color:{{ s.dateFg }};display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none;line-height:1"><span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em">{{ s.mon }}</span><span style="font-size:16px;font-weight:700">{{ s.day }}</span></div>
+          <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600;color:var(--text)">{{ s.label }}</div><div style="font-size:12px;color:var(--subtle)">{{ s.present }}/{{ s.total }} present · {{ s.time }}</div></div>
+          <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:600;background:{{ s.badge.bg }};color:{{ s.badge.fg }};flex:none"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ s.badge.icon }}"></use></svg>{{ s.badge.text }}</span>
+        </div></sc-for>
+      </div>
+      <sc-if value="{{ showSessPagination }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;justify-content:center;gap:5px;padding:10px;border-top:1px solid var(--border2)"><sc-for list="{{ sessPages }}" as="pg" hint-placeholder-count="2"><button onClick="{{ onSessPage }}" data-p="{{ pg.p }}" style="min-width:30px;height:30px;padding:0 8px;border-radius:7px;border:1px solid {{ pg.bd }};background:{{ pg.bg }};color:{{ pg.fg }};font-family:inherit;font-size:12px;font-weight:600;cursor:pointer">{{ pg.n }}</button></sc-for></div></sc-if>
+    </section>
+
+    <!-- ROSTER -->
+    <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden;flex:2 1 380px;min-width:0">
+      <header style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border2)">
+        <div><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">{{ activeSession.label }}</h3><p style="margin:2px 0 0;font-size:12px;color:var(--subtle)">{{ activeSession.dateFull }} · {{ presentCount }}/{{ total }} present</p></div>
+        <sc-if value="{{ canEdit }}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:7px"><button onClick="{{ onAllPresent }}" style="display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);color:var(--ok);border-radius:8px;padding:7px 11px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer" style-hover="background:var(--oks)"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check2"></use></svg>All present</button><button style="background:var(--brand);color:var(--brandfg);border:none;border-radius:8px;padding:7px 13px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer" style-hover="filter:brightness(.96)">Save</button></div></sc-if>
+        <sc-if value="{{ readonly }}" hint-placeholder-val="{{ true }}"><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);font-weight:500"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-shield"></use></svg>View only</span></sc-if>
+      </header>
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--border2)">
+        <div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rad-sm);padding:0 11px;height:38px;flex:1;min-width:170px;max-width:300px"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="var(--subtle)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-search"></use></svg><input value="{{ search }}" onInput="{{ onSearch }}" placeholder="Find a student…" style="border:none;outline:none;background:none;font-family:inherit;font-size:13px;color:var(--text);width:100%;height:100%"/></div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:auto"><sc-for list="{{ summary }}" as="s" hint-placeholder-count="3"><span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600;background:{{ s.bg }};color:{{ s.fg }}"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ s.icon }}"></use></svg>{{ s.n }} {{ s.label }}</span></sc-for></div>
+      </div>
+      <div style="padding:7px 8px">
+        <sc-for list="{{ roster }}" as="r" hint-placeholder-count="6"><div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:9px 11px;border-radius:10px" style-hover="background:var(--surface2)">
+          <div style="width:34px;height:34px;border-radius:50%;background:var(--surface2);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none">{{ r.i }}</div>
+          <div style="flex:1 1 140px;min-width:130px"><div style="font-size:13.5px;font-weight:600;color:var(--text)">{{ r.name }}</div><sc-if value="{{ r.showRate }}" hint-placeholder-val="{{ true }}"><div style="font-size:11.5px;color:var(--subtle)">{{ r.rate }}% attendance this session</div></sc-if></div>
+          <sc-if value="{{ canEdit }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-wrap:wrap;gap:6px;flex:none;margin-left:auto">
+            <sc-for list="{{ r.options }}" as="o" hint-placeholder-count="3"><button onClick="{{ onMark }}" data-id="{{ r.id }}" data-k="{{ o.key }}" title="{{ o.label }}" style="display:flex;align-items:center;gap:5px;padding:7px 11px;border-radius:8px;border:1px solid {{ o.bd }};background:{{ o.bg }};color:{{ o.fg }};font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;min-height:38px"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ o.icon }}"></use></svg>{{ o.label }}</button></sc-for>
+          </div></sc-if>
+          <sc-if value="{{ readonly }}" hint-placeholder-val="{{ true }}"><div style="margin-left:auto;display:flex;align-items:center;gap:8px;flex:none"><span style="display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;font-size:12px;font-weight:600;background:{{ r.badge.bg }};color:{{ r.badge.fg }}"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ r.badge.icon }}"></use></svg>{{ r.badge.text }}</span><button onClick="{{ onOpenWa }}" data-id="{{ r.id }}" title="Message parent about attendance" style="width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:#1ea952;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:var(--oks);border-color:var(--ok)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-send"></use></svg></button></div></sc-if>
+        </div></sc-for>
+        <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}"><div style="padding:28px 12px;text-align:center;font-size:13px;color:var(--muted)">No students match “{{ search }}”</div></sc-if>
+      </div>
+      <sc-if value="{{ showPagination }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:11px 14px;border-top:1px solid var(--border2)">
+          <span style="font-size:12px;color:var(--subtle)">Showing {{ pageCountText }} students</span>
+          <div style="display:flex;align-items:center;gap:5px">
+            <button onClick="{{ onPage }}" data-p="{{ prevP }}" disabled="{{ prevDisabled }}" style="width:32px;height:32px;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:{{ prevColor }};display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:var(--surface2)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(180deg)"><use href="#i-cr"></use></svg></button>
+            <sc-for list="{{ pages }}" as="pg" hint-placeholder-count="3"><button onClick="{{ onPage }}" data-p="{{ pg.p }}" style="min-width:32px;height:32px;padding:0 8px;border-radius:7px;border:1px solid {{ pg.bd }};background:{{ pg.bg }};color:{{ pg.fg }};font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer">{{ pg.n }}</button></sc-for>
+            <button onClick="{{ onPage }}" data-p="{{ nextP }}" disabled="{{ nextDisabled }}" style="width:32px;height:32px;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:{{ nextColor }};display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:var(--surface2)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-cr"></use></svg></button>
+          </div>
+        </div>
+      </sc-if>
+    </section>
+  </div>
+
+  <!-- WHATSAPP ATTENDANCE MODAL -->
+  <sc-if value="{{ waOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;background:rgba(8,12,22,.5);display:flex;align-items:center;justify-content:center;padding:20px;z-index:60">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:0 24px 70px rgba(8,12,22,.34);width:100%;max-width:440px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:11px;padding:16px 18px;border-bottom:1px solid var(--border2)">
+          <div style="width:38px;height:38px;border-radius:10px;background:rgba(37,211,102,.14);color:#1ea952;display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-send"></use></svg></div>
+          <div style="flex:1;min-width:0"><h3 style="margin:0;font-size:15px;font-weight:600;color:var(--text)">Message parent · attendance</h3><div style="font-size:12px;color:var(--muted)">{{ wa.session }}</div></div>
+          <button onClick="{{ onCloseWa }}" style="width:32px;height:32px;border-radius:8px;border:none;background:none;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none" style-hover="background:var(--surface2)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-x"></use></svg></button>
+        </div>
+        <div style="padding:18px">
+          <div style="display:flex;align-items:center;gap:11px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rad-sm);padding:11px 13px;margin-bottom:14px">
+            <div style="width:36px;height:36px;border-radius:50%;background:var(--brands);color:var(--brand);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none">{{ wa.i }}</div>
+            <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600;color:var(--text)">{{ wa.parent }}</div><div style="font-size:12px;color:var(--muted);font-family:'Geist Mono',monospace">{{ wa.phone }}</div></div>
+            <span style="display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:999px;font-size:11.5px;font-weight:600;background:{{ wa.badgeBg }};color:{{ wa.badgeFg }};flex:none"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ wa.badgeIcon }}"></use></svg>{{ wa.status }}</span>
+          </div>
+          <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px">Message preview</div>
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--rad-sm);padding:13px;font-size:13px;color:var(--text);line-height:1.55;white-space:pre-wrap;max-height:180px;overflow:auto">{{ wa.message }}</div>
+        </div>
+        <div style="display:flex;gap:10px;padding:0 18px 16px">
+          <button onClick="{{ onCloseWa }}" style="flex:1;height:44px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface);color:var(--text);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer" style-hover="background:var(--surface2)">Cancel</button>
+          <a href="{{ wa.url }}" target="_blank" rel="noopener" onClick="{{ onCloseWa }}" style="flex:1.4;display:flex;align-items:center;justify-content:center;gap:8px;height:44px;background:#25D366;color:#fff;border-radius:var(--rad-sm);font-size:13.5px;font-weight:600;text-decoration:none"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-send"></use></svg>Open WhatsApp</a>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- NEW SESSION MODAL -->
+  <sc-if value="{{ modalOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;background:rgba(8,12,22,.5);display:flex;align-items:center;justify-content:center;padding:20px;z-index:60">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:0 24px 70px rgba(8,12,22,.34);width:100%;max-width:430px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:11px;padding:16px 18px;border-bottom:1px solid var(--border2)">
+          <div style="width:38px;height:38px;border-radius:10px;background:var(--brands);color:var(--brand);display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-cal-check"></use></svg></div>
+          <div style="flex:1;min-width:0"><h3 style="margin:0;font-size:15px;font-weight:600;color:var(--text)">New attendance session</h3><div style="font-size:12px;color:var(--muted)">{{ activeOfferingLabel }}</div></div>
+          <button onClick="{{ onCloseModal }}" style="width:32px;height:32px;border-radius:8px;border:none;background:none;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none" style-hover="background:var(--surface2)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-x"></use></svg></button>
+        </div>
+        <div style="padding:18px;display:flex;flex-direction:column;gap:14px">
+          <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:7px">Session title</label><input value="{{ newTitle }}" onInput="{{ onNewTitle }}" placeholder="e.g. Week 7 — Lecture" style="width:100%;height:44px;padding:0 13px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);font-family:inherit;font-size:13.5px;color:var(--text);outline:none" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:7px">Date</label><input value="{{ newDate }}" onInput="{{ onNewDate }}" type="date" style="width:100%;height:44px;padding:0 13px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);font-family:inherit;font-size:13.5px;color:var(--text);outline:none" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/></div>
+            <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:7px">Time</label><input value="{{ newTime }}" onInput="{{ onNewTime }}" type="time" style="width:100%;height:44px;padding:0 13px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);font-family:inherit;font-size:13.5px;color:var(--text);outline:none" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rad-sm);padding:11px 13px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><use href="#i-users"></use></svg><span style="font-size:12.5px;color:var(--muted)">All <span style="color:var(--text);font-weight:600">{{ roster.length }} students</span> in {{ activeOfferingLabel }} will be added.</span></div>
+        </div>
+        <div style="display:flex;gap:10px;padding:0 18px 16px">
+          <button onClick="{{ onCloseModal }}" style="flex:1;height:44px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface);color:var(--text);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer" style-hover="background:var(--surface2)">Cancel</button>
+          <button onClick="{{ onCreateSession }}" style="flex:1.3;display:flex;align-items:center;justify-content:center;gap:8px;height:44px;background:var(--brand);color:var(--brandfg);border:none;border-radius:var(--rad-sm);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer" style-hover="filter:brightness(.96)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-plus"></use></svg>Create &amp; take attendance</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:980,&quot;height&quot;:740},&quot;compact&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;role&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;registration&quot;,&quot;head&quot;,&quot;assistant&quot;],&quot;default&quot;:&quot;registration&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  OPTS=[{key:'present',label:'Present',tone:'ok',icon:'check'},{key:'late',label:'Late',tone:'warn',icon:'clock'},{key:'absent',label:'Absent',tone:'danger',icon:'x'}];
+  FIRST_A=['Aria','Ben','Chloe','Diego','Ethan','Fatima','Grace','Hana','Henry','Isla','Jack','Karim','Lucy','Marco','Nadia','Oscar','Priya','Quinn','Rana','Sam','Tara','Uma','Victor','Wendy','Yara','Adam','Bella','Caleb','Dina','Elias','Farah','Gabe','Huda','Ivan','Jana','Kai','Lina','Musa','Nora','Owen'];
+  LAST_A=['Khan','Cohen','Adeyemi','Luna','Park','Zahra','Owusu','Kim','Walsh','Murphy','Lee','Adel','Brennan','Ricci','Petrov','Reyes','Menon','Foster','Saleh','Okonkwo','Vidal','Desai','Hugo','Nasser','Silva','Tan','Ahmed','Costa','Diallo','Erdem'];
+  get ROSTER(){ if(this._roster) return this._roster; const out=[]; for(let k=1;k<=300;k++){ const f=this.FIRST_A[(k*7)%this.FIRST_A.length]; const l=this.LAST_A[(k*13)%this.LAST_A.length]; out.push([f+' '+l,(f[0]+l[0]).toUpperCase()]); } this._roster=out; return out; }
+  PAGE_SIZE=20;
+  SESS_PAGE=4;
+  tone(t){ const m={ok:['var(--oks)','var(--ok)'],warn:['var(--warns)','var(--warn)'],danger:['var(--dangers)','var(--danger)'],neutral:['var(--surface2)','var(--muted)']}; const [bg,fg]=m[t]||m.neutral; return {bg,fg}; }
+
+  state={
+    offering:0, activeSession:1, modalOpen:false, sessPage:0,
+    newTitle:'', newDate:'2026-06-20', newTime:'16:00', search:'', page:0, waId:null,
+    sessions:[
+      {id:1,label:'Week 7 — Lecture',mon:'Jun',day:'18',dateFull:'Thu, 18 June 2026',time:'4:00 PM',status:'open'},
+      {id:2,label:'Week 6 — Lecture',mon:'Jun',day:'11',dateFull:'Thu, 11 June 2026',time:'4:00 PM',status:'done'},
+      {id:3,label:'Week 6 — Lab',mon:'Jun',day:'09',dateFull:'Tue, 9 June 2026',time:'5:30 PM',status:'done'},
+      {id:4,label:'Week 5 — Lecture',mon:'Jun',day:'04',dateFull:'Thu, 4 June 2026',time:'4:00 PM',status:'done'},
+    ],
+    marks:{ 1:{1:'present',2:'present',3:'late',4:'present',5:'absent',6:'present',7:'present',8:'present'},
+            2:{1:'present',2:'present',3:'present',4:'late',5:'present',6:'present',7:'absent',8:'present'},
+            3:{1:'present',2:'absent',3:'present',4:'present',5:'present',6:'late',7:'present',8:'present'},
+            4:{1:'present',2:'present',3:'present',4:'present',5:'present',6:'present',7:'present',8:'late'} },
+  };
+
+  onOffering=(e)=>this.setState({offering:+(e.currentTarget.dataset.i!==undefined?e.currentTarget.dataset.i:e.target.value)});
+  onPickSession=(e)=>this.setState({activeSession:+(e.currentTarget.dataset.id!==undefined?e.currentTarget.dataset.id:e.target.value),page:0});
+  onSessPage=(e)=>this.setState({sessPage:+e.currentTarget.dataset.p});
+  onSearch=(e)=>this.setState({search:e.target.value,page:0});
+  onPage=(e)=>this.setState({page:+e.currentTarget.dataset.p});
+  onOpenWa=(e)=>this.setState({waId:+e.currentTarget.dataset.id});
+  onCloseWa=()=>this.setState({waId:null});
+  onMark=(e)=>{ const id=+e.currentTarget.dataset.id, k=e.currentTarget.dataset.k, sid=this.state.activeSession; this.setState(s=>({marks:{...s.marks,[sid]:{...s.marks[sid],[id]:k}}})); };
+  onAllPresent=()=>{ const sid=this.state.activeSession; const all={}; this.ROSTER.forEach((_,idx)=>all[idx+1]='present'); this.setState(s=>({marks:{...s.marks,[sid]:all}})); };
+  onNewSession=()=>this.setState({modalOpen:true,newTitle:''});
+  onCloseModal=()=>this.setState({modalOpen:false});
+  onNewTitle=(e)=>this.setState({newTitle:e.target.value});
+  onNewDate=(e)=>this.setState({newDate:e.target.value});
+  onNewTime=(e)=>this.setState({newTime:e.target.value});
+  onCreateSession=()=>{ this.setState(s=>{ const id=Math.max(...s.sessions.map(x=>x.id))+1; const dt=new Date(s.newDate+'T00:00'); const mon=dt.toLocaleString('en',{month:'short'}); const day=String(dt.getDate()).padStart(2,'0'); const t12=(()=>{ const [h,m]=s.newTime.split(':').map(Number); const ap=h>=12?'PM':'AM'; const hh=((h+11)%12)+1; return `${hh}:${String(m).padStart(2,'0')} ${ap}`; })(); const sess={id,label:s.newTitle.trim()||'New session',mon,day,dateFull:dt.toLocaleDateString('en',{weekday:'short',day:'numeric',month:'long',year:'numeric'}),time:t12,status:'open'}; const marks={}; this.ROSTER.forEach((_,idx)=>marks[idx+1]='present'); return {sessions:[sess,...s.sessions],marks:{...s.marks,[id]:marks},activeSession:id,modalOpen:false}; }); };
+
+  renderVals(){
+    const compact=!!this.props.compact;
+    const role=this.props.role||'registration';
+    const canEdit=role==='registration';
+    const allOffs=['Physics · Jun · U1','Physics · Nov · U1','Chemistry · Jun · U1','Chemistry · Nov · U1','Mathematics · Jun · U1','Biology · Jun · U2'];
+    const headOffs=['Physics · Jun · U1','Physics · Nov · U1','Physics · Jun · U2'];
+    const asstOffs=['Physics · Jun · U1','Physics · Nov · U1'];
+    const offSource=role==='head'?headOffs:(role==='assistant'?asstOffs:allOffs);
+    const offs=offSource.map((label,i)=>{ const a=i===this.state.offering; return {label,i,value:String(i),sel:a,bg:a?'var(--brand)':'var(--surface)',fg:a?'var(--brandfg)':'var(--muted)',bd:a?'var(--brand)':'var(--border)',dot:a?'var(--brandfg)':'var(--subtle)'}; });
+    const useCourseDropdown=role==='registration'||role==='admin';
+    const sid=this.state.activeSession;
+    const curMarks=this.state.marks[sid]||{};
+    // sessions sorted latest first, paginated 4 at a time
+    const allSessions=this.state.sessions.slice().sort((a,b)=>(b.day-a.day));
+    const sessPageCount=Math.max(1,Math.ceil(allSessions.length/this.SESS_PAGE));
+    const sessPage=Math.min(this.state.sessPage,sessPageCount-1);
+    const sessSlice=allSessions.slice(sessPage*this.SESS_PAGE,sessPage*this.SESS_PAGE+this.SESS_PAGE);
+    const sessions=sessSlice.map(s=>{ const mk=this.state.marks[s.id]||{}; const present=Object.values(mk).filter(v=>v==='present'||v==='late').length; const active=s.id===sid;
+      const badge=s.status==='open'?{text:'Open',icon:'clock',...this.tone('warn')}:{text:'Recorded',icon:'check2',...this.tone('ok')};
+      return {...s,total:this.ROSTER.length,present,activeBg:active?'var(--brands)':'transparent',dateBg:active?'var(--brand)':'var(--surface2)',dateFg:active?'var(--brandfg)':'var(--muted)',badge}; });
+    const sessionOpts=allSessions.map(s=>({value:String(s.id),label:s.label+' · '+s.dateFull,sel:s.id===sid}));
+    const sessPages=Array.from({length:sessPageCount},(_,i)=>({n:i+1,p:i, bg:i===sessPage?'var(--brand)':'var(--surface)', fg:i===sessPage?'var(--brandfg)':'var(--muted)', bd:i===sessPage?'var(--brand)':'var(--border)'}));
+    const activeSession=this.state.sessions.find(s=>s.id===sid)||this.state.sessions[0];
+    const fullRoster=this.ROSTER.filter((_,idx)=> role!=='assistant' ? true : (idx%10===0)).map(([name,i],ri)=>{ const idx=this.ROSTER.findIndex(x=>x[0]===name&&x[1]===i); const id=idx+1; const mk=curMarks[id]||'present'; const m=this.OPTS.find(o=>o.key===mk);
+      const options=this.OPTS.map(o=>{ const active=mk===o.key; const {bg,fg}=this.tone(o.tone); return {key:o.key,label:o.label,icon:o.icon, bg:active?bg:'transparent', fg:active?fg:'var(--muted)', bd:active?fg:'var(--border)'}; });
+      const {bg,fg}=this.tone(m.tone);
+      return {id,name,i,mk,options, showRate:false, rate:90, badge:{text:m.label,icon:m.icon,bg,fg}}; });
+    // status summary across whole session
+    const count=(k)=>fullRoster.filter(r=>r.mk===k).length;
+    const summary=[
+      {key:'present',label:'Present',n:count('present'),...this.tone('ok'),icon:'check'},
+      {key:'late',label:'Late',n:count('late'),...this.tone('warn'),icon:'clock'},
+      {key:'absent',label:'Absent',n:count('absent'),...this.tone('danger'),icon:'x'},
+    ];
+    // search + pagination
+    const q=this.state.search.trim().toLowerCase();
+    const filtered=q?fullRoster.filter(r=>r.name.toLowerCase().includes(q)):fullRoster;
+    const pageCount=Math.max(1,Math.ceil(filtered.length/this.PAGE_SIZE));
+    const page=Math.min(this.state.page,pageCount-1);
+    const start=page*this.PAGE_SIZE;
+    const roster=filtered.slice(start,start+this.PAGE_SIZE);
+    const showingFrom=filtered.length?start+1:0, showingTo=Math.min(start+this.PAGE_SIZE,filtered.length);
+    const pages=(()=>{ const lo=Math.max(0,page-2), hi=Math.min(pageCount-1,page+2); const w=[]; for(let i=lo;i<=hi;i++) w.push(i); return w; })().map(i=>({n:i+1,p:i, active:i===page, bg:i===page?'var(--brand)':'var(--surface)', fg:i===page?'var(--brandfg)':'var(--muted)', bd:i===page?'var(--brand)':'var(--border)'}));
+    const presentCount=Object.values(curMarks).filter(v=>v==='present'||v==='late').length;
+    // WhatsApp attendance message
+    let wa=null;
+    if(this.state.waId){ const idx=this.state.waId-1; const [nm,ini]=this.ROSTER[idx]; const mk=curMarks[this.state.waId]||'present'; const m=this.OPTS.find(o=>o.key===mk); const {bg,fg}=this.tone(m.tone);
+      const digits='447700900'+(100+this.state.waId);
+      const statusLine={present:'was present',late:'arrived late',absent:'was absent'}[mk];
+      const msg=['Assalamu alaikum, this is RadAMS — '+offs[this.state.offering].label+'.','',`Attendance update for ${nm}:`,`${activeSession.label} (${activeSession.dateFull}) — ${nm} ${statusLine}.`,'','Thank you.'].join('\n');
+      wa={ i:ini, parent:nm.split(' ')[0]+"'s guardian", phone:'+44 7700 900'+(100+this.state.waId), session:activeSession.label, status:m.label, badgeBg:bg, badgeFg:fg, badgeIcon:m.icon, message:msg, url:`https://wa.me/${digits}?text=${encodeURIComponent(msg)}` };
+    }
+    return {
+      waOpen:!!wa, wa, onOpenWa:this.onOpenWa, onCloseWa:this.onCloseWa,
+      compact, canEdit, readonly:!canEdit,
+      useCourseDropdown, useCourseChips:!useCourseDropdown, offeringValue:String(this.state.offering),
+      sessionOpts, sessPages, showSessPagination:sessPageCount>1,
+      title: canEdit?'Take attendance':(role==='assistant'?'My students\u2019 attendance':'Attendance records'),
+      subtitle: canEdit?'Create a session for a course and mark each student.':(role==='assistant'?'Attendance for your assigned students, per session.':'Attendance recorded by the Registration team, per session.'),
+      mainCols: compact?'1fr':'minmax(260px,300px) minmax(0,1fr)',
+      offerings:offs, activeOfferingLabel:offs[this.state.offering].label,
+      sessions, activeSession, roster, presentCount, total:this.ROSTER.length, summary,
+      search:this.state.search, onSearch:this.onSearch,
+      pages, showPagination:pageCount>1, pageCountText:`${showingFrom}–${showingTo} of ${filtered.length}`,
+      prevP:Math.max(0,page-1), nextP:Math.min(pageCount-1,page+1), prevDisabled:page===0, nextDisabled:page>=pageCount-1,
+      prevColor:page===0?'var(--subtle)':'var(--muted)', nextColor:page>=pageCount-1?'var(--subtle)':'var(--muted)',
+      noResults:filtered.length===0, onPage:this.onPage,
+      onOffering:this.onOffering, onPickSession:this.onPickSession, onMark:this.onMark, onAllPresent:this.onAllPresent,
+      modalOpen:this.state.modalOpen, onNewSession:this.onNewSession, onCloseModal:this.onCloseModal,
+      onCreateSession:this.onCreateSession, newTitle:this.state.newTitle, newDate:this.state.newDate, newTime:this.state.newTime,
+      onNewTitle:this.onNewTitle, onNewDate:this.onNewDate, onNewTime:this.onNewTime,
+    };
+  }
+}
+</script>
+</body>
+</html>

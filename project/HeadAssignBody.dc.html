@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:flex;flex-direction:column;gap:16px">
+
+  <!-- HEADER -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:17px 18px">
+    <div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px">
+      <div>
+        <div style="font-size:12px;color:var(--subtle);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Assignments</div>
+        <h1 style="margin:4px 0 0;font-size:20px;font-weight:600;color:var(--text);letter-spacing:-.01em">Create &amp; assign work</h1>
+        <p style="margin:3px 0 0;font-size:13px;color:var(--muted)">Each assignment is scoped to a course offering and logged by each student's assistant.</p>
+      </div>
+      <button onClick="{{ onNew }}" style="display:flex;align-items:center;gap:7px;flex:none;background:var(--brand);color:var(--brandfg);border:none;border-radius:var(--rad-sm);padding:10px 15px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer" style-hover="filter:brightness(.96)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-plus"></use></svg>New assignment</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:15px;flex-wrap:wrap">
+      <span style="font-size:12.5px;font-weight:600;color:var(--muted);flex:none;margin-right:2px">Offering</span>
+      <sc-for list="{{ offerings }}" as="o" hint-placeholder-count="3"><button onClick="{{ onOffering }}" data-i="{{ o.i }}" style="flex:none;display:flex;align-items:center;gap:7px;padding:8px 13px;border-radius:999px;border:1px solid {{ o.bd }};background:{{ o.bg }};color:{{ o.fg }};font-family:inherit;font-size:13px;font-weight:600;cursor:pointer"><span style="width:7px;height:7px;border-radius:50%;background:{{ o.dot }}"></span>{{ o.label }}</button></sc-for>
+    </div>
+  </div>
+
+  <!-- ASSIGNMENT LIST -->
+  <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden">
+    <header style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border2)"><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">{{ activeOfferingLabel }} · {{ assignments.length }} assignments</h3></header>
+    <sc-for list="{{ assignments }}" as="a" hint-placeholder-count="3"><div style="border-bottom:1px solid var(--border2)">
+      <div onClick="{{ onToggle }}" data-id="{{ a.id }}" style="display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:14px 18px;cursor:pointer" style-hover="background:var(--surface2)">
+        <div style="width:40px;height:40px;border-radius:11px;background:{{ a.iconBg }};color:{{ a.iconFg }};display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-clipboard-list"></use></svg></div>
+        <div style="flex:1;min-width:160px"><div style="font-size:14px;font-weight:600;color:var(--text)">{{ a.title }}</div><div style="font-size:12px;color:var(--subtle)">{{ a.meta }}</div></div>
+        <div style="display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1"><div style="display:flex;justify-content:space-between"><span style="font-size:11.5px;color:var(--muted);font-weight:500">Logged</span><span style="font-size:12px;font-weight:700;color:var(--text)">{{ a.logged }}/{{ a.total }}</span></div><div style="height:6px;background:var(--surface2);border-radius:999px;overflow:hidden"><div style="height:100%;width:{{ a.barW }};background:{{ a.barColor }};border-radius:999px"></div></div></div>
+        <span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;font-size:11.5px;font-weight:600;background:{{ a.status.bg }};color:{{ a.status.fg }};flex:none"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ a.status.icon }}"></use></svg>{{ a.status.text }}</span>
+        <button onClick="{{ onEdit }}" data-id="{{ a.id }}" title="Edit assignment" style="width:32px;height:32px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none" style-hover="background:var(--surface2);color:var(--text)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-settings"></use></svg></button>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--subtle)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;transform:{{ a.chevR }}"><use href="#i-cd"></use></svg>
+      </div>
+      <sc-if value="{{ a.expanded }}" hint-placeholder-val="{{ false }}">
+        <div style="background:var(--surface2);border-top:1px solid var(--border2);padding:6px 0">
+          <div style="font-size:11px;font-weight:700;color:var(--subtle);text-transform:uppercase;letter-spacing:.04em;padding:8px 18px 5px">Assigned to · by assistant</div>
+          <sc-for list="{{ a.assignees }}" as="g" hint-placeholder-count="3"><div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 11px;padding:9px 18px;border-top:1px solid var(--border2)">
+            <div style="width:30px;height:30px;border-radius:50%;background:var(--surface);border:1px solid var(--border);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex:none">{{ g.i }}</div>
+            <span style="flex:1 1 120px;min-width:0;font-size:13px;font-weight:600;color:var(--text)">{{ g.name }}</span>
+            <span style="font-size:12px;color:var(--muted);flex:none">{{ g.count }} students</span>
+            <div style="width:80px;flex:none"><div style="height:6px;background:var(--surface);border:1px solid var(--border);border-radius:999px;overflow:hidden"><div style="height:100%;width:{{ g.barW }};background:{{ g.barColor }};border-radius:999px"></div></div></div>
+            <span style="font-size:12px;font-weight:700;color:var(--text);width:46px;text-align:right;flex:none">{{ g.logged }}/{{ g.count }}</span>
+          </div></sc-for>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 18px;border-top:1px solid var(--border2)">
+            <span style="font-size:11.5px;color:var(--subtle);line-height:1.4">Stays open past the due date until every student is logged — or close it manually.</span>
+            <sc-if value="{{ a.canClose }}" hint-placeholder-val="{{ true }}"><button onClick="{{ onToggleClose }}" data-id="{{ a.id }}" style="flex:none;display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer" style-hover="background:var(--dangers);color:var(--danger);border-color:var(--danger)"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check2"></use></svg>{{ a.closeLabel }}</button></sc-if>
+            <sc-if value="{{ a.reopenable }}" hint-placeholder-val="{{ false }}"><button onClick="{{ onToggleClose }}" data-id="{{ a.id }}" style="flex:none;display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);color:var(--brand);border-radius:8px;padding:7px 12px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer" style-hover="background:var(--brands)"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-clock"></use></svg>{{ a.closeLabel }}</button></sc-if>
+          </div>
+        </div>
+      </sc-if>
+    </div></sc-for>
+  </section>
+
+  <!-- NEW ASSIGNMENT MODAL -->
+  <sc-if value="{{ modalOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;background:rgba(8,12,22,.5);display:flex;align-items:center;justify-content:center;padding:20px;z-index:60">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:0 24px 70px rgba(8,12,22,.34);width:100%;max-width:480px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:11px;padding:16px 18px;border-bottom:1px solid var(--border2)">
+          <div style="width:38px;height:38px;border-radius:10px;background:var(--brands);color:var(--brand);display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-clipboard-list"></use></svg></div>
+          <div style="flex:1;min-width:0"><h3 style="margin:0;font-size:15px;font-weight:600;color:var(--text)">{{ modalTitle }}</h3><div style="font-size:12px;color:var(--muted)">{{ activeOfferingLabel }}</div></div>
+          <button onClick="{{ onCloseModal }}" style="width:32px;height:32px;border-radius:8px;border:none;background:none;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none" style-hover="background:var(--surface2)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-x"></use></svg></button>
+        </div>
+        <div style="padding:18px;overflow-y:auto;display:flex;flex-direction:column;gap:14px">
+          <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:7px">Title</label><input value="{{ form.title }}" onInput="{{ onFormTitle }}" placeholder="e.g. Paper 4 — Alternative to Practical" style="width:100%;height:44px;padding:0 13px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);font-family:inherit;font-size:13.5px;color:var(--text);outline:none" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/></div>
+          <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:7px">Due date</label><input value="{{ form.due }}" onInput="{{ onFormDue }}" type="date" style="width:100%;height:44px;padding:0 13px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);font-family:inherit;font-size:13.5px;color:var(--text);outline:none" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/></div>
+          <div>
+            <label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:7px">Comment template</label>
+            <div style="display:flex;flex-direction:column;gap:7px">
+              <sc-for list="{{ templates }}" as="t" hint-placeholder-count="4"><button onClick="{{ onTemplate }}" data-v="{{ t.value }}" style="display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:var(--rad-sm);border:1.5px solid {{ t.bd }};background:{{ t.bg }};cursor:pointer;text-align:left"><div style="width:18px;height:18px;border-radius:50%;border:1.5px solid {{ t.dotBd }};background:{{ t.dotBg }};flex:none;display:flex;align-items:center;justify-content:center"><sc-if value="{{ t.active }}" hint-placeholder-val="{{ false }}"><div style="width:8px;height:8px;border-radius:50%;background:var(--brandfg)"></div></sc-if></div><div style="min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text)">{{ t.label }}</div><div style="font-size:11.5px;color:var(--subtle)">{{ t.desc }}</div></div></button></sc-for>
+            </div>
+          </div>
+          <sc-if value="{{ showGradeScheme }}" hint-placeholder-val="{{ true }}">
+          <div>
+            <label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:7px">Grade scheme</label>
+            <div style="display:flex;gap:7px;margin-bottom:9px"><sc-for list="{{ gradeSchemes }}" as="g" hint-placeholder-count="2"><button onClick="{{ onGradeScheme }}" data-v="{{ g.value }}" style="flex:1;height:40px;border-radius:8px;border:1.5px solid {{ g.bd }};background:{{ g.bg }};color:{{ g.fg }};font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">{{ g.label }}</button></sc-for></div>
+            <sc-if value="{{ showMarks }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:9px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rad-sm);padding:0 12px;height:42px"><span style="font-size:13px;color:var(--muted);font-weight:500;flex:none">Marks out of</span><input value="{{ form.marks }}" onInput="{{ onFormMarks }}" inputmode="numeric" placeholder="100" style="border:none;outline:none;background:none;font-family:'Geist Mono',monospace;font-size:13.5px;font-weight:600;color:var(--text);width:100%;height:100%"/></div></sc-if>
+            <sc-if value="{{ showLetters }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rad-sm);padding:10px 12px"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><use href="#i-grad"></use></svg><span style="font-size:12.5px;color:var(--muted)">Assistants pick a letter: <span style="color:var(--text);font-weight:600;font-family:'Geist Mono',monospace">{{ letterPreview }}</span></span></div></sc-if>
+          </div>
+          </sc-if>
+          <div style="display:flex;align-items:center;gap:11px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rad-sm);padding:12px 13px">
+            <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text)">Counts toward salary</div><div style="font-size:11.5px;color:var(--subtle);line-height:1.4">When on, papers checked here are billed by Finance. Turn off for practice work that isn't paid.</div></div>
+            <button onClick="{{ onToggleSalary }}" role="switch" style="width:38px;height:22px;border-radius:999px;border:none;background:{{ salaryTrackBg }};position:relative;cursor:pointer;flex:none;transition:background .15s"><span style="position:absolute;top:2px;left:{{ salaryKnobX }};width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)"></span></button>
+          </div>
+          <div>
+            <label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Parent message template</label>
+            <p style="margin:0 0 7px;font-size:11.5px;color:var(--subtle);line-height:1.45">Prefilled and editable. Assistants send this on WhatsApp — <span style="font-family:'Geist Mono',monospace;color:var(--muted)">{student}</span>, <span style="font-family:'Geist Mono',monospace;color:var(--muted)">{assignment}</span>, <span style="font-family:'Geist Mono',monospace;color:var(--muted)">{grade}</span>, <span style="font-family:'Geist Mono',monospace;color:var(--muted)">{status}</span> auto-fill.</p>
+            <textarea value="{{ form.message }}" onInput="{{ onMessage }}" style="width:100%;height:104px;resize:vertical;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);padding:11px 12px;font-family:inherit;font-size:13px;color:var(--text);outline:none;line-height:1.5" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"></textarea>
+          </div>
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--rad-sm);padding:11px 13px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><use href="#i-user-check"></use></svg><span style="font-size:12.5px;color:var(--text);font-weight:600">Assign to assistants</span><button onClick="{{ onSelectAllAst }}" style="margin-left:auto;background:none;border:none;color:var(--brand);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;padding:0">{{ selectAllLabel }}</button></div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px"><sc-for list="{{ assistantChips }}" as="c" hint-placeholder-count="3"><button onClick="{{ onToggleAst }}" data-name="{{ c.name }}" style="display:flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;border:1px solid {{ c.bd }};background:{{ c.bg }};color:{{ c.fg }};font-family:inherit;font-size:12px;font-weight:600;cursor:pointer"><sc-if value="{{ c.active }}" hint-placeholder-val="{{ false }}"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"></use></svg></sc-if>{{ c.name }}</button></sc-for></div>
+            <p style="margin:9px 0 0;font-size:11.5px;color:var(--subtle);line-height:1.45">Each assistant logs this assignment for their own students. Leave all selected to assign across the whole offering.</p>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;padding:14px 18px;border-top:1px solid var(--border2)">
+          <button onClick="{{ onCloseModal }}" style="flex:1;height:44px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface);color:var(--text);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer" style-hover="background:var(--surface2)">Cancel</button>
+          <button onClick="{{ onCreate }}" disabled="{{ createDisabled }}" style="flex:1.3;display:flex;align-items:center;justify-content:center;gap:8px;height:44px;background:{{ createBg }};color:var(--brandfg);border:none;border-radius:var(--rad-sm);font-family:inherit;font-size:13.5px;font-weight:600;cursor:{{ createCursor }}"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"></use></svg>Create &amp; assign</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:980,&quot;height&quot;:720},&quot;compact&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;role&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  ASTS=[['Aisha Rahman','AR',16],['Tom Becker','TB',18],['Yuki Tanaka','YT',14]];
+  TEMPLATES=[['grade','Grade + comment','Numeric mark and a free-text note'],['checkbox','Complete / Missing','Assistant just ticks done or not — no grade'],['rubric','Rubric (criteria)','Score against named criteria'],['comment','Comment only','Qualitative feedback, no mark']];
+  DEFAULT_MSG="Assalamu alaikum, this is RadAMS.\n\nUpdate on {assignment} for {student}:\n{status}{grade}\n\nThank you.";
+  tone(t){ const m={ok:['var(--oks)','var(--ok)'],warn:['var(--warns)','var(--warn)'],brand:['var(--brands)','var(--brand)'],danger:['var(--dangers)','var(--danger)'],neutral:['var(--surface2)','var(--muted)']}; const [bg,fg]=m[t]||m.neutral; return {bg,fg}; }
+  track(pct){ if(pct>=100) return {text:'Complete',icon:'check2',...this.tone('ok')}; if(pct>=60) return {text:'In progress',icon:'clock',...this.tone('brand')}; if(pct>0) return {text:'Behind',icon:'clock',...this.tone('warn')}; return {text:'Not started',icon:'clock',...this.tone('neutral')}; }
+
+  state={
+    offering:0, open:{}, modalOpen:false, editId:null,
+    form:{title:'',marks:'100',due:'2026-06-26',template:'grade',gradeScheme:'numeric',countsSalary:true,message:'',assistants:['Aisha Rahman','Tom Becker','Yuki Tanaka']},
+    byOffering:{
+      0:[
+        {id:1,title:'Paper 3 — Mechanics',marks:100,due:'18 Jun',pastDue:true,logged:[16,12,14]},
+        {id:2,title:'Paper 1 — Multiple Choice',marks:40,due:'11 Jun',pastDue:true,logged:[16,18,14]},
+        {id:3,title:'Homework — Forces',marks:25,due:'25 Jun',pastDue:false,logged:[4,0,2]},
+      ],
+      1:[ {id:1,title:'Paper 2 — Structured',marks:80,due:'14 Nov',pastDue:false,logged:[12,10,9]} ],
+      2:[ {id:1,title:'Titration practical',marks:30,due:'20 Jun',pastDue:true,logged:[11,8,10]} ],
+    },
+    closed:{},
+    nextId:10,
+  };
+
+  onOffering=(e)=>this.setState({offering:+e.currentTarget.dataset.i,open:{}});
+  onToggle=(e)=>{ const id=+e.currentTarget.dataset.id; this.setState(s=>({open:{...s.open,[id]:!s.open[id]}})); };
+  onToggleClose=(e)=>{ e.stopPropagation&&e.stopPropagation(); const id=+e.currentTarget.dataset.id; const key=this.state.offering+'-'+id; this.setState(s=>({closed:{...s.closed,[key]:!s.closed[key]}})); };
+  onNew=()=>this.setState(s=>({modalOpen:true,form:{title:'',marks:'100',due:'2026-06-26',template:'grade',gradeScheme:'numeric',countsSalary:true,message:this.DEFAULT_MSG,assistants:this.ASTS.map(a=>a[0])}}));
+  onEdit=(e)=>{ e.stopPropagation&&e.stopPropagation(); const id=+e.currentTarget.dataset.id; const a=(this.state.byOffering[this.state.offering]||[]).find(x=>x.id===id); if(!a) return; const iso=(()=>{ try{ const d=new Date(a.due+' 2026'); if(!isNaN(d)) return d.toISOString().slice(0,10); }catch(e){} return '2026-06-26'; })(); this.setState(s=>({modalOpen:true,editId:id,form:{title:a.title,marks:String(a.marks||100),due:iso,template:'grade',gradeScheme:a.marks?'numeric':'letter',countsSalary:a.countsSalary!==false,message:this.DEFAULT_MSG,assistants:this.ASTS.map(x=>x[0]).filter((_,idx)=>a.logged[idx]>=0)}})); };
+  onCloseModal=()=>this.setState({modalOpen:false,editId:null});
+  onFormTitle=(e)=>this.setState(s=>({form:{...s.form,title:e.target.value}}));
+  onFormMarks=(e)=>this.setState(s=>({form:{...s.form,marks:e.target.value.replace(/[^0-9]/g,'')}}));
+  onFormDue=(e)=>this.setState(s=>({form:{...s.form,due:e.target.value}}));
+  onTemplate=(e)=>{ const v=e.currentTarget.dataset.v; this.setState(s=>({form:{...s.form,template:v}})); };
+  onGradeScheme=(e)=>{ const v=e.currentTarget.dataset.v; this.setState(s=>({form:{...s.form,gradeScheme:v}})); };
+  onToggleSalary=()=>this.setState(s=>({form:{...s.form,countsSalary:!s.form.countsSalary}}));
+  onMessage=(e)=>this.setState(s=>({form:{...s.form,message:e.target.value}}));
+  onToggleAst=(e)=>{ const n=e.currentTarget.dataset.name; this.setState(s=>({form:{...s.form,assistants:s.form.assistants.includes(n)?s.form.assistants.filter(x=>x!==n):s.form.assistants.concat([n])}})); };
+  onSelectAllAst=()=>{ this.setState(s=>{ const all=this.ASTS.map(a=>a[0]); const isAll=s.form.assistants.length===all.length; return {form:{...s.form,assistants:isAll?[]:all}}; }); };
+  onCreate=()=>{ if(!this.state.form.title.trim()||this.state.form.assistants.length<1) return; this.setState(s=>{ const off=s.offering; const due=(()=>{ try{ const d=new Date(s.form.due+'T00:00'); return d.toLocaleDateString('en',{day:'numeric',month:'short'}); }catch(e){ return s.form.due; } })();
+    if(s.editId){ const list=(s.byOffering[off]||[]).map(a=>a.id===s.editId?{...a,title:s.form.title.trim(),marks:+s.form.marks||100,due,countsSalary:s.form.countsSalary}:a); return {byOffering:{...s.byOffering,[off]:list},modalOpen:false,editId:null}; }
+    const id=s.nextId; const logged=this.ASTS.map(a=>s.form.assistants.includes(a[0])?0:-1); const item={id,title:s.form.title.trim(),marks:+s.form.marks||100,due,countsSalary:s.form.countsSalary,logged}; const list=(s.byOffering[off]||[]).slice(); list.unshift(item); return {byOffering:{...s.byOffering,[off]:list},nextId:id+1,modalOpen:false,open:{...s.open,[id]:true}}; }); };
+
+  renderVals(){
+    const compact=!!this.props.compact, s=this.state;
+    const offLabels=['Physics · Jun · U1','Physics · Nov · U1','Chemistry · Jun · U1'];
+    const offerings=offLabels.map((label,i)=>{ const a=i===s.offering; return {label,i,bg:a?'var(--brand)':'var(--surface)',fg:a?'var(--brandfg)':'var(--muted)',bd:a?'var(--brand)':'var(--border)',dot:a?'var(--brandfg)':'var(--subtle)'}; });
+    const list=s.byOffering[s.offering]||[];
+    const assignments=list.map(a=>{ const assignees=this.ASTS.map(([name,i,count],idx)=>({name,i,count,logged:Math.max(0,a.logged[idx])})).filter((_,idx)=>a.logged[idx]>=0);
+      const total=assignees.reduce((x,g)=>x+g.count,0); const logged=assignees.reduce((x,g)=>x+g.logged,0); const pct=total?Math.round(logged/total*100):0;
+      const complete=total>0&&logged>=total; const manualClosed=!!s.closed[s.offering+'-'+a.id];
+      // open stays open past due until all logged, unless head closed it
+      let status, openState;
+      if(manualClosed){ status={text:'Closed',icon:'check2',...this.tone('neutral')}; openState='closed'; }
+      else if(complete){ status={text:'Complete',icon:'check2',...this.tone('ok')}; openState='complete'; }
+      else if(a.pastDue){ status={text:'Open · past due',icon:'clock',...this.tone('warn')}; openState='pastdue'; }
+      else { status={text:'Open',icon:'clock',...this.tone('brand')}; openState='open'; }
+      const canClose=!manualClosed&&!complete;
+      return {id:a.id,title:a.title,meta:`Out of ${a.marks} · Logging due ${a.due} · ${assignees.length} assistants`,
+        logged,total,barW:pct+'%',barColor:status.fg,status,
+        canClose, closeLabel:manualClosed?'Reopen':'Close now',
+        iconBg:this.tone('brand').bg,iconFg:this.tone('brand').fg,
+        expanded:!!s.open[a.id],chevR:s.open[a.id]?'rotate(180deg)':'none',
+        assignees:assignees.map(g=>{ const p=g.count?Math.round(g.logged/g.count*100):0; return {...g,barW:p+'%',barColor:this.track(p).fg}; }) }; });
+    const templates=this.TEMPLATES.map(([value,label,desc])=>{ const a=s.form.template===value; return {value,label,desc, bg:a?'var(--brands)':'var(--surface)', bd:a?'var(--brand)':'var(--border)', dotBd:a?'var(--brand)':'var(--border)', dotBg:a?'var(--brand)':'transparent', active:a}; });
+    const assistantChips=this.ASTS.map(([name])=>{ const a=s.form.assistants.includes(name); return {name, active:a, bg:a?'var(--brand)':'var(--surface)', fg:a?'var(--brandfg)':'var(--muted)', bd:a?'var(--brand)':'var(--border)'}; });
+    const allSelected=s.form.assistants.length===this.ASTS.length;
+    // grade scheme only matters for grade/rubric templates
+    const showGradeScheme=s.form.template==='grade'||s.form.template==='rubric';
+    const gsDefs=[['numeric','Out of N'],['letter','Letter grades']];
+    const gradeSchemes=gsDefs.map(([value,label])=>{ const a=s.form.gradeScheme===value; return {value,label, bg:a?'var(--brand)':'var(--surface)', fg:a?'var(--brandfg)':'var(--muted)', bd:a?'var(--brand)':'var(--border)'}; });
+    const showMarks=showGradeScheme&&s.form.gradeScheme==='numeric';
+    const showLetters=showGradeScheme&&s.form.gradeScheme==='letter';
+    const letterPreview='A* · A · B · C · D · E · U';
+    const can=s.form.title.trim().length>0&&s.form.assistants.length>0;
+    return {
+      compact, offerings, activeOfferingLabel:offLabels[s.offering], assignments,
+      onOffering:this.onOffering, onToggle:this.onToggle, onToggleClose:this.onToggleClose, onNew:this.onNew, onEdit:this.onEdit, onCloseModal:this.onCloseModal,
+      modalTitle: s.editId?'Edit assignment':'New assignment', saveLabel: s.editId?'Save changes':'Create assignment',
+      modalOpen:s.modalOpen, form:s.form, templates, assistantChips,
+      gradeSchemes, showGradeScheme, showMarks, showLetters, letterPreview, onGradeScheme:this.onGradeScheme,
+      countsSalary:s.form.countsSalary, salaryTrackBg:s.form.countsSalary?'var(--brand)':'var(--border)', salaryKnobX:s.form.countsSalary?'18px':'2px',
+      onToggleSalary:this.onToggleSalary, onMessage:this.onMessage,
+      allSelected, selectAllLabel:allSelected?'Clear all':'Select all', onSelectAllAst:this.onSelectAllAst,
+      onFormTitle:this.onFormTitle, onFormMarks:this.onFormMarks, onFormDue:this.onFormDue, onTemplate:this.onTemplate, onToggleAst:this.onToggleAst, onCreate:this.onCreate,
+      createDisabled:!can, createBg:can?'var(--brand)':'var(--subtle)', createCursor:can?'pointer':'not-allowed',
+    };
+  }
+}
+</script>
+</body>
+</html>

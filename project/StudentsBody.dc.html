@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:flex;flex-direction:column;gap:16px">
+
+  <!-- HEADER -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:17px 18px">
+    <div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px">
+      <div>
+        <div style="font-size:12px;color:var(--subtle);font-weight:600;text-transform:uppercase;letter-spacing:.04em">{{ kicker }}</div>
+        <h1 style="margin:4px 0 0;font-size:20px;font-weight:600;color:var(--text);letter-spacing:-.01em">Student progress</h1>
+        <p style="margin:3px 0 0;font-size:13px;color:var(--muted)">{{ subtitle }}</p>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:15px;flex-wrap:wrap">
+      <span style="font-size:12.5px;font-weight:600;color:var(--muted);flex:none;margin-right:2px">Course</span>
+      <sc-if value="{{ useCourseDropdown }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rad-sm);padding:0 12px;height:38px;min-width:230px"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="var(--subtle)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-right:8px"><use href="#i-book"></use></svg><select value="{{ offeringValue }}" onChange="{{ onOfferingSel }}" style="appearance:none;border:none;background:none;font-family:inherit;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;width:100%;height:100%;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 fill=%22none%22 stroke=%22%2397a1b0%22 stroke-width=%222%22><path d=%22m3 4.5 3 3 3-3%22/></svg>');background-repeat:no-repeat;background-position:right center"><sc-for list="{{ offerings }}" as="o" hint-placeholder-count="3"><option value="{{ o.i }}">{{ o.label }}</option></sc-for></select></div></sc-if>
+      <sc-if value="{{ useCourseChips }}" hint-placeholder-val="{{ true }}"><sc-for list="{{ offerings }}" as="o" hint-placeholder-count="3"><button onClick="{{ onOffering }}" data-i="{{ o.i }}" style="flex:none;display:flex;align-items:center;gap:7px;padding:8px 13px;border-radius:999px;border:1px solid {{ o.bd }};background:{{ o.bg }};color:{{ o.fg }};font-family:inherit;font-size:13px;font-weight:600;cursor:pointer"><span style="width:7px;height:7px;border-radius:50%;background:{{ o.dot }}"></span>{{ o.label }}</button></sc-for></sc-if>
+    </div>
+  </div>
+
+  <!-- TOOLBAR -->
+  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px">
+    <div style="display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--rad-sm);padding:0 12px;height:40px;flex:1;min-width:200px;max-width:300px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--subtle)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-search"></use></svg><input value="{{ search }}" onInput="{{ onSearch }}" placeholder="Search students…" style="border:none;outline:none;background:none;font-family:inherit;font-size:13.5px;color:var(--text);width:100%;height:100%"/></div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <sc-for list="{{ legend }}" as="l" hint-placeholder-count="5"><span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);font-weight:500"><span style="width:18px;height:18px;border-radius:5px;background:{{ l.bg }};color:{{ l.fg }};display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ l.icon }}"></use></svg></span>{{ l.label }}</span></sc-for>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;margin-left:auto"><span style="font-size:11.5px;color:var(--subtle);font-weight:600">Sort</span><div style="display:flex;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:2px;gap:2px"><button onClick="{{ onSort }}" data-v="enroll" style="border:none;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:600;padding:5px 10px;border-radius:6px;background:{{ enrollBg }};color:{{ enrollFg }}">Enrollment</button><button onClick="{{ onSort }}" data-v="name" style="border:none;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:600;padding:5px 10px;border-radius:6px;background:{{ nameBg }};color:{{ nameFg }}">Name</button></div></div>
+  </div>
+
+  <!-- TABLE -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow)">
+    <div style="width:100%">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:11px 18px;border-bottom:1px solid var(--border2);font-size:11px;font-weight:700;color:var(--subtle);text-transform:uppercase;letter-spacing:.04em">
+        <span style="flex:2 1 190px;min-width:0">Student</span>
+        <span style="flex:2 1 130px;min-width:0">Progress · assignments to date</span>
+        <span style="flex:1 1 130px;min-width:0">Assistant</span>
+        <span style="width:54px;flex:none;text-align:right">Avg</span>
+        <span style="width:74px;flex:none"></span>
+      </div>
+      <sc-for list="{{ students }}" as="st" hint-placeholder-count="6"><div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:12px 18px;border-bottom:1px solid var(--border2);opacity:{{ st.rowOpacity }}" style-hover="background:var(--surface2)">
+        <div style="flex:2 1 190px;min-width:0;display:flex;align-items:center;gap:10px"><div style="width:34px;height:34px;border-radius:50%;background:var(--brands);color:var(--brand);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none">{{ st.i }}</div><div style="min-width:0"><div style="font-size:13.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ st.name }}</div><div style="font-size:11px;color:var(--subtle);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ st.email }}</div><div style="font-size:11px;color:var(--subtle);font-family:'Geist Mono',monospace">{{ st.phone }} · G {{ st.guardian }}<sc-if value="{{ st.left }}" hint-placeholder-val="{{ false }}"> · <span style="color:var(--danger);font-weight:600">Left</span></sc-if></div></div></div>
+        <div style="flex:2 1 130px;min-width:0;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+          <sc-for list="{{ st.cells }}" as="c" hint-placeholder-count="6"><span title="{{ c.title }}" style="width:22px;height:22px;border-radius:6px;background:{{ c.bg }};color:{{ c.fg }};display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ c.icon }}"></use></svg></span></sc-for>
+        </div>
+        <div style="flex:1 1 130px;min-width:0"><div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0 10px;height:34px"><select value="{{ st.assistant }}" onChange="{{ onReassign }}" data-id="{{ st.id }}" style="appearance:none;border:none;background:none;font-family:inherit;font-size:12.5px;font-weight:600;color:var(--text);cursor:pointer;width:100%;height:100%;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 fill=%22none%22 stroke=%22%2397a1b0%22 stroke-width=%222%22><path d=%22m3 4.5 3 3 3-3%22/></svg>');background-repeat:no-repeat;background-position:right center"><sc-for list="{{ assistantOpts }}" as="a" hint-placeholder-count="3"><option value="{{ a }}">{{ a }}</option></sc-for></select></div></div>
+        <span style="width:54px;flex:none;text-align:right;font-size:13px;font-weight:700;color:var(--text);font-family:'Geist Mono',monospace">{{ st.avg }}</span>
+        <sc-if value="{{ isAssistant }}" hint-placeholder-val="{{ false }}"><button onClick="{{ onWelcome }}" data-id="{{ st.id }}" title="Send welcome message" style="width:34px;height:34px;flex:none;border:1px solid #25D366;border-radius:8px;background:var(--surface);color:#1ea952;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:rgba(37,211,102,.1)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-send"></use></svg></button></sc-if>
+        <sc-if value="{{ canEditStudents }}" hint-placeholder-val="{{ true }}"><button onClick="{{ onOpenEdit }}" data-id="{{ st.id }}" title="Edit student" style="width:34px;height:34px;flex:none;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:var(--surface2);color:var(--text)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-settings"></use></svg></button></sc-if>
+      </div></sc-for>
+    </div>
+    <sc-if value="{{ showPagination }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:11px 16px;border-top:1px solid var(--border2)"><span style="font-size:12px;color:var(--subtle)">{{ pageInfo }}</span><div style="display:flex;gap:5px"><sc-for list="{{ pages }}" as="pg" hint-placeholder-count="2"><button onClick="{{ onPage }}" data-p="{{ pg.p }}" style="min-width:30px;height:30px;padding:0 8px;border-radius:7px;border:1px solid {{ pg.bd }};background:{{ pg.bg }};color:{{ pg.fg }};font-family:inherit;font-size:12px;font-weight:600;cursor:pointer">{{ pg.n }}</button></sc-for></div></div></sc-if>
+  </div>
+
+  <!-- WELCOME MESSAGE MODAL -->
+  <sc-if value="{{ welcomeOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;background:rgba(8,12,22,.5);display:flex;align-items:center;justify-content:center;padding:20px;z-index:60">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:0 24px 70px rgba(8,12,22,.34);width:100%;max-width:440px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:11px;padding:16px 18px;border-bottom:1px solid var(--border2)">
+          <div style="width:38px;height:38px;border-radius:10px;background:rgba(37,211,102,.14);color:#1ea952;display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-send"></use></svg></div>
+          <div style="flex:1;min-width:0"><h3 style="margin:0;font-size:15px;font-weight:600;color:var(--text)">Welcome message</h3><div style="font-size:12px;color:var(--muted)">To {{ welcome.name }}'s guardian · {{ welcome.phone }}</div></div>
+          <button onClick="{{ onCloseWelcome }}" style="width:32px;height:32px;border-radius:8px;border:none;background:none;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none" style-hover="background:var(--surface2)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-x"></use></svg></button>
+        </div>
+        <div style="padding:18px"><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px">Message preview</div><div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--rad-sm);padding:13px;font-size:13px;color:var(--text);line-height:1.55;white-space:pre-wrap">{{ welcome.message }}</div></div>
+        <div style="display:flex;gap:10px;padding:0 18px 16px">
+          <button onClick="{{ onCloseWelcome }}" style="flex:1;height:44px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface);color:var(--text);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer" style-hover="background:var(--surface2)">Cancel</button>
+          <a href="{{ welcome.waUrl }}" target="_blank" rel="noopener" onClick="{{ onCloseWelcome }}" style="flex:1.4;display:flex;align-items:center;justify-content:center;gap:8px;height:44px;background:#25D366;color:#fff;border-radius:var(--rad-sm);font-size:13.5px;font-weight:600;text-decoration:none"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-send"></use></svg>Open WhatsApp</a>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- EDIT STUDENT MODAL -->
+  <sc-if value="{{ editOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;background:rgba(8,12,22,.5);display:flex;align-items:center;justify-content:center;padding:20px;z-index:60">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:0 24px 70px rgba(8,12,22,.34);width:100%;max-width:460px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:11px;padding:16px 18px;border-bottom:1px solid var(--border2)">
+          <div style="width:38px;height:38px;border-radius:50%;background:var(--brands);color:var(--brand);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex:none">{{ edit.i }}</div>
+          <div style="flex:1;min-width:0"><h3 style="margin:0;font-size:15px;font-weight:600;color:var(--text)">Edit student</h3><div style="font-size:12px;color:var(--muted)">{{ edit.idText }}</div></div>
+          <button onClick="{{ onCloseEdit }}" style="width:32px;height:32px;border-radius:8px;border:none;background:none;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none" style-hover="background:var(--surface2)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-x"></use></svg></button>
+        </div>
+        <div style="padding:16px 18px;overflow-y:auto;display:flex;flex-direction:column;gap:14px">
+          <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:7px">Full name</label><input value="{{ edit.name }}" onInput="{{ onEditName }}" style="width:100%;height:42px;padding:0 13px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);font-family:inherit;font-size:13.5px;color:var(--text);outline:none" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/></div>
+          <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:7px">Email</label><input value="{{ edit.email }}" onInput="{{ onEditEmail }}" type="email" style="width:100%;height:42px;padding:0 13px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);font-family:inherit;font-size:13px;color:var(--text);outline:none" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:7px">Phone</label><input value="{{ edit.phone }}" onInput="{{ onEditPhone }}" style="width:100%;height:42px;padding:0 13px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);font-family:'Geist Mono',monospace;font-size:13px;color:var(--text);outline:none" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/></div>
+            <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:7px">Guardian phone <span style="color:var(--danger)">*</span></label><input value="{{ edit.guardian }}" onInput="{{ onEditGuardian }}" style="width:100%;height:42px;padding:0 13px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface2);font-family:'Geist Mono',monospace;font-size:13px;color:var(--text);outline:none" style-focus="border-color:var(--brand);box-shadow:0 0 0 3px var(--brands)"/></div>
+          </div>
+          <div><label style="font-size:12.5px;font-weight:600;color:var(--text);display:block;margin-bottom:7px">Assigned assistant</label><div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rad-sm);padding:0 12px;height:42px"><select value="{{ edit.assistant }}" onChange="{{ onEditAssistant }}" style="appearance:none;border:none;background:none;font-family:inherit;font-size:13.5px;font-weight:600;color:var(--text);cursor:pointer;width:100%;height:100%;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 fill=%22none%22 stroke=%22%2397a1b0%22 stroke-width=%222%22><path d=%22m3 4.5 3 3 3-3%22/></svg>');background-repeat:no-repeat;background-position:right center"><sc-for list="{{ assistantOpts }}" as="a" hint-placeholder-count="3"><option value="{{ a }}">{{ a }}</option></sc-for></select></div></div>
+          <div style="display:flex;align-items:center;gap:11px;background:{{ leftBoxBg }};border:1px solid {{ leftBoxBd }};border-radius:var(--rad-sm);padding:12px 13px">
+            <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text)">Mark as left</div><div style="font-size:11.5px;color:var(--subtle);line-height:1.4">Stops new assignments and removes them from active rosters. History is kept.</div></div>
+            <button onClick="{{ onToggleLeft }}" role="switch" style="width:42px;height:24px;border-radius:999px;border:none;background:{{ leftTrackBg }};position:relative;cursor:pointer;flex:none;transition:background .15s"><span style="position:absolute;top:2px;left:{{ leftKnobX }};width:20px;height:20px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)"></span></button>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;padding:14px 18px;border-top:1px solid var(--border2)">
+          <button onClick="{{ onCloseEdit }}" style="flex:1;height:44px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface);color:var(--text);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer" style-hover="background:var(--surface2)">Cancel</button>
+          <button onClick="{{ onSaveEdit }}" style="flex:1.3;display:flex;align-items:center;justify-content:center;gap:8px;height:44px;background:var(--brand);color:var(--brandfg);border:none;border-radius:var(--rad-sm);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer" style-hover="filter:brightness(.96)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"></use></svg>Save changes</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:980,&quot;height&quot;:720},&quot;compact&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;role&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  ASTS=['Aisha Rahman','Tom Becker','Yuki Tanaka'];
+  ASSIGNMENTS=['Paper 1','Paper 2','Paper 3','Homework','Mock'];
+  STAT={checked:['Checked','ok','check2'],submitted:['Submitted','ok','check'],late:['Late','warn','clock'],missing:['Missing','danger','alert'],excused:['Excused','neutral','minus'],none:['Not logged','none','clock']};
+  tone(t){ const m={ok:['var(--oks)','var(--ok)'],warn:['var(--warns)','var(--warn)'],danger:['var(--dangers)','var(--danger)'],neutral:['var(--surface2)','var(--muted)'],none:['var(--surface2)','var(--subtle)']}; const [bg,fg]=m[t]||m.none; return {bg,fg}; }
+  mkStud(id,name,i,phone,guardian,assistant,prog,avg,left){ const email=name.toLowerCase().replace(/[^a-z]+/g,'.')+'@student.cpc.edu'; const day=String(1+((id*5)%27)).padStart(2,'0'); const mon=['Jan','Feb','Mar','Apr','May'][id%5]; const enrolled=`${mon} ${day}, 2026`; const enrollSort=(id%5)*100+(1+((id*5)%27)); return {id,name,i,phone,guardian,email,assistant,prog,avg,left:!!left,enrolled,enrollSort}; }
+  FIRST=['Aria','Ben','Ethan','Hana','Liam','Mei','Omar','Sofia','Noah','Yara','Chloe','Diego','Fatima','Grace','Henry','Isla','Jack','Karim','Lucy','Marco','Nadia','Oscar','Priya','Quinn','Rana','Sam','Tara','Uma','Victor','Wendy','Adam','Bella','Caleb','Dina','Elias','Farah','Gabe','Huda','Ivan','Jana','Kai','Lina','Musa','Nora','Owen','Pia','Rami','Suki','Theo','Vera'];
+  LAST=['Khan','Cohen','Park','Kim','Carter','Wong','Sayed','Rossi','Bauer','Haddad','Adeyemi','Luna','Zahra','Owusu','Walsh','Murphy','Lee','Adel','Brennan','Ricci','Petrov','Reyes','Menon','Foster','Saleh','Okonkwo','Vidal','Desai','Hugo','Nasser','Silva','Tan','Ahmed','Costa','Diallo','Erdem','Frost','Gupta','Haas','Ito'];
+  ASTS_GEN=['Aisha Rahman','Tom Becker','Yuki Tanaka','Carlos Diaz','Nadia Saleh','Elena Voss','Marco Bianchi','Priya Nair','Hassan Ali','Fatima Noor'];
+  STATES_GEN=['checked','submitted','late','missing','excused','none'];
+  genStudents(n){ const out=[]; for(let k=1;k<=n;k++){ const f=this.FIRST[(k*7)%this.FIRST.length]; const l=this.LAST[(k*13)%this.LAST.length]; const name=f+' '+l; const ini=(f[0]+l[0]).toUpperCase();
+    const prog=Array.from({length:5},(_,j)=>this.STATES_GEN[(k*3+j*7)%this.STATES_GEN.length]); const avg=52+((k*17)%46); const ast=this.ASTS_GEN[(k-1)%this.ASTS_GEN.length]; const left=(k%37===0);
+    const ph='7700 9'+String(100000+k).slice(-5); const g='7700 9'+String(200000+k).slice(-5);
+    out.push(this.mkStud(k,name,ini,ph,g,ast,prog,avg,left)); } return out; }
+  state={
+    offering:0, search:'', editId:null, sortBy:'enroll', page:0,
+    students:this.genStudents(300),
+    draft:null,
+  };
+  onOffering=(e)=>this.setState({offering:+e.currentTarget.dataset.i});
+  onOfferingSel=(e)=>this.setState({offering:+e.target.value});
+  onWelcome=(e)=>this.setState({welcomeId:+e.currentTarget.dataset.id});
+  onCloseWelcome=()=>this.setState({welcomeId:null});
+  onSearch=(e)=>this.setState({search:e.target.value});
+  onReassign=(e)=>{ const id=+e.currentTarget.dataset.id, v=e.target.value; this.setState(s=>({students:s.students.map(st=>st.id===id?{...st,assistant:v}:st)})); };
+  onOpenEdit=(e)=>{ const id=+e.currentTarget.dataset.id; const st=this.state.students.find(x=>x.id===id); this.setState({editId:id,draft:{...st}}); };
+  onCloseEdit=()=>this.setState({editId:null,draft:null});
+  onSort=(e)=>this.setState({sortBy:e.currentTarget.dataset.v,page:0});
+  onPage=(e)=>this.setState({page:+e.currentTarget.dataset.p});
+  onEditName=(e)=>this.setState(s=>({draft:{...s.draft,name:e.target.value}}));
+  onEditPhone=(e)=>this.setState(s=>({draft:{...s.draft,phone:e.target.value}}));
+  onEditGuardian=(e)=>this.setState(s=>({draft:{...s.draft,guardian:e.target.value}}));
+  onEditEmail=(e)=>this.setState(s=>({draft:{...s.draft,email:e.target.value}}));
+  onEditAssistant=(e)=>this.setState(s=>({draft:{...s.draft,assistant:e.target.value}}));
+  onToggleLeft=()=>this.setState(s=>({draft:{...s.draft,left:!s.draft.left}}));
+  onSaveEdit=()=>{ this.setState(s=>({students:s.students.map(st=>st.id===s.draft.id?{...s.draft}:st),editId:null,draft:null})); };
+
+  renderVals(){
+    const compact=!!this.props.compact, s=this.state;
+    const offs=['Physics · Jun · U1','Physics · Nov · U1','Chemistry · Jun · U1'].map((label,i)=>{ const a=i===s.offering; return {label,i,bg:a?'var(--brand)':'var(--surface)',fg:a?'var(--brandfg)':'var(--muted)',bd:a?'var(--brand)':'var(--border)',dot:a?'var(--brandfg)':'var(--subtle)'}; });
+    const q=s.search.trim().toLowerCase();
+    const role=this.props.role||'head';
+    const isAssistant=role==='assistant';
+    const scoped=isAssistant?s.students.filter(st=>st.assistant==='Aisha Rahman'):s.students;
+    const filtered=scoped.filter(st=>!q||st.name.toLowerCase().includes(q));
+    const sorted=filtered.slice().sort((a,b)=> s.sortBy==='name' ? a.name.localeCompare(b.name) : (b.enrollSort-a.enrollSort));
+    const PAGE=20; const pageCount=Math.max(1,Math.ceil(sorted.length/PAGE)); const page=Math.min(s.page,pageCount-1);
+    const pageRows=sorted.slice(page*PAGE,page*PAGE+PAGE);
+    const students=pageRows.map(st=>{
+      const cells=st.prog.map((k,idx)=>{ const [label,tone,icon]=this.STAT[k]; const {bg,fg}=this.tone(tone); return {bg,fg,icon,title:`${this.ASSIGNMENTS[idx]}: ${label}`}; });
+      return {id:st.id,name:st.name,i:st.i,idText:'ID CB-10'+(40+st.id),enrolled:st.enrolled,assistant:st.assistant,avg:st.left?'—':st.avg+'%',left:st.left,rowOpacity:st.left?'.55':'1',cells,phone:st.phone,guardian:st.guardian,email:(st.name.toLowerCase().replace(/[^a-z]+/g,'.')+'@student.cpc.edu')};
+    });
+    const legend=['checked','submitted','late','missing','none'].map(k=>{ const [label,toneKey,icon]=this.STAT[k]; const {bg,fg}=this.tone(toneKey); return {label,icon,bg,fg}; });
+    const d=s.draft;
+    const wm=s.welcomeId?s.students.find(x=>x.id===s.welcomeId):null;
+    let welcome=null;
+    if(wm){ const digits='447700900'+(100+wm.id); const msg=`Assalamu alaikum. I'm Aisha Rahman, ${wm.name}'s assistant for Physics (June · Unit 1) at Cambridge Prep Center. I'll be sharing assignment and attendance updates with you here. Please reach out any time.`;
+      welcome={name:wm.name,i:wm.i,guardian:wm.guardian,phone:'+44 '+wm.guardian,message:msg,waUrl:`https://wa.me/${digits}?text=${encodeURIComponent(msg)}`}; }
+    return {
+      compact, isAssistant, canEditStudents: !isAssistant,
+      kicker: (role==='admin')?'Admin · Cambridge Prep Center':(isAssistant?'My students · Aisha Rahman':'Students'),
+      subtitle: (role==='admin')?'Every student org-wide — progress across assignments, attendance, enrolled courses. Edit details, reassign assistant, add/remove from courses, or mark as left.':(isAssistant?'Your assigned students — performance to date, average grade, and contact details. Send a welcome message to introduce yourself.':'Every student\u2019s status across all assignments to date. Edit details, reassign, or mark as left.'),
+      welcomeOpen:!!welcome, welcome:welcome||{name:'',i:'',guardian:'',phone:'',message:'',waUrl:'#'}, onWelcome:this.onWelcome, onCloseWelcome:this.onCloseWelcome,
+      offerings:offs, search:s.search, students, legend, assistantOpts:this.ASTS,
+      sortName:s.sortBy==='name', sortEnroll:s.sortBy==='enroll', onSort:this.onSort,
+      nameBg:s.sortBy==='name'?'var(--brand)':'var(--surface)', nameFg:s.sortBy==='name'?'var(--brandfg)':'var(--muted)',
+      enrollBg:s.sortBy==='enroll'?'var(--brand)':'var(--surface)', enrollFg:s.sortBy==='enroll'?'var(--brandfg)':'var(--muted)',
+      pages:(()=>{ const win=[]; const lo=Math.max(0,page-2), hi=Math.min(pageCount-1,page+2); for(let i=lo;i<=hi;i++) win.push(i); return win.map(i=>({n:i+1,p:i,bg:i===page?'var(--brand)':'var(--surface)',fg:i===page?'var(--brandfg)':'var(--muted)',bd:i===page?'var(--brand)':'var(--border)'})); })(),
+      showPagination:pageCount>1, pageInfo:`${page*PAGE+1}–${Math.min((page+1)*PAGE,sorted.length)} of ${sorted.length} students`, onPage:this.onPage,
+      onOffering:this.onOffering, onOfferingSel:this.onOfferingSel, useCourseDropdown:(this.props.role==='admin'), useCourseChips:(this.props.role!=='admin'), offeringValue:String(this.state.offering), onSearch:this.onSearch, onReassign:this.onReassign, onOpenEdit:this.onOpenEdit,
+      editOpen:!!d, edit:d||{name:'',i:'',idText:'',phone:'',guardian:'',email:'',assistant:this.ASTS[0],left:false},
+      onCloseEdit:this.onCloseEdit, onEditName:this.onEditName, onEditPhone:this.onEditPhone, onEditGuardian:this.onEditGuardian, onEditEmail:this.onEditEmail, onEditAssistant:this.onEditAssistant, onToggleLeft:this.onToggleLeft, onSaveEdit:this.onSaveEdit,
+      leftTrackBg: d&&d.left?'var(--danger)':'var(--border)', leftKnobX: d&&d.left?'20px':'2px',
+      leftBoxBg: d&&d.left?'var(--dangers)':'var(--surface2)', leftBoxBd: d&&d.left?'var(--danger)':'var(--border)',
+    };
+  }
+}
+</script>
+</body>
+</html>

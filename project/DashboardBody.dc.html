@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:flex;flex-direction:column">
+
+  <!-- greeting -->
+  <div style="margin-bottom:18px">
+    <div style="font-size:12.5px;color:var(--subtle);font-weight:600;letter-spacing:.01em;text-transform:uppercase">{{ dateLabel }}</div>
+    <h1 style="margin:3px 0 4px;font-size:23px;font-weight:600;color:var(--text);letter-spacing:-.02em">{{ greeting }}</h1>
+    <p style="margin:0;font-size:14px;color:var(--muted)">{{ subtitle }}</p>
+  </div>
+
+  <!-- HEAD offering switcher -->
+  <sc-if value="{{ isHead }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:center;gap:9px;margin-bottom:18px;flex-wrap:wrap">
+      <span style="font-size:12.5px;font-weight:600;color:var(--muted);flex:none;margin-right:2px">Course</span>
+      <sc-for list="{{ offerings }}" as="o" hint-placeholder-count="4"><button style="flex:none;display:flex;align-items:center;gap:7px;padding:8px 14px;border-radius:999px;border:1px solid {{ o.bd }};background:{{ o.bg }};color:{{ o.fg }};font-family:inherit;font-size:13px;font-weight:600;cursor:pointer"><span style="width:7px;height:7px;border-radius:50%;background:{{ o.dot }}"></span>{{ o.label }}</button></sc-for>
+    </div>
+  </sc-if>
+
+  <!-- KPI ROW -->
+  <div style="{{ kpiGrid }}">
+    <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="4">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);padding:15px 15px 14px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:11px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div style="width:34px;height:34px;border-radius:9px;background:{{ k.iconBg }};color:{{ k.iconFg }};display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ k.icon }}"></use></svg></div>
+          <sc-if value="{{ k.delta }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;gap:2px;font-size:12px;font-weight:700;color:{{ k.deltaColor }}"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ k.deltaIcon }}"></use></svg>{{ k.delta }}</span></sc-if>
+        </div>
+        <div><div style="font-size:25px;font-weight:700;color:var(--text);letter-spacing:-.02em;line-height:1.1">{{ k.value }}</div><div style="font-size:12.5px;color:var(--muted);font-weight:500;margin-top:2px">{{ k.label }}</div></div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- MAIN -->
+  <div style="margin-top:18px">
+
+    <!-- HEAD -->
+    <sc-if value="{{ isHead }}" hint-placeholder-val="{{ true }}">
+      <div style="{{ twoCol }}">
+        <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden">
+          <header style="display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--border2)"><div><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">Assistant message completion</h3><p style="margin:2px 0 0;font-size:12px;color:var(--subtle)">Physics · June · Unit 1 — Paper 3 messages sent vs pending</p></div><button style="display:flex;align-items:center;gap:4px;background:none;border:none;color:var(--brand);font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer">View all<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-cr"></use></svg></button></header>
+          <div style="padding:7px 8px">
+            <sc-for list="{{ assistants }}" as="a" hint-placeholder-count="5"><div style="display:flex;align-items:center;gap:12px;padding:10px 11px;border-radius:10px;cursor:pointer" style-hover="background:var(--surface2)">
+              <div style="width:34px;height:34px;border-radius:50%;background:var(--brands);color:var(--brand);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none">{{ a.i }}</div>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="font-size:13.5px;font-weight:600;color:var(--text)">{{ a.n }}</span><span style="font-size:12px;color:var(--muted);font-weight:500">{{ a.sent }}/{{ a.total }}</span></div>
+                <div style="height:6px;background:var(--surface2);border-radius:999px;margin-top:7px;overflow:hidden"><div style="height:100%;width:{{ a.barW }};background:{{ a.barColor }};border-radius:999px"></div></div>
+              </div>
+              <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:600;background:{{ a.badge.bg }};color:{{ a.badge.fg }};flex:none"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ a.badge.icon }}"></use></svg>{{ a.badge.text }}</span>
+            </div></sc-for>
+          </div>
+        </section>
+        <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden;align-self:flex-start">
+          <header style="padding:15px 18px;border-bottom:1px solid var(--border2)"><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">Course completion</h3></header>
+          <div style="padding:18px">
+            <div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:6px"><span style="font-size:34px;font-weight:700;color:var(--text);letter-spacing:-.02em;line-height:1">76%</span><span style="font-size:12.5px;color:var(--ok);font-weight:600;margin-bottom:6px">on schedule</span></div>
+            <div style="height:8px;background:var(--surface2);border-radius:999px;overflow:hidden;margin-bottom:18px"><div style="height:100%;width:76%;background:var(--brand);border-radius:999px"></div></div>
+            <sc-for list="{{ statusBreakdown }}" as="b" hint-placeholder-count="4"><div style="display:flex;align-items:center;gap:9px;padding:7px 0"><span style="width:9px;height:9px;border-radius:50%;background:{{ b.color }}"></span><span style="font-size:13px;color:var(--muted);flex:1">{{ b.label }}</span><span style="font-size:13px;font-weight:700;color:var(--text)">{{ b.count }}</span></div></sc-for>
+          </div>
+        </section>
+      </div>
+    </sc-if>
+
+    <!-- ASSISTANT -->
+    <sc-if value="{{ isAssistant }}" hint-placeholder-val="{{ false }}">
+      <div style="{{ twoCol }}">
+        <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden">
+          <header style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:15px 18px;border-bottom:1px solid var(--border2)"><div style="min-width:0"><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">Pending assignments today</h3><p style="margin:2px 0 0;font-size:12px;color:var(--subtle)">12 students awaiting an assignment status</p></div><button style="display:flex;align-items:center;gap:6px;flex:none;white-space:nowrap;background:var(--brand);color:var(--brandfg);border:none;border-radius:var(--rad-sm);padding:8px 13px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer" style-hover="filter:brightness(.96)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-clipboard-list"></use></svg>Open assignments</button></header>
+          <div style="padding:7px 8px">
+            <sc-for list="{{ pendingStudents }}" as="p" hint-placeholder-count="6"><div style="display:flex;align-items:center;gap:12px;padding:10px 11px;border-radius:10px;cursor:pointer" style-hover="background:var(--surface2)">
+              <div style="width:34px;height:34px;border-radius:50%;background:var(--surface2);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none">{{ p.i }}</div>
+              <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600;color:var(--text)">{{ p.n }}</div><div style="font-size:12px;color:var(--subtle)">{{ p.off }}</div></div>
+              <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:600;background:{{ p.badge.bg }};color:{{ p.badge.fg }}"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ p.badge.icon }}"></use></svg>{{ p.badge.text }}</span>
+            </div></sc-for>
+          </div>
+        </section>
+        <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden;align-self:flex-start">
+          <header style="padding:15px 18px;border-bottom:1px solid var(--border2)"><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">My courses</h3></header>
+          <div style="padding:7px 8px">
+            <sc-for list="{{ myOfferings }}" as="o" hint-placeholder-count="3"><div style="display:flex;align-items:center;gap:11px;padding:11px;border-radius:10px"><div style="width:34px;height:34px;border-radius:9px;background:var(--brands);color:var(--brand);display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-grad"></use></svg></div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text)">{{ o.label }}</div><div style="font-size:11.5px;color:var(--subtle)">{{ o.count }} students</div></div><span style="font-size:12.5px;font-weight:700;color:var(--text)">{{ o.pending }}</span></div></sc-for>
+          </div>
+        </section>
+      </div>
+    </sc-if>
+
+    <!-- FINANCE -->
+    <sc-if value="{{ isFinance }}" hint-placeholder-val="{{ false }}">
+      <div style="{{ twoCol }}">
+        <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden">
+          <header style="display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--border2)"><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">Salary overview</h3><button style="display:flex;align-items:center;gap:4px;background:none;border:none;color:var(--brand);font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer">View payroll<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-cr"></use></svg></button></header>
+          <div style="padding:7px 8px">
+            <sc-for list="{{ salaryRows }}" as="r" hint-placeholder-count="5"><div style="display:flex;align-items:center;gap:12px;padding:10px 11px;border-radius:10px" style-hover="background:var(--surface2)">
+              <div style="width:34px;height:34px;border-radius:50%;background:var(--surface2);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none">{{ r.i }}</div>
+              <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600;color:var(--text)">{{ r.n }}</div><div style="font-size:12px;color:var(--subtle)">{{ r.off }} · {{ r.method }}</div></div>
+              <span style="font-size:14px;font-weight:700;color:var(--text);flex:none">{{ r.amount }}</span>
+              <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:600;background:{{ r.badge.bg }};color:{{ r.badge.fg }};flex:none;min-width:70px;justify-content:center"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ r.badge.icon }}"></use></svg>{{ r.badge.text }}</span>
+            </div></sc-for>
+          </div>
+        </section>
+        <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden;align-self:flex-start">
+          <header style="padding:15px 18px;border-bottom:1px solid var(--border2)"><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">Payment methods</h3></header>
+          <div style="padding:18px">
+            <sc-for list="{{ payMethods }}" as="m" hint-placeholder-count="3"><div style="margin-bottom:15px"><div style="display:flex;justify-content:space-between;margin-bottom:7px"><span style="font-size:13px;color:var(--text);font-weight:500">{{ m.label }}</span><span style="font-size:13px;color:var(--muted);font-weight:600">{{ m.pct }}%</span></div><div style="height:7px;background:var(--surface2);border-radius:999px;overflow:hidden"><div style="height:100%;width:{{ m.barW }};background:{{ m.color }};border-radius:999px"></div></div></div></sc-for>
+          </div>
+        </section>
+      </div>
+    </sc-if>
+
+    <!-- HR -->
+    <sc-if value="{{ isHr }}" hint-placeholder-val="{{ false }}">
+      <div style="{{ twoCol }}">
+        <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden">
+          <header style="display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--border2)"><div><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">Pending assistant requests</h3><p style="margin:2px 0 0;font-size:12px;color:var(--subtle)">Submitted by course heads</p></div></header>
+          <div style="padding:7px 8px">
+            <sc-for list="{{ requests }}" as="q" hint-placeholder-count="4"><div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:11px;border-radius:10px" style-hover="background:var(--surface2)">
+              <div style="width:36px;height:36px;border-radius:50%;background:var(--brands);color:var(--brand);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none">{{ q.i }}</div>
+              <div style="flex:1;min-width:130px"><div style="font-size:13.5px;font-weight:600;color:var(--text)">{{ q.n }}</div><div style="font-size:12px;color:var(--subtle)">{{ q.role }}</div><div style="font-size:11.5px;color:var(--subtle);margin-top:1px">by {{ q.by }} · {{ q.date }}</div></div>
+              <div style="{{ reqActionsStyle }}"><button style="flex:{{ reqBtnFlex }};background:var(--brand);color:var(--brandfg);border:none;border-radius:8px;padding:8px 12px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer" style-hover="filter:brightness(.96)">Approve</button><button style="flex:{{ reqBtnFlex }};background:var(--surface);color:var(--muted);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer" style-hover="background:var(--surface2)">Review</button></div>
+            </div></sc-for>
+          </div>
+        </section>
+        <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden;align-self:flex-start">
+          <header style="padding:15px 18px;border-bottom:1px solid var(--border2)"><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">Staff by role</h3></header>
+          <div style="padding:18px">
+            <sc-for list="{{ staffByRole }}" as="s" hint-placeholder-count="5"><div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:13px;color:var(--text);font-weight:500">{{ s.role }}</span><span style="font-size:13px;color:var(--muted);font-weight:600">{{ s.n }}</span></div><div style="height:7px;background:var(--surface2);border-radius:999px;overflow:hidden"><div style="height:100%;width:{{ s.barW }};background:var(--brand);border-radius:999px"></div></div></div></sc-for>
+          </div>
+        </section>
+      </div>
+    </sc-if>
+
+    <!-- OWNER -->
+    <sc-if value="{{ isOwner }}" hint-placeholder-val="{{ false }}">
+      <div style="{{ twoCol }}">
+        <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden">
+          <header style="display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--border2)"><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">Organizations</h3><button style="display:flex;align-items:center;gap:4px;background:none;border:none;color:var(--brand);font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer">Manage<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-cr"></use></svg></button></header>
+          <div style="padding:7px 8px">
+            <sc-for list="{{ orgs }}" as="o" hint-placeholder-count="4"><div style="display:flex;align-items:center;gap:12px;padding:11px;border-radius:10px" style-hover="background:var(--surface2)">
+              <div style="width:36px;height:36px;border-radius:9px;background:var(--surface2);color:var(--muted);display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-building"></use></svg></div>
+              <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600;color:var(--text)">{{ o.n }}</div><div style="font-size:12px;color:var(--subtle)">{{ o.users }} users · {{ o.off }} courses</div></div>
+              <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:600;background:{{ o.badge.bg }};color:{{ o.badge.fg }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ o.badge.fg }}"></span>{{ o.badge.text }}</span>
+            </div></sc-for>
+          </div>
+        </section>
+        <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden;align-self:flex-start">
+          <header style="padding:15px 18px;border-bottom:1px solid var(--border2)"><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">Recent activity</h3></header>
+          <div style="padding:7px 8px">
+            <sc-for list="{{ activity }}" as="a" hint-placeholder-count="4"><div style="display:flex;gap:11px;padding:10px 11px"><div style="width:30px;height:30px;border-radius:8px;background:{{ a.bg }};color:{{ a.fg }};display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ a.icon }}"></use></svg></div><div style="flex:1;min-width:0"><div style="font-size:13px;color:var(--text);line-height:1.35">{{ a.text }}</div><div style="font-size:11.5px;color:var(--subtle);margin-top:2px">{{ a.time }}</div></div></div></sc-for>
+          </div>
+        </section>
+      </div>
+    </sc-if>
+
+    <!-- ADMIN -->
+    <sc-if value="{{ isAdmin }}" hint-placeholder-val="{{ false }}">
+      <div style="{{ twoCol }}">
+        <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden">
+          <header style="padding:15px 18px;border-bottom:1px solid var(--border2)"><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">Recent activity</h3></header>
+          <div style="padding:7px 8px">
+            <sc-for list="{{ activity }}" as="a" hint-placeholder-count="4"><div style="display:flex;gap:11px;padding:10px 11px"><div style="width:30px;height:30px;border-radius:8px;background:{{ a.bg }};color:{{ a.fg }};display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ a.icon }}"></use></svg></div><div style="flex:1;min-width:0"><div style="font-size:13px;color:var(--text);line-height:1.35">{{ a.text }}</div><div style="font-size:11.5px;color:var(--subtle);margin-top:2px">{{ a.time }}</div></div></div></sc-for>
+          </div>
+        </section>
+        <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden;align-self:flex-start">
+          <header style="padding:15px 18px;border-bottom:1px solid var(--border2)"><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">Staff by role</h3></header>
+          <div style="padding:18px">
+            <sc-for list="{{ staffByRole }}" as="s" hint-placeholder-count="5"><div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:13px;color:var(--text);font-weight:500">{{ s.role }}</span><span style="font-size:13px;color:var(--muted);font-weight:600">{{ s.n }}</span></div><div style="height:7px;background:var(--surface2);border-radius:999px;overflow:hidden"><div style="height:100%;width:{{ s.barW }};background:var(--brand);border-radius:999px"></div></div></div></sc-for>
+          </div>
+        </section>
+      </div>
+    </sc-if>
+
+    <!-- REGISTRATION -->
+    <sc-if value="{{ isReg }}" hint-placeholder-val="{{ false }}">
+      <div style="{{ twoCol }}">
+        <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden">
+          <header style="display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--border2)"><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">Registration queue</h3><button style="display:flex;align-items:center;gap:6px;background:var(--brand);color:var(--brandfg);border:none;border-radius:var(--rad-sm);padding:8px 13px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer" style-hover="filter:brightness(.96)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-file-up"></use></svg>Import</button></header>
+          <div style="padding:7px 8px">
+            <sc-for list="{{ regQueue }}" as="r" hint-placeholder-count="4"><div style="display:flex;align-items:center;gap:12px;padding:11px;border-radius:10px" style-hover="background:var(--surface2)">
+              <div style="width:34px;height:34px;border-radius:50%;background:var(--surface2);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none">{{ r.i }}</div>
+              <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600;color:var(--text)">{{ r.n }}</div><div style="font-size:12px;color:var(--subtle)">{{ r.off }} · {{ r.channel }}</div></div>
+              <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:600;background:{{ r.badge.bg }};color:{{ r.badge.fg }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ r.badge.fg }}"></span>{{ r.badge.text }}</span>
+            </div></sc-for>
+          </div>
+        </section>
+        <section style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden;align-self:flex-start">
+          <header style="display:flex;align-items:center;gap:8px;padding:15px 18px;border-bottom:1px solid var(--border2)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--danger)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-alert"></use></svg><h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text)">Import errors</h3></header>
+          <div style="padding:9px 10px">
+            <sc-for list="{{ importErrors }}" as="e" hint-placeholder-count="4"><div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;background:var(--dangers);margin-bottom:6px"><span style="font-size:12px;font-weight:700;color:var(--danger);font-family:'Geist Mono',monospace;flex:none">{{ e.row }}</span><span style="font-size:12.5px;color:var(--text);flex:1">{{ e.msg }}</span></div></sc-for>
+          </div>
+        </section>
+      </div>
+    </sc-if>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:960,&quot;height&quot;:700},&quot;role&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;owner&quot;,&quot;admin&quot;,&quot;hr&quot;,&quot;head&quot;,&quot;assistant&quot;,&quot;registration&quot;,&quot;finance&quot;],&quot;default&quot;:&quot;head&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;compact&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;theme&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  tone(t){ const m={brand:['var(--brands)','var(--brand)'],ok:['var(--oks)','var(--ok)'],warn:['var(--warns)','var(--warn)'],danger:['var(--dangers)','var(--danger)'],info:['var(--infos)','var(--info)'],neutral:['var(--surface2)','var(--muted)']}; const [bg,fg]=m[t]||m.neutral; return {bg,fg}; }
+  badge(text,t,icon){ const {bg,fg}=this.tone(t); return {text,bg,fg,icon}; }
+
+  kpis(role){ const k=(icon,value,label,tone,delta,dir)=>{ const {bg,fg}=this.tone(tone); const d=this.tone(dir==='up'?'ok':'danger'); return {icon,value,label,iconBg:bg,iconFg:fg,delta:delta||'',deltaIcon:dir==='up'?'arrow-up':'arrow-down',deltaColor:d.fg}; };
+    return {
+      owner:[k('building','12','Organizations','brand','+2','up'),k('users','318','Active users','neutral','+14','up'),k('clipboard-list','47','Active courses','neutral'),k('shield','Healthy','System status','ok')],
+      admin:[k('grad','842','Students','brand','+23','up'),k('users','36','Staff members','neutral','+1','up'),k('clipboard-list','18','Active courses','neutral'),k('alert','5','Pending tasks','warn')],
+      hr:[k('inbox','7','Pending requests','warn','+3','up'),k('users','36','Active staff','neutral'),k('user-plus','4','New this month','brand','+4','up'),k('clock','3','Awaiting review','warn')],
+      head:[k('clipboard-list','4','My courses','brand'),k('grad','142','Students','neutral','+8','up'),k('user-check','12','Assistants','neutral'),k('clock','57','Pending messages','warn')],
+      assistant:[k('grad','48','My students','brand'),k('clipboard-list','12','Pending assignments','warn'),k('check','6','Marked today','ok','+6','up'),k('message','3','Unread','neutral')],
+      registration:[k('user-plus','23','New registrations','brand','+9','up'),k('clock','9','Pending review','warn'),k('file-up','120','Imported this week','neutral'),k('alert','4','Import errors','danger')],
+      finance:[k('wallet','$42,300','Payroll this month','brand'),k('card','28/36','Assistants paid','neutral'),k('clock','6','Pending approvals','warn'),k('trend','4','Bonuses issued','ok')],
+    }[role]; }
+
+  renderVals(){
+    const role = this.props.role || 'head';
+    const compact = !!this.props.compact;
+    const first = {owner:'Daniel',admin:'Sara',hr:'Lena',head:'Marcus',assistant:'Priya',registration:'Omar',finance:'Grace'}[role];
+    const subtitle = {owner:'Platform overview across all organizations.',admin:"Here's what's happening at Cambridge Prep Center.",hr:'Requests and staff needing your attention.',head:'Your course completion at a glance.',assistant:'Your students and logs for today.',registration:'Registrations and imports in progress.',finance:'Payroll and payments this month.'}[role];
+
+    // HEAD
+    const offDefs=[['Physics · June · Unit 1',1],['Physics · Nov · Unit 1'],['Physics · June · Unit 2'],['Chemistry · June · Unit 1']];
+    const offerings=offDefs.map(([label,a])=>({label,active:!!a, bg:a?'var(--brand)':'var(--surface)', fg:a?'var(--brandfg)':'var(--muted)', bd:a?'var(--brand)':'var(--border)', dot:a?'var(--brandfg)':'var(--subtle)'}));
+    const aDefs=[['Aisha Rahman','AR',46,48],['Tom Becker','TB',38,52],['Yuki Tanaka','YT',48,48],['Carlos Diaz','CD',21,45],['Nadia Saleh','NS',33,40]];
+    const assistants=aDefs.map(([n,i,sent,total])=>{ const pct=Math.round(sent/total*100); let badge,bc; if(pct===100){badge=this.badge('Complete','ok','check2');bc='var(--ok)';} else if(pct>=80){badge=this.badge('On track','brand','check2');bc='var(--brand)';} else if(pct>=55){badge=this.badge('Behind','warn','clock');bc='var(--warn)';} else {badge=this.badge('At risk','danger','alert');bc='var(--danger)';} return {n,i,sent,total,barW:pct+'%',barColor:bc,badge}; });
+    const statusBreakdown=[{label:'Complete',count:'1',color:'var(--ok)'},{label:'On track',count:'2',color:'var(--brand)'},{label:'Behind',count:'1',color:'var(--warn)'},{label:'At risk',count:'1',color:'var(--danger)'}];
+
+    // ASSISTANT
+    const pDefs=[['Liam Carter','LC','June · Unit 1','Pending','warn','clock'],['Mei Wong','MW','June · Unit 1','Missing','danger','alert'],['Omar Sayed','OS','June · Unit 1','Pending','warn','clock'],['Sofia Rossi','SR','Nov · Unit 1','Pending','warn','clock'],['Ethan Park','EP','Nov · Unit 1','Missing','danger','alert'],['Hana Kim','HK','June · Unit 1','Pending','warn','clock']];
+    const pendingStudents=pDefs.map(([n,i,off,t,tone,ic])=>({n,i,off,badge:this.badge(t,tone,ic)}));
+    const myOfferings=[{label:'Physics · June · Unit 1',count:'28',pending:'7'},{label:'Physics · Nov · Unit 1',count:'14',pending:'3'},{label:'Physics · June · Unit 2',count:'6',pending:'2'}];
+
+    // FINANCE
+    const sDefs=[['Aisha Rahman','AR','June · Unit 1','Per paper','$1,240','Paid','ok','check'],['Tom Becker','TB','Nov · Unit 1','Bracket','$980','Pending','warn','clock'],['Yuki Tanaka','YT','June · Unit 2','Per paper','$1,560','Paid','ok','check'],['Carlos Diaz','CD','June · Unit 1','Bracket','$720','Pending','warn','clock'],['Nadia Saleh','NS','Nov · Unit 2','Per paper','$1,100','Paid','ok','check']];
+    const salaryRows=sDefs.map(([n,i,off,method,amount,t,tone,ic])=>({n,i,off,method,amount,badge:this.badge(t,tone,ic)}));
+    const pmDefs=[['Bank transfer',62,'var(--brand)'],['Mobile wallet',26,'var(--info)'],['Cash',12,'var(--subtle)']];
+    const payMethods=pmDefs.map(([label,pct,color])=>({label,pct,barW:pct+'%',color}));
+
+    // HR
+    const qDefs=[['Daniel Cole','DC','Assistant · June Unit 1','Marcus Bell','Jun 18'],['Fatima Noor','FN','Assistant · Nov Unit 1','Marcus Bell','Jun 17'],['Jack Lee','JL','Assistant · June Unit 2','Elena Voss','Jun 17'],['Aria Khan','AK','Assistant · Nov Unit 2','Elena Voss','Jun 16']];
+    const requests=qDefs.map(([n,i,role2,by,date])=>({n,i,role:role2,by,date}));
+    const sbrDefs=[['Assistants',18],['Heads',6],['Registration',5],['Finance',4],['HR',3]];
+    const sbrMax=18;
+    const staffByRole=sbrDefs.map(([role2,n])=>({role:role2,n,barW:Math.round(n/sbrMax*100)+'%'}));
+
+    // OWNER
+    const orgDefs=[['Cambridge Prep Center',128,14,'Active','ok'],['Oxford Tutorials',96,11,'Active','ok'],['Bright Future Academy',54,8,'Trial','info'],['Elite IGCSE Hub',40,6,'Active','ok']];
+    const orgs=orgDefs.map(([n,users,off,t,tone])=>({n,users,off,badge:this.badge(t,tone)}));
+    const actDefs=[['New course created: Nov · Unit 2','12m ago','clipboard-list','brand'],['Sara Mensah updated org branding','1h ago','palette','neutral'],['14 students imported successfully','3h ago','file-up','ok'],['Assistant request approved by HR','5h ago','user-check','ok']];
+    const activity=actDefs.map(([text,time,icon,tone])=>{ const {bg,fg}=this.tone(tone); return {text,time,icon,bg,fg}; });
+
+    // REGISTRATION
+    const rqDefs=[['Hannah Mills','HM','June · Unit 1','Online form','Pending','warn'],['Raj Patel','RP','June · Unit 1','Bulk import','New','brand'],['Lucas Silva','LS','Nov · Unit 1','Walk-in','Pending','warn'],['Amara Obi','AO','June · Unit 2','Online form','New','brand']];
+    const regQueue=rqDefs.map(([n,i,off,channel,t,tone])=>({n,i,off,channel,badge:this.badge(t,tone)}));
+    const importErrors=[{row:'Row 14',msg:'Missing phone number'},{row:'Row 27',msg:'Invalid session code (NOV-26)'},{row:'Row 31',msg:'Duplicate student ID'},{row:'Row 42',msg:'Unknown unit reference'}];
+
+    return {
+      dateLabel:'Friday · 19 June 2026', greeting:`Good morning, ${first}`, subtitle,
+      kpiGrid:{display:'grid',gap:'14px',gridTemplateColumns: compact?'repeat(2,1fr)':'repeat(4,1fr)'},
+      twoCol:{display:'grid',gap:'16px',gridTemplateColumns: compact?'1fr':'1.7fr 1fr',alignItems:'start'},
+      kpis:this.kpis(role),
+      isOwner:role==='owner',isAdmin:role==='admin',isHr:role==='hr',isHead:role==='head',isAssistant:role==='assistant',isReg:role==='registration',isFinance:role==='finance',
+      offerings, assistants, statusBreakdown,
+      pendingStudents, myOfferings,
+      salaryRows, payMethods,
+      requests, staffByRole,
+      reqActionsStyle: compact ? {display:'flex',gap:'8px',flexBasis:'100%',marginTop:'2px'} : {display:'flex',gap:'8px',flexShrink:0},
+      reqBtnFlex: compact ? '1' : 'none',
+      orgs, activity,
+      regQueue, importErrors,
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:flex;flex-direction:column;gap:16px">
+
+  <!-- HEADER -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:17px 18px">
+    <div style="font-size:12px;color:var(--subtle);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Registration</div>
+    <h1 style="margin:4px 0 0;font-size:20px;font-weight:600;color:var(--text);letter-spacing:-.01em">Fee installments</h1>
+    <p style="margin:3px 0 0;font-size:13px;color:var(--muted)">Track installment status, override amount or status, and send payment reminders over WhatsApp.</p>
+    <div style="display:grid;gap:12px;grid-template-columns:{{ statCols }};margin-top:16px">
+      <sc-for list="{{ stats }}" as="s" hint-placeholder-count="3"><div style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--rad-sm);padding:12px 14px"><div style="font-size:21px;font-weight:700;color:{{ s.color }};letter-spacing:-.02em;line-height:1.1">{{ s.value }}</div><div style="font-size:12px;color:var(--muted);font-weight:500;margin-top:2px">{{ s.label }}</div></div></sc-for>
+    </div>
+  </div>
+
+  <!-- TOOLBAR: search + status filter -->
+  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--rad-sm);padding:0 12px;height:40px;flex:1;min-width:200px;max-width:320px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--subtle)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-search"></use></svg><input value="{{ search }}" onInput="{{ onSearch }}" placeholder="Search students…" style="border:none;outline:none;background:none;font-family:inherit;font-size:13.5px;color:var(--text);width:100%;height:100%"/></div>
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><sc-for list="{{ filters }}" as="f" hint-placeholder-count="4"><button onClick="{{ onFilter }}" data-v="{{ f.value }}" style="padding:7px 12px;border-radius:999px;border:1px solid {{ f.bd }};background:{{ f.bg }};color:{{ f.fg }};font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer">{{ f.label }}</button></sc-for></div>
+    <div style="display:flex;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--rad-sm);padding:0 11px;height:40px;min-width:170px"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="var(--subtle)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-right:7px"><use href="#i-book"></use></svg><select value="{{ courseFilter }}" onChange="{{ onCourseFilter }}" style="appearance:none;border:none;background:none;font-family:inherit;font-size:12.5px;font-weight:600;color:var(--text);cursor:pointer;width:100%;height:100%;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2210%22 height=%2210%22 fill=%22none%22 stroke=%22%2397a1b0%22 stroke-width=%222%22><path d=%22m3 4.5 3 3 3-3%22/></svg>');background-repeat:no-repeat;background-position:right center"><sc-for list="{{ courseOpts }}" as="c" hint-placeholder-count="3"><option value="{{ c }}">{{ c }}</option></sc-for></select></div>
+  </div>
+
+  <!-- CARDS (no horizontal scroll, wraps responsively) -->
+  <div style="display:grid;gap:12px;grid-template-columns:{{ cardCols }}">
+    <sc-for list="{{ rows }}" as="r" hint-placeholder-count="6"><div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:var(--shadow);padding:14px 15px;display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:11px">
+        <div style="width:38px;height:38px;border-radius:50%;background:var(--surface2);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex:none">{{ r.i }}</div>
+        <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.name }}</div><div style="font-size:11.5px;color:var(--subtle)">{{ r.course }} · Installment {{ r.inst }}</div></div>
+        <span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;font-size:11.5px;font-weight:600;background:{{ r.badge.bg }};color:{{ r.badge.fg }};flex:none"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ r.badge.icon }}"></use></svg>{{ r.statusText }}</span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px">
+        <div style="flex:1;min-width:120px"><div style="font-size:10.5px;font-weight:700;color:var(--subtle);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px">Amount due</div>
+          <div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0 11px;height:38px"><span style="font-size:13px;color:var(--subtle);font-weight:600">{{ cs }}</span><input value="{{ r.amount }}" onInput="{{ onAmount }}" data-id="{{ r.id }}" inputmode="numeric" style="border:none;outline:none;background:none;font-family:'Geist Mono',monospace;font-size:13.5px;font-weight:700;color:var(--text);width:100%;height:100%" style-focus="color:var(--brand)"/></div>
+        </div>
+        <div style="flex:1;min-width:120px"><div style="font-size:10.5px;font-weight:700;color:var(--subtle);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px">Override status</div>
+          <div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0 11px;height:38px"><select value="{{ r.status }}" onChange="{{ onStatus }}" data-id="{{ r.id }}" style="appearance:none;border:none;background:none;font-family:inherit;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;width:100%;height:100%;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 fill=%22none%22 stroke=%22%2397a1b0%22 stroke-width=%222%22><path d=%22m3 4.5 3 3 3-3%22/></svg>');background-repeat:no-repeat;background-position:right center"><sc-for list="{{ statusOpts }}" as="o" hint-placeholder-count="3"><option value="{{ o.value }}">{{ o.label }}</option></sc-for></select></div>
+        </div>
+      </div>
+      <sc-if value="{{ r.canRemind }}" hint-placeholder-val="{{ true }}"><button onClick="{{ onRemind }}" data-id="{{ r.id }}" style="display:flex;align-items:center;justify-content:center;gap:7px;height:42px;border:1px solid #25D366;border-radius:9px;background:rgba(37,211,102,.06);color:#1ea952;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer" style-hover="background:rgba(37,211,102,.12)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-send"></use></svg>Send payment reminder</button></sc-if>
+      <sc-if value="{{ r.paid }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;justify-content:center;gap:6px;height:42px;border-radius:9px;background:var(--oks);color:var(--ok);font-size:13px;font-weight:600"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"></use></svg>Fully settled</div></sc-if>
+    </div></sc-for>
+  </div>
+
+  <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}"><div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);padding:30px;text-align:center;font-size:13px;color:var(--muted)">No students match your search.</div></sc-if>
+
+  <sc-if value="{{ showPagination }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);padding:11px 16px"><span style="font-size:12.5px;color:var(--subtle)">{{ pageInfo }}</span><div style="display:flex;align-items:center;gap:5px"><button onClick="{{ onPage }}" data-p="{{ prevP }}" style="width:32px;height:32px;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:var(--surface2)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(180deg)"><use href="#i-cr"></use></svg></button><sc-for list="{{ pages }}" as="pg" hint-placeholder-count="3"><button onClick="{{ onPage }}" data-p="{{ pg.p }}" style="min-width:32px;height:32px;padding:0 8px;border-radius:7px;border:1px solid {{ pg.bd }};background:{{ pg.bg }};color:{{ pg.fg }};font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer">{{ pg.n }}</button></sc-for><button onClick="{{ onPage }}" data-p="{{ nextP }}" style="width:32px;height:32px;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:var(--surface2)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-cr"></use></svg></button></div></div></sc-if>
+
+  <!-- REMINDER MODAL -->
+  <sc-if value="{{ modalOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;background:rgba(8,12,22,.5);display:flex;align-items:center;justify-content:center;padding:20px;z-index:60">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);box-shadow:0 24px 70px rgba(8,12,22,.34);width:100%;max-width:440px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:11px;padding:16px 18px;border-bottom:1px solid var(--border2)">
+          <div style="width:38px;height:38px;border-radius:10px;background:rgba(37,211,102,.14);color:#1ea952;display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-send"></use></svg></div>
+          <div style="flex:1;min-width:0"><h3 style="margin:0;font-size:15px;font-weight:600;color:var(--text)">Payment reminder</h3><div style="font-size:12px;color:var(--muted)">To {{ active.guardian }} · {{ active.phone }}</div></div>
+          <button onClick="{{ onClose }}" style="width:32px;height:32px;border-radius:8px;border:none;background:none;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none" style-hover="background:var(--surface2)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-x"></use></svg></button>
+        </div>
+        <div style="padding:18px">
+          <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px">Message preview <span style="font-weight:500;color:var(--subtle)">· from the org template</span></div>
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--rad-sm);padding:13px;font-size:13px;color:var(--text);line-height:1.55;white-space:pre-wrap;max-height:180px;overflow:auto">{{ active.message }}</div>
+        </div>
+        <div style="display:flex;gap:10px;padding:0 18px 16px">
+          <button onClick="{{ onClose }}" style="flex:1;height:44px;border:1px solid var(--border);border-radius:var(--rad-sm);background:var(--surface);color:var(--text);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer" style-hover="background:var(--surface2)">Cancel</button>
+          <a href="{{ active.waUrl }}" target="_blank" rel="noopener" onClick="{{ onClose }}" style="flex:1.4;display:flex;align-items:center;justify-content:center;gap:8px;height:44px;background:#25D366;color:#fff;border-radius:var(--rad-sm);font-size:13.5px;font-weight:600;text-decoration:none"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-send"></use></svg>Open WhatsApp</a>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:960,&quot;height&quot;:680},&quot;compact&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;role&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  CUR={GBP:'£',USD:'$',EUR:'€',EGP:'E£',AED:'AED ',SAR:'SAR ',INR:'₹'};
+  cur(){ try{ return this.CUR[localStorage.getItem('radams_currency')]||'£'; }catch(e){ return '£'; } }
+  tone(t){ const m={ok:['var(--oks)','var(--ok)'],warn:['var(--warns)','var(--warn)'],danger:['var(--dangers)','var(--danger)']}; const [bg,fg]=m[t]||m.warn; return {bg,fg}; }
+  state={ modalOpen:false, activeId:null, search:'', filter:'all', courseFilter:'all', page:0, rows:[
+    {id:1,name:'Liam Carter',i:'LC',course:'Physics · Jun · U1',inst:'2 of 3',amount:'120',status:'due'},
+    {id:2,name:'Mei Wong',i:'MW',course:'Physics · Jun · U1',inst:'2 of 3',amount:'120',status:'overdue'},
+    {id:3,name:'Omar Sayed',i:'OS',course:'Chemistry · Jun · U1',inst:'1 of 2',amount:'200',status:'paid'},
+    {id:4,name:'Sofia Rossi',i:'SR',course:'Physics · Nov · U1',inst:'3 of 3',amount:'120',status:'due'},
+    {id:5,name:'Ethan Park',i:'EP',course:'Physics · Jun · U1',inst:'2 of 3',amount:'120',status:'overdue'},
+    {id:6,name:'Hana Kim',i:'HK',course:'Maths · Jun · U1',inst:'1 of 2',amount:'180',status:'paid'},
+  ].concat((()=>{ const FN=['Aria','Ben','Chloe','Diego','Ella','Faris','Grace','Henry','Iris','Jack','Karim','Lucy','Marco','Nadia','Omar','Priya','Quinn','Rana','Sam','Tara','Uma','Victor','Wendy','Yara','Zane']; const LN=['Khan','Cohen','Park','Kim','Carter','Wong','Sayed','Rossi','Bauer','Haddad','Lee','Adel','Luna','Owusu','Walsh','Murphy','Reyes','Menon','Foster','Saleh']; const CO=['Physics · Jun · U1','Chemistry · Jun · U1','Maths · Nov · U1','Physics · Nov · U1']; const ST=['due','overdue','paid','due']; const out=[]; for(let k=7;k<=1206;k++){ const f=FN[(k*3)%FN.length], l=LN[(k*7)%LN.length]; out.push({id:k,name:f+' '+l,i:(f[0]+l[0]).toUpperCase(),course:CO[k%4],inst:(1+(k%3))+' of 3',amount:String(120+((k*10)%180)),status:ST[k%4]}); } return out; })()) };
+  onRemind=(e)=>this.setState({modalOpen:true, activeId:+e.currentTarget.dataset.id});
+  onClose=()=>this.setState({modalOpen:false});
+  onAmount=(e)=>{ const id=+e.target.dataset.id, v=e.target.value.replace(/[^0-9]/g,''); this.setState(s=>({rows:s.rows.map(r=>r.id===id?{...r,amount:v}:r)})); };
+  onStatus=(e)=>{ const id=+e.currentTarget.dataset.id, v=e.target.value; this.setState(s=>({rows:s.rows.map(r=>r.id===id?{...r,status:v}:r)})); };
+  onSearch=(e)=>this.setState({search:e.target.value,page:0});
+  onFilter=(e)=>this.setState({filter:e.currentTarget.dataset.v,page:0});
+  onCourseFilter=(e)=>this.setState({courseFilter:e.target.value,page:0});
+  onPage=(e)=>this.setState({page:+e.currentTarget.dataset.p});
+  renderVals(){
+    const compact=!!this.props.compact, s=this.state;
+    const q=(s.search||'').trim().toLowerCase(); const flt=s.filter||'all';
+    const sortedAll=s.rows.slice().sort((a,b)=>a.name.localeCompare(b.name)).filter(r=>(!q||r.name.toLowerCase().includes(q)||r.course.toLowerCase().includes(q))&&(flt==='all'||r.status===flt)&&(s.courseFilter==='all'||r.course===s.courseFilter));
+    const PAGE=10; const pageCount=Math.max(1,Math.ceil(sortedAll.length/PAGE)); const page=Math.min(s.page||0,pageCount-1);
+    const sorted=sortedAll.slice(page*PAGE,page*PAGE+PAGE);
+    const map={due:['Due soon','warn','clock'],overdue:['Overdue','danger','alert'],paid:['Paid','ok','check']};
+    const rows=sorted.map(r=>{ const [t,tone,ic]=map[r.status]; const {bg,fg}=this.tone(tone); return {...r, statusText:t, badge:{bg,fg,icon:ic}, paid:r.status==='paid', canRemind:r.status!=='paid'}; });
+    const due=s.rows.filter(r=>r.status==='due').length, over=s.rows.filter(r=>r.status==='overdue').length;
+    const ar=s.rows.find(r=>r.id===s.activeId);
+    let active=null;
+    if(ar){ const digits='447700900'+(100+ar.id); const guardian=ar.name.split(' ')[0]+"'s guardian";
+      const msg=`Dear parent, this is a reminder that ${ar.name}'s fee installment (${ar.inst}) for ${ar.course} — ${this.cur()}${ar.amount} — is now due. Please contact us with any questions.\n\nThank you,\nCambridge Prep Center`;
+      active={guardian, phone:'+44 7700 900'+(100+ar.id), message:msg, waUrl:`https://wa.me/${digits}?text=${encodeURIComponent(msg)}`}; }
+    return {
+      compact, cs:this.cur(), statCols: compact?'1fr 1fr':'repeat(3,1fr)', cardCols: compact?'1fr':'repeat(2,minmax(0,1fr))',
+      stats:[{value:String(s.rows.length),label:'Active installments',color:'var(--brand)'},{value:String(due),label:'Due soon',color:'var(--warn)'},{value:String(over),label:'Overdue',color:'var(--danger)'}],
+      statusOpts:[{value:'due',label:'Due soon'},{value:'overdue',label:'Overdue'},{value:'paid',label:'Paid'}],
+      search:s.search||'', onSearch:this.onSearch, onFilter:this.onFilter, onPage:this.onPage,
+      filters:[['all','All'],['due','Due soon'],['overdue','Overdue'],['paid','Paid']].map(([value,label])=>{ const a=flt===value; return {value,label,bg:a?'var(--brand)':'var(--surface)',fg:a?'var(--brandfg)':'var(--muted)',bd:a?'var(--brand)':'var(--border)'}; }),
+      courseFilter:s.courseFilter, onCourseFilter:this.onCourseFilter, courseOpts:['all'].concat([...new Set(s.rows.map(r=>r.course))]),
+      noResults:sortedAll.length===0, showPagination:pageCount>1,
+      pageInfo:`${sortedAll.length?page*PAGE+1:0}\u2013${Math.min((page+1)*PAGE,sortedAll.length)} of ${sortedAll.length}`,
+      prevP:Math.max(0,page-1), nextP:Math.min(pageCount-1,page+1),
+      pages:(()=>{ const lo=Math.max(0,page-2),hi=Math.min(pageCount-1,page+2); const w=[]; for(let i=lo;i<=hi;i++) w.push({n:i+1,p:i,bg:i===page?'var(--brand)':'var(--surface)',fg:i===page?'var(--brandfg)':'var(--muted)',bd:i===page?'var(--brand)':'var(--border)'}); return w; })(),
+      rows, onRemind:this.onRemind, onAmount:this.onAmount, onStatus:this.onStatus, modalOpen:s.modalOpen, onClose:this.onClose, active:active||{guardian:'',phone:'',message:'',waUrl:'#'},
+    };
+  }
+}
+</script>
+</body>
+</html>

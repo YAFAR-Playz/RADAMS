@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:'Geist',system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:999px;border:3px solid transparent;background-clip:content-box}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes pop{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+</style>
+</helmet>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-dashboard" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"></rect><rect width="7" height="5" x="14" y="3" rx="1"></rect><rect width="7" height="9" x="14" y="12" rx="1"></rect><rect width="7" height="5" x="3" y="16" rx="1"></rect></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></symbol>
+<symbol id="i-user-check" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><polyline points="16 11 18 13 22 9"></polyline></symbol>
+<symbol id="i-user-plus" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" x2="19" y1="8" y2="14"></line><line x1="22" x2="16" y1="11" y2="11"></line></symbol>
+<symbol id="i-clipboard-list" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><path d="M12 11h4"></path><path d="M12 16h4"></path><path d="M8 11h.01"></path><path d="M8 16h.01"></path></symbol>
+<symbol id="i-grad" viewBox="0 0 24 24"><path d="M22 10v6M2 10l10-5 10 5-10 5z"></path><path d="M6 12v5c3 3 9 3 12 0v-5"></path></symbol>
+<symbol id="i-wallet" viewBox="0 0 24 24"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"></path></symbol>
+<symbol id="i-card" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="5" rx="2"></rect><line x1="2" x2="22" y1="10" y2="10"></line></symbol>
+<symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></symbol>
+<symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" x2="12" y1="3" y2="15"></line></symbol>
+<symbol id="i-file-up" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v5h5"></path><path d="M12 18v-6"></path><path d="m9 15 3-3 3 3"></path></symbol>
+<symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" x2="9" y1="12" y2="12"></line></symbol>
+<symbol id="i-building" viewBox="0 0 24 24"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"></path><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"></path><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"></path><path d="M10 6h4M10 10h4M10 14h4M10 18h4"></path></symbol>
+<symbol id="i-palette" viewBox="0 0 24 24"><circle cx="13.5" cy="6.5" r=".6" fill="currentColor" stroke="none"></circle><circle cx="17.5" cy="10.5" r=".6" fill="currentColor" stroke="none"></circle><circle cx="8.5" cy="7.5" r=".6" fill="currentColor" stroke="none"></circle><circle cx="6.5" cy="12.5" r=".6" fill="currentColor" stroke="none"></circle><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.9 0 1.65-.75 1.65-1.69 0-.44-.18-.83-.44-1.12-.29-.29-.44-.65-.44-1.13a1.64 1.64 0 0 1 1.67-1.67h2c3.05 0 5.55-2.5 5.55-5.55C21.97 6.01 17.46 2 12 2z"></path></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1Z"></path></symbol>
+<symbol id="i-chart" viewBox="0 0 24 24"><line x1="12" x2="12" y1="20" y2="10"></line><line x1="18" x2="18" y1="20" y2="4"></line><line x1="6" x2="6" y1="20" y2="16"></line></symbol>
+<symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></symbol>
+<symbol id="i-cal-check" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"></rect><path d="M3 10h18"></path><path d="M8 2v4M16 2v4"></path><path d="m9 16 2 2 4-4"></path></symbol>
+<symbol id="i-menu" viewBox="0 0 24 24"><line x1="4" x2="20" y1="6" y2="6"></line><line x1="4" x2="20" y1="12" y2="12"></line><line x1="4" x2="20" y1="18" y2="18"></line></symbol>
+<symbol id="i-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"></path><path d="M22 2 11 13"></path></symbol>
+<symbol id="i-filter" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></symbol>
+<symbol id="i-mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"></rect><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path></symbol>
+<symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"></path></symbol>
+<symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"></path></symbol>
+<symbol id="i-trend" viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></symbol>
+<symbol id="i-inbox" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></symbol>
+<symbol id="i-check2" viewBox="0 0 24 24"><path d="M18 6 7 17l-5-5"></path><path d="m22 10-7.5 7.5L13 16"></path></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"></path></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"></path></symbol>
+<symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"></path></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></symbol>
+<symbol id="i-cd" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"></path></symbol>
+<symbol id="i-cr" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"></path></symbol>
+<symbol id="i-chev-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"></path></symbol>
+<symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"></path></symbol>
+<symbol id="i-arrow-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"></path></symbol>
+<symbol id="i-arrow-r" viewBox="0 0 24 24"><line x1="5" x2="19" y1="12" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></symbol>
+</defs></svg>
+
+<div style="--bg:#f5f6f9;--surface:#ffffff;--surface2:#f1f4f8;--border:#e6e9ef;--border2:#eef1f6;--text:#0f1729;--muted:#5b6675;--subtle:#97a1b0;--brand:#2563eb;--brandh:#1d4ed8;--brands:#eef4ff;--brandfg:#ffffff;--ok:#15803d;--oks:#dcfce7;--warn:#b45309;--warns:#fdf0d3;--danger:#b91c1c;--dangers:#fee2e2;--info:#1d4ed8;--infos:#eff6ff;--neutral:#5b6675;--rad:13px;--rad-sm:9px;--shadow:0 1px 2px rgba(16,23,41,.05),0 1px 3px rgba(16,23,41,.04);--workspace:#e7e9ee;font-family:'Geist',system-ui,sans-serif">
+<div style="{{ themeVars }}">
+<div style="{{ brandVars }}">
+<div style="{{ cornerVars }}">
+
+<div style="min-height:100vh;background:var(--workspace);padding:18px;display:flex;flex-direction:column;align-items:center;gap:16px;transition:background .2s">
+
+  <!-- PROTOTYPE CHROME -->
+  <div style="width:100%;max-width:1360px;background:#0e1626;border:1px solid #1d2740;border-radius:14px;padding:9px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;box-shadow:0 6px 24px rgba(8,12,22,.18)">
+    <div style="display:flex;align-items:center;gap:9px;padding-right:14px;border-right:1px solid #202c46">
+      <span style="font-size:10px;font-weight:700;letter-spacing:.12em;color:#5d6b86;font-family:'Geist Mono',monospace">PROTOTYPE</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:11px;color:#8794aa;font-weight:500">Role</span>
+      <select value="{{ role }}" onChange="{{ onRole }}" style="appearance:none;background:#1a2538;color:#e6ecf6;border:1px solid #2a3854;border-radius:8px;padding:7px 30px 7px 11px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 fill=%22none%22 stroke=%22%238794aa%22 stroke-width=%222%22><path d=%22m3 4.5 3 3 3-3%22/></svg>');background-repeat:no-repeat;background-position:right 10px center">
+        <option value="owner">Owner</option>
+        <option value="admin">Admin</option>
+        <option value="hr">HR</option>
+        <option value="head">Head</option>
+        <option value="assistant">Assistant</option>
+        <option value="registration">Registration</option>
+        <option value="finance">Finance</option>
+      </select>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;background:#16203400;padding:0">
+      <span style="font-size:11px;color:#8794aa;font-weight:500;margin-right:2px">Nav</span>
+      <div style="display:flex;background:#16213a;border:1px solid #243453;border-radius:9px;padding:2px;gap:2px">
+        <sc-for list="{{ navOpts }}" as="o" hint-placeholder-count="3"><button onClick="{{ onNav }}" data-v="{{ o.value }}" style="border:none;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;padding:5px 11px;border-radius:7px;white-space:nowrap;background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</button></sc-for>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <span style="font-size:11px;color:#8794aa;font-weight:500;margin-right:2px">Device</span>
+      <div style="display:flex;background:#16213a;border:1px solid #243453;border-radius:9px;padding:2px;gap:2px">
+        <sc-for list="{{ deviceOpts }}" as="o" hint-placeholder-count="3"><button onClick="{{ onDevice }}" data-v="{{ o.value }}" style="border:none;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;padding:5px 11px;border-radius:7px;white-space:nowrap;background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</button></sc-for>
+      </div>
+    </div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+      <div style="display:flex;background:#16213a;border:1px solid #243453;border-radius:9px;padding:2px;gap:2px">
+        <sc-for list="{{ themeOpts }}" as="o" hint-placeholder-count="2"><button onClick="{{ onTheme }}" data-v="{{ o.value }}" title="{{ o.value }}" style="border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;width:30px;height:28px;border-radius:7px;background:{{ o.bg }};color:{{ o.fg }}"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ o.icon }}"></use></svg></button></sc-for>
+      </div>
+      <sc-if value="{{ isApp }}" hint-placeholder-val="{{ true }}"><button onClick="{{ onLogout }}" style="display:flex;align-items:center;gap:6px;background:#1a2538;color:#c4cee0;border:1px solid #2a3854;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap" style-hover="background:#22304b"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-logout"></use></svg>Sign out</button></sc-if>
+    </div>
+  </div>
+
+  <!-- ===================== LOGIN ===================== -->
+  <sc-if value="{{ isLogin }}" hint-placeholder-val="{{ true }}">
+  <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+    <!-- mobile login bezel -->
+    <div style="width:392px;height:808px;background:#0a0a0c;border-radius:46px;padding:11px;box-shadow:0 20px 60px rgba(8,12,22,.32)">
+      <div style="width:100%;height:100%;background:var(--bg);border-radius:36px;overflow:hidden;position:relative;display:flex;flex-direction:column">
+        <div style="height:38px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;flex:none"><span style="font-size:13px;font-weight:600;color:var(--text)">9:41</span><div style="display:flex;gap:5px;align-items:center"><div style="width:16px;height:9px;border:1.5px solid var(--text);border-radius:3px;opacity:.8"></div></div></div>
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 28px 40px">
+          <div style="display:flex;align-items:center;gap:11px;margin-bottom:38px">
+            <div style="width:42px;height:42px;border-radius:12px;background:var(--brand);color:var(--brandfg);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:20px;letter-spacing:-.02em">{{ logoLetter }}</div>
+            <span style="font-size:22px;font-weight:700;color:var(--text);letter-spacing:-.02em">{{ brandName }}</span>
+          </div>
+          <dc-import name="LoginBody" compact="{{ true }}" onAuthed="{{ onAuthed }}" hint-size="100%,420px"></dc-import>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ isDesktopish }}" hint-placeholder-val="{{ true }}">
+    <!-- desktop/tablet login -->
+    <div style="width:{{ frameW }};height:760px;background:var(--bg);border-radius:18px;overflow:hidden;border:1px solid var(--border);box-shadow:0 10px 40px rgba(15,23,41,.12);display:flex">
+      <div style="flex:1;background:var(--brands);padding:54px 52px;display:flex;flex-direction:column;justify-content:space-between;border-right:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:44px;height:44px;border-radius:13px;background:var(--brand);color:var(--brandfg);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:22px;letter-spacing:-.02em">{{ logoLetter }}</div>
+          <span style="font-size:23px;font-weight:700;color:var(--text);letter-spacing:-.02em">{{ brandName }}</span>
+        </div>
+        <div>
+          <h2 style="margin:0 0 18px;font-size:30px;font-weight:600;color:var(--text);letter-spacing:-.02em;line-height:1.25;max-width:380px">The operating system for your tutoring center.</h2>
+          <div style="display:flex;flex-direction:column;gap:14px;max-width:360px">
+            <div style="display:flex;gap:11px;align-items:flex-start"><div style="width:22px;height:22px;border-radius:7px;background:var(--brand);color:var(--brandfg);display:flex;align-items:center;justify-content:center;flex:none;margin-top:1px"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"></use></svg></div><span style="font-size:14px;color:var(--muted);line-height:1.5">Track assignment logging, evaluations and salary in one place.</span></div>
+            <div style="display:flex;gap:11px;align-items:flex-start"><div style="width:22px;height:22px;border-radius:7px;background:var(--brand);color:var(--brandfg);display:flex;align-items:center;justify-content:center;flex:none;margin-top:1px"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"></use></svg></div><span style="font-size:14px;color:var(--muted);line-height:1.5">Role-aware dashboards for every team across your org.</span></div>
+            <div style="display:flex;gap:11px;align-items:flex-start"><div style="width:22px;height:22px;border-radius:7px;background:var(--brand);color:var(--brandfg);display:flex;align-items:center;justify-content:center;flex:none;margin-top:1px"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"></use></svg></div><span style="font-size:14px;color:var(--muted);line-height:1.5">Built for IGCSE sessions, units and offerings.</span></div>
+          </div>
+        </div>
+        <span style="font-size:12px;color:var(--subtle)">© 2026 {{ brandName }}. All rights reserved.</span>
+      </div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:40px" data-comment-anchor="411d14a1b6-div">
+        <div style="width:100%;max-width:360px">
+          <dc-import name="LoginBody" compact="{{ false }}" onAuthed="{{ onAuthed }}" hint-size="100%,440px"></dc-import>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+  </sc-if>
+
+  <!-- ===================== APP ===================== -->
+  <sc-if value="{{ isApp }}" hint-placeholder-val="{{ false }}">
+  <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+    <!-- MOBILE SHELL -->
+    <div style="width:392px;height:808px;background:#0a0a0c;border-radius:46px;padding:11px;box-shadow:0 20px 60px rgba(8,12,22,.32)" data-comment-anchor="3943da08d4-div">
+      <div style="width:100%;height:100%;background:var(--bg);border-radius:36px;overflow:hidden;position:relative;display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;flex:none;background:var(--surface)"><span style="font-size:13px;font-weight:600;color:var(--text)">9:41</span><div style="width:16px;height:9px;border:1.5px solid var(--text);border-radius:3px;opacity:.8"></div></div>
+        <!-- app bar -->
+        <div style="height:56px;flex:none;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:11px;padding:0 16px">
+          <div style="width:30px;height:30px;border-radius:9px;background:var(--brand);color:var(--brandfg);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px">{{ logoLetter }}</div>
+          <span style="font-size:16px;font-weight:700;color:var(--text);letter-spacing:-.01em">{{ pageTitle }}</span>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
+            <button onClick="{{ onOpenSearch }}" style="width:36px;height:36px;border-radius:9px;border:none;background:none;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-search"></use></svg></button>
+            <button style="width:36px;height:36px;border-radius:9px;border:none;background:none;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-bell"></use></svg><span style="position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;background:var(--danger);border:1.5px solid var(--surface)"></span></button>
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--brands);color:var(--brand);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">{{ meta.initials }}</div>
+          </div>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:16px 16px 80px">
+          <sc-if value="{{ isPageDashboard }}" hint-placeholder-val="{{ true }}"><dc-import name="DashboardBody" role="{{ role }}" theme="{{ theme }}" compact="{{ true }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageAssignments }}" hint-placeholder-val="{{ false }}"><dc-import name="AssignmentsBody" role="{{ role }}" compact="{{ true }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageHeadAssign }}" hint-placeholder-val="{{ false }}"><dc-import name="HeadAssignBody" role="{{ role }}" compact="{{ true }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageAttendance }}" hint-placeholder-val="{{ false }}"><dc-import name="AttendanceBody" role="{{ role }}" compact="{{ true }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageOversight }}" hint-placeholder-val="{{ false }}"><dc-import name="OversightBody" role="{{ role }}" compact="{{ true }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageImport }}" hint-placeholder-val="{{ false }}"><dc-import name="ImportBody" role="{{ role }}" compact="{{ true }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageSalaryView }}" hint-placeholder-val="{{ false }}"><dc-import name="SalaryBody" role="{{ role }}" compact="{{ true }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageChat }}" hint-placeholder-val="{{ false }}"><dc-import name="ChatBody" role="{{ role }}" compact="{{ true }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageEval }}" hint-placeholder-val="{{ false }}"><dc-import name="EvalBody" role="{{ role }}" compact="{{ true }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageBranding }}" hint-placeholder-val="{{ false }}"><dc-import name="BrandingBody" role="{{ role }}" compact="{{ true }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPagePayroll }}" hint-placeholder-val="{{ false }}"><dc-import name="PayrollSettingsBody" role="{{ role }}" compact="{{ true }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageHeadStudents }}" hint-placeholder-val="{{ false }}"><dc-import name="StudentsBody" role="{{ role }}" compact="{{ true }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageRegStudents }}" hint-placeholder-val="{{ false }}"><dc-import name="RegStudentsBody" role="{{ role }}" compact="{{ true }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageRequests }}" hint-placeholder-val="{{ false }}"><dc-import name="RequestsBody" role="{{ role }}" compact="{{ true }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageHiring }}" hint-placeholder-val="{{ false }}"><dc-import name="HiringBody" role="{{ role }}" compact="{{ true }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageUsers }}" hint-placeholder-val="{{ false }}"><dc-import name="UsersBody" role="{{ role }}" compact="{{ true }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageHeadAssistants }}" hint-placeholder-val="{{ false }}"><dc-import name="AssistantsBody" role="{{ role }}" compact="{{ true }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageTemplates }}" hint-placeholder-val="{{ false }}"><dc-import name="TemplatesBody" role="{{ role }}" compact="{{ true }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageInstallments }}" hint-placeholder-val="{{ false }}"><dc-import name="InstallmentsBody" role="{{ role }}" compact="{{ true }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageCourses }}" hint-placeholder-val="{{ false }}"><dc-import name="CoursesBody" role="{{ role }}" compact="{{ true }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageRegCourses }}" hint-placeholder-val="{{ false }}"><dc-import name="RegCoursesBody" role="{{ role }}" compact="{{ true }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageOrgs }}" hint-placeholder-val="{{ false }}"><dc-import name="OrgsBody" role="{{ role }}" compact="{{ true }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPagePayments }}" hint-placeholder-val="{{ false }}"><dc-import name="PaymentsBody" role="{{ role }}" compact="{{ true }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageCategories }}" hint-placeholder-val="{{ false }}"><dc-import name="CategoriesBody" role="{{ role }}" compact="{{ true }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPagePlaceholder }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:48px 18px;gap:14px"><div style="width:56px;height:56px;border-radius:15px;background:var(--surface2);color:var(--muted);display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ pageIcon }}"></use></svg></div><div><h2 style="margin:0 0 6px;font-size:18px;font-weight:600;color:var(--text)">{{ pageLabel }}</h2><p style="margin:0;font-size:13.5px;color:var(--muted);line-height:1.55">Part of the next design round — navigation and shell are wired and ready.</p></div></div></sc-if>
+        </div>
+        <!-- bottom nav -->
+        <div style="position:absolute;bottom:0;left:0;right:0;height:64px;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:stretch;padding:0 4px">
+          <sc-for list="{{ navPrimary }}" as="n" hint-placeholder-count="4"><button onClick="{{ onPage }}" data-k="{{ n.key }}" style="flex:1;border:none;background:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:{{ n.color }};font-family:inherit;position:relative">
+            <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ n.icon }}"></use></svg>
+            <span style="font-size:9.5px;font-weight:600;white-space:nowrap">{{ n.label }}</span>
+            <sc-if value="{{ n.active }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:22px;height:3px;border-radius:0 0 3px 3px;background:var(--brand)"></span></sc-if>
+          </button></sc-for>
+          <sc-if value="{{ hasMore }}" hint-placeholder-val="{{ true }}"><button onClick="{{ onOpenMore }}" style="flex:1;border:none;background:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:{{ moreColor }};font-family:inherit;position:relative">
+            <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-menu"></use></svg>
+            <span style="font-size:9.5px;font-weight:600">More</span>
+            <sc-if value="{{ moreActive }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:22px;height:3px;border-radius:0 0 3px 3px;background:var(--brand)"></span></sc-if>
+          </button></sc-if>
+        </div>
+        <!-- MORE SHEET -->
+        <sc-if value="{{ moreOpen }}" hint-placeholder-val="{{ false }}">
+          <div onClick="{{ onCloseMore }}" style="position:absolute;inset:0;background:rgba(8,12,22,.4);z-index:50"></div>
+          <div style="position:absolute;left:0;right:0;bottom:0;z-index:51;background:var(--surface);border-top:1px solid var(--border);border-radius:18px 18px 0 0;padding:8px 14px 22px;box-shadow:0 -8px 30px rgba(8,12,22,.18)">
+            <div style="width:36px;height:4px;border-radius:999px;background:var(--border);margin:8px auto 14px"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+              <sc-for list="{{ navMobile }}" as="n" hint-placeholder-count="6"><button onClick="{{ onPageMore }}" data-k="{{ n.key }}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:14px 6px;border-radius:12px;border:1px solid {{ n.cardBd }};background:{{ n.cardBg }};color:{{ n.color }};font-family:inherit;cursor:pointer">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ n.icon }}"></use></svg>
+                <span style="font-size:11px;font-weight:600;text-align:center;line-height:1.2">{{ n.label }}</span>
+              </button></sc-for>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ isDesktopish }}" hint-placeholder-val="{{ true }}">
+    <!-- DESKTOP/TABLET SHELL -->
+    <div style="width:{{ frameW }};height:824px;background:var(--bg);border-radius:18px;overflow:hidden;border:1px solid var(--border);box-shadow:0 10px 40px rgba(15,23,41,.12);display:flex;{{ shellDir }}">
+
+      <!-- SIDE NAV (sidebar <-> collapsed icon rail; icon column stays fixed) -->
+      <sc-if value="{{ isSideNav }}" hint-placeholder-val="{{ true }}">
+        <aside style="width:{{ sideW }};min-width:0;flex:none;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:14px 13px;overflow:hidden" data-comment-anchor="64ac30ad48-aside">
+          <div style="display:flex;align-items:center;gap:6px;padding:0 0 14px;min-height:44px">
+            <button onClick="{{ onNav }}" data-v="{{ toggleTarget }}" title="{{ toggleTitle }}" style="width:38px;height:38px;border-radius:9px;border:none;background:none;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none" style-hover="background:var(--surface2);color:var(--text)"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-comment-anchor="5096913cb0-svg"><use href="#i-menu"></use></svg></button>
+            <div style="display:flex;align-items:center;gap:9px;flex:1;min-width:0;opacity:{{ labelOpacity }};overflow:hidden">
+              <div style="width:32px;height:32px;border-radius:9px;background:var(--brand);color:var(--brandfg);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex:none">{{ logoLetter }}</div>
+              <div style="line-height:1.1;min-width:0;white-space:nowrap"><div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-.01em">{{ brandName }}</div><div style="font-size:11px;color:var(--subtle);font-weight:500;overflow:hidden;text-overflow:ellipsis">{{ meta.org }}</div></div>
+            </div>
+          </div>
+          <nav style="display:flex;flex-direction:column;gap:3px">
+            <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="5"><a onClick="{{ onPage }}" data-k="{{ n.key }}" title="{{ n.label }}" style="display:flex;align-items:center;gap:12px;padding:10px 9px;border-radius:9px;text-decoration:none;font-size:13.5px;font-weight:{{ n.weight }};color:{{ n.color }};background:{{ n.bg }};cursor:pointer;overflow:hidden" style-hover="background:var(--surface2)" data-comment-anchor="ab925a6508-a"><span style="width:20px;height:20px;flex:none;display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ n.icon }}"></use></svg></span><span style="flex:1;min-width:0;white-space:nowrap;opacity:{{ labelOpacity }}" data-comment-anchor="4b9f043a7e-span">{{ n.label }}</span><sc-if value="{{ n.badge }}" hint-placeholder-val="{{ false }}"><span style="background:var(--brand);color:var(--brandfg);font-size:11px;font-weight:700;min-width:19px;height:19px;border-radius:999px;display:flex;align-items:center;justify-content:center;padding:0 5px;flex:none;opacity:{{ labelOpacity }}">{{ n.badge }}</span></sc-if></a></sc-for>
+          </nav>
+          <div style="margin-top:auto;display:flex;align-items:center;gap:11px;padding:9px;border-radius:10px;background:var(--surface2);overflow:hidden">
+            <div style="width:34px;height:34px;border-radius:50%;background:var(--brand);color:var(--brandfg);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex:none">{{ meta.initials }}</div>
+            <div style="line-height:1.2;flex:1;min-width:0;white-space:nowrap;opacity:{{ labelOpacity }}"><div style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis">{{ meta.person }}</div><div style="font-size:11.5px;color:var(--muted)">{{ meta.label }}</div></div>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--subtle)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;opacity:{{ labelOpacity }}"><use href="#i-settings"></use></svg>
+          </div>
+        </aside>
+      </sc-if>
+
+      <!-- MAIN COLUMN -->
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;height:100%">
+
+        <!-- TOP BAR variant -->
+        <sc-if value="{{ isTopbar }}" hint-placeholder-val="{{ false }}">
+          <header style="height:62px;flex:none;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:20px;padding:0 22px">
+            <div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:9px;background:var(--brand);color:var(--brandfg);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px">{{ logoLetter }}</div><span style="font-size:16px;font-weight:700;color:var(--text);letter-spacing:-.01em">{{ brandName }}</span></div>
+            <nav style="display:flex;align-items:center;gap:3px;margin-left:8px">
+              <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="5"><a style="display:flex;align-items:center;gap:8px;padding:8px 13px;border-radius:9px;text-decoration:none;font-size:13.5px;font-weight:{{ n.weight }};color:{{ n.color }};background:{{ n.bg }};cursor:pointer" style-hover="background:var(--surface2)"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ n.icon }}"></use></svg>{{ n.label }}</a></sc-for>
+            </nav>
+            <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
+              <div onClick="{{ onOpenSearch }}" style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:0 12px;height:38px;width:200px;cursor:pointer" style-hover="border-color:var(--brand)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--subtle)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-search"></use></svg><span style="font-size:13px;color:var(--subtle)">Search…</span></div>
+              <button style="width:38px;height:38px;border-radius:9px;border:1px solid var(--border);background:var(--surface);color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-bell"></use></svg><span style="position:absolute;top:7px;right:7px;width:7px;height:7px;border-radius:50%;background:var(--danger);border:1.5px solid var(--surface)"></span></button>
+              <div style="width:36px;height:36px;border-radius:50%;background:var(--brand);color:var(--brandfg);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">{{ meta.initials }}</div>
+            </div>
+          </header>
+        </sc-if>
+
+        <!-- HEADER STRIP for sidebar/rail -->
+        <sc-if value="{{ showStrip }}" hint-placeholder-val="{{ true }}">
+          <header style="height:62px;flex:none;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;padding:0 24px">
+            <div onClick="{{ onOpenSearch }}" style="display:flex;align-items:center;gap:9px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:0 13px;height:40px;width:320px;max-width:42%;cursor:pointer" style-hover="border-color:var(--brand)"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="var(--subtle)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-search"></use></svg><span style="font-size:13.5px;color:var(--subtle)">Search students, assistants, courses…</span></div>
+            <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
+              <button style="width:40px;height:40px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative" style-hover="background:var(--surface2)" data-comment-anchor="0d46346a42-button"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-bell"></use></svg><span style="position:absolute;top:7px;right:7px;width:16px;height:16px;border-radius:50%;background:var(--danger);color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;border:1.5px solid var(--surface)">{{ notif }}</span></button>
+              <div style="display:flex;align-items:center;gap:9px;padding-left:14px;border-left:1px solid var(--border)"><div style="width:36px;height:36px;border-radius:50%;background:var(--brand);color:var(--brandfg);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">{{ meta.initials }}</div><div style="line-height:1.2"><div style="font-size:13px;font-weight:600;color:var(--text)">{{ meta.person }}</div><div style="font-size:11.5px;color:var(--muted)">{{ meta.label }}</div></div></div>
+            </div>
+          </header>
+        </sc-if>
+
+        <div style="flex:1;overflow-y:auto;padding:26px 28px" data-comment-anchor="bd02861336-div">
+          <sc-if value="{{ isPageDashboard }}" hint-placeholder-val="{{ true }}"><dc-import name="DashboardBody" role="{{ role }}" theme="{{ theme }}" compact="{{ false }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageAssignments }}" hint-placeholder-val="{{ false }}"><dc-import name="AssignmentsBody" role="{{ role }}" compact="{{ bodyCompact }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageHeadAssign }}" hint-placeholder-val="{{ false }}"><dc-import name="HeadAssignBody" role="{{ role }}" compact="{{ false }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageAttendance }}" hint-placeholder-val="{{ false }}"><dc-import name="AttendanceBody" role="{{ role }}" compact="{{ false }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageOversight }}" hint-placeholder-val="{{ false }}"><dc-import name="OversightBody" role="{{ role }}" compact="{{ false }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageImport }}" hint-placeholder-val="{{ false }}"><dc-import name="ImportBody" role="{{ role }}" compact="{{ false }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageSalaryView }}" hint-placeholder-val="{{ false }}"><dc-import name="SalaryBody" role="{{ role }}" compact="{{ false }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageChat }}" hint-placeholder-val="{{ false }}"><dc-import name="ChatBody" role="{{ role }}" compact="{{ false }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageEval }}" hint-placeholder-val="{{ false }}"><dc-import name="EvalBody" role="{{ role }}" compact="{{ false }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageBranding }}" hint-placeholder-val="{{ false }}"><dc-import name="BrandingBody" role="{{ role }}" compact="{{ false }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPagePayroll }}" hint-placeholder-val="{{ false }}"><dc-import name="PayrollSettingsBody" role="{{ role }}" compact="{{ false }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageHeadStudents }}" hint-placeholder-val="{{ false }}"><dc-import name="StudentsBody" role="{{ role }}" compact="{{ bodyCompact }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageRegStudents }}" hint-placeholder-val="{{ false }}"><dc-import name="RegStudentsBody" role="{{ role }}" compact="{{ bodyCompact }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageRequests }}" hint-placeholder-val="{{ false }}"><dc-import name="RequestsBody" role="{{ role }}" compact="{{ bodyCompact }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageHiring }}" hint-placeholder-val="{{ false }}"><dc-import name="HiringBody" role="{{ role }}" compact="{{ bodyCompact }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageUsers }}" hint-placeholder-val="{{ false }}"><dc-import name="UsersBody" role="{{ role }}" compact="{{ bodyCompact }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageHeadAssistants }}" hint-placeholder-val="{{ false }}"><dc-import name="AssistantsBody" role="{{ role }}" compact="{{ false }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageTemplates }}" hint-placeholder-val="{{ false }}"><dc-import name="TemplatesBody" role="{{ role }}" compact="{{ false }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageInstallments }}" hint-placeholder-val="{{ false }}"><dc-import name="InstallmentsBody" role="{{ role }}" compact="{{ bodyCompact }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageCourses }}" hint-placeholder-val="{{ false }}"><dc-import name="CoursesBody" role="{{ role }}" compact="{{ bodyCompact }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageRegCourses }}" hint-placeholder-val="{{ false }}"><dc-import name="RegCoursesBody" role="{{ role }}" compact="{{ bodyCompact }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageOrgs }}" hint-placeholder-val="{{ false }}"><dc-import name="OrgsBody" role="{{ role }}" compact="{{ false }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPagePayments }}" hint-placeholder-val="{{ false }}"><dc-import name="PaymentsBody" role="{{ role }}" compact="{{ bodyCompact }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPageCategories }}" hint-placeholder-val="{{ false }}"><dc-import name="CategoriesBody" role="{{ role }}" compact="{{ bodyCompact }}" hint-size="100%,1px"></dc-import></sc-if>
+          <sc-if value="{{ isPagePlaceholder }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:70px 22px;gap:16px" data-comment-anchor="06b9d2bc00-div" data-comment-anchor="c5e78ef3a3-div"><div style="width:62px;height:62px;border-radius:16px;background:var(--surface2);color:var(--muted);display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ pageIcon }}"></use></svg></div><div><h2 style="margin:0 0 6px;font-size:20px;font-weight:600;color:var(--text);letter-spacing:-.01em">{{ pageLabel }}</h2><p style="margin:0;font-size:14px;color:var(--muted);max-width:360px;line-height:1.55">This section is part of the next design round — the navigation, shell and theming are wired and ready for it.</p></div></div></sc-if>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ORG-WIDE SEARCH OVERLAY -->
+  <sc-if value="{{ searchOpen }}" hint-placeholder-val="{{ false }}">
+    <dc-import name="SearchBody" compact="{{ isMobile }}" onClose="{{ onCloseSearch }}" hint-size="100%,100%"></dc-import>
+  </sc-if>
+  </sc-if>
+
+</div>
+</div></div></div></div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:960},&quot;brandName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;RadAMS&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;primaryColor&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#2563eb&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;corner&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Soft&quot;,&quot;Sharp&quot;],&quot;default&quot;:&quot;Soft&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = {
+    screen:'login', step:'phone', phone:'', otp:['','','','','',''], resendIn:30,
+    role:'head', theme:'light', nav:'sidebar', device:'desktop', page:'dashboard',
+    loginMethod:'phone', countryCode:'+44', email:'', searchOpen:false, moreOpen:false,
+  };
+
+  componentDidMount(){ this._t=setInterval(()=>{ if(this.state.screen==='login'&&this.state.step==='otp'&&this.state.resendIn>0) this.setState(s=>({resendIn:s.resendIn-1})); },1000); }
+  componentWillUnmount(){ clearInterval(this._t); }
+
+  tone(t){ const m={brand:['var(--brands)','var(--brand)'],ok:['var(--oks)','var(--ok)'],warn:['var(--warns)','var(--warn)'],danger:['var(--dangers)','var(--danger)'],info:['var(--infos)','var(--info)'],neutral:['var(--surface2)','var(--muted)']}; const [bg,fg]=m[t]||m.neutral; return {bg,fg}; }
+  badge(text,t,icon){ const {bg,fg}=this.tone(t); return {text,bg,fg,icon}; }
+
+  meta(){ return {
+    owner:{name:'Owner',label:'System Owner',person:'Daniel Okafor',initials:'DO',org:'RadAMS Platform',first:'Daniel'},
+    admin:{name:'Admin',label:'Org Administrator',person:'Sara Mensah',initials:'SM',org:'Cambridge Prep Center',first:'Sara'},
+    hr:{name:'HR',label:'Human Resources',person:'Lena Farouk',initials:'LF',org:'Cambridge Prep Center',first:'Lena'},
+    head:{name:'Head',label:'Course Head',person:'Marcus Bell',initials:'MB',org:'Cambridge Prep Center',first:'Marcus'},
+    assistant:{name:'Assistant',label:'Teaching Assistant',person:'Priya Nair',initials:'PN',org:'Cambridge Prep Center',first:'Priya'},
+    registration:{name:'Registration',label:'Registration Team',person:'Omar Haddad',initials:'OH',org:'Cambridge Prep Center',first:'Omar'},
+    finance:{name:'Finance',label:'Finance Team',person:'Grace Lim',initials:'GL',org:'Cambridge Prep Center',first:'Grace'},
+  }[this.state.role]; }
+
+  navDef(){ return {
+    owner:[['dashboard','Dashboard','dashboard'],['building','Organizations','orgs'],['users','Users','users'],['palette','Branding','branding'],['mail','Templates','templates'],['shield','System','system'],['message','Chat','chat']],
+    admin:[['dashboard','Dashboard','dashboard'],['grad','Students','students'],['users','Staff','staff'],['book','Courses','courses'],['wallet','Payroll','payroll'],['mail','Templates','templates'],['palette','Branding','branding'],['message','Chat','chat']],
+    hr:[['dashboard','Dashboard','dashboard'],['inbox','Requests','requests',7],['users','Staff','staff'],['user-plus','Hiring','hiring'],['message','Chat','chat']],
+    head:[['dashboard','Dashboard','dashboard'],['book','Courses','oversight'],['grad','Students','students'],['clipboard-list','Assignments','assignments'],['check2','Log entries','logentries'],['user-check','Assistants','assistants'],['cal-check','Attendance','attendance'],['chart','Evaluations','evaluations'],['wallet','My Pay','mypay'],['message','Chat','chat']],
+    assistant:[['dashboard','Dashboard','dashboard'],['grad','My Students','students'],['clipboard-list','Assignments','assignments',12],['cal-check','Attendance','attendance'],['wallet','My Pay','mypay'],['message','Chat','chat']],
+    registration:[['dashboard','Dashboard','dashboard'],['user-plus','Registrations','registrations'],['card','Installments','installments'],['cal-check','Attendance','attendance'],['file-up','Import','import'],['grad','Students','students'],['message','Chat','chat']],
+    finance:[['dashboard','Dashboard','dashboard'],['wallet','Salaries','salaries'],['card','Payments','payments'],['chart','Categories','categories'],['settings','Settings','payroll'],['message','Chat','chat']],
+  }[this.state.role]; }
+
+  navItems(){ const page=this.state.page; return this.navDef().map(([icon,label,key,badge])=>{ const active=key===page; return {icon,label,key,badge:badge||'',active,
+    color: active?'var(--brand)':'var(--muted)', bg: active?'var(--brands)':'transparent', weight: active?600:500 }; }); }
+
+  kpis(){ const k=(icon,value,label,tone,delta,dir)=>{ const {bg,fg}=this.tone(tone); const d=this.tone(dir==='up'?'ok':'danger'); return {icon,value,label,iconBg:bg,iconFg:fg,delta:delta||'',deltaIcon:dir==='up'?'arrow-up':'arrow-down',deltaColor:d.fg}; };
+    return {
+      owner:[k('building','12','Organizations','brand','+2','up'),k('users','318','Active users','neutral','+14','up'),k('clipboard-list','47','Active courses','neutral'),k('shield','Healthy','System status','ok')],
+      admin:[k('grad','842','Students','brand','+23','up'),k('users','36','Staff members','neutral','+1','up'),k('clipboard-list','18','Active courses','neutral'),k('alert','5','Pending tasks','warn')],
+      hr:[k('inbox','7','Pending requests','warn','+3','up'),k('users','36','Active staff','neutral'),k('user-plus','4','New this month','brand','+4','up'),k('clock','3','Awaiting review','warn')],
+      head:[k('clipboard-list','4','My courses','brand'),k('user-check','12','Assistants','neutral'),k('check2','184','Messages sent','ok','+38','up'),k('clock','57','Pending messages','warn')],
+      assistant:[k('grad','48','My students','brand'),k('clipboard-list','12','Pending logs','warn'),k('check','6','Logged today','ok','+6','up'),k('message','3','Unread','neutral')],
+      registration:[k('user-plus','23','New registrations','brand','+9','up'),k('clock','9','Pending review','warn'),k('file-up','120','Imported this week','neutral'),k('alert','4','Import errors','danger')],
+      finance:[k('wallet','$42,300','Payroll this month','brand'),k('card','28/36','Assistants paid','neutral'),k('clock','6','Pending approvals','warn'),k('trend','4','Bonuses issued','ok')],
+    }[this.state.role]; }
+
+  // ---- handlers ----
+  onRole=(e)=>this.setState({role:e.target.value, page:'dashboard'});
+  onPage=(e)=>this.setState({page:e.currentTarget.dataset.k});
+  onOpenMore=()=>this.setState({moreOpen:true});
+  onCloseMore=()=>this.setState({moreOpen:false});
+  onPageMore=(e)=>this.setState({page:e.currentTarget.dataset.k, moreOpen:false});
+  onOpenSearch=()=>this.setState({searchOpen:true});
+  onCloseSearch=()=>this.setState({searchOpen:false});
+  onMethod=(e)=>this.setState({loginMethod:e.currentTarget.dataset.v});
+  onCountry=(e)=>this.setState({countryCode:e.target.value});
+  onEmail=(e)=>this.setState({email:e.target.value});
+  onNav=(e)=>this.setState({nav:e.currentTarget.dataset.v});
+  onDevice=(e)=>this.setState({device:e.currentTarget.dataset.v});
+  onTheme=(e)=>this.setState({theme:e.currentTarget.dataset.v});
+  onLogout=()=>this.setState({screen:'login',step:'phone',otp:['','','','','','']});
+  onPhone=(e)=>this.setState({phone:e.target.value});
+  onAuthed=()=>this.setState({screen:'app'});
+  onSend=()=>{ const ok=this.state.loginMethod==='email' ? /^\S+@\S+\.\S+$/.test(this.state.email) : this.state.phone.replace(/\D/g,'').length>=6; if(ok) this.setState({step:'otp',resendIn:30}); };
+  onBack=()=>this.setState({step:'phone'});
+  onOtp=(e)=>{ const i=+e.target.dataset.i; const v=(e.target.value||'').replace(/\D/g,'').slice(-1); const otp=this.state.otp.slice(); otp[i]=v; this.setState({otp}); if(v&&i<5){ const pre=e.target.id.replace(/\d$/,''); const nx=document.getElementById(pre+(i+1)); if(nx) nx.focus(); } };
+  onOtpKey=(e)=>{ if(e.key==='Backspace'&&!e.target.value){ const i=+e.target.dataset.i; if(i>0){ const pre=e.target.id.replace(/\d$/,''); const pv=document.getElementById(pre+(i-1)); if(pv) pv.focus(); } } };
+  onVerify=()=>{ if(this.state.otp.every(d=>d!=='')) this.setState({screen:'app'}); };
+
+  renderVals(){
+    const s=this.state, m=this.meta();
+    const isMobile=s.device==='mobile';
+    const isLogin=s.screen==='login', isApp=s.screen==='app';
+    const navMode = isMobile?'mobile':s.nav;
+    const phoneClean=s.phone.replace(/\D/g,'');
+    const isPhoneMethod=s.loginMethod==='phone', isEmailMethod=s.loginMethod==='email';
+    const emailOk=/^\S+@\S+\.\S+$/.test(s.email);
+    const sendOk = isEmailMethod ? emailOk : phoneClean.length>=6;
+    const contactDisplay = isEmailMethod ? (s.email||'you@example.com') : (s.countryCode+' '+(s.phone||'7700 900000'));
+    const verifyOk=s.otp.every(d=>d!=='');
+    const opt=(label,value,cur,extra={})=>({label,value,active:value===cur,bg:value===cur?'#27324c':'transparent',fg:value===cur?'#fff':'#8b97a8',...extra});
+    const navItems=this.navItems();
+    const active=navItems.find(n=>n.active)||navItems[0];
+    const pageLabel=active?active.label:'Dashboard', pageIcon=active?active.icon:'dashboard';
+    const isPageDashboard=s.page==='dashboard';
+    const isPageAssignments=(s.page==='assignments'&&s.role==='assistant')||(s.page==='logentries'&&s.role==='head');
+    const isPageHeadAssign=s.page==='assignments'&&s.role==='head';
+    const isPageAttendance=s.page==='attendance'&&(s.role==='registration'||s.role==='head'||s.role==='assistant');
+    const isPageOversight=s.page==='oversight'&&s.role==='head';
+    const isPageImport=s.page==='import'&&s.role==='registration';
+    const isPageSalaryView=(s.page==='salaries'&&s.role==='finance')||(s.page==='mypay'&&(s.role==='assistant'||s.role==='head'));
+    const isPagePayroll=s.page==='payroll'&&(s.role==='finance'||s.role==='admin');
+    const isPageRegStudents=s.page==='students'&&s.role==='registration';
+    const isPageHeadStudents=(s.page==='students'&&s.role==='head')||(s.page==='students'&&s.role==='admin')||(s.page==='students'&&s.role==='assistant');
+    const isPageUsers=(s.page==='users'&&s.role==='owner')||(s.page==='staff'&&s.role==='admin')||(s.page==='staff'&&s.role==='hr');
+    const isPageHiring=s.page==='hiring'&&s.role==='hr';
+    const isPageRequests=s.page==='requests'&&s.role==='hr';
+    const isPageHeadAssistants=s.page==='assistants'&&s.role==='head';
+    const isPageTemplates=s.page==='templates'&&(s.role==='owner'||s.role==='admin');
+    const isPageInstallments=s.page==='installments'&&s.role==='registration';
+    const isPageCourses=s.page==='courses'&&s.role==='admin';
+    const isPageRegCourses=s.page==='regcourses'&&s.role==='registration'||(s.page==='registrations'&&s.role==='registration');
+    const isPageOrgs=s.page==='orgs'&&s.role==='owner';
+    const isPagePayments=s.page==='payments'&&s.role==='finance';
+    const isPageCategories=s.page==='categories'&&s.role==='finance';
+    const isPageChat=s.page==='chat';
+    const isPageEval=s.page==='evaluations'&&s.role==='head';
+    const isPageBranding=s.page==='branding'&&(s.role==='owner'||s.role==='admin');
+    const isPagePlaceholder=!isPageDashboard&&!isPageAssignments&&!isPageHeadAssign&&!isPageAttendance&&!isPageOversight&&!isPageImport&&!isPageSalaryView&&!isPagePayroll&&!isPageHeadStudents&&!isPageRegStudents&&!isPageUsers&&!isPageRequests&&!isPageHiring&&!isPageHeadAssistants&&!isPageTemplates&&!isPageInstallments&&!isPageCourses&&!isPageRegCourses&&!isPageOrgs&&!isPagePayments&&!isPageCategories&&!isPageChat&&!isPageEval&&!isPageBranding;
+    const navMobile=navItems.map(n=>({icon:n.icon,label:n.label,key:n.key,active:n.active,color:n.active?'var(--brand)':'var(--subtle)', cardBg:n.active?'var(--brands)':'var(--surface2)', cardBd:n.active?'var(--brand)':'var(--border)'}));
+    const navPrimary=navMobile.slice(0,4);
+    const moreItems=navMobile.slice(4);
+    const moreActive=moreItems.some(n=>n.active);
+
+    // theme overrides
+    const dark = s.theme==='dark';
+    const themeVars = dark ? {
+      '--bg':'#0a0e16','--surface':'#111824','--surface2':'#19212f','--border':'#232d3d','--border2':'#1b2431',
+      '--text':'#e9eef5','--muted':'#9aa6b5','--subtle':'#5d6878','--brands':'#15233c','--brandfg':'#ffffff',
+      '--ok':'#4ade80','--oks':'#10301d','--warn':'#fbbf24','--warns':'#2c2410','--danger':'#f87171','--dangers':'#311616',
+      '--info':'#60a5fa','--infos':'#13233d','--neutral':'#9aa6b5','--workspace':'#05080d',
+      '--shadow':'0 1px 2px rgba(0,0,0,.35)'
+    } : {};
+
+    return {
+      // chrome
+      role:s.role, theme:s.theme, isLogin, isApp, isMobile, isDesktopish:!isMobile,
+      navOpts:[opt('Sidebar','sidebar',s.nav),opt('Icon rail','rail',s.nav)],
+      deviceOpts:[opt('Desktop','desktop',s.device),opt('Tablet','tablet',s.device),opt('Mobile','mobile',s.device)],
+      themeOpts:[{...opt('','light',s.theme),icon:'sun'},{...opt('','dark',s.theme),icon:'moon'}],
+      onRole:this.onRole,onNav:this.onNav,onDevice:this.onDevice,onTheme:this.onTheme,onLogout:this.onLogout,
+      themeVars,
+      brandVars: (()=>{ const c=this.props.primaryColor ?? '#2563eb'; return {'--brand':c,'--brandh':`color-mix(in srgb, ${c} 84%, black)`,'--brands':`color-mix(in srgb, ${c} 9%, var(--surface))`,'--info':c,'--infos':`color-mix(in srgb, ${c} 8%, var(--surface))`}; })(),
+      cornerVars: (this.props.corner==='Sharp') ? {'--rad':'6px','--rad-sm':'5px'} : {},
+      // login
+      isPhoneStep:s.step==='phone', isOtpStep:s.step==='otp', onAuthed:this.onAuthed,
+      phone:s.phone, phoneDisplay:contactDisplay,
+      isPhoneMethod, isEmailMethod, countryCode:s.countryCode, email:s.email, onMethod:this.onMethod, onCountry:this.onCountry, onEmail:this.onEmail,
+      phoneTabBg:isPhoneMethod?'var(--surface)':'transparent', phoneTabFg:isPhoneMethod?'var(--text)':'var(--muted)', phoneTabSh:isPhoneMethod?'var(--shadow)':'none',
+      emailTabBg:isEmailMethod?'var(--surface)':'transparent', emailTabFg:isEmailMethod?'var(--text)':'var(--muted)', emailTabSh:isEmailMethod?'var(--shadow)':'none',
+      otpDigits:s.otp.map((v,i)=>({i,v})),
+      onPhone:this.onPhone,onSend:this.onSend,onBack:this.onBack,onOtp:this.onOtp,onOtpKey:this.onOtpKey,onVerify:this.onVerify,
+      sendDisabled:!sendOk, sendBg:sendOk?'var(--brand)':'var(--subtle)', sendCursor:sendOk?'pointer':'not-allowed',
+      verifyDisabled:!verifyOk, verifyBg:verifyOk?'var(--brand)':'var(--subtle)', verifyCursor:verifyOk?'pointer':'not-allowed',
+      resendIn:s.resendIn,
+      // shell
+      meta:m, logoLetter:'R', brandName: this.props.brandName ?? 'RadAMS',
+      pageTitle:pageLabel, notif:String(this.state.role==='hr'?7:3),
+      page:s.page, isPageDashboard, isPageAssignments, isPageHeadAssign, isPageAttendance, isPageOversight, isPageImport, isPageSalaryView, isPagePayroll, isPageHeadStudents, isPageRegStudents, isPageUsers, isPageRequests, isPageHiring, isPageHeadAssistants, isPageTemplates, isPageInstallments, isPageCourses, isPageRegCourses, isPageOrgs, isPagePayments, isPageCategories, isPageChat, isPageEval, isPageBranding, isPagePlaceholder, pageLabel, pageIcon, onPage:this.onPage,
+      searchOpen:s.searchOpen, onOpenSearch:this.onOpenSearch, onCloseSearch:this.onCloseSearch,
+      frameW: s.device==='tablet'?'768px':'min(1320px, 100%)', bodyCompact: isMobile || s.device==='tablet',
+      shellDir: (navMode==='topbar')?'flex-direction:column':'flex-direction:row',
+      isSidebar:navMode==='sidebar', isTopbar:navMode==='topbar', isRail:navMode==='rail',
+      isSideNav: navMode==='sidebar'||navMode==='rail',
+      sideW: navMode==='rail'?'74px':'248px',
+      labelOpacity: navMode==='rail'?'0':'1',
+      toggleTarget: navMode==='rail'?'sidebar':'rail',
+      toggleIcon: navMode==='rail'?'cr':'chev-left',
+      toggleTitle: navMode==='rail'?'Expand sidebar':'Collapse sidebar',
+      showStrip: navMode==='sidebar'||navMode==='rail',
+      navItems, navMobile, navPrimary,
+      hasMore: moreItems.length>0, moreActive, moreColor: moreActive?'var(--brand)':'var(--subtle)',
+      moreOpen: s.moreOpen, onOpenMore: this.onOpenMore, onCloseMore: this.onCloseMore, onPageMore: this.onPageMore,
+    };
+  }
+}
+</script>
+</body>
+</html>
