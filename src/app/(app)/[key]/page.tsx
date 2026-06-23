@@ -3,6 +3,7 @@ import { getCurrentProfile } from "@/lib/current-profile";
 import { findNavItem } from "@/lib/roles";
 import { Icon } from "@/components/icons";
 import { DashboardContent } from "@/components/dashboard/dashboard-content";
+import { AssignmentsContent } from "@/components/assignments/assignments-content";
 
 export default async function AppPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
@@ -12,6 +13,10 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
   if (key === "dashboard") {
     const firstName = profile.fullName.split(" ")[0];
     return <DashboardContent role={profile.role} orgName={profile.org?.name ?? null} firstName={firstName} />;
+  }
+
+  if (key === "assignments" && (profile.role === "head" || profile.role === "assistant")) {
+    return <AssignmentsContent role={profile.role} />;
   }
 
   const item = findNavItem(profile.role, key);
