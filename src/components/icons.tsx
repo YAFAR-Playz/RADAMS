@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -101,11 +102,13 @@ export function Icon({
   name,
   size = 18,
   className,
+  style,
 }: {
   name: IconName;
   size?: number;
   className?: string;
+  style?: CSSProperties;
 }) {
   const Cmp = ICONS[name];
-  return <Cmp size={size} strokeWidth={2} className={className} />;
+  return <Cmp size={size} strokeWidth={2} className={className} style={style} />;
 }
