@@ -9,6 +9,7 @@ import { HeadAssignmentsContent } from "@/components/head-assignments/head-assig
 import { StudentsContent } from "@/components/students/students-content";
 import { AttendanceContent } from "@/components/attendance/attendance-content";
 import { MyPayContent } from "@/components/pay/my-pay-content";
+import { AssistantsContent } from "@/components/assistants/assistants-content";
 
 export default async function AppPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
@@ -42,6 +43,10 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
 
   if (key === "mypay" && (profile.role === "head" || profile.role === "assistant")) {
     return <MyPayContent />;
+  }
+
+  if (key === "assistants" && profile.role === "head") {
+    return <AssistantsContent />;
   }
 
   const item = findNavItem(profile.role, key);
