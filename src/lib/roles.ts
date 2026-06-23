@@ -58,7 +58,6 @@ const NAV_DEF: Record<Role, NavItem[]> = {
     { icon: "book", label: "Courses", key: "oversight" },
     { icon: "grad", label: "Students", key: "students" },
     { icon: "clipboard-list", label: "Assignments", key: "assignments" },
-    { icon: "check2", label: "Log entries", key: "logentries" },
     { icon: "user-check", label: "Assistants", key: "assistants" },
     { icon: "cal-check", label: "Attendance", key: "attendance" },
     { icon: "chart", label: "Evaluations", key: "evaluations" },

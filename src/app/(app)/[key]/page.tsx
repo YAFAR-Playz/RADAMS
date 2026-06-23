@@ -5,6 +5,7 @@ import { Icon } from "@/components/icons";
 import { DashboardContent } from "@/components/dashboard/dashboard-content";
 import { AssignmentsContent } from "@/components/assignments/assignments-content";
 import { OversightContent } from "@/components/oversight/oversight-content";
+import { HeadAssignmentsContent } from "@/components/head-assignments/head-assignments-content";
 
 export default async function AppPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
@@ -16,8 +17,12 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
     return <DashboardContent role={profile.role} orgName={profile.org?.name ?? null} firstName={firstName} />;
   }
 
-  if (key === "assignments" && (profile.role === "head" || profile.role === "assistant")) {
-    return <AssignmentsContent role={profile.role} />;
+  if (key === "assignments" && profile.role === "head") {
+    return <HeadAssignmentsContent />;
+  }
+
+  if (key === "assignments" && profile.role === "assistant") {
+    return <AssignmentsContent />;
   }
 
   if (key === "oversight" && profile.role === "head") {

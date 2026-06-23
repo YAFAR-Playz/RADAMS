@@ -1,12 +1,12 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Icon, type IconName } from "@/components/icons";
+import { SkeletonRow } from "@/components/ui/spinner";
 import { toneColors } from "@/lib/tone";
-import { mockKpisForRole, type Role, type Tone } from "@/lib/roles";
+import { mockKpisForRole, type Kpi, type Role, type Tone } from "@/lib/roles";
 import {
-  HEAD_OFFERINGS,
-  HEAD_ASSISTANTS,
-  HEAD_STATUS_BREAKDOWN,
-  PENDING_STUDENTS,
-  MY_OFFERINGS,
   SALARY_ROWS,
   PAY_METHODS,
   ASSISTANT_REQUESTS,
@@ -19,6 +19,14 @@ import {
   greetingFor,
   dateLabel,
 } from "@/lib/dashboard-data";
+import {
+  getAdminDashboard,
+  getAssistantDashboard,
+  getHeadDashboard,
+  type AdminDashboard,
+  type AssistantDashboard,
+  type HeadDashboard,
+} from "@/lib/actions/dashboard";
 
 function Badge({ text, tone, icon }: { text: string; tone: Tone; icon?: IconName }) {
   const { bg, fg } = toneColors(tone);
@@ -51,7 +59,7 @@ function Avatar({ initials, tone = "brand" }: { initials: string; tone?: "brand"
 function ProgressBar({ pct, color }: { pct: number; color: string }) {
   return (
     <div className="h-[6px] overflow-hidden rounded-full bg-[var(--surface2)]">
-      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
+      <div className="h-full rounded-full transition-[width]" style={{ width: `${pct}%`, background: color }} />
     </div>
   );
 }
@@ -81,17 +89,38 @@ function Card({
   );
 }
 
-function ViewAllButton({ children = "View all" }: { children?: string }) {
+function ViewAllButton({ children = "View all", href }: { children?: string; href?: string }) {
+  const className = "flex flex-none items-center gap-1 whitespace-nowrap bg-none text-[12.5px] font-semibold text-[var(--brand)]";
+  if (href) {
+    return (
+      <Link href={href} className={className}>
+        {children}
+        <Icon name="cr" size={14} />
+      </Link>
+    );
+  }
   return (
-    <button className="flex flex-none items-center gap-1 whitespace-nowrap bg-none text-[12.5px] font-semibold text-[var(--brand)]">
+    <button className={className}>
       {children}
       <Icon name="cr" size={14} />
     </button>
   );
 }
 
-function KpiRow({ role }: { role: Role }) {
-  const kpis = mockKpisForRole(role);
+function EmptyRow({ children }: { children: React.ReactNode }) {
+  return <div className="p-[28px_18px] text-center text-[13px] text-[var(--muted)]">{children}</div>;
+}
+
+function KpiRow({ kpis }: { kpis: Kpi[] | null }) {
+  if (!kpis) {
+    return (
+      <div className="grid grid-cols-2 gap-[14px] lg:grid-cols-4">
+        {Array.from({ length: 4 }, (_, i) => (
+          <SkeletonRow key={i} className="h-[92px]" />
+        ))}
+      </div>
+    );
+  }
   return (
     <div className="grid grid-cols-2 gap-[14px] lg:grid-cols-4">
       {kpis.map((k) => {
@@ -133,92 +162,138 @@ function KpiRow({ role }: { role: Role }) {
   );
 }
 
-function HeadPanels() {
+function PanelSkeleton() {
   return (
     <>
-      <Card title="Assistant message completion" subtitle="Physics · June · Unit 1 — Paper 3 messages sent vs pending" action={<ViewAllButton />}>
-        <div className="px-2 py-[7px]">
-          {HEAD_ASSISTANTS.map((a) => (
-            <div key={a.name} className="flex items-center gap-3 rounded-[10px] p-[10px_11px] hover:bg-[var(--surface2)]">
-              <Avatar initials={a.initials} />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[13.5px] font-semibold text-[var(--text)]">{a.name}</span>
-                  <span className="text-[12px] font-medium text-[var(--muted)]">
-                    {a.sent}/{a.total}
-                  </span>
-                </div>
-                <div className="mt-[7px]">
-                  <ProgressBar pct={a.pct} color={toneColors(a.badge.tone).fg} />
-                </div>
-              </div>
-              <Badge text={a.badge.text} tone={a.badge.tone} icon={a.badge.icon} />
-            </div>
+      <section className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] p-[18px]">
+        <div className="flex flex-col gap-3">
+          {Array.from({ length: 4 }, (_, i) => (
+            <SkeletonRow key={i} className="h-[48px]" />
           ))}
+        </div>
+      </section>
+      <section className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] p-[18px]">
+        <div className="flex flex-col gap-3">
+          {Array.from({ length: 3 }, (_, i) => (
+            <SkeletonRow key={i} className="h-[48px]" />
+          ))}
+        </div>
+      </section>
+    </>
+  );
+}
+
+function HeadPanels({ data }: { data: HeadDashboard }) {
+  return (
+    <>
+      <Card
+        title="Assistant message completion"
+        subtitle={data.offeringLabel ? `${data.offeringLabel} — messages sent vs pending` : "No course assigned yet"}
+        action={<ViewAllButton href="/oversight" />}
+      >
+        <div className="px-2 py-[7px]">
+          {data.assistants.length === 0 ? (
+            <EmptyRow>No assistants on this course yet.</EmptyRow>
+          ) : (
+            data.assistants.map((a) => (
+              <div key={a.id} className="flex items-center gap-3 rounded-[10px] p-[10px_11px] hover:bg-[var(--surface2)]">
+                <Avatar initials={a.initials} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[13.5px] font-semibold text-[var(--text)]">{a.name}</span>
+                    <span className="text-[12px] font-medium text-[var(--muted)]">
+                      {a.sent}/{a.total}
+                    </span>
+                  </div>
+                  <div className="mt-[7px]">
+                    <ProgressBar pct={a.pct} color={toneColors(a.badge.tone).fg} />
+                  </div>
+                </div>
+                <Badge text={a.badge.text} tone={a.badge.tone} icon={a.badge.icon} />
+              </div>
+            ))
+          )}
         </div>
       </Card>
       <Card title="Course completion">
         <div className="p-[18px]">
           <div className="mb-[6px] flex items-end gap-2">
-            <span className="text-[34px] font-bold leading-none tracking-[-0.02em] text-[var(--text)]">76%</span>
-            <span className="mb-[6px] text-[12.5px] font-semibold text-[var(--ok)]">on schedule</span>
+            <span className="text-[34px] font-bold leading-none tracking-[-0.02em] text-[var(--text)]">
+              {data.completionPct}%
+            </span>
+            <span className="mb-[6px] text-[12.5px] font-semibold text-[var(--ok)]">across your courses</span>
           </div>
           <div className="mb-[18px] h-2 overflow-hidden rounded-full bg-[var(--surface2)]">
-            <div className="h-full w-[76%] rounded-full bg-[var(--brand)]" />
+            <div className="h-full rounded-full bg-[var(--brand)] transition-[width]" style={{ width: `${data.completionPct}%` }} />
           </div>
-          {HEAD_STATUS_BREAKDOWN.map((b) => (
-            <div key={b.label} className="flex items-center gap-[9px] py-[7px]">
-              <span className="h-[9px] w-[9px] rounded-full" style={{ background: toneColors(b.tone).fg }} />
-              <span className="flex-1 text-[13px] text-[var(--muted)]">{b.label}</span>
-              <span className="text-[13px] font-bold text-[var(--text)]">{b.count}</span>
-            </div>
-          ))}
+          {data.statusBreakdown.length === 0 ? (
+            <EmptyRow>No course offerings yet.</EmptyRow>
+          ) : (
+            data.statusBreakdown.map((b) => (
+              <div key={b.label} className="flex items-center gap-[9px] py-[7px]">
+                <span className="h-[9px] w-[9px] rounded-full" style={{ background: toneColors(b.tone).fg }} />
+                <span className="flex-1 text-[13px] text-[var(--muted)]">{b.label}</span>
+                <span className="text-[13px] font-bold text-[var(--text)]">{b.count}</span>
+              </div>
+            ))
+          )}
         </div>
       </Card>
     </>
   );
 }
 
-function AssistantPanels() {
+function AssistantPanels({ data }: { data: AssistantDashboard }) {
   return (
     <>
       <Card
         title="Pending assignments today"
-        subtitle="12 students awaiting an assignment status"
+        subtitle={`${data.pendingStudents.length ? data.pendingStudents.length + "+" : "0"} students awaiting an assignment status`}
         action={
-          <button className="flex flex-none items-center gap-[6px] whitespace-nowrap rounded-[var(--rad-sm)] bg-[var(--brand)] px-[13px] py-2 text-[12.5px] font-semibold text-[var(--brandfg)]">
+          <Link
+            href="/assignments"
+            className="flex flex-none items-center gap-[6px] whitespace-nowrap rounded-[var(--rad-sm)] bg-[var(--brand)] px-[13px] py-2 text-[12.5px] font-semibold text-[var(--brandfg)]"
+          >
             <Icon name="clipboard-list" size={15} />
             Open assignments
-          </button>
+          </Link>
         }
       >
         <div className="px-2 py-[7px]">
-          {PENDING_STUDENTS.map((p) => (
-            <div key={p.name} className="flex items-center gap-3 rounded-[10px] p-[10px_11px] hover:bg-[var(--surface2)]">
-              <Avatar initials={p.initials} tone="neutral" />
-              <div className="min-w-0 flex-1">
-                <div className="text-[13.5px] font-semibold text-[var(--text)]">{p.name}</div>
-                <div className="text-[12px] text-[var(--subtle)]">{p.offering}</div>
+          {data.pendingStudents.length === 0 ? (
+            <EmptyRow>Nothing pending — you&apos;re all caught up.</EmptyRow>
+          ) : (
+            data.pendingStudents.map((p) => (
+              <div key={p.name + p.offering} className="flex items-center gap-3 rounded-[10px] p-[10px_11px] hover:bg-[var(--surface2)]">
+                <Avatar initials={p.initials} tone="neutral" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13.5px] font-semibold text-[var(--text)]">{p.name}</div>
+                  <div className="text-[12px] text-[var(--subtle)]">{p.offering}</div>
+                </div>
+                <Badge text={p.badge.text} tone={p.badge.tone} icon={p.badge.icon} />
               </div>
-              <Badge text={p.badge.text} tone={p.badge.tone} icon={p.badge.icon} />
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </Card>
       <Card title="My courses">
         <div className="px-2 py-[7px]">
-          {MY_OFFERINGS.map((o) => (
-            <div key={o.label} className="flex items-center gap-[11px] p-[11px]">
-              <div className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[9px] bg-[var(--brands)] text-[var(--brand)]">
-                <Icon name="grad" size={17} />
+          {data.myOfferings.length === 0 ? (
+            <EmptyRow>No courses assigned yet.</EmptyRow>
+          ) : (
+            data.myOfferings.map((o) => (
+              <div key={o.id} className="flex items-center gap-[11px] p-[11px]">
+                <div className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[9px] bg-[var(--brands)] text-[var(--brand)]">
+                  <Icon name="grad" size={17} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-semibold text-[var(--text)]">{o.label}</div>
+                  <div className="text-[11.5px] text-[var(--subtle)]">{o.students} students</div>
+                </div>
+                <span className="text-[12.5px] font-bold text-[var(--text)]">{o.pending}</span>
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-[13px] font-semibold text-[var(--text)]">{o.label}</div>
-                <div className="text-[11.5px] text-[var(--subtle)]">{o.count} students</div>
-              </div>
-              <span className="text-[12.5px] font-bold text-[var(--text)]">{o.pending}</span>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </Card>
     </>
@@ -228,7 +303,7 @@ function AssistantPanels() {
 function FinancePanels() {
   return (
     <>
-      <Card title="Salary overview" action={<ViewAllButton>View payroll</ViewAllButton>}>
+      <Card title="Salary overview" action={<ViewAllButton href="/salaries">View payroll</ViewAllButton>}>
         <div className="px-2 py-[7px]">
           {SALARY_ROWS.map((r) => (
             <div key={r.name} className="flex items-center gap-3 rounded-[10px] p-[10px_11px] hover:bg-[var(--surface2)]">
@@ -349,7 +424,7 @@ function ActivityCard() {
 function OwnerPanels() {
   return (
     <>
-      <Card title="Organizations" action={<ViewAllButton>Manage</ViewAllButton>}>
+      <Card title="Organizations" action={<ViewAllButton href="/orgs">Manage</ViewAllButton>}>
         <div className="px-2 py-[7px]">
           {ORGS.map((o) => (
             <div key={o.name} className="flex items-center gap-3 rounded-[10px] p-[11px] hover:bg-[var(--surface2)]">
@@ -372,11 +447,48 @@ function OwnerPanels() {
   );
 }
 
-function AdminPanels() {
+function AdminPanels({ data }: { data: AdminDashboard }) {
   return (
     <>
-      <ActivityCard />
-      <StaffByRoleCard />
+      <Card title="Offerings overview" action={<ViewAllButton href="/courses">Manage</ViewAllButton>}>
+        <div className="px-2 py-[7px]">
+          {data.offerings.length === 0 ? (
+            <EmptyRow>No course offerings yet.</EmptyRow>
+          ) : (
+            data.offerings.map((o) => (
+              <div key={o.id} className="flex items-center gap-3 rounded-[10px] p-[11px] hover:bg-[var(--surface2)]">
+                <div className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] bg-[var(--surface2)] text-[var(--muted)]">
+                  <Icon name="book" size={18} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13.5px] font-semibold text-[var(--text)]">{o.label}</div>
+                  <div className="text-[12px] text-[var(--subtle)]">{o.students} students</div>
+                </div>
+                <span className="text-[12.5px] font-bold text-[var(--text)]">{o.pending}</span>
+              </div>
+            ))
+          )}
+        </div>
+      </Card>
+      <Card title="Staff by role">
+        <div className="p-[18px]">
+          {data.staffByRole.length === 0 ? (
+            <EmptyRow>No staff yet.</EmptyRow>
+          ) : (
+            data.staffByRole.map((s) => (
+              <div key={s.label} className="mb-[14px] last:mb-0">
+                <div className="mb-[6px] flex justify-between">
+                  <span className="text-[13px] font-medium text-[var(--text)]">{s.label}</span>
+                  <span className="text-[13px] font-semibold text-[var(--muted)]">{s.n}</span>
+                </div>
+                <div className="h-[7px] overflow-hidden rounded-full bg-[var(--surface2)]">
+                  <div className="h-full rounded-full bg-[var(--brand)] transition-[width]" style={{ width: `${s.barWPct}%` }} />
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </Card>
     </>
   );
 }
@@ -387,10 +499,13 @@ function RegistrationPanels() {
       <Card
         title="Registration queue"
         action={
-          <button className="flex flex-none items-center gap-[6px] whitespace-nowrap rounded-[var(--rad-sm)] bg-[var(--brand)] px-[13px] py-2 text-[12.5px] font-semibold text-[var(--brandfg)]">
+          <Link
+            href="/import"
+            className="flex flex-none items-center gap-[6px] whitespace-nowrap rounded-[var(--rad-sm)] bg-[var(--brand)] px-[13px] py-2 text-[12.5px] font-semibold text-[var(--brandfg)]"
+          >
             <Icon name="file-up" size={15} />
             Import
-          </button>
+          </Link>
         }
       >
         <div className="px-2 py-[7px]">
@@ -429,15 +544,7 @@ function RegistrationPanels() {
   );
 }
 
-const PANELS: Record<Role, () => React.ReactElement> = {
-  head: HeadPanels,
-  assistant: AssistantPanels,
-  finance: FinancePanels,
-  hr: HrPanels,
-  owner: OwnerPanels,
-  admin: AdminPanels,
-  registration: RegistrationPanels,
-};
+const MOCK_DASHBOARD_ROLES = new Set<Role>(["finance", "hr", "owner", "registration"]);
 
 export function DashboardContent({
   role,
@@ -448,7 +555,34 @@ export function DashboardContent({
   orgName: string | null;
   firstName: string;
 }) {
-  const Panels = PANELS[role];
+  const isMock = MOCK_DASHBOARD_ROLES.has(role);
+
+  const [adminData, setAdminData] = useState<AdminDashboard | null>(null);
+  const [assistantData, setAssistantData] = useState<AssistantDashboard | null>(null);
+  const [headData, setHeadData] = useState<HeadDashboard | null>(null);
+  const [loading, setLoading] = useState(!isMock);
+
+  useEffect(() => {
+    (async () => {
+      if (isMock) return;
+      setLoading(true);
+      if (role === "admin") setAdminData(await getAdminDashboard());
+      else if (role === "assistant") setAssistantData(await getAssistantDashboard());
+      else if (role === "head") setHeadData(await getHeadDashboard());
+      setLoading(false);
+    })();
+  }, [role, isMock]);
+
+  const kpis: Kpi[] | null = isMock
+    ? mockKpisForRole(role)
+    : role === "admin"
+      ? adminData?.kpis ?? null
+      : role === "assistant"
+        ? assistantData?.kpis ?? null
+        : role === "head"
+          ? headData?.kpis ?? null
+          : null;
+
   return (
     <div className="flex flex-col">
       <div className="mb-[18px]">
@@ -461,30 +595,16 @@ export function DashboardContent({
         <p className="m-0 text-[14px] text-[var(--muted)]">{dashboardSubtitle(role, orgName)}</p>
       </div>
 
-      {role === "head" && (
-        <div className="mb-[18px] flex flex-wrap items-center gap-[9px]">
-          <span className="mr-[2px] flex-none text-[12.5px] font-semibold text-[var(--muted)]">Course</span>
-          {HEAD_OFFERINGS.map((o) => (
-            <span
-              key={o.label}
-              className="flex flex-none items-center gap-[7px] rounded-full border px-[14px] py-2 text-[13px] font-semibold"
-              style={
-                o.active
-                  ? { borderColor: "var(--brand)", background: "var(--brand)", color: "var(--brandfg)" }
-                  : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
-              }
-            >
-              <span className="h-[7px] w-[7px] rounded-full" style={{ background: o.active ? "var(--brandfg)" : "var(--subtle)" }} />
-              {o.label}
-            </span>
-          ))}
-        </div>
-      )}
-
-      <KpiRow role={role} />
+      <KpiRow kpis={kpis} />
 
       <div className="mt-[18px] grid items-start gap-4 lg:grid-cols-[1.7fr_1fr]">
-        <Panels />
+        {role === "owner" && <OwnerPanels />}
+        {role === "admin" && (loading || !adminData ? <PanelSkeleton /> : <AdminPanels data={adminData} />)}
+        {role === "hr" && <HrPanels />}
+        {role === "head" && (loading || !headData ? <PanelSkeleton /> : <HeadPanels data={headData} />)}
+        {role === "assistant" && (loading || !assistantData ? <PanelSkeleton /> : <AssistantPanels data={assistantData} />)}
+        {role === "registration" && <RegistrationPanels />}
+        {role === "finance" && <FinancePanels />}
       </div>
     </div>
   );
