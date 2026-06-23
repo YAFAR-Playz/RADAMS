@@ -26,6 +26,7 @@ type EditDraft = {
 export function StudentsContent({ role }: { role: Role }) {
   const isAdmin = role === "admin";
   const isAssistant = role === "assistant";
+  const useDropdown = role === "admin" || role === "registration";
   const canEdit = !isAssistant;
 
   const [offerings, setOfferings] = useState<OfferingOption[] | null>(null);
@@ -178,11 +179,11 @@ export function StudentsContent({ role }: { role: Role }) {
       {/* HEADER */}
       <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
         <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">
-          {isAdmin ? "Admin · Students" : isAssistant ? "My students" : "Students"}
+          {isAdmin ? "Admin · Students" : role === "registration" ? "Registration · Students" : isAssistant ? "My students" : "Students"}
         </div>
         <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Student progress</h1>
         <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">
-          {isAdmin
+          {isAdmin || role === "registration"
             ? "Every student org-wide — progress across assignments, contact details. Reassign or edit as needed."
             : isAssistant
               ? "Your assigned students — performance to date and contact details."
@@ -197,7 +198,7 @@ export function StudentsContent({ role }: { role: Role }) {
               <SkeletonRow className="h-[36px] w-[130px]" />
             </>
           ) : offerings && offerings.length ? (
-            isAdmin ? (
+            useDropdown ? (
               <select
                 value={offeringId ?? ""}
                 onChange={(e) => setOfferingId(e.target.value)}
