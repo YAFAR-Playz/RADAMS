@@ -1,26 +1,32 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { Icon } from "@/components/icons";
+import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { toneColors } from "@/lib/tone";
 import type { Role } from "@/lib/roles";
+import { STATUS_DEFS, statusDef, type AssignmentStatus } from "@/lib/assignments-data";
 import {
-  STATUS_DEFS,
-  statusDef,
-  mockAssignmentStudents,
-  COURSE_OFFERINGS,
-  type AssignmentStatus,
-  type AssignmentStudent,
-} from "@/lib/assignments-data";
+  listMyOfferings,
+  listAssignmentsForOffering,
+  getRoster,
+  setStatus,
+  setGrade,
+  setComment,
+  markSent,
+  type OfferingOption,
+  type AssignmentOption,
+  type RosterStudent,
+} from "@/lib/actions/assignments";
 
 const PAGE_SIZE = 10;
 
-function buildMessage(student: AssignmentStudent) {
+function buildMessage(student: RosterStudent, assignmentTitle: string, offeringLabel: string) {
   const def = statusDef(student.status);
   const lines = [
-    "Assalamu alaikum, this is RadAMS — Physics (June · Unit 1).",
+    `Assalamu alaikum, this is RadAMS — ${offeringLabel}.`,
     "",
-    `Update for ${student.name} on "Paper 3 — Mechanics":`,
+    `Update for ${student.name} on "${assignmentTitle}":`,
     `Status: ${def ? def.label : "Not yet logged"}`,
   ];
   if (student.grade) lines.push(`Grade: ${student.grade}/100`);
@@ -34,8 +40,8 @@ function StatusSelect({
   onChange,
   size = "sm",
 }: {
-  student: AssignmentStudent;
-  onChange: (id: number, status: AssignmentStatus | "") => void;
+  student: RosterStudent;
+  onChange: (status: AssignmentStatus | "") => void;
   size?: "sm" | "lg";
 }) {
   const def = statusDef(student.status);
@@ -49,7 +55,7 @@ function StatusSelect({
       <Icon name={def ? def.icon : "clock"} size={big ? 15 : 13} className="flex-none" style={{ color: fg }} />
       <select
         value={student.status ?? ""}
-        onChange={(e) => onChange(student.id, e.target.value as AssignmentStatus | "")}
+        onChange={(e) => onChange(e.target.value as AssignmentStatus | "")}
         className={`h-full w-full cursor-pointer appearance-none border-none bg-transparent font-semibold outline-none ${big ? "text-[14px]" : "text-[12.5px]"}`}
         style={{ color: fg }}
       >
@@ -66,40 +72,149 @@ function StatusSelect({
 
 export function AssignmentsContent({ role }: { role: Role }) {
   const isHead = role === "head";
-  const [students, setStudents] = useState<AssignmentStudent[]>(() => mockAssignmentStudents(isHead ? 60 : 30));
-  const [offering, setOffering] = useState(0);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(0);
-  const [modalId, setModalId] = useState<number | null>(null);
 
-  function updateStudent(id: number, patch: Partial<AssignmentStudent>) {
-    setStudents((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  const [offerings, setOfferings] = useState<OfferingOption[] | null>(null);
+  const [offeringId, setOfferingId] = useState<string | null>(null);
+  const [assignments, setAssignments] = useState<AssignmentOption[] | null>(null);
+  const [assignmentId, setAssignmentId] = useState<string | null>(null);
+  const [roster, setRoster] = useState<RosterStudent[] | null>(null);
+  const [rosterLoading, startRosterLoad] = useTransition();
+  const [savingId, setSavingId] = useState<string | null>(null);
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<AssignmentStatus | null>(null);
+  const [page, setPage] = useState(0);
+  const [modalId, setModalId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    listMyOfferings().then((data) => {
+      setOfferings(data);
+      setOfferingId(data[0]?.id ?? null);
+    });
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      if (!offeringId) {
+        setAssignments([]);
+        setAssignmentId(null);
+        return;
+      }
+      setAssignments(null);
+      setAssignmentId(null);
+      const data = await listAssignmentsForOffering(offeringId);
+      setAssignments(data);
+      setAssignmentId(data[0]?.id ?? null);
+    })();
+  }, [offeringId]);
+
+  function reloadRoster(id: string) {
+    startRosterLoad(async () => {
+      try {
+        const data = await getRoster(id);
+        setRoster(data);
+        setPage(0);
+      } catch {
+        setError("Couldn't load students for this assignment.");
+      }
+    });
   }
 
-  const sorted = useMemo(() => students.slice().sort((a, b) => a.name.localeCompare(b.name)), [students]);
-  const matched = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return q ? sorted.filter((s) => s.name.toLowerCase().includes(q)) : sorted;
-  }, [sorted, search]);
+  useEffect(() => {
+    (() => {
+      if (!assignmentId) {
+        setRoster(null);
+        return;
+      }
+      reloadRoster(assignmentId);
+    })();
+  }, [assignmentId]);
 
-  const pageCount = Math.max(1, Math.ceil(matched.length / PAGE_SIZE));
+  const currentAssignment = assignments?.find((a) => a.id === assignmentId) ?? null;
+  const currentOffering = offerings?.find((o) => o.id === offeringId) ?? null;
+
+  const filtered = useMemo(() => {
+    if (!roster) return [];
+    const q = search.trim().toLowerCase();
+    return roster.filter((s) => {
+      if (q && !s.name.toLowerCase().includes(q)) return false;
+      if (statusFilter && s.status !== statusFilter) return false;
+      return true;
+    });
+  }, [roster, search, statusFilter]);
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
   const pageStart = safePage * PAGE_SIZE;
-  const pageStudents = matched.slice(pageStart, pageStart + PAGE_SIZE);
+  const pageStudents = filtered.slice(pageStart, pageStart + PAGE_SIZE);
 
-  const total = students.length;
-  const logged = students.filter((s) => s.status !== null).length;
+  const total = roster?.length ?? 0;
+  const logged = roster?.filter((s) => s.status !== null).length ?? 0;
   const pct = total ? Math.round((logged / total) * 100) : 0;
 
-  const modalStudent = modalId != null ? students.find((s) => s.id === modalId) ?? null : null;
-  const modalMessage = modalStudent ? buildMessage(modalStudent) : "";
-  const modalDigits = modalStudent ? "447700900" + (100 + modalStudent.id) : "";
-  const modalWaUrl = modalStudent ? `https://wa.me/${modalDigits}?text=${encodeURIComponent(modalMessage)}` : "";
+  const modalStudent = modalId != null ? roster?.find((s) => s.studentId === modalId) ?? null : null;
+  const modalMessage =
+    modalStudent && currentAssignment && currentOffering
+      ? buildMessage(modalStudent, currentAssignment.title, currentOffering.label)
+      : "";
+  const modalWaUrl = modalStudent
+    ? `https://wa.me/${(modalStudent.guardianPhone ?? "").replace(/[^\d]/g, "")}?text=${encodeURIComponent(modalMessage)}`
+    : "";
   const modalDef = modalStudent ? statusDef(modalStudent.status) : null;
   const modalToneColors = modalDef ? toneColors(modalDef.tone) : toneColors("neutral");
 
-  function onStatusChange(id: number, status: AssignmentStatus | "") {
-    updateStudent(id, { status: status || null });
+  function patchLocal(studentId: string, patch: Partial<RosterStudent>) {
+    setRoster((prev) => (prev ? prev.map((s) => (s.studentId === studentId ? { ...s, ...patch } : s)) : prev));
+  }
+
+  async function onStatusChange(studentId: string, status: AssignmentStatus | "") {
+    if (!assignmentId) return;
+    patchLocal(studentId, { status: status || null });
+    setSavingId(studentId);
+    try {
+      await setStatus(assignmentId, studentId, status || null);
+    } catch {
+      setError("Couldn't save status — try again.");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function onGradeBlur(studentId: string, value: string) {
+    if (!assignmentId) return;
+    setSavingId(studentId);
+    try {
+      await setGrade(assignmentId, studentId, value);
+      patchLocal(studentId, { grade: value || null });
+    } catch {
+      setError("Couldn't save grade — try again.");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function onCommentBlur(studentId: string, value: string) {
+    if (!assignmentId) return;
+    setSavingId(studentId);
+    try {
+      await setComment(assignmentId, studentId, value);
+      patchLocal(studentId, { comment: value || null });
+    } catch {
+      setError("Couldn't save comment — try again.");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function onConfirmSend() {
+    if (!assignmentId || !modalStudent) return;
+    patchLocal(modalStudent.studentId, { sentAt: new Date().toISOString() });
+    try {
+      await markSent(assignmentId, modalStudent.studentId);
+    } catch {
+      // Non-fatal — WhatsApp still opens via the link below.
+    }
   }
 
   const pageNumbers = useMemo(() => {
@@ -110,8 +225,20 @@ export function AssignmentsContent({ role }: { role: Role }) {
     return out;
   }, [safePage, pageCount]);
 
+  const offeringsLoading = offerings === null;
+  const assignmentsLoading = assignments === null;
+
   return (
     <div className="flex flex-col gap-4">
+      {error && (
+        <div className="flex items-center justify-between gap-3 rounded-[var(--rad-sm)] border border-[var(--danger)] bg-[var(--dangers)] px-4 py-3 text-[13px] font-medium text-[var(--danger)]">
+          {error}
+          <button onClick={() => setError(null)} className="flex-none">
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+      )}
+
       {/* CONTEXT HEADER */}
       <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -120,10 +247,12 @@ export function AssignmentsContent({ role }: { role: Role }) {
               Assignment logging
             </div>
             <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">
-              Paper 3 — Mechanics
+              {currentAssignment?.title ?? (assignmentsLoading ? "Loading…" : "No assignments yet")}
             </h1>
             <div className="mt-[3px] text-[13px] text-[var(--muted)]">
-              Out of 100 · Logging due 18 Jun · {COURSE_OFFERINGS[offering]}
+              {currentAssignment ? `Out of ${currentAssignment.maxMarks}` : ""}
+              {currentAssignment?.dueDate ? ` · Due ${currentAssignment.dueDate}` : ""}
+              {currentOffering ? ` · ${currentOffering.label}` : ""}
               {isHead ? " · all students" : ""}
             </div>
             {isHead && (
@@ -133,55 +262,78 @@ export function AssignmentsContent({ role }: { role: Role }) {
               </div>
             )}
           </div>
-          <button className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[15px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)]">
-            <Icon name="check" size={16} />
-            Save all
+          <button
+            disabled={rosterLoading || savingId !== null}
+            onClick={() => assignmentId && reloadRoster(assignmentId)}
+            className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[15px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+          >
+            {rosterLoading ? <Spinner size={15} /> : <Icon name="check" size={16} />}
+            Refresh
           </button>
         </div>
 
         <div className="mt-[15px] flex flex-wrap items-center gap-2">
           <span className="mr-[2px] flex-none text-[12.5px] font-semibold text-[var(--muted)]">Course</span>
-          {COURSE_OFFERINGS.map((label, i) => {
-            const active = i === offering;
-            return (
-              <button
-                key={label}
-                onClick={() => setOffering(i)}
-                className="flex flex-none items-center gap-[7px] rounded-full border px-[13px] py-2 text-[13px] font-semibold"
-                style={
-                  active
-                    ? { borderColor: "var(--brand)", background: "var(--brand)", color: "var(--brandfg)" }
-                    : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
-                }
-              >
-                <span
-                  className="h-[7px] w-[7px] rounded-full"
-                  style={{ background: active ? "var(--brandfg)" : "var(--subtle)" }}
-                />
-                {label}
-              </button>
-            );
-          })}
+          {offeringsLoading ? (
+            <>
+              <SkeletonRow className="h-[36px] w-[140px]" />
+              <SkeletonRow className="h-[36px] w-[120px]" />
+            </>
+          ) : offerings && offerings.length ? (
+            offerings.map((o) => {
+              const active = o.id === offeringId;
+              return (
+                <button
+                  key={o.id}
+                  onClick={() => setOfferingId(o.id)}
+                  className="flex flex-none items-center gap-[7px] rounded-full border px-[13px] py-2 text-[13px] font-semibold"
+                  style={
+                    active
+                      ? { borderColor: "var(--brand)", background: "var(--brand)", color: "var(--brandfg)" }
+                      : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
+                  }
+                >
+                  <span
+                    className="h-[7px] w-[7px] rounded-full"
+                    style={{ background: active ? "var(--brandfg)" : "var(--subtle)" }}
+                  />
+                  {o.label}
+                </button>
+              );
+            })
+          ) : (
+            <span className="text-[13px] text-[var(--subtle)]">No courses assigned yet.</span>
+          )}
         </div>
 
         <div className="mt-[14px] flex flex-wrap items-center gap-[14px]">
           <div className="flex h-10 min-w-[220px] max-w-[320px] flex-1 items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3">
             <Icon name="clipboard-list" size={16} className="text-[var(--subtle)]" />
-            <select className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[13.5px] font-semibold text-[var(--text)] outline-none">
-              <option>Paper 3 — Mechanics</option>
-              <option>Paper 1 — Multiple Choice</option>
-              <option>Paper 2 — Structured Questions</option>
-            </select>
+            {assignmentsLoading ? (
+              <SkeletonRow className="h-[18px] w-full" />
+            ) : (
+              <select
+                value={assignmentId ?? ""}
+                onChange={(e) => setAssignmentId(e.target.value)}
+                className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[13.5px] font-semibold text-[var(--text)] outline-none"
+              >
+                {(assignments ?? []).map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.title}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
           <div className="min-w-[180px] flex-1">
             <div className="mb-[6px] flex items-center justify-between">
               <span className="text-[12.5px] font-medium text-[var(--muted)]">Logging progress</span>
               <span className="text-[12.5px] font-bold text-[var(--text)]">
-                {logged} of {total} logged
+                {rosterLoading ? <Spinner size={13} /> : `${logged} of ${total} logged`}
               </span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-[var(--surface2)]">
-              <div className="h-full rounded-full bg-[var(--brand)]" style={{ width: `${pct}%` }} />
+              <div className="h-full rounded-full bg-[var(--brand)] transition-[width]" style={{ width: `${pct}%` }} />
             </div>
           </div>
         </div>
@@ -201,11 +353,25 @@ export function AssignmentsContent({ role }: { role: Role }) {
             className="h-full w-full border-none bg-transparent text-[13.5px] text-[var(--text)] outline-none"
           />
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           {STATUS_DEFS.map((s) => {
             const { bg, fg } = toneColors(s.tone);
+            const active = statusFilter === s.key;
             return (
-              <span key={s.key} className="inline-flex items-center gap-[5px] text-[12px] font-medium text-[var(--muted)]">
+              <button
+                key={s.key}
+                onClick={() => {
+                  setStatusFilter(active ? null : s.key);
+                  setPage(0);
+                }}
+                className="inline-flex items-center gap-[5px] rounded-full border px-[9px] py-[4px] text-[12px] font-medium"
+                style={{
+                  borderColor: active ? fg : "transparent",
+                  background: active ? bg : "transparent",
+                  color: active ? fg : "var(--muted)",
+                }}
+                title={active ? `Showing only ${s.label}` : `Filter to ${s.label}`}
+              >
                 <span
                   className="flex h-[18px] w-[18px] items-center justify-center rounded-[5px]"
                   style={{ background: bg, color: fg }}
@@ -213,140 +379,166 @@ export function AssignmentsContent({ role }: { role: Role }) {
                   <Icon name={s.icon} size={12} />
                 </span>
                 {s.label}
-              </span>
+              </button>
             );
           })}
         </div>
       </div>
 
-      {/* DESKTOP TABLE */}
-      <div className="hidden overflow-x-auto rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] md:block">
-        <div className="min-w-[760px]">
-          <div className="flex items-center gap-[14px] border-b border-[var(--border2)] px-[18px] py-[11px] text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">
-            <span className="w-[172px] flex-none">Student</span>
-            <span className="flex-1">Status</span>
-            <span className="w-[66px] flex-none">Grade</span>
-            <span className="min-w-0 flex-[1.4]">Comment</span>
-            <span className="w-[36px] flex-none" />
-          </div>
-          {pageStudents.map((st) => (
-            <div
-              key={st.id}
-              className="flex items-center gap-[14px] border-b border-[var(--border2)] px-[18px] py-[11px] hover:bg-[var(--surface2)]"
-            >
-              <div className="flex w-[172px] flex-none items-center gap-[10px]">
-                <div className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-full bg-[var(--brands)] text-[12px] font-bold text-[var(--brand)]">
-                  {st.initials}
-                </div>
-                <div className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[13.5px] font-semibold text-[var(--text)]">
-                  {st.name}
-                </div>
-              </div>
-              <div className="flex flex-1 items-center">
-                <StatusSelect student={st} onChange={onStatusChange} />
-              </div>
-              <input
-                value={st.grade}
-                onChange={(e) => updateStudent(st.id, { grade: e.target.value })}
-                placeholder="—"
-                className="h-[36px] w-[66px] flex-none rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-center text-[13px] font-semibold text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
-              />
-              <input
-                value={st.comment}
-                onChange={(e) => updateStudent(st.id, { comment: e.target.value })}
-                placeholder="Add comment…"
-                className="h-[36px] min-w-0 flex-[1.4] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[11px] text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
-              />
-              <button
-                onClick={() => setModalId(st.id)}
-                title="Send update to guardian"
-                className="flex h-[36px] w-[36px] flex-none items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--ok)] hover:border-[var(--ok)] hover:bg-[var(--oks)]"
-              >
-                <Icon name="send" size={16} />
-              </button>
-            </div>
+      {/* ROSTER */}
+      {rosterLoading && !roster ? (
+        <div className="flex flex-col gap-3">
+          {Array.from({ length: 5 }, (_, i) => (
+            <SkeletonRow key={i} className="h-[58px]" />
           ))}
         </div>
-      </div>
-
-      {/* MOBILE CARDS */}
-      <div className="flex flex-col gap-3 md:hidden">
-        {pageStudents.map((st) => {
-          const def = statusDef(st.status);
-          const { bg, fg } = def ? toneColors(def.tone) : { bg: "var(--surface2)", fg: "var(--muted)" };
-          return (
-            <div
-              key={st.id}
-              className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[14px] shadow-[var(--shadow)]"
-            >
-              <div className="mb-[13px] flex items-center gap-[11px]">
-                <div className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-full bg-[var(--brands)] text-[13px] font-bold text-[var(--brand)]">
-                  {st.initials}
+      ) : !assignmentId ? (
+        <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-10 text-center text-[13.5px] text-[var(--muted)] shadow-[var(--shadow)]">
+          No assignment selected.
+        </div>
+      ) : (
+        <>
+          {/* DESKTOP TABLE */}
+          <div className="hidden overflow-x-auto rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] md:block">
+            <div className="min-w-[760px]">
+              <div className="flex items-center gap-[14px] border-b border-[var(--border2)] px-[18px] py-[11px] text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">
+                <span className="w-[172px] flex-none">Student</span>
+                <span className="flex-1">Status</span>
+                <span className="w-[66px] flex-none">Grade</span>
+                <span className="min-w-0 flex-[1.4]">Comment</span>
+                <span className="w-[36px] flex-none" />
+              </div>
+              {pageStudents.map((st) => (
+                <div
+                  key={st.studentId}
+                  className="flex items-center gap-[14px] border-b border-[var(--border2)] px-[18px] py-[11px] hover:bg-[var(--surface2)]"
+                >
+                  <div className="flex w-[172px] flex-none items-center gap-[10px]">
+                    <div className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-full bg-[var(--brands)] text-[12px] font-bold text-[var(--brand)]">
+                      {st.initials}
+                    </div>
+                    <div className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[13.5px] font-semibold text-[var(--text)]">
+                      {st.name}
+                    </div>
+                    {savingId === st.studentId && <Spinner size={13} className="flex-none text-[var(--subtle)]" />}
+                  </div>
+                  <div className="flex flex-1 items-center">
+                    <StatusSelect student={st} onChange={(status) => onStatusChange(st.studentId, status)} />
+                  </div>
+                  <input
+                    defaultValue={st.grade ?? ""}
+                    onBlur={(e) => onGradeBlur(st.studentId, e.target.value)}
+                    placeholder="—"
+                    className="h-[36px] w-[66px] flex-none rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-center text-[13px] font-semibold text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                  />
+                  <input
+                    defaultValue={st.comment ?? ""}
+                    onBlur={(e) => onCommentBlur(st.studentId, e.target.value)}
+                    placeholder="Add comment…"
+                    className="h-[36px] min-w-0 flex-[1.4] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[11px] text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                  />
+                  <button
+                    onClick={() => setModalId(st.studentId)}
+                    title="Send update to guardian"
+                    className="flex h-[36px] w-[36px] flex-none items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--ok)] hover:border-[var(--ok)] hover:bg-[var(--oks)]"
+                  >
+                    <Icon name="send" size={16} />
+                  </button>
                 </div>
-                <div className="min-w-0 flex-1 text-[14.5px] font-semibold text-[var(--text)]">{st.name}</div>
-                <span
-                  className="inline-flex items-center gap-[5px] rounded-full px-[10px] py-[4px] text-[11.5px] font-semibold"
-                  style={{ background: bg, color: fg }}
-                >
-                  <Icon name={def ? def.icon : "clock"} size={13} />
-                  {def ? def.label : "Not logged"}
-                </span>
-              </div>
-              <div className="mb-3">
-                <StatusSelect student={st} onChange={onStatusChange} size="lg" />
-              </div>
-              <div className="flex gap-[10px]">
-                <input
-                  value={st.grade}
-                  onChange={(e) => updateStudent(st.id, { grade: e.target.value })}
-                  placeholder="Grade"
-                  className="h-[44px] w-[84px] flex-none rounded-[9px] border border-[var(--border)] bg-[var(--surface2)] text-center text-[14px] font-semibold text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
-                />
-                <input
-                  value={st.comment}
-                  onChange={(e) => updateStudent(st.id, { comment: e.target.value })}
-                  placeholder="Add comment…"
-                  className="h-[44px] min-w-0 flex-1 rounded-[9px] border border-[var(--border)] bg-[var(--surface2)] px-[13px] text-[14px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
-                />
-              </div>
-              <button
-                onClick={() => setModalId(st.id)}
-                className="mt-[11px] flex h-[46px] w-full items-center justify-center gap-2 rounded-[10px] border border-[var(--ok)] bg-[var(--oks)] text-[14px] font-semibold text-[var(--ok)]"
-              >
-                <Icon name="send" size={16} />
-                Send update to guardian
-              </button>
+              ))}
+              {pageStudents.length === 0 && (
+                <div className="p-10 text-center text-[13.5px] text-[var(--muted)]">No students match these filters.</div>
+              )}
             </div>
-          );
-        })}
-      </div>
+          </div>
 
-      {/* PAGINATION */}
-      {pageCount > 1 && (
-        <div className="flex flex-wrap items-center justify-between gap-[10px] rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[11px_16px] shadow-[var(--shadow)]">
-          <span className="text-[12.5px] text-[var(--subtle)]">
-            Showing {matched.length ? pageStart + 1 : 0}–{Math.min(pageStart + PAGE_SIZE, matched.length)} of {matched.length}
-          </span>
-          <div className="flex items-center gap-[5px]">
-            {pageNumbers.map((i) => {
-              const active = i === safePage;
+          {/* MOBILE CARDS */}
+          <div className="flex flex-col gap-3 md:hidden">
+            {pageStudents.map((st) => {
+              const def = statusDef(st.status);
+              const { bg, fg } = def ? toneColors(def.tone) : { bg: "var(--surface2)", fg: "var(--muted)" };
               return (
-                <button
-                  key={i}
-                  onClick={() => setPage(i)}
-                  className="h-8 min-w-8 rounded-[7px] border px-2 text-[12.5px] font-semibold"
-                  style={
-                    active
-                      ? { borderColor: "var(--brand)", background: "var(--brand)", color: "var(--brandfg)" }
-                      : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
-                  }
+                <div
+                  key={st.studentId}
+                  className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[14px] shadow-[var(--shadow)]"
                 >
-                  {i + 1}
-                </button>
+                  <div className="mb-[13px] flex items-center gap-[11px]">
+                    <div className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-full bg-[var(--brands)] text-[13px] font-bold text-[var(--brand)]">
+                      {st.initials}
+                    </div>
+                    <div className="min-w-0 flex-1 text-[14.5px] font-semibold text-[var(--text)]">{st.name}</div>
+                    {savingId === st.studentId && <Spinner size={14} className="text-[var(--subtle)]" />}
+                    <span
+                      className="inline-flex items-center gap-[5px] rounded-full px-[10px] py-[4px] text-[11.5px] font-semibold"
+                      style={{ background: bg, color: fg }}
+                    >
+                      <Icon name={def ? def.icon : "clock"} size={13} />
+                      {def ? def.label : "Not logged"}
+                    </span>
+                  </div>
+                  <div className="mb-3">
+                    <StatusSelect student={st} onChange={(status) => onStatusChange(st.studentId, status)} size="lg" />
+                  </div>
+                  <div className="flex gap-[10px]">
+                    <input
+                      defaultValue={st.grade ?? ""}
+                      onBlur={(e) => onGradeBlur(st.studentId, e.target.value)}
+                      placeholder="Grade"
+                      className="h-[44px] w-[84px] flex-none rounded-[9px] border border-[var(--border)] bg-[var(--surface2)] text-center text-[14px] font-semibold text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                    />
+                    <input
+                      defaultValue={st.comment ?? ""}
+                      onBlur={(e) => onCommentBlur(st.studentId, e.target.value)}
+                      placeholder="Add comment…"
+                      className="h-[44px] min-w-0 flex-1 rounded-[9px] border border-[var(--border)] bg-[var(--surface2)] px-[13px] text-[14px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                    />
+                  </div>
+                  <button
+                    onClick={() => setModalId(st.studentId)}
+                    className="mt-[11px] flex h-[46px] w-full items-center justify-center gap-2 rounded-[10px] border border-[var(--ok)] bg-[var(--oks)] text-[14px] font-semibold text-[var(--ok)]"
+                  >
+                    <Icon name="send" size={16} />
+                    Send update to guardian
+                  </button>
+                </div>
               );
             })}
+            {pageStudents.length === 0 && (
+              <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-[13.5px] text-[var(--muted)] shadow-[var(--shadow)]">
+                No students match these filters.
+              </div>
+            )}
           </div>
-        </div>
+
+          {/* PAGINATION */}
+          {pageCount > 1 && (
+            <div className="flex flex-wrap items-center justify-between gap-[10px] rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[11px_16px] shadow-[var(--shadow)]">
+              <span className="text-[12.5px] text-[var(--subtle)]">
+                Showing {filtered.length ? pageStart + 1 : 0}–{Math.min(pageStart + PAGE_SIZE, filtered.length)} of{" "}
+                {filtered.length}
+              </span>
+              <div className="flex items-center gap-[5px]">
+                {pageNumbers.map((i) => {
+                  const active = i === safePage;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => setPage(i)}
+                      className="h-8 min-w-8 rounded-[7px] border px-2 text-[12.5px] font-semibold"
+                      style={
+                        active
+                          ? { borderColor: "var(--brand)", background: "var(--brand)", color: "var(--brandfg)" }
+                          : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
+                      }
+                    >
+                      {i + 1}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* WHATSAPP SEND CONFIRMATION */}
@@ -375,9 +567,11 @@ export function AssignmentsContent({ role }: { role: Role }) {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-[13.5px] font-semibold text-[var(--text)]">
-                    {modalStudent.name.split(" ")[0]}&apos;s guardian
+                    {modalStudent.guardianName ?? `${modalStudent.name.split(" ")[0]}'s guardian`}
                   </div>
-                  <div className="font-mono text-[12px] text-[var(--muted)]">{modalStudent.guardianPhone}</div>
+                  <div className="font-mono text-[12px] text-[var(--muted)]">
+                    {modalStudent.guardianPhone ?? "No phone on file"}
+                  </div>
                 </div>
                 <span
                   className="inline-flex flex-none items-center gap-[5px] rounded-full px-[9px] py-[4px] text-[11.5px] font-semibold"
@@ -403,7 +597,10 @@ export function AssignmentsContent({ role }: { role: Role }) {
                 href={modalWaUrl}
                 target="_blank"
                 rel="noopener"
-                onClick={() => setModalId(null)}
+                onClick={() => {
+                  onConfirmSend();
+                  setModalId(null);
+                }}
                 className="flex h-11 flex-[1.4] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[#25D366] text-[13.5px] font-semibold text-white"
               >
                 <Icon name="send" size={16} />
