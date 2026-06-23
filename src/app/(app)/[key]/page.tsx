@@ -4,6 +4,7 @@ import { findNavItem } from "@/lib/roles";
 import { Icon } from "@/components/icons";
 import { DashboardContent } from "@/components/dashboard/dashboard-content";
 import { AssignmentsContent } from "@/components/assignments/assignments-content";
+import { OversightContent } from "@/components/oversight/oversight-content";
 
 export default async function AppPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
@@ -17,6 +18,10 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
 
   if (key === "assignments" && (profile.role === "head" || profile.role === "assistant")) {
     return <AssignmentsContent role={profile.role} />;
+  }
+
+  if (key === "oversight" && profile.role === "head") {
+    return <OversightContent />;
   }
 
   const item = findNavItem(profile.role, key);
