@@ -8,6 +8,7 @@ import { OversightContent } from "@/components/oversight/oversight-content";
 import { HeadAssignmentsContent } from "@/components/head-assignments/head-assignments-content";
 import { StudentsContent } from "@/components/students/students-content";
 import { AttendanceContent } from "@/components/attendance/attendance-content";
+import { MyPayContent } from "@/components/pay/my-pay-content";
 
 export default async function AppPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
@@ -37,6 +38,10 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
 
   if (key === "attendance" && (profile.role === "head" || profile.role === "assistant")) {
     return <AttendanceContent role={profile.role} />;
+  }
+
+  if (key === "mypay" && (profile.role === "head" || profile.role === "assistant")) {
+    return <MyPayContent />;
   }
 
   const item = findNavItem(profile.role, key);

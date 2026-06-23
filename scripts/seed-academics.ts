@@ -164,6 +164,52 @@ async function main() {
   }
   await supabase.from("assignment_logs").insert(logs);
 
+  console.log("Creating sample salary lines for June 2026...");
+  await supabase.from("salary_lines").insert([
+    {
+      org_id: org.id,
+      payee_id: assistant.id,
+      offering_id: offerings[0].id,
+      period: "2026-06",
+      method: "Per paper",
+      basis: "156 papers checked × $8",
+      base: 1248,
+      bonus: 100,
+      deduction: 0,
+      bonus_reason: "Extra weekend session",
+      status: "paid",
+      pay_method: "Bank transfer",
+    },
+    {
+      org_id: org.id,
+      payee_id: assistant.id,
+      offering_id: offerings[1].id,
+      period: "2026-06",
+      method: "Bracket",
+      basis: "Bracket B (120-160 papers)",
+      base: 980,
+      bonus: 0,
+      deduction: 30,
+      deduction_reason: "2 logs submitted late",
+      status: "paid",
+      pay_method: "Bank transfer",
+    },
+    {
+      org_id: org.id,
+      payee_id: head.id,
+      offering_id: offerings[0].id,
+      period: "2026-06",
+      method: "Stipend",
+      basis: "Head oversight stipend",
+      base: 600,
+      bonus: 50,
+      deduction: 0,
+      bonus_reason: "Covered an absent assistant's session",
+      status: "pending",
+      pay_method: "Bank transfer",
+    },
+  ]);
+
   console.log("\nDone — academic demo data seeded.");
 }
 
