@@ -61,7 +61,7 @@ export function LoginForm() {
     });
     setLoading(false);
     if (signInError) {
-      setError(signInError.message);
+      setError(signInError.message || "Something went wrong. Please try again.");
       return;
     }
     router.push("/dashboard");
@@ -74,7 +74,7 @@ export function LoginForm() {
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email);
     setLoading(false);
     if (resetError) {
-      setError(resetError.message);
+      setError(resetError.message || "Something went wrong. Please try again.");
       return;
     }
     setMode("reset");
@@ -112,7 +112,7 @@ export function LoginForm() {
     });
     setLoading(false);
     if (verifyError) {
-      setError(verifyError.message);
+      setError(verifyError.message || "Something went wrong. Please try again.");
       return;
     }
     setStep("create");
@@ -128,7 +128,7 @@ export function LoginForm() {
     const { error: updateError } = await supabase.auth.updateUser({ password: newPw });
     setLoading(false);
     if (updateError) {
-      setError(updateError.message);
+      setError(updateError.message || "Something went wrong. Please try again.");
       return;
     }
     router.push("/dashboard");
