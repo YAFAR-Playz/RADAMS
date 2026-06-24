@@ -13,6 +13,7 @@ import { AssistantsContent } from "@/components/assistants/assistants-content";
 import { ImportContent } from "@/components/import/import-content";
 import { RegistrationsContent } from "@/components/registrations/registrations-content";
 import { StaffContent } from "@/components/staff/staff-content";
+import { CoursesContent } from "@/components/courses/courses-content";
 
 export default async function AppPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
@@ -62,6 +63,10 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
 
   if (key === "staff" && profile.role === "admin") {
     return <StaffContent />;
+  }
+
+  if (key === "courses" && profile.role === "admin") {
+    return <CoursesContent />;
   }
 
   const item = findNavItem(profile.role, key);
