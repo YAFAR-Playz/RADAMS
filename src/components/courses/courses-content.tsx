@@ -10,11 +10,27 @@ import {
   toggleCourseActive,
   updateCourseDates,
   getEnrolledStudents,
+  getInstallmentSchedule,
   type CourseOffering,
   type HeadOption,
   type EnrolledStudent,
   type CourseInput,
 } from "@/lib/actions/courses";
+
+type ScheduleDraftRow = { seq: number; amount: string; dueDate: string };
+
+function defaultScheduleRows(count: number, total: string, startDate: string): ScheduleDraftRow[] {
+  const totalNum = Number(total) || 0;
+  const per = count > 0 ? Math.round((totalNum / count) * 100) / 100 : 0;
+  const base = startDate ? new Date(startDate) : new Date();
+  return Array.from({ length: count }, (_, i) => {
+    const isLast = i === count - 1;
+    const amount = isLast ? Math.round((totalNum - per * (count - 1)) * 100) / 100 : per;
+    const due = new Date(base);
+    due.setMonth(due.getMonth() + i);
+    return { seq: i + 1, amount: String(amount), dueDate: due.toISOString().slice(0, 10) };
+  });
+}
 
 const PAGE_SIZE = 8;
 const STUDENT_PAGE_SIZE = 12;
@@ -52,9 +68,19 @@ export function CoursesContent() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<CourseInput>(emptyForm);
+  const [schedule, setSchedule] = useState<ScheduleDraftRow[]>([]);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [savingDatesId, setSavingDatesId] = useState<string | null>(null);
+
+  function syncScheduleCount(count: number, total: string, startDate: string) {
+    setSchedule((prev) => {
+      if (count <= 1) return [];
+      const next = defaultScheduleRows(count, total, startDate);
+      return next.map((row, i) => (prev[i] ? { ...row, amount: prev[i].amount, dueDate: prev[i].dueDate } : row));
+    });
+  }
 
   async function reload() {
     setLoading(true);
@@ -102,10 +128,11 @@ export function CoursesContent() {
   function openAdd() {
     setEditId(null);
     setForm(emptyForm);
+    setSchedule([]);
     setModalOpen(true);
   }
 
-  function openEdit(c: CourseOffering) {
+  async function openEdit(c: CourseOffering) {
     const parts = c.name.split(" · ");
     setEditId(c.id);
     setForm({
@@ -121,6 +148,23 @@ export function CoursesContent() {
       headIds: heads.filter((h) => c.heads.includes(h.name)).map((h) => h.id),
     });
     setModalOpen(true);
+    if (c.installmentCount > 1) {
+      setScheduleLoading(true);
+      try {
+        const existing = await getInstallmentSchedule(c.id);
+        if (existing.length) {
+          setSchedule(existing.map((r) => ({ seq: r.seq, amount: String(r.amount), dueDate: r.dueDate ?? "" })));
+        } else {
+          setSchedule(defaultScheduleRows(c.installmentCount, c.feeInstallmentTotal != null ? String(c.feeInstallmentTotal) : "", c.start ?? ""));
+        }
+      } catch {
+        setSchedule(defaultScheduleRows(c.installmentCount, c.feeInstallmentTotal != null ? String(c.feeInstallmentTotal) : "", c.start ?? ""));
+      } finally {
+        setScheduleLoading(false);
+      }
+    } else {
+      setSchedule([]);
+    }
   }
 
   const canSave = form.courseName.trim().length > 0 && form.session.trim().length > 0;
@@ -129,7 +173,11 @@ export function CoursesContent() {
     if (!canSave) return;
     setSaving(true);
     try {
-      await saveCourse({ ...form, id: editId ?? undefined });
+      await saveCourse({
+        ...form,
+        id: editId ?? undefined,
+        schedule: form.installmentCount > 1 ? schedule.map((r) => ({ seq: r.seq, amount: Number(r.amount) || 0, dueDate: r.dueDate })) : undefined,
+      });
       setModalOpen(false);
       await reload();
     } catch {
@@ -524,7 +572,11 @@ export function CoursesContent() {
                   <label className="mb-[6px] block text-[12px] font-semibold text-[var(--text)]">Installments total (£)</label>
                   <input
                     value={form.feeInstallmentTotal}
-                    onChange={(e) => setForm((f) => ({ ...f, feeInstallmentTotal: e.target.value.replace(/[^0-9]/g, "") }))}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/[^0-9]/g, "");
+                      setForm((f) => ({ ...f, feeInstallmentTotal: v }));
+                      syncScheduleCount(form.installmentCount, v, form.start);
+                    }}
                     placeholder="660"
                     className="h-10 w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[11px] font-mono text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                   />
@@ -535,7 +587,11 @@ export function CoursesContent() {
                 <div className="flex h-10 items-center rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[11px]">
                   <select
                     value={form.installmentCount}
-                    onChange={(e) => setForm((f) => ({ ...f, installmentCount: Number(e.target.value) }))}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      setForm((f) => ({ ...f, installmentCount: n }));
+                      syncScheduleCount(n, form.feeInstallmentTotal, form.start);
+                    }}
                     className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[13px] font-semibold text-[var(--text)] outline-none"
                   >
                     {[1, 2, 3, 4].map((n) => (
@@ -546,6 +602,46 @@ export function CoursesContent() {
                   </select>
                 </div>
               </div>
+              {form.installmentCount > 1 && (
+                <div className="overflow-hidden rounded-[var(--rad-sm)] border border-[var(--border)]">
+                  <div className="border-b border-[var(--border2)] bg-[var(--surface2)] p-[8px_12px] text-[10.5px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">
+                    Installment schedule
+                  </div>
+                  {scheduleLoading ? (
+                    <div className="flex flex-col gap-2 p-3">
+                      {Array.from({ length: form.installmentCount }, (_, i) => (
+                        <SkeletonRow key={i} className="h-[34px]" />
+                      ))}
+                    </div>
+                  ) : (
+                    schedule.map((row, i) => (
+                      <div key={row.seq} className="flex flex-wrap items-center gap-2 border-b border-[var(--border2)] p-[9px_12px] last:border-b-0">
+                        <span className="w-[80px] flex-none text-[12.5px] font-semibold text-[var(--text)]">Payment {row.seq}</span>
+                        <div className="flex h-[34px] min-w-[90px] flex-1 items-center gap-[2px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[9px]">
+                          <span className="text-[12px] font-semibold text-[var(--subtle)]">£</span>
+                          <input
+                            value={row.amount}
+                            onChange={(e) => {
+                              const v = e.target.value.replace(/[^0-9.]/g, "");
+                              setSchedule((prev) => prev.map((r, idx) => (idx === i ? { ...r, amount: v } : r)));
+                            }}
+                            className="w-full border-none bg-transparent text-right font-mono text-[12.5px] font-bold text-[var(--ok)] outline-none"
+                          />
+                        </div>
+                        <input
+                          type="date"
+                          value={row.dueDate}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setSchedule((prev) => prev.map((r, idx) => (idx === i ? { ...r, dueDate: v } : r)));
+                          }}
+                          className="h-[34px] min-w-[120px] flex-1 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[9px] text-[12px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+                        />
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
               <div>
                 <label className="mb-[6px] block text-[12px] font-semibold text-[var(--text)]">
                   Course head(s) <span className="text-[var(--subtle)]">(assign one or more)</span>

@@ -143,6 +143,24 @@ export async function removeStaffMember(id: string) {
   if (error) throw new Error(error.message);
 }
 
+export async function getLoginAsLink(targetProfileId: string, redirectTo: string): Promise<{ url: string }> {
+  const profile = await getCurrentProfile();
+  if (!profile || profile.role !== "admin" || !profile.org) throw new Error("Not authorized");
+
+  const admin = createAdminClient();
+  const { data: target } = await admin.from("profiles").select("email, org_id").eq("id", targetProfileId).single();
+  if (!target || target.org_id !== profile.org.id) throw new Error("User not found in your organization");
+
+  const { data, error } = await admin.auth.admin.generateLink({
+    type: "magiclink",
+    email: target.email,
+    options: { redirectTo },
+  });
+  if (error || !data) throw new Error(error?.message ?? "Couldn't create a login link");
+
+  return { url: data.properties.action_link };
+}
+
 export async function listPendingRequests(): Promise<PendingRequest[]> {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org) return [];

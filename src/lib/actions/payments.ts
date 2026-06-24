@@ -66,20 +66,36 @@ export async function createPaymentPlan(input: { studentId: string; offeringId: 
     .single();
   if (error || !plan) throw new Error(error?.message ?? "Failed to create payment plan");
 
-  const per = Math.round((totalAmount / count) * 100) / 100;
-  const rows = Array.from({ length: count }, (_, i) => {
-    const isLast = i === count - 1;
-    const amount = isLast ? Math.round((totalAmount - per * (count - 1)) * 100) / 100 : per;
-    const due = new Date();
-    due.setMonth(due.getMonth() + i);
-    return {
-      plan_id: plan.id,
-      seq: i + 1,
-      amount,
-      due_date: due.toISOString().slice(0, 10),
-      status: "pending" as const,
-    };
-  });
+  let scheduleDefs: { seq: number; amount: number; dueDate: string | null }[] = [];
+  if (input.planType === "installments") {
+    const { data: customSchedule } = await supabase
+      .from("course_installment_schedule")
+      .select("seq, amount, due_date")
+      .eq("offering_id", input.offeringId)
+      .order("seq", { ascending: true });
+    if (customSchedule && customSchedule.length) {
+      scheduleDefs = customSchedule.map((r) => ({ seq: r.seq, amount: Number(r.amount), dueDate: r.due_date }));
+    }
+  }
+
+  if (!scheduleDefs.length) {
+    const per = Math.round((totalAmount / count) * 100) / 100;
+    scheduleDefs = Array.from({ length: count }, (_, i) => {
+      const isLast = i === count - 1;
+      const amount = isLast ? Math.round((totalAmount - per * (count - 1)) * 100) / 100 : per;
+      const due = new Date();
+      due.setMonth(due.getMonth() + i);
+      return { seq: i + 1, amount, dueDate: due.toISOString().slice(0, 10) };
+    });
+  }
+
+  const rows = scheduleDefs.map((s) => ({
+    plan_id: plan.id,
+    seq: s.seq,
+    amount: s.amount,
+    due_date: s.dueDate ?? new Date().toISOString().slice(0, 10),
+    status: "pending" as const,
+  }));
 
   const { error: rowsError } = await supabase.from("payment_installments").insert(rows);
   if (rowsError) throw new Error(rowsError.message);
@@ -131,6 +147,38 @@ export async function listPaymentPlans(): Promise<StudentPaymentRow[]> {
   });
 
   return rows.filter((x): x is StudentPaymentRow => x !== null);
+}
+
+export type PaymentStatusSummary = { planType: PlanType | null; totalAmount: number; paidAmount: number; status: "paid" | "pending" | "partial" | "none" };
+
+export async function getPaymentStatusForOffering(offeringId: string): Promise<Record<string, PaymentStatusSummary>> {
+  const supabase = await createClient();
+  const { data: plans } = await supabase
+    .from("payment_plans")
+    .select("id, student_id, plan_type, total_amount")
+    .eq("offering_id", offeringId);
+  if (!plans || plans.length === 0) return {};
+
+  const planIds = plans.map((p) => p.id);
+  const { data: installments } = await supabase
+    .from("payment_installments")
+    .select("plan_id, amount, status")
+    .in("plan_id", planIds);
+
+  const paidByPlan = new Map<string, number>();
+  for (const row of installments ?? []) {
+    if (row.status !== "paid") continue;
+    paidByPlan.set(row.plan_id, (paidByPlan.get(row.plan_id) ?? 0) + Number(row.amount));
+  }
+
+  const result: Record<string, PaymentStatusSummary> = {};
+  for (const plan of plans) {
+    const paidAmount = paidByPlan.get(plan.id) ?? 0;
+    const totalAmount = Number(plan.total_amount);
+    const status: PaymentStatusSummary["status"] = paidAmount <= 0 ? "pending" : paidAmount >= totalAmount ? "paid" : "partial";
+    result[plan.student_id] = { planType: plan.plan_type as PlanType, totalAmount, paidAmount, status };
+  }
+  return result;
 }
 
 export async function markInstallmentPaid(installmentId: string, paid: boolean) {

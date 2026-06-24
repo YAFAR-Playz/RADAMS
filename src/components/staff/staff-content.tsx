@@ -11,6 +11,7 @@ import {
   removeStaffMember,
   listPendingRequests,
   resolveStaffingRequest,
+  getLoginAsLink,
   type StaffMember,
   type PendingRequest,
 } from "@/lib/actions/staff";
@@ -52,6 +53,7 @@ export function StaffContent() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [loginAsId, setLoginAsId] = useState<string | null>(null);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
 
   async function reload() {
@@ -126,6 +128,18 @@ export function StaffContent() {
       setError("Couldn't remove this user — try again.");
     } finally {
       setRemovingId(null);
+    }
+  }
+
+  async function onLoginAs(id: string) {
+    setLoginAsId(id);
+    try {
+      const redirectTo = `${window.location.origin}/dashboard`;
+      const { url } = await getLoginAsLink(id, redirectTo);
+      window.location.href = url;
+    } catch {
+      setError("Couldn't sign in as this user — try again.");
+      setLoginAsId(null);
     }
   }
 
@@ -307,6 +321,17 @@ export function StaffContent() {
                     >
                       <Icon name="settings" size={15} />
                     </button>
+                    {u.role !== "owner" && (
+                      <button
+                        onClick={() => onLoginAs(u.id)}
+                        disabled={loginAsId === u.id}
+                        title="Sign in as this user"
+                        className="flex flex-none items-center gap-[6px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[11px] py-[7px] text-[12px] font-semibold text-[var(--brand)] hover:bg-[var(--brands)] disabled:opacity-60"
+                      >
+                        {loginAsId === u.id ? <Spinner size={13} /> : <Icon name="logout" size={13} />}
+                        Login as
+                      </button>
+                    )}
                     <button
                       onClick={() => onRemove(u.id)}
                       disabled={removingId === u.id}

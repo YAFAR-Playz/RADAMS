@@ -17,21 +17,21 @@ import {
   type AssignmentOption,
   type RosterStudent,
 } from "@/lib/actions/assignments";
+import { getEffectiveTemplate, getOrgBrandName } from "@/lib/actions/templates";
+import { applyTemplateVars } from "@/lib/message-vars";
 
 const PAGE_SIZE = 10;
 
-function buildMessage(student: RosterStudent, assignmentTitle: string, offeringLabel: string) {
+function buildMessage(template: string, orgName: string, student: RosterStudent, assignmentTitle: string) {
   const def = statusDef(student.status);
-  const lines = [
-    `Assalamu alaikum, this is RadAMS — ${offeringLabel}.`,
-    "",
-    `Update for ${student.name} on "${assignmentTitle}":`,
-    `Status: ${def ? def.label : "Not yet logged"}`,
-  ];
-  if (student.grade) lines.push(`Grade: ${student.grade}/100`);
-  if (student.comment) lines.push(`Note: ${student.comment}`);
-  lines.push("", "Thank you.");
-  return lines.join("\n");
+  return applyTemplateVars(template, {
+    org: orgName,
+    student: student.name,
+    assignment: assignmentTitle,
+    status: def ? def.label : "Not yet logged",
+    grade: student.grade ? ` (${student.grade}/100)` : "",
+    comment: student.comment ?? "",
+  });
 }
 
 function StatusSelect({
@@ -83,11 +83,17 @@ export function AssignmentsContent() {
   const [page, setPage] = useState(0);
   const [modalId, setModalId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [template, setTemplate] = useState<string | null>(null);
+  const [orgName, setOrgName] = useState("RadAMS");
 
   useEffect(() => {
     listMyOfferings().then((data) => {
       setOfferings(data);
       setOfferingId(data[0]?.id ?? null);
+    });
+    Promise.all([getEffectiveTemplate("assignment"), getOrgBrandName()]).then(([tpl, org]) => {
+      setTemplate(tpl);
+      setOrgName(org);
     });
   }, []);
 
@@ -152,9 +158,7 @@ export function AssignmentsContent() {
 
   const modalStudent = modalId != null ? roster?.find((s) => s.studentId === modalId) ?? null : null;
   const modalMessage =
-    modalStudent && currentAssignment && currentOffering
-      ? buildMessage(modalStudent, currentAssignment.title, currentOffering.label)
-      : "";
+    modalStudent && currentAssignment && template ? buildMessage(template, orgName, modalStudent, currentAssignment.title) : "";
   const modalWaUrl = modalStudent
     ? `https://wa.me/${(modalStudent.guardianPhone ?? "").replace(/[^\d]/g, "")}?text=${encodeURIComponent(modalMessage)}`
     : "";

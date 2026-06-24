@@ -8,7 +8,11 @@ import type { Role } from "@/lib/roles";
 import { statusDef, STATUS_DEFS } from "@/lib/assignments-data";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import { listOfferingAssistants, type AssistantOption } from "@/lib/actions/head-assignments";
-import { getStudentsForOffering, reassignStudentAssistant, updateStudent, type StudentRow } from "@/lib/actions/students";
+import { getStudentsForOffering, getEnrollmentCounts, reassignStudentAssistant, updateStudent, type StudentRow } from "@/lib/actions/students";
+import { getEffectiveTemplate, getOrgBrandName } from "@/lib/actions/templates";
+import { applyTemplateVars } from "@/lib/message-vars";
+import { autoAssignUnassigned } from "@/lib/actions/assistant-groups";
+import { getPaymentStatusForOffering, type PaymentStatusSummary } from "@/lib/actions/payments";
 
 const PAGE_SIZE = 20;
 
@@ -44,11 +48,21 @@ export function StudentsContent({ role }: { role: Role }) {
   const [welcomeId, setWelcomeId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [welcomeTemplate, setWelcomeTemplate] = useState<string | null>(null);
+  const [orgName, setOrgName] = useState("RadAMS");
+  const [autoAssigning, setAutoAssigning] = useState(false);
+  const [paymentByStudent, setPaymentByStudent] = useState<Record<string, PaymentStatusSummary>>({});
+  const [enrollmentCounts, setEnrollmentCounts] = useState<Record<string, number>>({});
+  const isRegistration = role === "registration";
 
   useEffect(() => {
     listMyOfferings().then((data) => {
       setOfferings(data);
       setOfferingId(data[0]?.id ?? null);
+    });
+    Promise.all([getEffectiveTemplate("welcome"), getOrgBrandName()]).then(([tpl, org]) => {
+      setWelcomeTemplate(tpl);
+      setOrgName(org);
     });
   }, []);
 
@@ -58,6 +72,14 @@ export function StudentsContent({ role }: { role: Role }) {
       const [rows, ast] = await Promise.all([getStudentsForOffering(id), listOfferingAssistants(id)]);
       setStudents(rows);
       setAssistants(ast);
+      if (isRegistration) {
+        const [payments, counts] = await Promise.all([
+          getPaymentStatusForOffering(id),
+          getEnrollmentCounts(rows.map((r) => r.studentId)),
+        ]);
+        setPaymentByStudent(payments);
+        setEnrollmentCounts(counts);
+      }
     } catch {
       setError("Couldn't load students for this course.");
     } finally {
@@ -116,6 +138,22 @@ export function StudentsContent({ role }: { role: Role }) {
     }
   }
 
+  const canReassignAssistants = role === "admin" || role === "head";
+  const unassignedCount = students?.filter((s) => !s.assistantId).length ?? 0;
+
+  async function onAutoAssign() {
+    if (!offeringId) return;
+    setAutoAssigning(true);
+    try {
+      await autoAssignUnassigned(offeringId, "equal");
+      await reload(offeringId);
+    } catch {
+      setError("Couldn't auto-assign students — try again.");
+    } finally {
+      setAutoAssigning(false);
+    }
+  }
+
   function openEdit(s: StudentRow) {
     setEditDraft({
       studentId: s.studentId,
@@ -151,9 +189,15 @@ export function StudentsContent({ role }: { role: Role }) {
   }
 
   const welcomeStudent = welcomeId ? students?.find((s) => s.studentId === welcomeId) ?? null : null;
-  const welcomeMessage = welcomeStudent
-    ? `Assalamu alaikum. I'm ${welcomeStudent.assistantName ?? "your assistant"}, ${welcomeStudent.name}'s assistant for ${current?.label ?? "this course"}. I'll be sharing assignment and attendance updates with you here. Please reach out any time.`
-    : "";
+  const welcomeMessage =
+    welcomeStudent && welcomeTemplate
+      ? applyTemplateVars(welcomeTemplate, {
+          org: orgName,
+          student: welcomeStudent.name,
+          course: current?.label ?? "this course",
+          assistant_name: welcomeStudent.assistantName ?? "your assistant",
+        })
+      : "";
   const welcomeDigits = welcomeStudent?.guardianPhone ? welcomeStudent.guardianPhone.replace(/[^\d]/g, "") : "";
   const welcomeWaUrl = `https://wa.me/${welcomeDigits}?text=${encodeURIComponent(welcomeMessage)}`;
 
@@ -178,17 +222,44 @@ export function StudentsContent({ role }: { role: Role }) {
 
       {/* HEADER */}
       <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">
-          {isAdmin ? "Admin · Students" : role === "registration" ? "Registration · Students" : isAssistant ? "My students" : "Students"}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">
+              {isAdmin ? "Admin · Students" : role === "registration" ? "Registration · Students" : isAssistant ? "My students" : "Students"}
+            </div>
+            <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">
+              {role === "registration" ? "Enrollment & payments" : "Student progress"}
+            </h1>
+            <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">
+              {role === "registration"
+                ? "Every student org-wide — enrollment, contact details, and payment status."
+                : isAssistant
+                  ? "Your assigned students — performance to date and contact details."
+                  : "Every student's status across recent assignments. Reassign or edit as needed."}
+            </p>
+          </div>
+          {canReassignAssistants && (
+            <button
+              onClick={onAutoAssign}
+              disabled={unassignedCount === 0 || autoAssigning || !offeringId}
+              title={unassignedCount === 0 ? "No unassigned students on this course" : "Auto-assign unassigned students"}
+              className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--brand)] bg-[var(--surface)] px-[14px] py-[10px] text-[13px] font-semibold text-[var(--brand)] hover:bg-[var(--brands)] disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:text-[var(--subtle)] disabled:hover:bg-[var(--surface)]"
+            >
+              {autoAssigning ? <Spinner size={15} /> : <Icon name="users" size={16} />}
+              Auto-assign
+              <span
+                className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-[5px] text-[11px] font-bold"
+                style={
+                  unassignedCount === 0
+                    ? { background: "var(--surface2)", color: "var(--subtle)" }
+                    : { background: "var(--brand)", color: "var(--brandfg)" }
+                }
+              >
+                {unassignedCount}
+              </span>
+            </button>
+          )}
         </div>
-        <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Student progress</h1>
-        <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">
-          {isAdmin || role === "registration"
-            ? "Every student org-wide — progress across assignments, contact details. Reassign or edit as needed."
-            : isAssistant
-              ? "Your assigned students — performance to date and contact details."
-              : "Every student's status across recent assignments. Reassign or edit as needed."}
-        </p>
 
         <div className="mt-[15px] flex flex-wrap items-center gap-2">
           <span className="mr-[2px] flex-none text-[12.5px] font-semibold text-[var(--muted)]">Course</span>
@@ -296,9 +367,18 @@ export function StudentsContent({ role }: { role: Role }) {
           <div className="min-w-[820px]">
             <div className="flex flex-wrap items-center gap-[10px_14px] border-b border-[var(--border2)] px-[18px] py-[11px] text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">
               <span className="min-w-0 flex-[2_1_190px]">Student</span>
-              <span className="min-w-0 flex-[2_1_130px]">Progress</span>
-              {!isAssistant && <span className="min-w-0 flex-[1_1_130px]">Assistant</span>}
-              <span className="w-[54px] flex-none text-right">Avg</span>
+              {isRegistration ? (
+                <>
+                  <span className="min-w-0 flex-[1_1_130px]">Payment status</span>
+                  <span className="min-w-0 flex-[1_1_130px]">Courses enrolled</span>
+                </>
+              ) : (
+                <>
+                  <span className="min-w-0 flex-[2_1_130px]">Progress</span>
+                  {!isAssistant && <span className="min-w-0 flex-[1_1_130px]">Assistant</span>}
+                  <span className="w-[54px] flex-none text-right">Avg</span>
+                </>
+              )}
               <span className="w-[74px] flex-none" />
             </div>
             {pageRows.length === 0 ? (
@@ -328,47 +408,84 @@ export function StudentsContent({ role }: { role: Role }) {
                       </div>
                     </div>
                   </div>
-                  <div className="flex min-w-0 flex-[2_1_130px] flex-wrap items-center gap-[4px]">
-                    {st.cells.length === 0 ? (
-                      <span className="text-[12px] text-[var(--subtle)]">No assignments yet</span>
-                    ) : (
-                      st.cells.map((c, i) => {
-                        const def = statusDef(c.status as never);
-                        const { bg, fg } = def ? toneColors(def.tone) : { bg: "var(--surface2)", fg: "var(--subtle)" };
-                        return (
-                          <span
-                            key={i}
-                            title={`${c.assignmentTitle}: ${def?.label ?? "Not logged"}`}
-                            className="flex h-[22px] w-[22px] flex-none items-center justify-center rounded-[6px]"
-                            style={{ background: bg, color: fg }}
-                          >
-                            <Icon name={def?.icon ?? "clock"} size={12} />
-                          </span>
-                        );
-                      })
-                    )}
-                  </div>
-                  {!isAssistant && (
-                    <div className="min-w-0 flex-[1_1_130px]">
-                      <div className="flex h-[34px] items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px]">
-                        <select
-                          value={st.assistantId ?? ""}
-                          onChange={(e) => onReassign(st.enrollmentId, st.studentId, e.target.value)}
-                          className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[12.5px] font-semibold text-[var(--text)] outline-none"
-                        >
-                          <option value="">Unassigned</option>
-                          {(assistants ?? []).map((a) => (
-                            <option key={a.id} value={a.id}>
-                              {a.name}
-                            </option>
-                          ))}
-                        </select>
+                  {isRegistration ? (
+                    <>
+                      <div className="min-w-0 flex-[1_1_130px]">
+                        {(() => {
+                          const payment = paymentByStudent[st.studentId];
+                          if (!payment) {
+                            return <span className="text-[12px] text-[var(--subtle)]">No plan</span>;
+                          }
+                          const tone =
+                            payment.status === "paid" ? "ok" : payment.status === "partial" ? "warn" : "danger";
+                          const { bg, fg } = toneColors(tone);
+                          const label =
+                            payment.status === "paid" ? "Paid" : payment.status === "partial" ? "Partial" : "Pending";
+                          return (
+                            <div className="flex flex-col gap-[3px]">
+                              <span
+                                className="inline-flex w-fit items-center gap-[5px] rounded-full px-[9px] py-[3px] text-[11.5px] font-semibold"
+                                style={{ background: bg, color: fg }}
+                              >
+                                {label}
+                              </span>
+                              <span className="text-[11px] text-[var(--subtle)]">
+                                £{payment.paidAmount.toLocaleString()} / £{payment.totalAmount.toLocaleString()}
+                                {payment.planType === "installments" ? " · installments" : payment.planType === "full" ? " · full" : ""}
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </div>
-                    </div>
+                      <div className="min-w-0 flex-[1_1_130px] text-[13px] text-[var(--text)]">
+                        {enrollmentCounts[st.studentId] ?? 1} course{(enrollmentCounts[st.studentId] ?? 1) === 1 ? "" : "s"}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex min-w-0 flex-[2_1_130px] flex-wrap items-center gap-[4px]">
+                        {st.cells.length === 0 ? (
+                          <span className="text-[12px] text-[var(--subtle)]">No assignments yet</span>
+                        ) : (
+                          st.cells.map((c, i) => {
+                            const def = statusDef(c.status as never);
+                            const { bg, fg } = def ? toneColors(def.tone) : { bg: "var(--surface2)", fg: "var(--subtle)" };
+                            return (
+                              <span
+                                key={i}
+                                title={`${c.assignmentTitle}: ${def?.label ?? "Not logged"}`}
+                                className="flex h-[22px] w-[22px] flex-none items-center justify-center rounded-[6px]"
+                                style={{ background: bg, color: fg }}
+                              >
+                                <Icon name={def?.icon ?? "clock"} size={12} />
+                              </span>
+                            );
+                          })
+                        )}
+                      </div>
+                      {!isAssistant && (
+                        <div className="min-w-0 flex-[1_1_130px]">
+                          <div className="flex h-[34px] items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px]">
+                            <select
+                              value={st.assistantId ?? ""}
+                              onChange={(e) => onReassign(st.enrollmentId, st.studentId, e.target.value)}
+                              className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[12.5px] font-semibold text-[var(--text)] outline-none"
+                            >
+                              <option value="">Unassigned</option>
+                              {(assistants ?? []).map((a) => (
+                                <option key={a.id} value={a.id}>
+                                  {a.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      )}
+                      <span className="w-[54px] flex-none text-right font-mono text-[13px] font-bold text-[var(--text)]">
+                        {st.leftAt ? "—" : st.avgGrade != null ? `${st.avgGrade}%` : "—"}
+                      </span>
+                    </>
                   )}
-                  <span className="w-[54px] flex-none text-right font-mono text-[13px] font-bold text-[var(--text)]">
-                    {st.leftAt ? "—" : st.avgGrade != null ? `${st.avgGrade}%` : "—"}
-                  </span>
                   <div className="flex w-[74px] flex-none justify-end gap-[6px]">
                     {isAssistant && (
                       <button
