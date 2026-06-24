@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { signInWithPassword } from "@/lib/actions/auth";
 import { Icon } from "@/components/icons";
 
 type Step = "contact" | "password" | "otp" | "create";
@@ -55,13 +56,10 @@ export function LoginForm() {
     if (password.length < 1) return;
     setLoading(true);
     setError(null);
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { error: signInError } = await signInWithPassword(email, password);
     setLoading(false);
     if (signInError) {
-      setError(signInError.message || "Something went wrong. Please try again.");
+      setError(signInError);
       return;
     }
     router.push("/dashboard");

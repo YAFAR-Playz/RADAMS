@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/icons";
+import { Spinner } from "@/components/ui/spinner";
 import type { NavItem } from "@/lib/roles";
 
 type NavMode = "sidebar" | "rail";
@@ -41,6 +42,7 @@ function ThemeToggle({ className }: { className?: string }) {
 
 function UserMenu({ person }: { person: { name: string; label: string; initials: string } }) {
   const [open, setOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
@@ -53,6 +55,7 @@ function UserMenu({ person }: { person: { name: string; label: string; initials:
   }, []);
 
   async function signOut() {
+    setSigningOut(true);
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/login");
@@ -83,10 +86,11 @@ function UserMenu({ person }: { person: { name: string; label: string; initials:
           <ThemeToggle className="w-full" />
           <button
             onClick={signOut}
-            className="flex w-full items-center gap-2 rounded-[8px] px-3 py-2 text-[13px] font-medium text-[var(--danger)] hover:bg-[var(--surface2)]"
+            disabled={signingOut}
+            className="flex w-full items-center gap-2 rounded-[8px] px-3 py-2 text-[13px] font-medium text-[var(--danger)] hover:bg-[var(--surface2)] disabled:opacity-60"
           >
-            <Icon name="logout" size={16} />
-            Sign out
+            {signingOut ? <Spinner size={16} /> : <Icon name="logout" size={16} />}
+            {signingOut ? "Signing out…" : "Sign out"}
           </button>
         </div>
       )}

@@ -18,6 +18,10 @@ import { PayrollSettingsContent } from "@/components/payroll-settings/payroll-se
 import { TemplatesContent } from "@/components/templates/templates-content";
 import { BrandingContent } from "@/components/branding/branding-content";
 import { EvaluationsContent } from "@/components/evaluations/evaluations-content";
+import { InstallmentsContent } from "@/components/installments/installments-content";
+import { StaffPaymentsContent } from "@/components/staff-payments/staff-payments-content";
+import { PayCategoriesContent } from "@/components/pay-categories/pay-categories-content";
+import { FinanceSalariesContent } from "@/components/finance-salaries/finance-salaries-content";
 
 export default async function AppPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
@@ -73,7 +77,7 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
     return <CoursesContent />;
   }
 
-  if (key === "payroll" && profile.role === "admin") {
+  if (key === "payroll" && (profile.role === "admin" || profile.role === "finance")) {
     return <PayrollSettingsContent />;
   }
 
@@ -87,6 +91,22 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
 
   if (key === "evaluations" && profile.role === "head") {
     return <EvaluationsContent />;
+  }
+
+  if (key === "installments" && profile.role === "registration") {
+    return <InstallmentsContent />;
+  }
+
+  if (key === "salaries" && profile.role === "finance") {
+    return <FinanceSalariesContent />;
+  }
+
+  if (key === "payments" && profile.role === "finance") {
+    return <StaffPaymentsContent />;
+  }
+
+  if (key === "categories" && profile.role === "finance") {
+    return <PayCategoriesContent />;
   }
 
   const item = findNavItem(profile.role, key);

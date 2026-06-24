@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
+import { createPaymentPlan, type PlanType } from "@/lib/actions/payments";
 
 export type RegistrationFields = {
   name: string;
@@ -9,6 +10,7 @@ export type RegistrationFields = {
   email: string;
   guardianName: string;
   guardianPhone: string;
+  planType: PlanType;
 };
 
 export type RegistrationRow = {
@@ -59,6 +61,8 @@ export async function registerStudent(offeringId: string, fields: RegistrationFi
 
   const { error: enrollError } = await supabase.from("enrollments").insert({ student_id: student.id, offering_id: offeringId });
   if (enrollError) throw new Error(enrollError.message);
+
+  await createPaymentPlan({ studentId: student.id, offeringId, planType: fields.planType });
 
   return { studentId: student.id };
 }

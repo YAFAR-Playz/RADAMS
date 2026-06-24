@@ -5,10 +5,15 @@ import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import { registerStudent, listRegistrations, type RegistrationRow } from "@/lib/actions/registrations";
+import { getOfferingFees, type OfferingFees, type PlanType } from "@/lib/actions/payments";
 
 const PAGE_SIZE = 15;
 
-const emptyForm = { name: "", phone: "", email: "", guardianName: "", guardianPhone: "" };
+const emptyForm = { name: "", phone: "", email: "", guardianName: "", guardianPhone: "", planType: "full" as PlanType };
+
+function fmt(n: number | null) {
+  return n != null ? `£${n.toLocaleString("en-US")}` : "—";
+}
 
 export function RegistrationsContent() {
   const [offerings, setOfferings] = useState<OfferingOption[] | null>(null);
@@ -20,17 +25,37 @@ export function RegistrationsContent() {
 
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
+  const [fees, setFees] = useState<OfferingFees | null>(null);
+  const [feesLoading, setFeesLoading] = useState(false);
 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
 
   useEffect(() => {
-    listMyOfferings().then((data) => {
+    (async () => {
+      const data = await listMyOfferings();
       setOfferings(data);
       setOfferingId(data[0]?.id ?? null);
-    });
-    reload();
+    })();
+    (async () => {
+      await reload();
+    })();
   }, []);
+
+  useEffect(() => {
+    (async () => {
+      if (!offeringId) {
+        setFees(null);
+        return;
+      }
+      setFeesLoading(true);
+      try {
+        setFees(await getOfferingFees(offeringId));
+      } finally {
+        setFeesLoading(false);
+      }
+    })();
+  }, [offeringId]);
 
   async function reload() {
     setLoading(true);
@@ -176,6 +201,38 @@ export function RegistrationsContent() {
                   className="h-[42px] w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 font-mono text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                 />
               </div>
+            </div>
+            <div>
+              <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Payment plan</label>
+              {feesLoading ? (
+                <SkeletonRow className="h-[64px] w-full" />
+              ) : (
+                <div className="grid grid-cols-2 gap-[8px]">
+                  {(
+                    [
+                      { value: "full" as PlanType, label: "Full payment", amount: fees?.feeFull ?? null },
+                      {
+                        value: "installments" as PlanType,
+                        label: `Installments (${fees?.installmentCount ?? 1})`,
+                        amount: fees?.feeInstallmentTotal ?? null,
+                      },
+                    ]
+                  ).map((opt) => {
+                    const active = form.planType === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        onClick={() => setForm((f) => ({ ...f, planType: opt.value }))}
+                        className="flex flex-col items-start gap-1 rounded-[var(--rad-sm)] border-[1.5px] p-[11px_13px] text-left"
+                        style={{ borderColor: active ? "var(--brand)" : "var(--border)", background: active ? "var(--brands)" : "var(--surface)" }}
+                      >
+                        <span className="text-[12.5px] font-semibold text-[var(--text)]">{opt.label}</span>
+                        <span className="font-mono text-[14px] font-bold text-[var(--text)]">{fmt(opt.amount)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
             <button
               onClick={onSubmit}
