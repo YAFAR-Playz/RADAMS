@@ -56,14 +56,19 @@ export function LoginForm() {
     if (password.length < 1) return;
     setLoading(true);
     setError(null);
-    const { error: signInError } = await signInWithPassword(email, password);
-    setLoading(false);
-    if (signInError) {
-      setError(signInError);
-      return;
+    try {
+      const { error: signInError } = await signInWithPassword(email, password);
+      if (signInError) {
+        setError(signInError);
+        return;
+      }
+      router.push("/dashboard");
+      router.refresh();
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
     }
-    router.push("/dashboard");
-    router.refresh();
   }
 
   async function sendResetCode() {
