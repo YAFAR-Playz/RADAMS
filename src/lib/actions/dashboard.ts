@@ -406,3 +406,91 @@ export async function getRegistrationDashboard(): Promise<RegistrationDashboard>
 
   return { kpis, recentEnrollments, unassigned };
 }
+
+export type SalaryOverviewRow = { name: string; initials: string; offering: string; amount: number; status: "paid" | "pending" };
+export type PaymentMethodSlice = { label: string; pct: number };
+
+export type FinanceDashboard = {
+  kpis: Kpi[];
+  salaryOverview: SalaryOverviewRow[];
+  paymentMethods: PaymentMethodSlice[];
+};
+
+function currentPeriod() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+export async function getFinanceDashboard(): Promise<FinanceDashboard> {
+  const profile = await getCurrentProfile();
+  const orgId = profile?.org?.id;
+  if (!orgId) return { kpis: [], salaryOverview: [], paymentMethods: [] };
+  const supabase = await createClient();
+  const period = currentPeriod();
+
+  const { data: lines } = await supabase
+    .from("salary_lines")
+    .select(
+      "payee_id, base, bonus, deduction, status, pay_method, profiles(full_name, initials), course_offerings(session, unit, courses(name))"
+    )
+    .eq("org_id", orgId)
+    .eq("period", period);
+
+  const byPayee = new Map<string, { name: string; initials: string; total: number; status: "paid" | "pending"; offering: string; payMethod: string }>();
+  let totalPayroll = 0;
+  let bonusCount = 0;
+  const methodCounts = new Map<string, number>();
+
+  for (const l of lines ?? []) {
+    const payee = Array.isArray(l.profiles) ? l.profiles[0] : l.profiles;
+    if (!payee) continue;
+    const offering = Array.isArray(l.course_offerings) ? l.course_offerings[0] : l.course_offerings;
+    const subtotal = Number(l.base) + Number(l.bonus) - Number(l.deduction);
+    totalPayroll += subtotal;
+    if (Number(l.bonus) > 0) bonusCount++;
+    methodCounts.set(l.pay_method, (methodCounts.get(l.pay_method) ?? 0) + 1);
+
+    const existing = byPayee.get(l.payee_id);
+    if (existing) {
+      existing.total += subtotal;
+      if (l.status !== "paid") existing.status = "pending";
+    } else {
+      byPayee.set(l.payee_id, {
+        name: payee.full_name,
+        initials: payee.initials,
+        total: subtotal,
+        status: l.status as "paid" | "pending",
+        offering: offeringLabelOf(offering ?? { session: "", unit: null, courses: null }),
+        payMethod: l.pay_method,
+      });
+    }
+  }
+
+  const assistants = Array.from(byPayee.values());
+  const paidCount = assistants.filter((a) => a.status === "paid").length;
+
+  const { count: pendingEvaluations } = await supabase
+    .from("evaluations")
+    .select("id", { count: "exact", head: true })
+    .eq("org_id", orgId)
+    .eq("status", "submitted");
+
+  const totalMethodCount = Array.from(methodCounts.values()).reduce((s, n) => s + n, 0);
+  const paymentMethods: PaymentMethodSlice[] = Array.from(methodCounts.entries())
+    .map(([label, n]) => ({ label, pct: totalMethodCount ? Math.round((n / totalMethodCount) * 100) : 0 }))
+    .sort((a, b) => b.pct - a.pct);
+
+  const salaryOverview: SalaryOverviewRow[] = assistants
+    .map((a) => ({ name: a.name, initials: a.initials, offering: a.offering, amount: Math.round(a.total), status: a.status }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .slice(0, 6);
+
+  const kpis: Kpi[] = [
+    { icon: "wallet", value: `£${Math.round(totalPayroll).toLocaleString()}`, label: "Payroll this month", tone: "brand" },
+    { icon: "card", value: `${paidCount}/${assistants.length}`, label: "Assistants paid", tone: "neutral" },
+    { icon: "clock", value: String(pendingEvaluations ?? 0), label: "Pending approvals", tone: (pendingEvaluations ?? 0) > 0 ? "warn" : "ok" },
+    { icon: "trend", value: String(bonusCount), label: "Bonuses issued", tone: "ok" },
+  ];
+
+  return { kpis, salaryOverview, paymentMethods };
+}

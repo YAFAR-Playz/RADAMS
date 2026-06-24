@@ -7,8 +7,6 @@ import { SkeletonRow } from "@/components/ui/spinner";
 import { toneColors } from "@/lib/tone";
 import { mockKpisForRole, type Kpi, type Role, type Tone } from "@/lib/roles";
 import {
-  SALARY_ROWS,
-  PAY_METHODS,
   ASSISTANT_REQUESTS,
   STAFF_BY_ROLE,
   ORGS,
@@ -22,10 +20,12 @@ import {
   getAssistantDashboard,
   getHeadDashboard,
   getRegistrationDashboard,
+  getFinanceDashboard,
   type AdminDashboard,
   type AssistantDashboard,
   type HeadDashboard,
   type RegistrationDashboard,
+  type FinanceDashboard,
 } from "@/lib/actions/dashboard";
 
 function Badge({ text, tone, icon }: { text: string; tone: Tone; icon?: IconName }) {
@@ -300,41 +300,53 @@ function AssistantPanels({ data }: { data: AssistantDashboard }) {
   );
 }
 
-function FinancePanels() {
+const METHOD_COLORS = ["var(--brand)", "var(--info)", "var(--subtle)", "var(--ok)", "var(--warn)"];
+
+function FinancePanels({ data }: { data: FinanceDashboard }) {
   return (
     <>
       <Card title="Salary overview" action={<ViewAllButton href="/salaries">View payroll</ViewAllButton>}>
         <div className="px-2 py-[7px]">
-          {SALARY_ROWS.map((r) => (
-            <div key={r.name} className="flex items-center gap-3 rounded-[10px] p-[10px_11px] hover:bg-[var(--surface2)]">
-              <Avatar initials={r.initials} tone="neutral" />
-              <div className="min-w-0 flex-1">
-                <div className="text-[13.5px] font-semibold text-[var(--text)]">{r.name}</div>
-                <div className="text-[12px] text-[var(--subtle)]">
-                  {r.offering} · {r.method}
+          {data.salaryOverview.length === 0 ? (
+            <EmptyRow>No salary lines for this period yet.</EmptyRow>
+          ) : (
+            data.salaryOverview.map((r) => (
+              <div key={r.name} className="flex items-center gap-3 rounded-[10px] p-[10px_11px] hover:bg-[var(--surface2)]">
+                <Avatar initials={r.initials} tone="neutral" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13.5px] font-semibold text-[var(--text)]">{r.name}</div>
+                  <div className="text-[12px] text-[var(--subtle)]">{r.offering}</div>
+                </div>
+                <span className="flex-none text-[14px] font-bold text-[var(--text)]">£{r.amount.toLocaleString()}</span>
+                <div className="w-[78px] flex-none">
+                  <Badge
+                    text={r.status === "paid" ? "Paid" : "Pending"}
+                    tone={r.status === "paid" ? "ok" : "warn"}
+                    icon={r.status === "paid" ? "check" : "clock"}
+                  />
                 </div>
               </div>
-              <span className="flex-none text-[14px] font-bold text-[var(--text)]">{r.amount}</span>
-              <div className="w-[78px] flex-none">
-                <Badge text={r.badge.text} tone={r.badge.tone} icon={r.badge.icon} />
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </Card>
       <Card title="Payment methods">
         <div className="p-[18px]">
-          {PAY_METHODS.map((m) => (
-            <div key={m.label} className="mb-[15px] last:mb-0">
-              <div className="mb-[7px] flex justify-between">
-                <span className="text-[13px] font-medium text-[var(--text)]">{m.label}</span>
-                <span className="text-[13px] font-semibold text-[var(--muted)]">{m.pct}%</span>
+          {data.paymentMethods.length === 0 ? (
+            <EmptyRow>No salary lines for this period yet.</EmptyRow>
+          ) : (
+            data.paymentMethods.map((m, i) => (
+              <div key={m.label} className="mb-[15px] last:mb-0">
+                <div className="mb-[7px] flex justify-between">
+                  <span className="text-[13px] font-medium text-[var(--text)]">{m.label}</span>
+                  <span className="text-[13px] font-semibold text-[var(--muted)]">{m.pct}%</span>
+                </div>
+                <div className="h-[7px] overflow-hidden rounded-full bg-[var(--surface2)]">
+                  <div className="h-full rounded-full" style={{ width: `${m.pct}%`, background: METHOD_COLORS[i % METHOD_COLORS.length] }} />
+                </div>
               </div>
-              <div className="h-[7px] overflow-hidden rounded-full bg-[var(--surface2)]">
-                <div className="h-full rounded-full" style={{ width: `${m.pct}%`, background: m.color }} />
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </Card>
     </>
@@ -550,7 +562,7 @@ function RegistrationPanels({ data }: { data: RegistrationDashboard }) {
   );
 }
 
-const MOCK_DASHBOARD_ROLES = new Set<Role>(["finance", "hr", "owner"]);
+const MOCK_DASHBOARD_ROLES = new Set<Role>(["hr", "owner"]);
 
 export function DashboardContent({
   role,
@@ -567,6 +579,7 @@ export function DashboardContent({
   const [assistantData, setAssistantData] = useState<AssistantDashboard | null>(null);
   const [headData, setHeadData] = useState<HeadDashboard | null>(null);
   const [registrationData, setRegistrationData] = useState<RegistrationDashboard | null>(null);
+  const [financeData, setFinanceData] = useState<FinanceDashboard | null>(null);
   const [loading, setLoading] = useState(!isMock);
 
   useEffect(() => {
@@ -577,6 +590,7 @@ export function DashboardContent({
       else if (role === "assistant") setAssistantData(await getAssistantDashboard());
       else if (role === "head") setHeadData(await getHeadDashboard());
       else if (role === "registration") setRegistrationData(await getRegistrationDashboard());
+      else if (role === "finance") setFinanceData(await getFinanceDashboard());
       setLoading(false);
     })();
   }, [role, isMock]);
@@ -591,7 +605,9 @@ export function DashboardContent({
           ? headData?.kpis ?? null
           : role === "registration"
             ? registrationData?.kpis ?? null
-            : null;
+            : role === "finance"
+              ? financeData?.kpis ?? null
+              : null;
 
   return (
     <div className="flex flex-col">
@@ -614,7 +630,7 @@ export function DashboardContent({
         {role === "head" && (loading || !headData ? <PanelSkeleton /> : <HeadPanels data={headData} />)}
         {role === "assistant" && (loading || !assistantData ? <PanelSkeleton /> : <AssistantPanels data={assistantData} />)}
         {role === "registration" && (loading || !registrationData ? <PanelSkeleton /> : <RegistrationPanels data={registrationData} />)}
-        {role === "finance" && <FinancePanels />}
+        {role === "finance" && (loading || !financeData ? <PanelSkeleton /> : <FinancePanels data={financeData} />)}
       </div>
     </div>
   );

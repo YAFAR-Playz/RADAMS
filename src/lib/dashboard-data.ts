@@ -1,38 +1,8 @@
 import type { Role, Tone } from "@/lib/roles";
 
-export type Badge = { text: string; tone: Tone; icon: "check2" | "check" | "clock" | "alert" };
-
-function badge(text: string, tone: Tone, icon: Badge["icon"]): Badge {
-  return { text, tone, icon };
-}
-
-// Head and Assistant dashboards are backed by real data — see
-// src/lib/actions/dashboard.ts. Owner/HR/Registration/Finance below remain
-// mock until their backend phase.
-
-// ---- FINANCE ----
-const S_DEFS: [string, string, string, string, string, string, Tone, Badge["icon"]][] = [
-  ["Aisha Rahman", "AR", "June · Unit 1", "Per paper", "$1,240", "Paid", "ok", "check"],
-  ["Tom Becker", "TB", "Nov · Unit 1", "Bracket", "$980", "Pending", "warn", "clock"],
-  ["Yuki Tanaka", "YT", "June · Unit 2", "Per paper", "$1,560", "Paid", "ok", "check"],
-  ["Carlos Diaz", "CD", "June · Unit 1", "Bracket", "$720", "Pending", "warn", "clock"],
-  ["Nadia Saleh", "NS", "Nov · Unit 2", "Per paper", "$1,100", "Paid", "ok", "check"],
-];
-
-export const SALARY_ROWS = S_DEFS.map(([name, initials, offering, method, amount, text, tone, icon]) => ({
-  name,
-  initials,
-  offering,
-  method,
-  amount,
-  badge: badge(text, tone, icon),
-}));
-
-export const PAY_METHODS = [
-  { label: "Bank transfer", pct: 62, color: "var(--brand)" },
-  { label: "Mobile wallet", pct: 26, color: "var(--info)" },
-  { label: "Cash", pct: 12, color: "var(--subtle)" },
-];
+// Head, Assistant, Registration and Finance dashboards are backed by real
+// data — see src/lib/actions/dashboard.ts. Owner/HR below remain mock until
+// their backend phase.
 
 // ---- HR ----
 export const ASSISTANT_REQUESTS = [
