@@ -340,3 +340,69 @@ export async function getHeadDashboard(): Promise<HeadDashboard> {
 
   return { kpis, offeringLabel: primaryOffering?.label ?? "", assistants, statusBreakdown, completionPct };
 }
+
+export type RecentEnrollment = { name: string; initials: string; offering: string; enrolledAt: string };
+export type UnassignedSummary = { offering: string; count: number };
+
+export type RegistrationDashboard = {
+  kpis: Kpi[];
+  recentEnrollments: RecentEnrollment[];
+  unassigned: UnassignedSummary[];
+};
+
+export async function getRegistrationDashboard(): Promise<RegistrationDashboard> {
+  const profile = await getCurrentProfile();
+  const orgId = profile?.org?.id;
+  if (!orgId) return { kpis: [], recentEnrollments: [], unassigned: [] };
+  const supabase = await createClient();
+
+  const { data: offeringRows } = await supabase
+    .from("course_offerings")
+    .select("id, session, unit, courses(name)")
+    .eq("org_id", orgId);
+  const offeringIds = (offeringRows ?? []).map((o) => o.id);
+  const labelById = new Map((offeringRows ?? []).map((o) => [o.id, offeringLabelOf(o)]));
+
+  const { count: studentsCount } = await supabase.from("students").select("id", { count: "exact", head: true }).eq("org_id", orgId);
+
+  const weekAgo = new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
+  const { data: enrollments } = offeringIds.length
+    ? await supabase
+        .from("enrollments")
+        .select("offering_id, assistant_id, created_at, students(name, initials)")
+        .in("offering_id", offeringIds)
+        .order("created_at", { ascending: false })
+    : { data: [] as { offering_id: string; assistant_id: string | null; created_at: string; students: { name: string; initials: string } | { name: string; initials: string }[] | null }[] };
+
+  const newThisWeek = (enrollments ?? []).filter((e) => e.created_at >= weekAgo).length;
+  const unassignedRows = (enrollments ?? []).filter((e) => !e.assistant_id);
+
+  const unassignedByOffering = new Map<string, number>();
+  for (const e of unassignedRows) {
+    unassignedByOffering.set(e.offering_id, (unassignedByOffering.get(e.offering_id) ?? 0) + 1);
+  }
+
+  const recentEnrollments: RecentEnrollment[] = (enrollments ?? []).slice(0, 6).map((e) => {
+    const s = Array.isArray(e.students) ? e.students[0] : e.students;
+    return {
+      name: s?.name ?? "—",
+      initials: s?.initials ?? "—",
+      offering: labelById.get(e.offering_id) ?? "—",
+      enrolledAt: e.created_at,
+    };
+  });
+
+  const unassigned: UnassignedSummary[] = Array.from(unassignedByOffering.entries()).map(([id, count]) => ({
+    offering: labelById.get(id) ?? "—",
+    count,
+  }));
+
+  const kpis: Kpi[] = [
+    { icon: "user-plus", value: String(newThisWeek), label: "New this week", tone: "brand" },
+    { icon: "grad", value: String(studentsCount ?? 0), label: "Total students", tone: "neutral" },
+    { icon: "clipboard-list", value: String(offeringIds.length), label: "Active courses", tone: "neutral" },
+    { icon: "alert", value: String(unassignedRows.length), label: "Unassigned students", tone: unassignedRows.length > 0 ? "warn" : "ok" },
+  ];
+
+  return { kpis, recentEnrollments, unassigned };
+}

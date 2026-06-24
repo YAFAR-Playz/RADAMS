@@ -78,27 +78,8 @@ const ACT_DEFS: [string, string, string, Tone][] = [
 ];
 export const ACTIVITY = ACT_DEFS.map(([text, time, icon, tone]) => ({ text, time, icon, tone }));
 
-// ---- REGISTRATION ----
-const RQ_DEFS: [string, string, string, string, string, Tone][] = [
-  ["Hannah Mills", "HM", "June · Unit 1", "Online form", "Pending", "warn"],
-  ["Raj Patel", "RP", "June · Unit 1", "Bulk import", "New", "brand"],
-  ["Lucas Silva", "LS", "Nov · Unit 1", "Walk-in", "Pending", "warn"],
-  ["Amara Obi", "AO", "June · Unit 2", "Online form", "New", "brand"],
-];
-export const REG_QUEUE = RQ_DEFS.map(([name, initials, offering, channel, text, tone]) => ({
-  name,
-  initials,
-  offering,
-  channel,
-  badge: { text, tone },
-}));
-
-export const IMPORT_ERRORS = [
-  { row: "Row 14", msg: "Missing phone number" },
-  { row: "Row 27", msg: "Invalid session code (NOV-26)" },
-  { row: "Row 31", msg: "Duplicate student ID" },
-  { row: "Row 42", msg: "Unknown unit reference" },
-];
+// Registration dashboard is backed by real data — see
+// src/lib/actions/dashboard.ts (getRegistrationDashboard).
 
 export function dashboardSubtitle(role: Role, orgName: string | null): string {
   const map: Record<Role, string> = {

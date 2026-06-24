@@ -13,8 +13,6 @@ import {
   STAFF_BY_ROLE,
   ORGS,
   ACTIVITY,
-  REG_QUEUE,
-  IMPORT_ERRORS,
   dashboardSubtitle,
   greetingFor,
   dateLabel,
@@ -23,9 +21,11 @@ import {
   getAdminDashboard,
   getAssistantDashboard,
   getHeadDashboard,
+  getRegistrationDashboard,
   type AdminDashboard,
   type AssistantDashboard,
   type HeadDashboard,
+  type RegistrationDashboard,
 } from "@/lib/actions/dashboard";
 
 function Badge({ text, tone, icon }: { text: string; tone: Tone; icon?: IconName }) {
@@ -493,11 +493,11 @@ function AdminPanels({ data }: { data: AdminDashboard }) {
   );
 }
 
-function RegistrationPanels() {
+function RegistrationPanels({ data }: { data: RegistrationDashboard }) {
   return (
     <>
       <Card
-        title="Registration queue"
+        title="Recent enrollments"
         action={
           <Link
             href="/import"
@@ -509,42 +509,48 @@ function RegistrationPanels() {
         }
       >
         <div className="px-2 py-[7px]">
-          {REG_QUEUE.map((r) => (
-            <div key={r.name} className="flex items-center gap-3 rounded-[10px] p-[11px] hover:bg-[var(--surface2)]">
-              <Avatar initials={r.initials} tone="neutral" />
-              <div className="min-w-0 flex-1">
-                <div className="text-[13.5px] font-semibold text-[var(--text)]">{r.name}</div>
-                <div className="text-[12px] text-[var(--subtle)]">
-                  {r.offering} · {r.channel}
+          {data.recentEnrollments.length === 0 ? (
+            <EmptyRow>No enrollments yet.</EmptyRow>
+          ) : (
+            data.recentEnrollments.map((r, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-[10px] p-[11px] hover:bg-[var(--surface2)]">
+                <Avatar initials={r.initials} tone="neutral" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13.5px] font-semibold text-[var(--text)]">{r.name}</div>
+                  <div className="text-[12px] text-[var(--subtle)]">{r.offering}</div>
                 </div>
               </div>
-              <Badge text={r.badge.text} tone={r.badge.tone} />
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </Card>
       <Card
-        title="Import errors"
+        title="Unassigned students"
         action={
-          <span className="text-[var(--danger)]">
-            <Icon name="alert" size={16} />
-          </span>
+          <Link href="/students" className="flex flex-none items-center gap-1 whitespace-nowrap bg-none text-[12.5px] font-semibold text-[var(--brand)]">
+            View all
+            <Icon name="cr" size={14} />
+          </Link>
         }
       >
         <div className="p-[9px_10px]">
-          {IMPORT_ERRORS.map((e) => (
-            <div key={e.row} className="mb-[6px] flex items-center gap-[10px] rounded-[9px] bg-[var(--dangers)] p-[9px_10px] last:mb-0">
-              <span className="flex-none font-mono text-[12px] font-bold text-[var(--danger)]">{e.row}</span>
-              <span className="flex-1 text-[12.5px] text-[var(--text)]">{e.msg}</span>
-            </div>
-          ))}
+          {data.unassigned.length === 0 ? (
+            <EmptyRow>Everyone has an assistant.</EmptyRow>
+          ) : (
+            data.unassigned.map((u) => (
+              <div key={u.offering} className="mb-[6px] flex items-center gap-[10px] rounded-[9px] bg-[var(--warns)] p-[9px_10px] last:mb-0">
+                <span className="flex-none font-mono text-[12px] font-bold text-[var(--warn)]">{u.count}</span>
+                <span className="flex-1 text-[12.5px] text-[var(--text)]">{u.offering}</span>
+              </div>
+            ))
+          )}
         </div>
       </Card>
     </>
   );
 }
 
-const MOCK_DASHBOARD_ROLES = new Set<Role>(["finance", "hr", "owner", "registration"]);
+const MOCK_DASHBOARD_ROLES = new Set<Role>(["finance", "hr", "owner"]);
 
 export function DashboardContent({
   role,
@@ -560,6 +566,7 @@ export function DashboardContent({
   const [adminData, setAdminData] = useState<AdminDashboard | null>(null);
   const [assistantData, setAssistantData] = useState<AssistantDashboard | null>(null);
   const [headData, setHeadData] = useState<HeadDashboard | null>(null);
+  const [registrationData, setRegistrationData] = useState<RegistrationDashboard | null>(null);
   const [loading, setLoading] = useState(!isMock);
 
   useEffect(() => {
@@ -569,6 +576,7 @@ export function DashboardContent({
       if (role === "admin") setAdminData(await getAdminDashboard());
       else if (role === "assistant") setAssistantData(await getAssistantDashboard());
       else if (role === "head") setHeadData(await getHeadDashboard());
+      else if (role === "registration") setRegistrationData(await getRegistrationDashboard());
       setLoading(false);
     })();
   }, [role, isMock]);
@@ -581,7 +589,9 @@ export function DashboardContent({
         ? assistantData?.kpis ?? null
         : role === "head"
           ? headData?.kpis ?? null
-          : null;
+          : role === "registration"
+            ? registrationData?.kpis ?? null
+            : null;
 
   return (
     <div className="flex flex-col">
@@ -603,7 +613,7 @@ export function DashboardContent({
         {role === "hr" && <HrPanels />}
         {role === "head" && (loading || !headData ? <PanelSkeleton /> : <HeadPanels data={headData} />)}
         {role === "assistant" && (loading || !assistantData ? <PanelSkeleton /> : <AssistantPanels data={assistantData} />)}
-        {role === "registration" && <RegistrationPanels />}
+        {role === "registration" && (loading || !registrationData ? <PanelSkeleton /> : <RegistrationPanels data={registrationData} />)}
         {role === "finance" && <FinancePanels />}
       </div>
     </div>
