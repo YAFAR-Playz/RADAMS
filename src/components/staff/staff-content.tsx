@@ -16,7 +16,8 @@ import {
   type PendingRequest,
 } from "@/lib/actions/staff";
 
-const ROLE_OPTIONS: Role[] = ["admin", "hr", "head", "assistant", "registration", "finance"];
+const ADMIN_ROLE_OPTIONS: Role[] = ["admin", "hr", "head", "assistant", "registration", "finance"];
+const HR_ROLE_OPTIONS: Role[] = ["hr", "head", "assistant", "registration", "finance"];
 const ROLE_COLOR: Record<Role, string> = {
   owner: "#7c3aed",
   admin: "#2563eb",
@@ -38,7 +39,9 @@ const ROLE_LABEL: Record<Role, string> = {
 
 const emptyForm = { name: "", email: "", phone: "", role: "assistant" as Role };
 
-export function StaffContent() {
+export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | "hr" }) {
+  const isHr = viewerRole === "hr";
+  const roleOptions = isHr ? HR_ROLE_OPTIONS : ADMIN_ROLE_OPTIONS;
   const [staff, setStaff] = useState<StaffMember[] | null>(null);
   const [requests, setRequests] = useState<PendingRequest[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,11 +82,12 @@ export function StaffContent() {
     if (!staff) return [];
     const q = search.trim().toLowerCase();
     return staff.filter((u) => {
+      if (isHr && (u.role === "admin" || u.role === "owner")) return false;
       if (filter !== "all" && u.role !== filter) return false;
       if (q && !u.name.toLowerCase().includes(q) && !u.role.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [staff, search, filter]);
+  }, [staff, search, filter, isHr]);
 
   const pendingRequests = (requests ?? []).filter((r) => r.status === "pending");
 
@@ -178,10 +182,12 @@ export function StaffContent() {
       <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Admin</div>
+            <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">{isHr ? "HR" : "Admin"}</div>
             <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Users &amp; access</h1>
             <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">
-              Manage your organization&apos;s users. Add or remove staff and edit their role.
+              {isHr
+                ? "Manage staff across the organization. Add or remove non-admin users and review staffing requests."
+                : "Manage your organization's users. Add or remove staff and edit their role."}
             </p>
           </div>
           <button
@@ -257,7 +263,10 @@ export function StaffContent() {
           />
         </div>
         <div className="flex flex-wrap items-center gap-[6px]">
-          {(["all", "admin", "head", "assistant", "finance"] as const).map((v) => {
+          {(isHr
+            ? (["all", "head", "assistant", "finance", "registration"] as const)
+            : (["all", "admin", "head", "assistant", "finance"] as const)
+          ).map((v) => {
             const active = filter === v;
             return (
               <button
@@ -321,7 +330,7 @@ export function StaffContent() {
                     >
                       <Icon name="settings" size={15} />
                     </button>
-                    {u.role !== "owner" && (
+                    {!isHr && u.role !== "owner" && (
                       <button
                         onClick={() => onLoginAs(u.id)}
                         disabled={loginAsId === u.id}
@@ -419,7 +428,7 @@ export function StaffContent() {
                       onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as Role }))}
                       className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[13.5px] font-semibold text-[var(--text)] outline-none"
                     >
-                      {ROLE_OPTIONS.map((r) => (
+                      {roleOptions.map((r) => (
                         <option key={r} value={r}>
                           {ROLE_LABEL[r]}
                         </option>

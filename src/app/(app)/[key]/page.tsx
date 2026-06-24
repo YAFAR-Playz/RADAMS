@@ -22,6 +22,8 @@ import { InstallmentsContent } from "@/components/installments/installments-cont
 import { StaffPaymentsContent } from "@/components/staff-payments/staff-payments-content";
 import { PayCategoriesContent } from "@/components/pay-categories/pay-categories-content";
 import { FinanceSalariesContent } from "@/components/finance-salaries/finance-salaries-content";
+import { HrRequestsContent } from "@/components/hr-requests/hr-requests-content";
+import { HiringContent } from "@/components/hiring/hiring-content";
 
 export default async function AppPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
@@ -69,8 +71,16 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
     return <RegistrationsContent />;
   }
 
-  if (key === "staff" && profile.role === "admin") {
-    return <StaffContent />;
+  if (key === "staff" && (profile.role === "admin" || profile.role === "hr")) {
+    return <StaffContent viewerRole={profile.role} />;
+  }
+
+  if (key === "requests" && profile.role === "hr") {
+    return <HrRequestsContent />;
+  }
+
+  if (key === "hiring" && profile.role === "hr") {
+    return <HiringContent />;
   }
 
   if (key === "courses" && profile.role === "admin") {

@@ -48,7 +48,7 @@ const NAV_DEF: Record<Role, NavItem[]> = {
   ],
   hr: [
     { icon: "dashboard", label: "Dashboard", key: "dashboard" },
-    { icon: "inbox", label: "Requests", key: "requests", badge: 7 },
+    { icon: "inbox", label: "Requests", key: "requests" },
     { icon: "users", label: "Staff", key: "staff" },
     { icon: "user-plus", label: "Hiring", key: "hiring" },
     { icon: "message", label: "Chat", key: "chat" },

@@ -1,30 +1,8 @@
 import type { Role, Tone } from "@/lib/roles";
 
-// Head, Assistant, Registration and Finance dashboards are backed by real
-// data — see src/lib/actions/dashboard.ts. Owner/HR below remain mock until
-// their backend phase.
-
-// ---- HR ----
-export const ASSISTANT_REQUESTS = [
-  { name: "Daniel Cole", initials: "DC", role: "Assistant · June Unit 1", by: "Marcus Bell", date: "Jun 18" },
-  { name: "Fatima Noor", initials: "FN", role: "Assistant · Nov Unit 1", by: "Marcus Bell", date: "Jun 17" },
-  { name: "Jack Lee", initials: "JL", role: "Assistant · June Unit 2", by: "Elena Voss", date: "Jun 17" },
-  { name: "Aria Khan", initials: "AK", role: "Assistant · Nov Unit 2", by: "Elena Voss", date: "Jun 16" },
-];
-
-const SBR_DEFS: [string, number][] = [
-  ["Assistants", 18],
-  ["Heads", 6],
-  ["Registration", 5],
-  ["Finance", 4],
-  ["HR", 3],
-];
-const SBR_MAX = 18;
-export const STAFF_BY_ROLE = SBR_DEFS.map(([role, n]) => ({
-  role,
-  n,
-  barW: `${Math.round((n / SBR_MAX) * 100)}%`,
-}));
+// Head, Assistant, Registration, Finance and HR dashboards are backed by
+// real data — see src/lib/actions/dashboard.ts and src/lib/actions/hr.ts.
+// Owner below remains mock until its backend phase.
 
 // ---- OWNER / ADMIN ----
 const ORG_DEFS: [string, number, number, string, Tone][] = [
