@@ -16,6 +16,8 @@ import {
   type AttendanceRosterRow,
   type AttendanceStatus,
 } from "@/lib/actions/attendance";
+import { getEffectiveTemplate, getOrgBrandName } from "@/lib/actions/templates";
+import { applyTemplateVars } from "@/lib/message-vars";
 
 const PAGE_SIZE = 20;
 const STATUS_OPTS: { key: AttendanceStatus; label: string; icon: "check" | "clock" | "x"; tone: Tone }[] = [
@@ -51,11 +53,17 @@ export function AttendanceContent({ role }: { role: Role }) {
   const [newDate, setNewDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [newTime, setNewTime] = useState("16:00");
   const [creating, setCreating] = useState(false);
+  const [template, setTemplate] = useState<string | null>(null);
+  const [orgName, setOrgName] = useState("RadAMS");
 
   useEffect(() => {
     listMyOfferings().then((data) => {
       setOfferings(data);
       setOfferingId(data[0]?.id ?? null);
+    });
+    Promise.all([getEffectiveTemplate("attendance"), getOrgBrandName()]).then(([tpl, org]) => {
+      setTemplate(tpl);
+      setOrgName(org);
     });
   }, []);
 
@@ -169,19 +177,16 @@ export function AttendanceContent({ role }: { role: Role }) {
   const waStudent = waId ? roster?.find((r) => r.studentId === waId) ?? null : null;
   const waMeta = waStudent ? statusMeta(waStudent.status) : null;
   const waToneColors = waMeta ? toneColors(waMeta.tone) : toneColors("neutral");
-  const waStatusLine = waStudent
-    ? { present: "was present", late: "arrived late", absent: "was absent" }[waStudent.status]
-    : "";
-  const waMessage = waStudent
-    ? [
-        `Assalamu alaikum, this is RadAMS — ${current?.label ?? ""}.`,
-        "",
-        `Attendance update for ${waStudent.name}:`,
-        `${activeSession?.title ?? ""} (${activeSession?.date ?? ""}) — ${waStudent.name} ${waStatusLine}.`,
-        "",
-        "Thank you.",
-      ].join("\n")
-    : "";
+  const waMessage =
+    waStudent && waMeta && template
+      ? applyTemplateVars(template, {
+          org: orgName,
+          student: waStudent.name,
+          status: waMeta.label,
+          session: activeSession?.title ?? "",
+          date: activeSession?.date ?? "",
+        })
+      : "";
   const waDigits = waStudent?.guardianPhone ? waStudent.guardianPhone.replace(/[^\d]/g, "") : "";
   const waUrl = `https://wa.me/${waDigits}?text=${encodeURIComponent(waMessage)}`;
 

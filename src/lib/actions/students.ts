@@ -100,6 +100,17 @@ export async function getStudentsForOffering(offeringId: string): Promise<Studen
     .filter((x): x is StudentRow => !!x);
 }
 
+export async function getEnrollmentCounts(studentIds: string[]): Promise<Record<string, number>> {
+  if (!studentIds.length) return {};
+  const supabase = await createClient();
+  const { data } = await supabase.from("enrollments").select("student_id").in("student_id", studentIds);
+  const counts: Record<string, number> = {};
+  for (const row of data ?? []) {
+    counts[row.student_id] = (counts[row.student_id] ?? 0) + 1;
+  }
+  return counts;
+}
+
 export async function reassignStudentAssistant(enrollmentId: string, assistantId: string | null) {
   const supabase = await createClient();
   const { error } = await supabase.from("enrollments").update({ assistant_id: assistantId }).eq("id", enrollmentId);

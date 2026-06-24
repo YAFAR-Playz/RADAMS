@@ -180,18 +180,25 @@ export function AssistantsContent() {
             <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">Request staffing changes and assign students to each assistant&apos;s group.</p>
           </div>
           <div className="flex flex-none flex-wrap items-center gap-[9px]">
-            {unassigned.length > 0 && (
-              <button
-                onClick={() => setAutoOpen(true)}
-                className="flex items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--brand)] bg-[var(--surface)] px-[14px] py-[10px] text-[13px] font-semibold text-[var(--brand)] hover:bg-[var(--brands)]"
+            <button
+              onClick={() => setAutoOpen(true)}
+              disabled={unassigned.length === 0}
+              title={unassigned.length === 0 ? "No unassigned students on this course" : "Auto-assign unassigned students"}
+              className="flex items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--brand)] bg-[var(--surface)] px-[14px] py-[10px] text-[13px] font-semibold text-[var(--brand)] hover:bg-[var(--brands)] disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:text-[var(--subtle)] disabled:hover:bg-[var(--surface)]"
+            >
+              <Icon name="users" size={16} />
+              Auto-assign
+              <span
+                className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-[5px] text-[11px] font-bold"
+                style={
+                  unassigned.length === 0
+                    ? { background: "var(--surface2)", color: "var(--subtle)" }
+                    : { background: "var(--brand)", color: "var(--brandfg)" }
+                }
               >
-                <Icon name="users" size={16} />
-                Auto-assign
-                <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--brand)] px-[5px] text-[11px] font-bold text-[var(--brandfg)]">
-                  {unassigned.length}
-                </span>
-              </button>
-            )}
+                {unassigned.length}
+              </span>
+            </button>
             <button
               onClick={() => openRequestModal("add")}
               className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[15px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)]"

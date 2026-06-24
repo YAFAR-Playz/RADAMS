@@ -2,7 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
-import type { TemplateKey } from "@/lib/template-defs";
+import { TEMPLATE_DEFS, type TemplateKey } from "@/lib/template-defs";
+import { applyTemplateVars } from "@/lib/message-vars";
 
 export async function getOrgTemplates(): Promise<Record<TemplateKey, string | null>> {
   const profile = await getCurrentProfile();
@@ -15,6 +16,26 @@ export async function getOrgTemplates(): Promise<Record<TemplateKey, string | nu
     result[row.key as TemplateKey] = row.body;
   }
   return result;
+}
+
+export async function getEffectiveTemplate(key: TemplateKey): Promise<string> {
+  const profile = await getCurrentProfile();
+  const orgId = profile?.org?.id;
+  const fallback = TEMPLATE_DEFS.find((t) => t.key === key)?.def ?? "";
+  if (!orgId) return fallback;
+  const supabase = await createClient();
+  const { data } = await supabase.from("message_templates").select("body").eq("org_id", orgId).eq("key", key).maybeSingle();
+  return data?.body ?? fallback;
+}
+
+export async function renderTemplate(key: TemplateKey, vars: Record<string, string>): Promise<string> {
+  const template = await getEffectiveTemplate(key);
+  return applyTemplateVars(template, vars);
+}
+
+export async function getOrgBrandName(): Promise<string> {
+  const profile = await getCurrentProfile();
+  return profile?.org?.name ?? "RadAMS";
 }
 
 export async function saveOrgTemplate(key: TemplateKey, body: string) {

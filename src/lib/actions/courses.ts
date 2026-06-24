@@ -31,7 +31,10 @@ export type CourseInput = {
   feeInstallmentTotal: string;
   installmentCount: number;
   headIds: string[];
+  schedule?: { seq: number; amount: number; dueDate: string }[];
 };
+
+export type ScheduleRow = { seq: number; amount: number; dueDate: string | null };
 
 export async function listHeadsForOrg(): Promise<HeadOption[]> {
   const profile = await getCurrentProfile();
@@ -145,7 +148,30 @@ export async function saveCourse(input: CourseInput): Promise<{ id: string }> {
     if (error) throw new Error(error.message);
   }
 
+  await supabase.from("course_installment_schedule").delete().eq("offering_id", offeringId);
+  if (input.installmentCount > 1 && input.schedule?.length) {
+    const { error } = await supabase.from("course_installment_schedule").insert(
+      input.schedule.map((row) => ({
+        offering_id: offeringId,
+        seq: row.seq,
+        amount: row.amount,
+        due_date: row.dueDate || null,
+      }))
+    );
+    if (error) throw new Error(error.message);
+  }
+
   return { id: offeringId };
+}
+
+export async function getInstallmentSchedule(offeringId: string): Promise<ScheduleRow[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("course_installment_schedule")
+    .select("seq, amount, due_date")
+    .eq("offering_id", offeringId)
+    .order("seq", { ascending: true });
+  return (data ?? []).map((r) => ({ seq: r.seq, amount: Number(r.amount), dueDate: r.due_date }));
 }
 
 export async function toggleCourseActive(id: string, active: boolean) {
