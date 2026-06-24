@@ -15,6 +15,7 @@ import { RegistrationsContent } from "@/components/registrations/registrations-c
 import { StaffContent } from "@/components/staff/staff-content";
 import { CoursesContent } from "@/components/courses/courses-content";
 import { PayrollSettingsContent } from "@/components/payroll-settings/payroll-settings-content";
+import { TemplatesContent } from "@/components/templates/templates-content";
 
 export default async function AppPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
@@ -72,6 +73,10 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
 
   if (key === "payroll" && profile.role === "admin") {
     return <PayrollSettingsContent />;
+  }
+
+  if (key === "templates" && profile.role === "admin") {
+    return <TemplatesContent />;
   }
 
   const item = findNavItem(profile.role, key);
