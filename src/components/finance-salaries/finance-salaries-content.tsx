@@ -1,0 +1,291 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Icon } from "@/components/icons";
+import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { getPayrollSettings } from "@/lib/actions/payroll-settings";
+import {
+  listPeriods,
+  listSalariesForPeriod,
+  updateSalaryLine,
+  setPayeeStatus,
+  type AssistantSalary,
+} from "@/lib/actions/finance-salaries";
+
+const CURRENCY_SYMBOL: Record<string, string> = { GBP: "£", USD: "$", EUR: "€", EGP: "E£", AED: "د.إ" };
+
+function periodLabel(period: string) {
+  const [y, m] = period.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
+export function FinanceSalariesContent() {
+  const [periods, setPeriods] = useState<string[] | null>(null);
+  const [period, setPeriod] = useState<string | null>(null);
+  const [assistants, setAssistants] = useState<AssistantSalary[] | null>(null);
+  const [currency, setCurrency] = useState("GBP");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const [p, settings] = await Promise.all([listPeriods(), getPayrollSettings()]);
+      setPeriods(p);
+      setPeriod(p[0] ?? null);
+      if (settings) setCurrency(settings.currency);
+    })();
+  }, []);
+
+  async function reload(p: string) {
+    setLoading(true);
+    try {
+      setAssistants(await listSalariesForPeriod(p));
+    } catch {
+      setError("Couldn't load salaries for this period.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    (async () => {
+      if (!period) {
+        setAssistants([]);
+        return;
+      }
+      await reload(period);
+    })();
+  }, [period]);
+
+  const sym = CURRENCY_SYMBOL[currency] ?? "£";
+  const fmt = (n: number) => `${n < 0 ? "−" : ""}${sym}${Math.abs(Math.round(n)).toLocaleString("en-US")}`;
+  const subtotal = (l: { base: number; bonus: number; deduction: number }) => l.base + l.bonus - l.deduction;
+  const total = (a: AssistantSalary) => a.lines.reduce((sum, l) => sum + subtotal(l), 0);
+
+  async function onEditLine(id: string, patch: Parameters<typeof updateSalaryLine>[1]) {
+    setBusyId(id);
+    try {
+      await updateSalaryLine(id, patch);
+      if (period) await reload(period);
+    } catch {
+      setError("Couldn't save this change — try again.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function onTogglePaid(a: AssistantSalary) {
+    if (!period) return;
+    setBusyId(a.payeeId);
+    try {
+      await setPayeeStatus(a.payeeId, period, a.status === "paid" ? "pending" : "paid");
+      await reload(period);
+    } catch {
+      setError("Couldn't update payment status — try again.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const totalPayroll = (assistants ?? []).reduce((sum, a) => sum + total(a), 0);
+  const paidAmt = (assistants ?? []).filter((a) => a.status === "paid").reduce((sum, a) => sum + total(a), 0);
+  const pendingCount = (assistants ?? []).filter((a) => a.status !== "paid").length;
+
+  return (
+    <div className="flex flex-col gap-4">
+      {error && (
+        <div className="flex items-center justify-between gap-3 rounded-[var(--rad-sm)] border border-[var(--danger)] bg-[var(--dangers)] px-4 py-3 text-[13px] font-medium text-[var(--danger)]">
+          {error}
+          <button onClick={() => setError(null)} className="flex-none">
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+      )}
+
+      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Finance</div>
+            <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Salary breakdown</h1>
+            <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">Edit per-course adjustments and release payments when ready.</p>
+          </div>
+          {periods && periods.length > 0 && (
+            <div className="flex h-10 items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3">
+              <Icon name="cal-check" size={15} className="text-[var(--subtle)]" />
+              <select
+                value={period ?? ""}
+                onChange={(e) => setPeriod(e.target.value)}
+                className="cursor-pointer appearance-none border-none bg-transparent text-[13.5px] font-semibold text-[var(--text)] outline-none"
+              >
+                {periods.map((p) => (
+                  <option key={p} value={p}>
+                    {periodLabel(p)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+        <div className="mt-4 grid grid-cols-3 gap-3">
+          {loading || !assistants
+            ? Array.from({ length: 3 }, (_, i) => <SkeletonRow key={i} className="h-[58px]" />)
+            : [
+                { value: fmt(totalPayroll), label: "Total payroll", color: "var(--brand)" },
+                { value: fmt(paidAmt), label: "Paid out", color: "var(--ok)" },
+                { value: String(pendingCount), label: "Pending payment", color: "var(--warn)" },
+              ].map((s) => (
+                <div key={s.label} className="rounded-[var(--rad-sm)] border border-[var(--border2)] bg-[var(--surface2)] p-[12px_14px]">
+                  <div className="font-mono text-[21px] font-bold leading-[1.1] tracking-[-0.02em]" style={{ color: s.color }}>
+                    {s.value}
+                  </div>
+                  <div className="mt-[2px] text-[12px] font-medium text-[var(--muted)]">{s.label}</div>
+                </div>
+              ))}
+        </div>
+      </div>
+
+      <section className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+        <header className="flex items-center justify-between border-b border-[var(--border2)] p-[15px_18px]">
+          <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">
+            Assistant salaries {period ? `· ${periodLabel(period)}` : ""}
+          </h3>
+          <span className="text-[12px] text-[var(--subtle)]">Tap a row to edit adjustments</span>
+        </header>
+        <div className="flex items-start gap-[10px] border-b border-[var(--border2)] bg-[var(--infos)] p-[11px_18px]">
+          <Icon name="trend" size={16} className="mt-[1px] flex-none text-[var(--info)]" />
+          <span className="text-[12px] leading-[1.45] text-[var(--text)]">
+            Amounts are editable before you release payment — bonus/deduction reasons show up on the assistant&apos;s own view too.
+          </span>
+        </div>
+
+        {loading && !assistants ? (
+          <div className="flex flex-col gap-2 p-[14px_18px]">
+            {Array.from({ length: 4 }, (_, i) => (
+              <SkeletonRow key={i} className="h-[60px]" />
+            ))}
+          </div>
+        ) : !assistants || assistants.length === 0 ? (
+          <div className="p-10 text-center text-[13.5px] text-[var(--muted)]">No salary lines for this period yet.</div>
+        ) : (
+          assistants.map((a) => {
+            const expanded = !!open[a.payeeId];
+            const t = total(a);
+            return (
+              <div key={a.payeeId} className="border-b border-[var(--border2)] last:border-b-0">
+                <div
+                  onClick={() => setOpen((prev) => ({ ...prev, [a.payeeId]: !prev[a.payeeId] }))}
+                  className="flex flex-wrap items-center gap-3 p-[14px_18px] cursor-pointer hover:bg-[var(--surface2)]"
+                >
+                  <div className="flex min-w-[160px] flex-1 items-center gap-[11px]">
+                    <div className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-full bg-[var(--brands)] text-[13px] font-bold text-[var(--brand)]">
+                      {a.initials}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[14px] font-semibold text-[var(--text)]">{a.name}</div>
+                      <div className="text-[12px] text-[var(--subtle)]">
+                        {a.lines.length} {a.lines.length === 1 ? "course" : "courses"} · {a.payMethod}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex-none font-mono text-[17px] font-bold text-[var(--text)]">{fmt(t)}</div>
+                  <span
+                    className="inline-flex flex-none items-center gap-[5px] rounded-full px-[10px] py-[4px] text-[11.5px] font-semibold"
+                    style={a.status === "paid" ? { background: "var(--oks)", color: "var(--ok)" } : { background: "var(--warns)", color: "var(--warn)" }}
+                  >
+                    <Icon name={a.status === "paid" ? "check2" : "clock"} size={12} />
+                    {a.status === "paid" ? "Paid" : "Pending"}
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onTogglePaid(a);
+                    }}
+                    disabled={busyId === a.payeeId}
+                    className="flex flex-none items-center gap-[6px] rounded-[8px] border px-3 py-[7px] text-[12px] font-semibold disabled:opacity-60"
+                    style={
+                      a.status === "paid"
+                        ? { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
+                        : { borderColor: "var(--ok)", background: "var(--ok)", color: "#fff" }
+                    }
+                  >
+                    {busyId === a.payeeId ? <Spinner size={13} /> : <Icon name={a.status === "paid" ? "clock" : "check"} size={13} />}
+                    {a.status === "paid" ? "Mark pending" : "Mark as paid"}
+                  </button>
+                  <Icon name="chevron-down" size={18} className="flex-none text-[var(--subtle)]" style={{ transform: expanded ? "rotate(180deg)" : "none" }} />
+                </div>
+
+                {expanded && (
+                  <div className="border-t border-[var(--border2)] bg-[var(--surface2)]">
+                    {a.lines.map((l) => (
+                      <div key={l.id} className="border-b border-[var(--border2)] p-[11px_18px]">
+                        <div className="flex flex-wrap items-center gap-[10px_12px]">
+                          <span className="w-[148px] flex-none text-[12.5px] font-semibold text-[var(--text)]">{l.offering}</span>
+                          <span className="flex-none">
+                            <span className="rounded-full bg-[var(--infos)] px-2 py-[2px] text-[11px] font-semibold text-[var(--info)]">{l.method}</span>
+                          </span>
+                          <span className="min-w-[120px] flex-1 text-[12.5px] text-[var(--muted)]">{l.basis}</span>
+                          <div className="flex h-8 w-20 flex-none items-center gap-[1px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[7px]">
+                            <span className="text-[11px] font-bold text-[var(--subtle)]">{sym}</span>
+                            <input
+                              defaultValue={l.base}
+                              onBlur={(e) => onEditLine(l.id, { base: Number(e.target.value.replace(/[^0-9]/g, "")) || 0 })}
+                              inputMode="numeric"
+                              className="w-full border-none bg-transparent text-right font-mono text-[12px] font-semibold text-[var(--text)] outline-none"
+                            />
+                          </div>
+                          <div className="flex h-8 w-[78px] flex-none items-center gap-[1px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[7px]">
+                            <span className="text-[11px] font-bold text-[var(--ok)]">+{sym}</span>
+                            <input
+                              defaultValue={l.bonus}
+                              onBlur={(e) => onEditLine(l.id, { bonus: Number(e.target.value.replace(/[^0-9]/g, "")) || 0 })}
+                              inputMode="numeric"
+                              className="w-full border-none bg-transparent text-right font-mono text-[12px] font-semibold text-[var(--ok)] outline-none"
+                            />
+                          </div>
+                          <div className="flex h-8 w-[82px] flex-none items-center gap-[1px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[7px]">
+                            <span className="text-[11px] font-bold text-[var(--danger)]">−{sym}</span>
+                            <input
+                              defaultValue={l.deduction}
+                              onBlur={(e) => onEditLine(l.id, { deduction: Number(e.target.value.replace(/[^0-9]/g, "")) || 0 })}
+                              inputMode="numeric"
+                              className="w-full border-none bg-transparent text-right font-mono text-[12px] font-semibold text-[var(--danger)] outline-none"
+                            />
+                          </div>
+                          {busyId === l.id && <Spinner size={13} className="text-[var(--subtle)]" />}
+                          <span className="w-20 flex-none text-right font-mono text-[12.5px] font-bold text-[var(--text)]">{fmt(subtotal(l))}</span>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <input
+                            defaultValue={l.bonusReason ?? ""}
+                            onBlur={(e) => onEditLine(l.id, { bonusReason: e.target.value })}
+                            placeholder="Reason for bonus…"
+                            className="h-[34px] min-w-[200px] flex-1 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[10px] text-[12px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+                          />
+                          <input
+                            defaultValue={l.deductionReason ?? ""}
+                            onBlur={(e) => onEditLine(l.id, { deductionReason: e.target.value })}
+                            placeholder="Reason for deduction…"
+                            className="h-[34px] min-w-[200px] flex-1 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[10px] text-[12px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex flex-wrap items-center justify-between gap-[10px] p-[12px_18px]">
+                      <span className="text-[12.5px] font-medium text-[var(--muted)]">Paid via {a.payMethod} · edits save to this period&apos;s payroll</span>
+                      <div className="flex items-center gap-[10px]">
+                        <span className="text-[12.5px] text-[var(--muted)]">Total</span>
+                        <span className="font-mono text-[17px] font-bold text-[var(--text)]">{fmt(t)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </section>
+    </div>
+  );
+}
