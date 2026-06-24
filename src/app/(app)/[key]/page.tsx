@@ -12,6 +12,7 @@ import { MyPayContent } from "@/components/pay/my-pay-content";
 import { AssistantsContent } from "@/components/assistants/assistants-content";
 import { ImportContent } from "@/components/import/import-content";
 import { RegistrationsContent } from "@/components/registrations/registrations-content";
+import { StaffContent } from "@/components/staff/staff-content";
 
 export default async function AppPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
@@ -57,6 +58,10 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
 
   if (key === "registrations" && profile.role === "registration") {
     return <RegistrationsContent />;
+  }
+
+  if (key === "staff" && profile.role === "admin") {
+    return <StaffContent />;
   }
 
   const item = findNavItem(profile.role, key);
