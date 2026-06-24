@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { toneColors } from "@/lib/tone";
-import type { Role } from "@/lib/roles";
 import { STATUS_DEFS, statusDef, type AssignmentStatus } from "@/lib/assignments-data";
 import {
   listMyOfferings,
@@ -70,9 +69,7 @@ function StatusSelect({
   );
 }
 
-export function AssignmentsContent({ role }: { role: Role }) {
-  const isHead = role === "head";
-
+export function AssignmentsContent() {
   const [offerings, setOfferings] = useState<OfferingOption[] | null>(null);
   const [offeringId, setOfferingId] = useState<string | null>(null);
   const [assignments, setAssignments] = useState<AssignmentOption[] | null>(null);
@@ -253,14 +250,7 @@ export function AssignmentsContent({ role }: { role: Role }) {
               {currentAssignment ? `Out of ${currentAssignment.maxMarks}` : ""}
               {currentAssignment?.dueDate ? ` · Due ${currentAssignment.dueDate}` : ""}
               {currentOffering ? ` · ${currentOffering.label}` : ""}
-              {isHead ? " · all students" : ""}
             </div>
-            {isHead && (
-              <div className="mt-[9px] inline-flex items-center gap-[6px] rounded-full bg-[var(--brands)] px-[10px] py-[4px] text-[12px] font-semibold text-[var(--brand)]">
-                <Icon name="shield" size={13} />
-                As Head you can log on behalf of any student in this course.
-              </div>
-            )}
           </div>
           <button
             disabled={rosterLoading || savingId !== null}
