@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
-import { getOrgTemplates, saveOrgTemplate, resetOrgTemplate, TEMPLATE_DEFS, type TemplateKey } from "@/lib/actions/templates";
+import { getOrgTemplates, saveOrgTemplate, resetOrgTemplate } from "@/lib/actions/templates";
+import { TEMPLATE_DEFS, type TemplateKey } from "@/lib/template-defs";
 
 const VARS = ["{student}", "{org}", "{course}", "{assistant_name}", "{assignment}", "{status}", "{grade}", "{session}", "{date}", "{comment}"];
 
