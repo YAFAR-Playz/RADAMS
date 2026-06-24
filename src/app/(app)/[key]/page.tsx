@@ -18,6 +18,7 @@ import { PayrollSettingsContent } from "@/components/payroll-settings/payroll-se
 import { TemplatesContent } from "@/components/templates/templates-content";
 import { BrandingContent } from "@/components/branding/branding-content";
 import { EvaluationsContent } from "@/components/evaluations/evaluations-content";
+import { InstallmentsContent } from "@/components/installments/installments-content";
 
 export default async function AppPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
@@ -87,6 +88,10 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
 
   if (key === "evaluations" && profile.role === "head") {
     return <EvaluationsContent />;
+  }
+
+  if (key === "installments" && profile.role === "registration") {
+    return <InstallmentsContent />;
   }
 
   const item = findNavItem(profile.role, key);
