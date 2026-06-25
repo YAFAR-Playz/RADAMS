@@ -19,7 +19,10 @@ const ROLE_LABEL: Record<Role, string> = {
 };
 
 type Kind = "add" | "remove";
-const emptyForm = { name: "", email: "", phone: "", role: "assistant" as Role, existingId: "" };
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+const emptyForm = { name: "", email: "", phone: "", role: "assistant" as Role, existingId: "", hireDate: today(), leaveDate: today() };
 
 export function HiringContent() {
   const [log, setLog] = useState<StaffingLogRow[] | null>(null);
@@ -64,9 +67,9 @@ export function HiringContent() {
     setSubmitting(true);
     try {
       if (kind === "add") {
-        await createStaffMember({ name: form.name, email: form.email, phone: form.phone, role: form.role });
+        await createStaffMember({ name: form.name, email: form.email, phone: form.phone, role: form.role, hireDate: form.hireDate });
       } else {
-        await removeStaffMember(form.existingId);
+        await removeStaffMember(form.existingId, form.leaveDate);
       }
       setModalOpen(false);
       await reload();
@@ -207,24 +210,44 @@ export function HiringContent() {
                       </div>
                     </div>
                   </div>
+                  <div>
+                    <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Hire date</label>
+                    <input
+                      type="date"
+                      value={form.hireDate}
+                      onChange={(e) => setForm((f) => ({ ...f, hireDate: e.target.value }))}
+                      className="h-[42px] w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                    />
+                  </div>
                 </>
               ) : (
-                <div>
-                  <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Staff member to remove</label>
-                  <div className="flex h-[42px] items-center rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3">
-                    <select
-                      value={form.existingId}
-                      onChange={(e) => setForm((f) => ({ ...f, existingId: e.target.value }))}
-                      className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[13.5px] font-semibold text-[var(--text)] outline-none"
-                    >
-                      {(staff ?? []).map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} ({ROLE_LABEL[s.role]})
-                        </option>
-                      ))}
-                    </select>
+                <>
+                  <div>
+                    <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Staff member to remove</label>
+                    <div className="flex h-[42px] items-center rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3">
+                      <select
+                        value={form.existingId}
+                        onChange={(e) => setForm((f) => ({ ...f, existingId: e.target.value }))}
+                        className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[13.5px] font-semibold text-[var(--text)] outline-none"
+                      >
+                        {(staff ?? []).map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name} ({ROLE_LABEL[s.role]})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                </div>
+                  <div>
+                    <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Leave date</label>
+                    <input
+                      type="date"
+                      value={form.leaveDate}
+                      onChange={(e) => setForm((f) => ({ ...f, leaveDate: e.target.value }))}
+                      className="h-[42px] w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                    />
+                  </div>
+                </>
               )}
             </div>
             <div className="flex gap-[10px] border-t border-[var(--border2)] p-[14px_18px]">

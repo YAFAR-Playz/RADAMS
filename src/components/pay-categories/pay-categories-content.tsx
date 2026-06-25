@@ -178,6 +178,8 @@ export function PayCategoriesContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [courseScope, setCourseScope] = useState<string[]>([]);
+  const [scopeMenuOpen, setScopeMenuOpen] = useState(false);
 
   async function reload() {
     setLoading(true);
@@ -290,6 +292,18 @@ export function PayCategoriesContent() {
   const extraCats = categories?.filter((c) => c.kind === "extra") ?? [];
   const dedCats = categories?.filter((c) => c.kind === "deduction") ?? [];
 
+  function toggleScope(offeringId: string) {
+    setCourseScope((prev) => (prev.includes(offeringId) ? prev.filter((x) => x !== offeringId) : [...prev, offeringId]));
+  }
+
+  const visibleCourseRates = courseScope.length ? (courseRates ?? []).filter((c) => courseScope.includes(c.offeringId)) : courseRates ?? [];
+  const scopeLabel =
+    courseScope.length === 0
+      ? "All courses"
+      : courseScope.length === 1
+        ? courseRates?.find((c) => c.offeringId === courseScope[0])?.label ?? "1 course selected"
+        : `${courseScope.length} courses selected`;
+
   return (
     <div className="flex flex-col gap-4">
       {error && (
@@ -307,6 +321,44 @@ export function PayCategoriesContent() {
         <p className="m-0 mt-[3px] max-w-[560px] text-[13px] leading-[1.5] text-[var(--muted)]">
           Define the extra-work and deduction categories Heads choose from in evaluations, plus per-course and bracket pay rates.
         </p>
+        <div className="mt-[14px] flex flex-wrap items-center gap-[9px]">
+          <span className="text-[12.5px] font-semibold text-[var(--muted)]">Per-paper rates apply to</span>
+          <div className="relative min-w-[240px]">
+            <button
+              onClick={() => setScopeMenuOpen((p) => !p)}
+              className="flex h-10 w-full items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3"
+            >
+              <Icon name="book" size={15} className="flex-none text-[var(--subtle)]" />
+              <span className={`flex-1 truncate text-left text-[13px] font-semibold ${courseScope.length ? "text-[var(--text)]" : "text-[var(--subtle)]"}`}>
+                {scopeLabel}
+              </span>
+              <Icon name="chevron-down" size={14} className="flex-none text-[var(--subtle)]" style={{ transform: scopeMenuOpen ? "rotate(180deg)" : "none" }} />
+            </button>
+            {scopeMenuOpen && (
+              <div className="absolute left-0 right-0 top-[46px] z-20 max-h-[240px] overflow-y-auto rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] p-[6px] shadow-[0_12px_36px_rgba(8,12,22,.18)]">
+                {(courseRates ?? []).map((c) => {
+                  const sel = courseScope.includes(c.offeringId);
+                  return (
+                    <button
+                      key={c.offeringId}
+                      onClick={() => toggleScope(c.offeringId)}
+                      className="flex w-full items-center gap-[10px] rounded-[8px] p-[9px_10px] hover:bg-[var(--surface2)]"
+                    >
+                      <div
+                        className="flex h-5 w-5 flex-none items-center justify-center rounded-[6px] border-[1.5px]"
+                        style={{ borderColor: sel ? "var(--brand)" : "var(--border)", background: sel ? "var(--brand)" : "transparent", color: "var(--brandfg)" }}
+                      >
+                        {sel && <Icon name="check" size={13} />}
+                      </div>
+                      <span className="text-[13px] font-semibold text-[var(--text)]">{c.label}</span>
+                    </button>
+                  );
+                })}
+                {(courseRates ?? []).length === 0 && <div className="p-3 text-center text-[12.5px] text-[var(--subtle)]">No courses yet.</div>}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {loading && !categories ? (
@@ -360,7 +412,7 @@ export function PayCategoriesContent() {
               <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Per-paper rate by course</h3>
             </header>
             <div className="grid grid-cols-1 gap-[10px] p-[10px] sm:grid-cols-2">
-              {(courseRates ?? []).map((c) => (
+              {visibleCourseRates.map((c) => (
                 <div key={c.offeringId} className="flex items-center gap-[10px] rounded-[9px] border border-[var(--border2)] p-[10px_12px]">
                   <span className="flex-1 text-[13px] font-semibold text-[var(--text)]">{c.label}</span>
                   <span className="text-[11.5px] text-[var(--subtle)]">per paper</span>
@@ -376,7 +428,7 @@ export function PayCategoriesContent() {
                   {busyId === c.offeringId && <Spinner size={13} className="text-[var(--subtle)]" />}
                 </div>
               ))}
-              {(courseRates ?? []).length === 0 && <div className="p-2 text-[12.5px] text-[var(--subtle)]">No courses yet.</div>}
+              {visibleCourseRates.length === 0 && <div className="p-2 text-[12.5px] text-[var(--subtle)]">No courses match this filter.</div>}
             </div>
           </section>
 

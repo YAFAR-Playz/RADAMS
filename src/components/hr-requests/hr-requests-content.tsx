@@ -155,6 +155,12 @@ export function HrRequestsContent() {
                               <div className="truncate text-[12.5px] text-[var(--text)]">{r.candidateEmail}</div>
                             </div>
                           )}
+                          {r.proposedDate && (
+                            <div>
+                              <div className="text-[10px] font-bold uppercase text-[var(--subtle)]">{r.kind === "remove" ? "Leave date" : "Proposed start"}</div>
+                              <div className="text-[12.5px] text-[var(--text)]">{new Date(r.proposedDate).toLocaleDateString()}</div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

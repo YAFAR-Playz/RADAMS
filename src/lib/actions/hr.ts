@@ -16,6 +16,7 @@ export type StaffingRequestDetail = {
   targetName: string | null;
   offeringLabel: string;
   reason: string | null;
+  proposedDate: string | null;
 };
 
 function offeringLabel(o: { session: string; unit: string | null; courses: { name: string } | { name: string }[] | null } | null) {
@@ -24,26 +25,39 @@ function offeringLabel(o: { session: string; unit: string | null; courses: { nam
   return [course?.name, o.session, o.unit].filter(Boolean).join(" · ");
 }
 
-export type StaffingLogRow = { id: string; title: string; detail: string; createdAt: string; icon: "user-plus"; color: string };
+export type StaffingLogRow = { id: string; title: string; detail: string; createdAt: string; icon: "user-plus" | "x"; color: string };
 
 export async function listRecentStaffJoins(): Promise<StaffingLogRow[]> {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org) return [];
   const supabase = await createClient();
   const { data } = await supabase
-    .from("profiles")
-    .select("id, full_name, role, created_at")
+    .from("staffing_log")
+    .select("id, kind, target_name, target_role, hire_date, leave_date, created_at")
     .eq("org_id", profile.org.id)
     .order("created_at", { ascending: false })
     .limit(8);
-  return (data ?? []).map((p) => ({
-    id: p.id,
-    title: `Added ${p.role.charAt(0).toUpperCase() + p.role.slice(1)} — ${p.full_name}`,
-    detail: `joined ${new Date(p.created_at).toLocaleDateString()}`,
-    createdAt: p.created_at,
-    icon: "user-plus" as const,
-    color: "var(--brand)",
-  }));
+  return (data ?? []).map((r) => {
+    const roleLabel = r.target_role.charAt(0).toUpperCase() + r.target_role.slice(1);
+    if (r.kind === "add") {
+      return {
+        id: r.id,
+        title: `Added ${roleLabel} — ${r.target_name}`,
+        detail: `hired ${r.hire_date ? new Date(r.hire_date).toLocaleDateString() : "—"}`,
+        createdAt: r.created_at,
+        icon: "user-plus" as const,
+        color: "var(--brand)",
+      };
+    }
+    return {
+      id: r.id,
+      title: `Removed ${roleLabel} — ${r.target_name}`,
+      detail: `left ${r.leave_date ? new Date(r.leave_date).toLocaleDateString() : "—"}`,
+      createdAt: r.created_at,
+      icon: "x" as const,
+      color: "var(--danger)",
+    };
+  });
 }
 
 export type StaffByRole = { role: string; n: number; barW: string };
@@ -88,7 +102,7 @@ export async function listAllStaffingRequests(): Promise<StaffingRequestDetail[]
   const { data } = await supabase
     .from("staffing_requests")
     .select(
-      "id, kind, status, created_at, reason, candidate_name, candidate_phone, candidate_email, requested_by, profiles!staffing_requests_target_assistant_id_fkey(full_name), course_offerings(session, unit, courses(name))"
+      "id, kind, status, created_at, reason, proposed_date, candidate_name, candidate_phone, candidate_email, requested_by, profiles!staffing_requests_target_assistant_id_fkey(full_name), course_offerings(session, unit, courses(name))"
     )
     .eq("org_id", profile.org.id)
     .order("created_at", { ascending: false });
@@ -115,6 +129,7 @@ export async function listAllStaffingRequests(): Promise<StaffingRequestDetail[]
       targetName: target?.full_name ?? null,
       offeringLabel: offeringLabel(offering),
       reason: r.reason,
+      proposedDate: r.proposed_date,
     };
   });
 }
