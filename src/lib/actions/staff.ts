@@ -84,7 +84,7 @@ export async function listStaff(): Promise<StaffMember[]> {
   }));
 }
 
-export async function createStaffMember(input: { name: string; email: string; phone: string; role: Role }): Promise<{ id: string }> {
+export async function createStaffMember(input: { name: string; email: string; phone: string; role: Role; hireDate?: string }): Promise<{ id: string }> {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org) throw new Error("Not authenticated");
   if (!input.name.trim() || !input.email.trim()) throw new Error("Name and email are required");
@@ -104,6 +104,8 @@ export async function createStaffMember(input: { name: string; email: string; ph
     .join("")
     .toUpperCase();
 
+  const hiredAt = input.hireDate || new Date().toISOString().slice(0, 10);
+
   const { error: profileError } = await admin.from("profiles").insert({
     id: created.user.id,
     org_id: profile.org.id,
@@ -112,11 +114,20 @@ export async function createStaffMember(input: { name: string; email: string; ph
     initials,
     email: input.email.trim(),
     phone: input.phone || null,
+    hired_at: hiredAt,
   });
   if (profileError) {
     await admin.auth.admin.deleteUser(created.user.id);
     throw new Error(profileError.message);
   }
+
+  await admin.from("staffing_log").insert({
+    org_id: profile.org.id,
+    kind: "add",
+    target_name: input.name.trim(),
+    target_role: input.role,
+    hire_date: hiredAt,
+  });
 
   return { id: created.user.id };
 }
@@ -137,10 +148,22 @@ export async function updateStaffMember(id: string, patch: { name: string; phone
   if (error) throw new Error(error.message);
 }
 
-export async function removeStaffMember(id: string) {
+export async function removeStaffMember(id: string, leaveDate?: string) {
   const admin = createAdminClient();
+  const { data: target } = await admin.from("profiles").select("org_id, full_name, role").eq("id", id).single();
+
   const { error } = await admin.auth.admin.deleteUser(id);
   if (error) throw new Error(error.message);
+
+  if (target) {
+    await admin.from("staffing_log").insert({
+      org_id: target.org_id,
+      kind: "remove",
+      target_name: target.full_name,
+      target_role: target.role,
+      leave_date: leaveDate || new Date().toISOString().slice(0, 10),
+    });
+  }
 }
 
 export async function getLoginAsLink(targetProfileId: string, redirectTo: string): Promise<{ url: string }> {
@@ -156,7 +179,10 @@ export async function getLoginAsLink(targetProfileId: string, redirectTo: string
     email: target.email,
     options: { redirectTo },
   });
-  if (error || !data) throw new Error(error?.message ?? "Couldn't create a login link");
+  if (error || !data) {
+    console.error("getLoginAsLink: generateLink failed", { targetProfileId, email: target.email, redirectTo, error });
+    throw new Error(error?.message ?? "Couldn't create a login link");
+  }
 
   return { url: data.properties.action_link };
 }

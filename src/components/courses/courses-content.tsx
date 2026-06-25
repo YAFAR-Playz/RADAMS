@@ -68,18 +68,26 @@ export function CoursesContent() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<CourseInput>(emptyForm);
-  const [schedule, setSchedule] = useState<ScheduleDraftRow[]>([]);
+  const [scheduleOverrides, setScheduleOverrides] = useState<Record<number, { amount?: string; dueDate?: string }>>({});
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [savingDatesId, setSavingDatesId] = useState<string | null>(null);
 
-  function syncScheduleCount(count: number, total: string, startDate: string) {
-    setSchedule((prev) => {
-      if (count <= 1) return [];
-      const next = defaultScheduleRows(count, total, startDate);
-      return next.map((row, i) => (prev[i] ? { ...row, amount: prev[i].amount, dueDate: prev[i].dueDate } : row));
+  // The number of rows shown always equals form.installmentCount — row count
+  // can never desync from the selected count, only the amount/date per row
+  // can be overridden.
+  const schedule: ScheduleDraftRow[] = useMemo(() => {
+    if (form.installmentCount <= 1) return [];
+    const defaults = defaultScheduleRows(form.installmentCount, form.feeInstallmentTotal, form.start);
+    return defaults.map((row) => {
+      const override = scheduleOverrides[row.seq];
+      return override ? { ...row, ...override } : row;
     });
+  }, [form.installmentCount, form.feeInstallmentTotal, form.start, scheduleOverrides]);
+
+  function updateScheduleRow(seq: number, patch: { amount?: string; dueDate?: string }) {
+    setScheduleOverrides((prev) => ({ ...prev, [seq]: { ...prev[seq], ...patch } }));
   }
 
   async function reload() {
@@ -128,7 +136,7 @@ export function CoursesContent() {
   function openAdd() {
     setEditId(null);
     setForm(emptyForm);
-    setSchedule([]);
+    setScheduleOverrides({});
     setModalOpen(true);
   }
 
@@ -147,23 +155,22 @@ export function CoursesContent() {
       installmentCount: c.installmentCount,
       headIds: heads.filter((h) => c.heads.includes(h.name)).map((h) => h.id),
     });
+    setScheduleOverrides({});
     setModalOpen(true);
     if (c.installmentCount > 1) {
       setScheduleLoading(true);
       try {
         const existing = await getInstallmentSchedule(c.id);
-        if (existing.length) {
-          setSchedule(existing.map((r) => ({ seq: r.seq, amount: String(r.amount), dueDate: r.dueDate ?? "" })));
-        } else {
-          setSchedule(defaultScheduleRows(c.installmentCount, c.feeInstallmentTotal != null ? String(c.feeInstallmentTotal) : "", c.start ?? ""));
+        const overrides: Record<number, { amount?: string; dueDate?: string }> = {};
+        for (const r of existing) {
+          overrides[r.seq] = { amount: String(r.amount), dueDate: r.dueDate ?? "" };
         }
+        setScheduleOverrides(overrides);
       } catch {
-        setSchedule(defaultScheduleRows(c.installmentCount, c.feeInstallmentTotal != null ? String(c.feeInstallmentTotal) : "", c.start ?? ""));
+        // Fall back to the computed defaults already shown.
       } finally {
         setScheduleLoading(false);
       }
-    } else {
-      setSchedule([]);
     }
   }
 
@@ -575,7 +582,6 @@ export function CoursesContent() {
                     onChange={(e) => {
                       const v = e.target.value.replace(/[^0-9]/g, "");
                       setForm((f) => ({ ...f, feeInstallmentTotal: v }));
-                      syncScheduleCount(form.installmentCount, v, form.start);
                     }}
                     placeholder="660"
                     className="h-10 w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[11px] font-mono text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
@@ -590,7 +596,6 @@ export function CoursesContent() {
                     onChange={(e) => {
                       const n = Number(e.target.value);
                       setForm((f) => ({ ...f, installmentCount: n }));
-                      syncScheduleCount(n, form.feeInstallmentTotal, form.start);
                     }}
                     className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[13px] font-semibold text-[var(--text)] outline-none"
                   >
@@ -614,7 +619,7 @@ export function CoursesContent() {
                       ))}
                     </div>
                   ) : (
-                    schedule.map((row, i) => (
+                    schedule.map((row) => (
                       <div key={row.seq} className="flex flex-wrap items-center gap-2 border-b border-[var(--border2)] p-[9px_12px] last:border-b-0">
                         <span className="w-[80px] flex-none text-[12.5px] font-semibold text-[var(--text)]">Payment {row.seq}</span>
                         <div className="flex h-[34px] min-w-[90px] flex-1 items-center gap-[2px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[9px]">
@@ -623,7 +628,7 @@ export function CoursesContent() {
                             value={row.amount}
                             onChange={(e) => {
                               const v = e.target.value.replace(/[^0-9.]/g, "");
-                              setSchedule((prev) => prev.map((r, idx) => (idx === i ? { ...r, amount: v } : r)));
+                              updateScheduleRow(row.seq, { amount: v });
                             }}
                             className="w-full border-none bg-transparent text-right font-mono text-[12.5px] font-bold text-[var(--ok)] outline-none"
                           />
@@ -633,7 +638,7 @@ export function CoursesContent() {
                           value={row.dueDate}
                           onChange={(e) => {
                             const v = e.target.value;
-                            setSchedule((prev) => prev.map((r, idx) => (idx === i ? { ...r, dueDate: v } : r)));
+                            updateScheduleRow(row.seq, { dueDate: v });
                           }}
                           className="h-[34px] min-w-[120px] flex-1 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[9px] text-[12px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
                         />

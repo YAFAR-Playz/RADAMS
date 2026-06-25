@@ -126,6 +126,7 @@ export async function createStaffingRequest(input: {
   candidatePhone: string;
   candidateEmail: string;
   reason: string;
+  proposedDate: string;
 }) {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org) throw new Error("Not authenticated");
@@ -140,6 +141,7 @@ export async function createStaffingRequest(input: {
     candidate_email: input.candidateEmail || null,
     reason: input.reason || null,
     requested_by: profile.id,
+    proposed_date: input.proposedDate || null,
   });
   if (error) throw new Error(error.message);
 }

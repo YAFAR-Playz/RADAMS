@@ -3,19 +3,26 @@
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
-import { listPaymentPlans, markInstallmentPaid, type StudentPaymentRow } from "@/lib/actions/payments";
+import { listPaymentPlans, markInstallmentPaid, setPlanDiscount, setPlanType, type StudentPaymentRow, type PlanType } from "@/lib/actions/payments";
+import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 
 function fmt(n: number) {
   return `£${Math.round(n).toLocaleString("en-US")}`;
 }
 
+type StatusFilter = "all" | "paid" | "pending" | "installments" | "full";
+
 export function InstallmentsContent() {
   const [plans, setPlans] = useState<StudentPaymentRow[] | null>(null);
+  const [offerings, setOfferings] = useState<OfferingOption[] | null>(null);
+  const [offeringFilter, setOfferingFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [savingPlanId, setSavingPlanId] = useState<string | null>(null);
 
   async function reload() {
     setLoading(true);
@@ -31,14 +38,48 @@ export function InstallmentsContent() {
   useEffect(() => {
     (async () => {
       await reload();
+      setOfferings(await listMyOfferings());
     })();
   }, []);
 
   const filtered = useMemo(() => {
     if (!plans) return [];
     const q = search.trim().toLowerCase();
-    return q ? plans.filter((p) => p.studentName.toLowerCase().includes(q)) : plans;
-  }, [plans, search]);
+    return plans.filter((p) => {
+      if (q && !p.studentName.toLowerCase().includes(q)) return false;
+      if (offeringFilter !== "all" && p.offeringId !== offeringFilter) return false;
+      const outstanding = p.totalAmount - p.paidAmount;
+      if (statusFilter === "paid" && outstanding > 0) return false;
+      if (statusFilter === "pending" && outstanding <= 0) return false;
+      if (statusFilter === "installments" && p.planType !== "installments") return false;
+      if (statusFilter === "full" && p.planType !== "full") return false;
+      return true;
+    });
+  }, [plans, search, offeringFilter, statusFilter]);
+
+  async function onSetDiscount(planId: string, pct: number) {
+    setSavingPlanId(planId);
+    try {
+      await setPlanDiscount(planId, pct);
+      await reload();
+    } catch {
+      setError("Couldn't update discount — try again.");
+    } finally {
+      setSavingPlanId(null);
+    }
+  }
+
+  async function onSetPlanType(planId: string, type: PlanType) {
+    setSavingPlanId(planId);
+    try {
+      await setPlanType(planId, type);
+      await reload();
+    } catch {
+      setError("Can't change plan type after a payment has been made.");
+    } finally {
+      setSavingPlanId(null);
+    }
+  }
 
   const stats = plans
     ? [
@@ -99,14 +140,56 @@ export function InstallmentsContent() {
       </div>
 
       {/* TOOLBAR */}
-      <div className="flex h-10 min-w-[200px] max-w-[300px] items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-3">
-        <Icon name="search" size={16} className="text-[var(--subtle)]" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search students…"
-          className="h-full w-full border-none bg-transparent text-[13.5px] text-[var(--text)] outline-none"
-        />
+      <div className="flex flex-wrap items-center gap-[10px]">
+        <div className="flex h-10 min-w-[200px] max-w-[300px] flex-1 items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-3">
+          <Icon name="search" size={16} className="text-[var(--subtle)]" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search students…"
+            className="h-full w-full border-none bg-transparent text-[13.5px] text-[var(--text)] outline-none"
+          />
+        </div>
+        <div className="flex h-10 min-w-[200px] items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-3">
+          <Icon name="book" size={15} className="flex-none text-[var(--subtle)]" />
+          <select
+            value={offeringFilter}
+            onChange={(e) => setOfferingFilter(e.target.value)}
+            className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[13px] font-semibold text-[var(--text)] outline-none"
+          >
+            <option value="all">All courses</option>
+            {(offerings ?? []).map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-wrap items-center gap-[6px]">
+          {([
+            ["all", "All"],
+            ["paid", "Fully paid"],
+            ["pending", "Pending"],
+            ["installments", "Installments"],
+            ["full", "Full payment"],
+          ] as [StatusFilter, string][]).map(([value, label]) => {
+            const active = statusFilter === value;
+            return (
+              <button
+                key={value}
+                onClick={() => setStatusFilter(value)}
+                className="rounded-full border px-3 py-[7px] text-[12.5px] font-semibold"
+                style={
+                  active
+                    ? { borderColor: "var(--brand)", background: "var(--brand)", color: "var(--brandfg)" }
+                    : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
+                }
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* PLANS LIST */}
@@ -156,6 +239,39 @@ export function InstallmentsContent() {
                 </div>
                 {expanded && (
                   <div className="border-t border-[var(--border2)] bg-[var(--surface2)] p-[12px_18px]">
+                    <div className="mb-3 flex flex-wrap gap-[10px]">
+                      <div className="min-w-[140px] flex-1">
+                        <div className="mb-[5px] text-[10.5px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Plan</div>
+                        <div className="flex h-9 items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px]">
+                          <select
+                            value={p.planType ?? "full"}
+                            disabled={savingPlanId === p.planId || p.paidAmount > 0}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => onSetPlanType(p.planId, e.target.value as PlanType)}
+                            className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[12.5px] font-semibold text-[var(--text)] outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                            title={p.paidAmount > 0 ? "Can't change plan type after a payment has been made" : undefined}
+                          >
+                            <option value="full">Full payment</option>
+                            <option value="installments">Installments</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="min-w-[120px] flex-1">
+                        <div className="mb-[5px] text-[10.5px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Discount (%)</div>
+                        <div className="flex h-9 items-center gap-[2px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px]">
+                          <input
+                            defaultValue={p.discountPct}
+                            onClick={(e) => e.stopPropagation()}
+                            onBlur={(e) => onSetDiscount(p.planId, Number(e.target.value.replace(/[^0-9]/g, "")) || 0)}
+                            inputMode="numeric"
+                            disabled={savingPlanId === p.planId}
+                            className="w-full border-none bg-transparent text-right font-mono text-[12.5px] font-bold text-[var(--text)] outline-none"
+                          />
+                          <span className="text-[12px] text-[var(--subtle)]">%</span>
+                        </div>
+                      </div>
+                      {savingPlanId === p.planId && <Spinner size={14} className="mt-[22px] flex-none text-[var(--subtle)]" />}
+                    </div>
                     <div className="mb-3 h-[6px] overflow-hidden rounded-full bg-[var(--surface)]">
                       <div className="h-full rounded-full bg-[var(--ok)] transition-[width]" style={{ width: `${pct}%` }} />
                     </div>

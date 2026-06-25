@@ -47,6 +47,7 @@ export function AssistantsContent() {
   const [candidatePhone, setCandidatePhone] = useState("");
   const [candidateEmail, setCandidateEmail] = useState("");
   const [reason, setReason] = useState("");
+  const [proposedDate, setProposedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -121,6 +122,7 @@ export function AssistantsContent() {
     setCandidatePhone("");
     setCandidateEmail("");
     setReason("");
+    setProposedDate(new Date().toISOString().slice(0, 10));
     setModalOpen(true);
   }
 
@@ -137,6 +139,7 @@ export function AssistantsContent() {
         candidatePhone,
         candidateEmail,
         reason,
+        proposedDate,
       });
       setModalOpen(false);
       setRequests(await listStaffingRequests());
@@ -464,6 +467,18 @@ export function AssistantsContent() {
                   </div>
                 </>
               )}
+
+              <div>
+                <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">
+                  {kind === "remove" ? "Leave date" : "Proposed start date"}
+                </label>
+                <input
+                  type="date"
+                  value={proposedDate}
+                  onChange={(e) => setProposedDate(e.target.value)}
+                  className="h-10 w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                />
+              </div>
 
               <div>
                 <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">
