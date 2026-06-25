@@ -20,11 +20,14 @@ export type InstallmentRow = {
 };
 
 export type StudentPaymentRow = {
+  planId: string;
   studentId: string;
   studentName: string;
   initials: string;
   offering: string;
+  offeringId: string;
   planType: PlanType | null;
+  discountPct: number;
   totalAmount: number;
   paidAmount: number;
   installments: InstallmentRow[];
@@ -109,7 +112,7 @@ export async function listPaymentPlans(): Promise<StudentPaymentRow[]> {
   const { data: plans } = await supabase
     .from("payment_plans")
     .select(
-      "id, student_id, offering_id, plan_type, total_amount, students(name, initials), course_offerings(session, unit, courses(name))"
+      "id, student_id, offering_id, plan_type, total_amount, discount_pct, students(name, initials), course_offerings(session, unit, courses(name))"
     )
     .order("created_at", { ascending: false });
   if (!plans || plans.length === 0) return [];
@@ -135,11 +138,14 @@ export async function listPaymentPlans(): Promise<StudentPaymentRow[]> {
     const installmentRows = installmentsByPlan.get(p.id) ?? [];
     const paidAmount = installmentRows.filter((i) => i.status === "paid").reduce((sum, i) => sum + i.amount, 0);
     return {
+      planId: p.id,
       studentId: p.student_id,
       studentName: student.name,
       initials: student.initials,
       offering: offeringLabel(offering),
+      offeringId: p.offering_id,
       planType: p.plan_type as PlanType,
+      discountPct: p.discount_pct,
       totalAmount: Number(p.total_amount),
       paidAmount,
       installments: installmentRows,
@@ -147,6 +153,99 @@ export async function listPaymentPlans(): Promise<StudentPaymentRow[]> {
   });
 
   return rows.filter((x): x is StudentPaymentRow => x !== null);
+}
+
+async function regenerateInstallments(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  planId: string,
+  offeringId: string,
+  planType: PlanType,
+  totalAmount: number,
+  alreadyPaid: number
+) {
+  await supabase.from("payment_installments").delete().eq("plan_id", planId);
+
+  let scheduleDefs: { seq: number; amount: number; dueDate: string | null }[] = [];
+  const count = planType === "full" ? 1 : Math.max(1, (await getOfferingFees(offeringId)).installmentCount);
+  if (planType === "installments") {
+    const { data: customSchedule } = await supabase
+      .from("course_installment_schedule")
+      .select("seq, amount, due_date")
+      .eq("offering_id", offeringId)
+      .order("seq", { ascending: true });
+    if (customSchedule && customSchedule.length) {
+      scheduleDefs = customSchedule.map((r) => ({ seq: r.seq, amount: Number(r.amount), dueDate: r.due_date }));
+    }
+  }
+  if (!scheduleDefs.length) {
+    const per = Math.round((totalAmount / count) * 100) / 100;
+    scheduleDefs = Array.from({ length: count }, (_, i) => {
+      const isLast = i === count - 1;
+      const amount = isLast ? Math.round((totalAmount - per * (count - 1)) * 100) / 100 : per;
+      const due = new Date();
+      due.setMonth(due.getMonth() + i);
+      return { seq: i + 1, amount, dueDate: due.toISOString().slice(0, 10) };
+    });
+  }
+
+  let remainingPaid = alreadyPaid;
+  const rows = scheduleDefs.map((s) => {
+    const markPaid = remainingPaid >= s.amount - 0.01;
+    if (markPaid) remainingPaid -= s.amount;
+    return {
+      plan_id: planId,
+      seq: s.seq,
+      amount: s.amount,
+      due_date: s.dueDate ?? new Date().toISOString().slice(0, 10),
+      status: markPaid ? ("paid" as const) : ("pending" as const),
+      paid_at: markPaid ? new Date().toISOString() : null,
+    };
+  });
+
+  const { error } = await supabase.from("payment_installments").insert(rows);
+  if (error) throw new Error(error.message);
+}
+
+export async function setPlanDiscount(planId: string, discountPct: number) {
+  const supabase = await createClient();
+  const { data: plan } = await supabase.from("payment_plans").select("offering_id, plan_type").eq("id", planId).single();
+  if (!plan) throw new Error("Plan not found");
+
+  const fees = await getOfferingFees(plan.offering_id);
+  const baseFee = plan.plan_type === "full" ? fees.feeFull ?? 0 : fees.feeInstallmentTotal ?? 0;
+  const clampedPct = Math.max(0, Math.min(100, discountPct));
+  const totalAmount = Math.round(baseFee * (1 - clampedPct / 100) * 100) / 100;
+
+  const { data: installments } = await supabase.from("payment_installments").select("amount, status").eq("plan_id", planId);
+  const alreadyPaid = (installments ?? []).filter((i) => i.status === "paid").reduce((s, i) => s + Number(i.amount), 0);
+
+  const { error } = await supabase.from("payment_plans").update({ total_amount: totalAmount, discount_pct: clampedPct }).eq("id", planId);
+  if (error) throw new Error(error.message);
+
+  await regenerateInstallments(supabase, planId, plan.offering_id, plan.plan_type as PlanType, totalAmount, alreadyPaid);
+}
+
+export async function setPlanType(planId: string, planType: PlanType) {
+  const supabase = await createClient();
+  const { data: plan } = await supabase.from("payment_plans").select("offering_id, discount_pct").eq("id", planId).single();
+  if (!plan) throw new Error("Plan not found");
+
+  const { data: installments } = await supabase.from("payment_installments").select("amount, status").eq("plan_id", planId);
+  const alreadyPaid = (installments ?? []).filter((i) => i.status === "paid").reduce((s, i) => s + Number(i.amount), 0);
+  if (alreadyPaid > 0) throw new Error("Can't change plan type after a payment has been made");
+
+  const fees = await getOfferingFees(plan.offering_id);
+  const baseFee = planType === "full" ? fees.feeFull ?? 0 : fees.feeInstallmentTotal ?? 0;
+  const totalAmount = Math.round(baseFee * (1 - plan.discount_pct / 100) * 100) / 100;
+  const count = planType === "full" ? 1 : Math.max(1, fees.installmentCount);
+
+  const { error } = await supabase
+    .from("payment_plans")
+    .update({ plan_type: planType, total_amount: totalAmount, installment_count: count })
+    .eq("id", planId);
+  if (error) throw new Error(error.message);
+
+  await regenerateInstallments(supabase, planId, plan.offering_id, planType, totalAmount, 0);
 }
 
 export type PaymentStatusSummary = { planType: PlanType | null; totalAmount: number; paidAmount: number; status: "paid" | "pending" | "partial" | "none" };

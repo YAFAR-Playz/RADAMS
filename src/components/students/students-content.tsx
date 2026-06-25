@@ -41,6 +41,7 @@ export function StudentsContent({ role }: { role: Role }) {
 
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"enroll" | "name">("enroll");
+  const [paymentFilter, setPaymentFilter] = useState<"all" | "paid" | "pending" | "installments">("all");
   const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -105,12 +106,21 @@ export function StudentsContent({ role }: { role: Role }) {
   const filtered = useMemo(() => {
     if (!students) return [];
     const q = search.trim().toLowerCase();
-    const rows = q ? students.filter((s) => s.name.toLowerCase().includes(q)) : students;
+    const rows = students.filter((s) => {
+      if (q && !s.name.toLowerCase().includes(q)) return false;
+      if (isRegistration && paymentFilter !== "all") {
+        const payment = paymentByStudent[s.studentId];
+        if (paymentFilter === "paid" && payment?.status !== "paid") return false;
+        if (paymentFilter === "pending" && (!payment || payment.status === "paid")) return false;
+        if (paymentFilter === "installments" && payment?.planType !== "installments") return false;
+      }
+      return true;
+    });
     return rows.slice().sort((a, b) => {
       if (sortBy === "name") return a.name.localeCompare(b.name);
       return new Date(b.enrolledAt).getTime() - new Date(a.enrolledAt).getTime();
     });
-  }, [students, search, sortBy]);
+  }, [students, search, sortBy, isRegistration, paymentFilter, paymentByStudent]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
@@ -321,19 +331,48 @@ export function StudentsContent({ role }: { role: Role }) {
             className="h-full w-full border-none bg-transparent text-[13.5px] text-[var(--text)] outline-none"
           />
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {STATUS_DEFS.filter((s) => s.key !== "excused").map((s) => {
-            const { bg, fg } = toneColors(s.tone);
-            return (
-              <span key={s.key} className="inline-flex items-center gap-[5px] text-[12px] font-medium text-[var(--muted)]">
-                <span className="flex h-[18px] w-[18px] items-center justify-center rounded-[5px]" style={{ background: bg, color: fg }}>
-                  <Icon name={s.icon} size={12} />
+        {isRegistration ? (
+          <div className="flex flex-wrap items-center gap-[6px]">
+            {(
+              [
+                ["all", "All"],
+                ["paid", "Fully paid"],
+                ["pending", "Pending"],
+                ["installments", "Installments"],
+              ] as const
+            ).map(([value, label]) => {
+              const active = paymentFilter === value;
+              return (
+                <button
+                  key={value}
+                  onClick={() => setPaymentFilter(value)}
+                  className="rounded-full border px-3 py-[7px] text-[12.5px] font-semibold"
+                  style={
+                    active
+                      ? { borderColor: "var(--brand)", background: "var(--brand)", color: "var(--brandfg)" }
+                      : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
+                  }
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            {STATUS_DEFS.filter((s) => s.key !== "excused").map((s) => {
+              const { bg, fg } = toneColors(s.tone);
+              return (
+                <span key={s.key} className="inline-flex items-center gap-[5px] text-[12px] font-medium text-[var(--muted)]">
+                  <span className="flex h-[18px] w-[18px] items-center justify-center rounded-[5px]" style={{ background: bg, color: fg }}>
+                    <Icon name={s.icon} size={12} />
+                  </span>
+                  {s.label}
                 </span>
-                {s.label}
-              </span>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
         <div className="ml-auto flex items-center gap-[6px]">
           <span className="text-[11.5px] font-semibold text-[var(--subtle)]">Sort</span>
           <div className="flex gap-[2px] rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] p-[2px]">
