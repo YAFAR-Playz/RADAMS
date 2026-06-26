@@ -3,7 +3,14 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
-import { getOrgTemplates, saveOrgTemplate, resetOrgTemplate } from "@/lib/actions/templates";
+import {
+  getOrgTemplates,
+  saveOrgTemplate,
+  resetOrgTemplate,
+  getPlatformTemplates,
+  savePlatformTemplate,
+  resetPlatformTemplate,
+} from "@/lib/actions/templates";
 import { TEMPLATE_DEFS, type TemplateKey } from "@/lib/template-defs";
 
 const VARS = ["{student}", "{org}", "{course}", "{assistant_name}", "{assignment}", "{status}", "{grade}", "{session}", "{date}", "{comment}"];
@@ -25,7 +32,8 @@ function fill(tpl: string) {
   return tpl.replace(/\{(\w+)\}/g, (m, k) => (SAMPLE[k] !== undefined ? SAMPLE[k] : m));
 }
 
-export function TemplatesContent() {
+export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform" }) {
+  const isPlatform = scope === "platform";
   const [overrides, setOverrides] = useState<Record<TemplateKey, string | null> | null>(null);
   const [sel, setSel] = useState<TemplateKey>("assignment");
   const [draft, setDraft] = useState("");
@@ -38,7 +46,7 @@ export function TemplatesContent() {
     (async () => {
       setLoading(true);
       try {
-        const data = await getOrgTemplates();
+        const data = await (isPlatform ? getPlatformTemplates() : getOrgTemplates());
         setOverrides(data);
         setDraft(data.assignment ?? TEMPLATE_DEFS.find((t) => t.key === "assignment")!.def);
       } catch {
@@ -47,7 +55,7 @@ export function TemplatesContent() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [isPlatform]);
 
   function selectTemplate(key: TemplateKey) {
     setSel(key);
@@ -57,7 +65,7 @@ export function TemplatesContent() {
   async function onSave() {
     setSaving(true);
     try {
-      await saveOrgTemplate(sel, draft);
+      await (isPlatform ? savePlatformTemplate(sel, draft) : saveOrgTemplate(sel, draft));
       setOverrides((prev) => (prev ? { ...prev, [sel]: draft } : prev));
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -71,7 +79,7 @@ export function TemplatesContent() {
   async function onReset() {
     setSaving(true);
     try {
-      await resetOrgTemplate(sel);
+      await (isPlatform ? resetPlatformTemplate(sel) : resetOrgTemplate(sel));
       setOverrides((prev) => (prev ? { ...prev, [sel]: null } : prev));
       setDraft(TEMPLATE_DEFS.find((t) => t.key === sel)!.def);
     } catch {
@@ -96,15 +104,26 @@ export function TemplatesContent() {
       )}
 
       <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Admin · Organization templates</div>
+        <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">
+          {isPlatform ? "Owner · Platform default templates" : "Admin · Organization templates"}
+        </div>
         <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">WhatsApp message templates</h1>
         <p className="m-0 mt-[3px] max-w-[600px] text-[13px] leading-[1.5] text-[var(--muted)]">
-          Customize the WhatsApp messages your organization sends. Each starts from a built-in default.
+          {isPlatform
+            ? "Set the default WhatsApp messages used by any organization that hasn't written its own."
+            : "Customize the WhatsApp messages your organization sends. Each starts from a built-in default."}
         </p>
         <div className="mt-[14px] flex items-start gap-[10px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--infos)] p-[11px_13px]">
           <Icon name="building" size={17} className="mt-[1px] flex-none text-[var(--info)]" />
           <span className="text-[12.5px] leading-[1.45] text-[var(--text)]">
-            These templates apply to <span className="font-semibold">your organization</span> only. Edit to override the default, or reset to fall back to it.
+            {isPlatform ? (
+              <>These are the platform-wide defaults. Each org&apos;s own Templates page can still override them.</>
+            ) : (
+              <>
+                These templates apply to <span className="font-semibold">your organization</span> only. Edit to override the default, or reset to fall back
+                to it.
+              </>
+            )}
           </span>
         </div>
       </div>
@@ -212,9 +231,11 @@ export function TemplatesContent() {
               className="flex h-11 items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
             >
               {saving ? <Spinner size={15} /> : <Icon name={saved ? "check2" : "check"} size={15} />}
-              {saved ? "Saved" : "Save for my organization"}
+              {saved ? "Saved" : isPlatform ? "Save platform default" : "Save for my organization"}
             </button>
-            <p className="m-0 text-[11.5px] leading-[1.5] text-[var(--subtle)]">Saved changes apply only to your organization.</p>
+            <p className="m-0 text-[11.5px] leading-[1.5] text-[var(--subtle)]">
+              {isPlatform ? "Saved changes become the default for every org without its own override." : "Saved changes apply only to your organization."}
+            </p>
           </div>
         </section>
       </div>

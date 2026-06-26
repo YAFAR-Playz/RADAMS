@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/current-profile";
-import type { Kpi } from "@/lib/roles";
+import type { Kpi, Role } from "@/lib/roles";
 
 export type OrgMetrics = { students: number; assistants: number; heads: number; courses: number; assignments: number };
 export type OrgOverview = {
@@ -127,6 +127,7 @@ export async function createOrganization(input: { name: string; adminName: strin
     initials: adminInitials || "AD",
     email: input.adminEmail.trim(),
     phone: input.adminPhone || null,
+    is_main_admin: true,
   });
   if (profileError) {
     await admin.auth.admin.deleteUser(created.user.id);
@@ -196,4 +197,94 @@ export async function getOwnerDashboard(): Promise<OwnerDashboard> {
   ];
 
   return { kpis };
+}
+
+export type PlatformStaffMember = {
+  id: string;
+  name: string;
+  initials: string;
+  email: string;
+  phone: string | null;
+  role: Role;
+  orgId: string;
+  orgName: string;
+  joinedAt: string;
+  isMainAdmin: boolean;
+};
+
+export async function listAllStaff(): Promise<PlatformStaffMember[]> {
+  await requireOwner();
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, full_name, initials, email, phone, role, org_id, created_at, is_main_admin, organizations(name)")
+    .order("full_name", { ascending: true });
+  return (data ?? [])
+    .map((p) => {
+      const org = Array.isArray(p.organizations) ? p.organizations[0] : p.organizations;
+      if (!org) return null;
+      return {
+        id: p.id,
+        name: p.full_name,
+        initials: p.initials,
+        email: p.email,
+        phone: p.phone,
+        role: p.role as Role,
+        orgId: p.org_id,
+        orgName: org.name,
+        joinedAt: p.created_at,
+        isMainAdmin: !!p.is_main_admin,
+      };
+    })
+    .filter((x): x is PlatformStaffMember => !!x);
+}
+
+export async function updateAnyStaffRole(id: string, role: Role) {
+  await requireOwner();
+  const admin = createAdminClient();
+  const { error } = await admin.from("profiles").update({ role }).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function removeAnyStaffMember(id: string) {
+  await requireOwner();
+  const admin = createAdminClient();
+  const { error } = await admin.auth.admin.deleteUser(id);
+  if (error) throw new Error(error.message);
+}
+
+export type SystemOverview = {
+  usersByRole: { role: string; n: number; barW: string }[];
+  orgsByStatus: { status: string; n: number }[];
+  recentSignups: { name: string; role: string; orgName: string; createdAt: string }[];
+};
+
+export async function getSystemOverview(): Promise<SystemOverview> {
+  await requireOwner();
+  const supabase = await createClient();
+
+  const { data: profiles } = await supabase.from("profiles").select("full_name, role, created_at, organizations(name)").order("created_at", { ascending: false });
+  const { data: orgs } = await supabase.from("organizations").select("status");
+
+  const roleCounts = new Map<string, number>();
+  for (const p of profiles ?? []) {
+    if (p.role === "owner") continue;
+    roleCounts.set(p.role, (roleCounts.get(p.role) ?? 0) + 1);
+  }
+  const maxRole = Math.max(1, ...Array.from(roleCounts.values()));
+  const roleLabel: Record<string, string> = { admin: "Admin", hr: "HR", head: "Head", assistant: "Assistant", registration: "Registration", finance: "Finance" };
+  const usersByRole = Array.from(roleCounts.entries())
+    .map(([role, n]) => ({ role: roleLabel[role] ?? role, n, barW: `${Math.round((n / maxRole) * 100)}%` }))
+    .sort((a, b) => b.n - a.n);
+
+  const statusCounts = new Map<string, number>();
+  for (const o of orgs ?? []) statusCounts.set(o.status, (statusCounts.get(o.status) ?? 0) + 1);
+  const orgsByStatus = Array.from(statusCounts.entries()).map(([status, n]) => ({ status, n }));
+
+  const recentSignups = (profiles ?? []).slice(0, 8).map((p) => {
+    const org = Array.isArray(p.organizations) ? p.organizations[0] : p.organizations;
+    return { name: p.full_name, role: roleLabel[p.role] ?? p.role, orgName: org?.name ?? "—", createdAt: p.created_at };
+  });
+
+  return { usersByRole, orgsByStatus, recentSignups };
 }

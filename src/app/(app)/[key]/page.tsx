@@ -28,6 +28,8 @@ import { HeadCheckingContent } from "@/components/head-checking/head-checking-co
 import { OwnerOrgsContent } from "@/components/owner-orgs/owner-orgs-content";
 import { OwnerBrandingContent } from "@/components/owner-branding/owner-branding-content";
 import { SettingsContent } from "@/components/settings/settings-content";
+import { OwnerUsersContent } from "@/components/owner-users/owner-users-content";
+import { OwnerSystemContent } from "@/components/owner-system/owner-system-content";
 
 export default async function AppPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
@@ -61,6 +63,14 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
 
   if (key === "orgs" && profile.role === "owner") {
     return <OwnerOrgsContent />;
+  }
+
+  if (key === "users" && profile.role === "owner") {
+    return <OwnerUsersContent />;
+  }
+
+  if (key === "system" && profile.role === "owner") {
+    return <OwnerSystemContent />;
   }
 
   if (key === "students" && (profile.role === "admin" || profile.role === "head" || profile.role === "assistant" || profile.role === "registration")) {
@@ -109,6 +119,10 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
 
   if (key === "templates" && profile.role === "admin") {
     return <TemplatesContent />;
+  }
+
+  if (key === "templates" && profile.role === "owner") {
+    return <TemplatesContent scope="platform" />;
   }
 
   if (key === "branding" && profile.role === "admin") {
