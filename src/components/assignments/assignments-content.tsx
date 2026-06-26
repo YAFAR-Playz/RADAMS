@@ -135,6 +135,7 @@ export function AssignmentsContent() {
   }, [assignmentId]);
 
   const currentAssignment = assignments?.find((a) => a.id === assignmentId) ?? null;
+  const showGrade = currentAssignment ? currentAssignment.template === "grade" || currentAssignment.template === "rubric" : true;
   const currentOffering = offerings?.find((o) => o.id === offeringId) ?? null;
 
   const filtered = useMemo(() => {
@@ -188,8 +189,8 @@ export function AssignmentsContent() {
     try {
       await setGrade(assignmentId, studentId, value);
       patchLocal(studentId, { grade: value || null });
-    } catch {
-      setError("Couldn't save grade — try again.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't save grade — try again.");
     } finally {
       setSavingId(null);
     }
@@ -398,7 +399,7 @@ export function AssignmentsContent() {
               <div className="flex items-center gap-[14px] border-b border-[var(--border2)] px-[18px] py-[11px] text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">
                 <span className="w-[172px] flex-none">Student</span>
                 <span className="flex-1">Status</span>
-                <span className="w-[66px] flex-none">Grade</span>
+                {showGrade && <span className="w-[66px] flex-none">Grade</span>}
                 <span className="min-w-0 flex-[1.4]">Comment</span>
                 <span className="w-[36px] flex-none" />
               </div>
@@ -419,12 +420,14 @@ export function AssignmentsContent() {
                   <div className="flex flex-1 items-center">
                     <StatusSelect student={st} onChange={(status) => onStatusChange(st.studentId, status)} />
                   </div>
-                  <input
-                    defaultValue={st.grade ?? ""}
-                    onBlur={(e) => onGradeBlur(st.studentId, e.target.value)}
-                    placeholder="—"
-                    className="h-[36px] w-[66px] flex-none rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-center text-[13px] font-semibold text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
-                  />
+                  {showGrade && (
+                    <input
+                      defaultValue={st.grade ?? ""}
+                      onBlur={(e) => onGradeBlur(st.studentId, e.target.value)}
+                      placeholder="—"
+                      className="h-[36px] w-[66px] flex-none rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-center text-[13px] font-semibold text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                    />
+                  )}
                   <input
                     defaultValue={st.comment ?? ""}
                     onBlur={(e) => onCommentBlur(st.studentId, e.target.value)}
@@ -474,12 +477,14 @@ export function AssignmentsContent() {
                     <StatusSelect student={st} onChange={(status) => onStatusChange(st.studentId, status)} size="lg" />
                   </div>
                   <div className="flex gap-[10px]">
-                    <input
-                      defaultValue={st.grade ?? ""}
-                      onBlur={(e) => onGradeBlur(st.studentId, e.target.value)}
-                      placeholder="Grade"
-                      className="h-[44px] w-[84px] flex-none rounded-[9px] border border-[var(--border)] bg-[var(--surface2)] text-center text-[14px] font-semibold text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
-                    />
+                    {showGrade && (
+                      <input
+                        defaultValue={st.grade ?? ""}
+                        onBlur={(e) => onGradeBlur(st.studentId, e.target.value)}
+                        placeholder="Grade"
+                        className="h-[44px] w-[84px] flex-none rounded-[9px] border border-[var(--border)] bg-[var(--surface2)] text-center text-[14px] font-semibold text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                      />
+                    )}
                     <input
                       defaultValue={st.comment ?? ""}
                       onBlur={(e) => onCommentBlur(st.studentId, e.target.value)}

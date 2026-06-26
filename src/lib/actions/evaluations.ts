@@ -37,6 +37,37 @@ export async function listMyAssistants(): Promise<AssistantOption[]> {
   return Array.from(seen.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
+export async function countCheckedPapers(assistantId: string, offeringId: string): Promise<number> {
+  const supabase = await createClient();
+  const { data: assignmentRows } = await supabase
+    .from("assignments")
+    .select("id")
+    .eq("offering_id", offeringId)
+    .eq("counts_salary", true);
+  const assignmentIds = (assignmentRows ?? []).map((a) => a.id);
+  if (!assignmentIds.length) return 0;
+
+  const { data: enrollments } = await supabase
+    .from("enrollments")
+    .select("student_id")
+    .eq("offering_id", offeringId)
+    .eq("assistant_id", assistantId);
+  const studentIds = (enrollments ?? []).map((e) => e.student_id);
+  if (!studentIds.length) return 0;
+
+  // Only count entries the assistant logged themselves — a head's
+  // correction/override on one of their students must not count toward
+  // that assistant's salary-relevant paper count.
+  const { count } = await supabase
+    .from("assignment_logs")
+    .select("id", { count: "exact", head: true })
+    .in("assignment_id", assignmentIds)
+    .in("student_id", studentIds)
+    .eq("status", "checked")
+    .eq("logged_by", assistantId);
+  return count ?? 0;
+}
+
 export async function getOrCreateEvaluation(assistantId: string, offeringId: string, period: string): Promise<Evaluation> {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org) throw new Error("Not authenticated");

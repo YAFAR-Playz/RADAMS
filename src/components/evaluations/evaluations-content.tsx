@@ -6,7 +6,7 @@ import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import { listOfferingAssistants, type AssistantOption } from "@/lib/actions/head-assignments";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
-import { listMyAssistants, getOrCreateEvaluation, saveEvaluation, type EvalLine, type EvalRating } from "@/lib/actions/evaluations";
+import { listMyAssistants, getOrCreateEvaluation, saveEvaluation, countCheckedPapers, type EvalLine, type EvalRating } from "@/lib/actions/evaluations";
 import { EXTRA_CATS, DED_CATS, categoryAmount, type CategoryDef } from "@/lib/evaluation-categories";
 
 const CURRENCY_SYMBOL: Record<string, string> = { GBP: "£", USD: "$", EUR: "€", EGP: "E£", AED: "د.إ" };
@@ -124,6 +124,7 @@ export function EvaluationsContent() {
   const [rating, setRating] = useState<EvalRating | null>(null);
   const [status, setStatus] = useState<"draft" | "submitted">("draft");
   const [loading, setLoading] = useState(true);
+  const [checkedPapers, setCheckedPapers] = useState<number | null>(null);
   const [saving, setSaving] = useState<"draft" | "submit" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -159,7 +160,7 @@ export function EvaluationsContent() {
     if (!assistantId || !offeringId) return;
     setLoading(true);
     try {
-      const ev = await getOrCreateEvaluation(assistantId, offeringId, period);
+      const [ev, papers] = await Promise.all([getOrCreateEvaluation(assistantId, offeringId, period), countCheckedPapers(assistantId, offeringId)]);
       setEvalId(ev.id);
       setBaseAmount(String(ev.baseAmount));
       setExtras(ev.lines.filter((l) => l.kind === "extra"));
@@ -167,6 +168,7 @@ export function EvaluationsContent() {
       setNotes(ev.notes);
       setRating(ev.rating);
       setStatus(ev.status);
+      setCheckedPapers(papers);
     } catch {
       setError("Couldn't load this evaluation.");
     } finally {
@@ -441,6 +443,12 @@ export function EvaluationsContent() {
                 </span>
               </div>
               <div className="flex flex-col gap-[11px]">
+                {checkedPapers !== null && (
+                  <div className="flex items-center justify-between rounded-[7px] bg-[var(--surface2)] px-[10px] py-[7px]">
+                    <span className="text-[11.5px] text-[var(--subtle)]">Papers marked &quot;checked&quot; on salary-counted assignments</span>
+                    <span className="font-mono text-[12.5px] font-bold text-[var(--text)]">{checkedPapers}</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between">
                   <span className="text-[13px] text-[var(--muted)]">Base (per paper / bracket)</span>
                   <input

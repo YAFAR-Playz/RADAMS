@@ -8,7 +8,19 @@ import type { Role } from "@/lib/roles";
 import { statusDef, STATUS_DEFS } from "@/lib/assignments-data";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import { listOfferingAssistants, type AssistantOption } from "@/lib/actions/head-assignments";
-import { getStudentsForOffering, getEnrollmentCounts, reassignStudentAssistant, updateStudent, type StudentRow } from "@/lib/actions/students";
+import {
+  getStudentsForOffering,
+  getCourseLabelsForStudents,
+  reassignStudentAssistant,
+  updateStudent,
+  getStudentEnrollments,
+  listAllOfferingsForOrg,
+  addStudentEnrollment,
+  removeStudentEnrollment,
+  type StudentRow,
+  type EnrollmentDetail,
+  type OfferingChoice,
+} from "@/lib/actions/students";
 import { getEffectiveTemplate, getOrgBrandName } from "@/lib/actions/templates";
 import { applyTemplateVars } from "@/lib/message-vars";
 import { autoAssignUnassigned } from "@/lib/actions/assistant-groups";
@@ -53,8 +65,13 @@ export function StudentsContent({ role }: { role: Role }) {
   const [orgName, setOrgName] = useState("RadAMS");
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [paymentByStudent, setPaymentByStudent] = useState<Record<string, PaymentStatusSummary>>({});
-  const [enrollmentCounts, setEnrollmentCounts] = useState<Record<string, number>>({});
+  const [courseLabelsByStudent, setCourseLabelsByStudent] = useState<Record<string, string[]>>({});
+  const [editEnrollments, setEditEnrollments] = useState<EnrollmentDetail[] | null>(null);
+  const [allOfferings, setAllOfferings] = useState<OfferingChoice[] | null>(null);
+  const [addOfferingId, setAddOfferingId] = useState("");
+  const [enrollmentBusy, setEnrollmentBusy] = useState(false);
   const isRegistration = role === "registration";
+  const canEditCourses = role === "admin" || role === "registration";
 
   useEffect(() => {
     listMyOfferings().then((data) => {
@@ -74,12 +91,12 @@ export function StudentsContent({ role }: { role: Role }) {
       setStudents(rows);
       setAssistants(ast);
       if (isRegistration) {
-        const [payments, counts] = await Promise.all([
+        const [payments, labels] = await Promise.all([
           getPaymentStatusForOffering(id),
-          getEnrollmentCounts(rows.map((r) => r.studentId)),
+          getCourseLabelsForStudents(rows.map((r) => r.studentId)),
         ]);
         setPaymentByStudent(payments);
-        setEnrollmentCounts(counts);
+        setCourseLabelsByStudent(labels);
       }
     } catch {
       setError("Couldn't load students for this course.");
@@ -175,6 +192,40 @@ export function StudentsContent({ role }: { role: Role }) {
       guardianPhone: s.guardianPhone ?? "",
       left: !!s.leftAt,
     });
+    if (canEditCourses) {
+      setEditEnrollments(null);
+      getStudentEnrollments(s.studentId).then(setEditEnrollments);
+      if (!allOfferings) listAllOfferingsForOrg().then(setAllOfferings);
+    }
+  }
+
+  async function onAddEnrollment(studentId: string) {
+    if (!addOfferingId) return;
+    setEnrollmentBusy(true);
+    try {
+      const { enrollmentId } = await addStudentEnrollment(studentId, addOfferingId);
+      const label = allOfferings?.find((o) => o.id === addOfferingId)?.label ?? "—";
+      setEditEnrollments((prev) => (prev ? [...prev, { enrollmentId, offeringId: addOfferingId, label }] : prev));
+      setAddOfferingId("");
+      if (offeringId) await reload(offeringId);
+    } catch {
+      setError("Couldn't enroll this student — try again.");
+    } finally {
+      setEnrollmentBusy(false);
+    }
+  }
+
+  async function onRemoveEnrollment(enrollmentId: string) {
+    setEnrollmentBusy(true);
+    try {
+      await removeStudentEnrollment(enrollmentId);
+      setEditEnrollments((prev) => (prev ? prev.filter((e) => e.enrollmentId !== enrollmentId) : prev));
+      if (offeringId) await reload(offeringId);
+    } catch {
+      setError("Couldn't remove this enrollment — try again.");
+    } finally {
+      setEnrollmentBusy(false);
+    }
   }
 
   async function onSaveEdit() {
@@ -476,8 +527,23 @@ export function StudentsContent({ role }: { role: Role }) {
                           );
                         })()}
                       </div>
-                      <div className="min-w-0 flex-[1_1_130px] text-[13px] text-[var(--text)]">
-                        {enrollmentCounts[st.studentId] ?? 1} course{(enrollmentCounts[st.studentId] ?? 1) === 1 ? "" : "s"}
+                      <div className="min-w-0 flex-[1_1_130px]">
+                        {(() => {
+                          const labels = courseLabelsByStudent[st.studentId] ?? [];
+                          if (labels.length === 0) return <span className="text-[12px] text-[var(--subtle)]">No courses</span>;
+                          return (
+                            <div className="flex flex-wrap gap-[4px]">
+                              {labels.map((label, i) => (
+                                <span
+                                  key={i}
+                                  className="inline-flex items-center rounded-full bg-[var(--surface2)] px-[8px] py-[2px] text-[11.5px] font-semibold text-[var(--text)]"
+                                >
+                                  {label}
+                                </span>
+                              ))}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </>
                   ) : (
@@ -688,6 +754,56 @@ export function StudentsContent({ role }: { role: Role }) {
                   className="h-[42px] w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[13px] text-[13.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                 />
               </div>
+              {canEditCourses && (
+                <div>
+                  <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Courses enrolled</label>
+                  {editEnrollments === null ? (
+                    <SkeletonRow className="h-[60px]" />
+                  ) : (
+                    <div className="flex flex-col gap-[6px]">
+                      {editEnrollments.length === 0 && <div className="text-[12.5px] text-[var(--subtle)]">Not enrolled in any course.</div>}
+                      {editEnrollments.map((e) => (
+                        <div key={e.enrollmentId} className="flex items-center gap-[8px] rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] p-[8px_10px]">
+                          <span className="flex-1 text-[12.5px] font-semibold text-[var(--text)]">{e.label}</span>
+                          <button
+                            onClick={() => onRemoveEnrollment(e.enrollmentId)}
+                            disabled={enrollmentBusy}
+                            className="flex h-7 w-7 flex-none items-center justify-center rounded-[7px] border border-[var(--border)] bg-[var(--surface)] text-[var(--subtle)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] hover:text-[var(--danger)] disabled:opacity-60"
+                          >
+                            <Icon name="x" size={13} />
+                          </button>
+                        </div>
+                      ))}
+                      <div className="flex items-center gap-[8px]">
+                        <div className="flex h-9 flex-1 items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[9px]">
+                          <select
+                            value={addOfferingId}
+                            onChange={(e) => setAddOfferingId(e.target.value)}
+                            className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[12.5px] font-semibold text-[var(--text)] outline-none"
+                          >
+                            <option value="">Add a course…</option>
+                            {(allOfferings ?? [])
+                              .filter((o) => !editEnrollments.some((e) => e.offeringId === o.id))
+                              .map((o) => (
+                                <option key={o.id} value={o.id}>
+                                  {o.label}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                        <button
+                          onClick={() => onAddEnrollment(editDraft.studentId)}
+                          disabled={!addOfferingId || enrollmentBusy}
+                          className="flex h-9 flex-none items-center gap-[6px] rounded-[8px] bg-[var(--brand)] px-[12px] text-[12.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+                        >
+                          {enrollmentBusy ? <Spinner size={13} /> : <Icon name="plus" size={13} />}
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               <div
                 className="flex items-center gap-[11px] rounded-[var(--rad-sm)] border p-[12px_13px]"
                 style={{ background: editDraft.left ? "var(--dangers)" : "var(--surface2)", borderColor: editDraft.left ? "var(--danger)" : "var(--border)" }}

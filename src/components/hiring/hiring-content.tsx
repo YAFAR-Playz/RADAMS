@@ -5,7 +5,8 @@ import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import type { Role } from "@/lib/roles";
 import { listRecentStaffJoins, type StaffingLogRow } from "@/lib/actions/hr";
-import { listStaff, createStaffMember, removeStaffMember, type StaffMember } from "@/lib/actions/staff";
+import { listStaff, createStaffMember, removeStaffMember, assignStaffToCourses, type StaffMember } from "@/lib/actions/staff";
+import { listAllOfferingsForOrg, type OfferingChoice } from "@/lib/actions/students";
 
 const ROLE_OPTIONS: Role[] = ["hr", "head", "assistant", "registration", "finance"];
 const ROLE_LABEL: Record<Role, string> = {
@@ -22,11 +23,12 @@ type Kind = "add" | "remove";
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
-const emptyForm = { name: "", email: "", phone: "", role: "assistant" as Role, existingId: "", hireDate: today(), leaveDate: today() };
+const emptyForm = { name: "", email: "", phone: "", role: "assistant" as Role, existingId: "", hireDate: today(), leaveDate: today(), courseIds: [] as string[] };
 
 export function HiringContent() {
   const [log, setLog] = useState<StaffingLogRow[] | null>(null);
   const [staff, setStaff] = useState<StaffMember[] | null>(null);
+  const [offerings, setOfferings] = useState<OfferingChoice[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,9 +40,10 @@ export function HiringContent() {
   async function reload() {
     setLoading(true);
     try {
-      const [l, s] = await Promise.all([listRecentStaffJoins(), listStaff()]);
+      const [l, s, o] = await Promise.all([listRecentStaffJoins(), listStaff(), listAllOfferingsForOrg()]);
       setLog(l);
       setStaff(s.filter((u) => u.role !== "owner" && u.role !== "admin"));
+      setOfferings(o);
     } catch {
       setError("Couldn't load hiring data.");
     } finally {
@@ -60,14 +63,22 @@ export function HiringContent() {
     setModalOpen(true);
   }
 
+  const showCourses = kind === "add" && (form.role === "head" || form.role === "assistant");
   const canSubmit = kind === "add" ? form.name.trim().length > 0 && form.email.trim().length > 0 : form.existingId.length > 0;
+
+  function toggleCourse(id: string) {
+    setForm((f) => ({ ...f, courseIds: f.courseIds.includes(id) ? f.courseIds.filter((x) => x !== id) : [...f.courseIds, id] }));
+  }
 
   async function onSubmit() {
     if (!canSubmit) return;
     setSubmitting(true);
     try {
       if (kind === "add") {
-        await createStaffMember({ name: form.name, email: form.email, phone: form.phone, role: form.role, hireDate: form.hireDate });
+        const { id } = await createStaffMember({ name: form.name, email: form.email, phone: form.phone, role: form.role, hireDate: form.hireDate });
+        if ((form.role === "head" || form.role === "assistant") && form.courseIds.length) {
+          await assignStaffToCourses(id, form.role, form.courseIds);
+        }
       } else {
         await removeStaffMember(form.existingId, form.leaveDate);
       }
@@ -219,6 +230,32 @@ export function HiringContent() {
                       className="h-[42px] w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                     />
                   </div>
+                  {showCourses && (
+                    <div>
+                      <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Assign to course(s)</label>
+                      <div className="flex flex-wrap gap-[6px]">
+                        {(offerings ?? []).map((o) => {
+                          const sel = form.courseIds.includes(o.id);
+                          return (
+                            <button
+                              key={o.id}
+                              onClick={() => toggleCourse(o.id)}
+                              className="inline-flex items-center gap-[5px] rounded-full border px-[11px] py-[5px] text-[12px] font-semibold"
+                              style={
+                                sel
+                                  ? { borderColor: "var(--brand)", background: "var(--brands)", color: "var(--brand)" }
+                                  : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
+                              }
+                            >
+                              {sel && <Icon name="check" size={12} />}
+                              {o.label}
+                            </button>
+                          );
+                        })}
+                        {(offerings ?? []).length === 0 && <span className="text-[12.5px] text-[var(--subtle)]">No course offerings yet.</span>}
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <>
