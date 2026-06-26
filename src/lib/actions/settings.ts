@@ -75,7 +75,13 @@ export async function uploadMyAvatar(formData: FormData): Promise<{ url: string 
 
   const admin = createAdminClient();
   const ext = file.name.split(".").pop() || "png";
-  const path = `${profile.id}-${Date.now()}.${ext}`;
+  const path = `${profile.id}.${ext}`;
+
+  // Remove any previous avatar for this profile first — old uploads used a
+  // different extension would otherwise sit in storage forever unused.
+  const { data: existing } = await admin.storage.from("avatars").list("", { search: profile.id });
+  const stale = (existing ?? []).filter((f) => f.name !== path).map((f) => f.name);
+  if (stale.length) await admin.storage.from("avatars").remove(stale);
 
   const { error: uploadError } = await admin.storage.from("avatars").upload(path, file, { contentType: file.type, upsert: true });
   if (uploadError) throw new Error(uploadError.message);
@@ -90,7 +96,12 @@ export async function uploadMyAvatar(formData: FormData): Promise<{ url: string 
 export async function removeMyAvatar() {
   const profile = await getCurrentProfile();
   if (!profile) throw new Error("Not authenticated");
-  const supabase = await createClient();
-  const { error } = await supabase.from("profiles").update({ avatar_url: null }).eq("id", profile.id);
+  const admin = createAdminClient();
+
+  const { data: existing } = await admin.storage.from("avatars").list("", { search: profile.id });
+  const stale = (existing ?? []).map((f) => f.name);
+  if (stale.length) await admin.storage.from("avatars").remove(stale);
+
+  const { error } = await admin.from("profiles").update({ avatar_url: null }).eq("id", profile.id);
   if (error) throw new Error(error.message);
 }
