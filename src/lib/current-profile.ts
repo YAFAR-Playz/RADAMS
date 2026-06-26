@@ -7,6 +7,7 @@ export type CurrentProfile = {
   fullName: string;
   initials: string;
   email: string;
+  avatarUrl: string | null;
   org: { id: string; name: string; brandName: string; logoLetter: string; logoUrl: string | null; primaryColor: string; corner: "soft" | "sharp" } | null;
 };
 
@@ -17,7 +18,7 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, role, full_name, initials, email, org_id")
+    .select("id, role, full_name, initials, email, org_id, avatar_url")
     .eq("id", userData.user.id)
     .single();
 
@@ -54,6 +55,7 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
     fullName: profile.full_name,
     initials: profile.initials,
     email: profile.email,
+    avatarUrl: profile.avatar_url,
     org,
   };
 }

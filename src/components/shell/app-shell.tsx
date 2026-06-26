@@ -40,7 +40,29 @@ function ThemeToggle({ className }: { className?: string }) {
   );
 }
 
-function UserMenu({ person }: { person: { name: string; label: string; initials: string } }) {
+function PersonAvatar({ person, size }: { person: { initials: string; avatarUrl: string | null }; size: number }) {
+  if (person.avatarUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={person.avatarUrl}
+        alt=""
+        className="flex-none rounded-full bg-[var(--brand)] object-cover"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+  return (
+    <div
+      className="flex flex-none items-center justify-center rounded-full bg-[var(--brand)] font-bold text-[var(--brandfg)]"
+      style={{ width: size, height: size, fontSize: size * 0.36 }}
+    >
+      {person.initials}
+    </div>
+  );
+}
+
+function UserMenu({ person }: { person: { name: string; label: string; initials: string; avatarUrl: string | null } }) {
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -68,9 +90,7 @@ function UserMenu({ person }: { person: { name: string; label: string; initials:
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-[9px] rounded-[10px] pl-[14px] border-l border-[var(--border)] py-1"
       >
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--brand)] text-[13px] font-bold text-[var(--brandfg)]">
-          {person.initials}
-        </div>
+        <PersonAvatar person={person} size={36} />
         <div className="hidden text-left leading-[1.2] sm:block">
           <div className="text-[13px] font-semibold text-[var(--text)]">{person.name}</div>
           <div className="text-[11.5px] text-[var(--muted)]">{person.label}</div>
@@ -83,6 +103,14 @@ function UserMenu({ person }: { person: { name: string; label: string; initials:
             <div className="text-[11.5px] text-[var(--muted)]">{person.label}</div>
           </div>
           <div className="my-1 h-px bg-[var(--border)]" />
+          <Link
+            href="/settings"
+            onClick={() => setOpen(false)}
+            className="flex w-full items-center gap-2 rounded-[8px] px-3 py-2 text-[13px] font-medium text-[var(--text)] hover:bg-[var(--surface2)]"
+          >
+            <Icon name="settings" size={16} />
+            Settings
+          </Link>
           <ThemeToggle className="w-full" />
           <button
             onClick={signOut}
@@ -130,7 +158,7 @@ export function AppShell({
   children,
 }: {
   navItems: NavItem[];
-  person: { name: string; label: string; initials: string };
+  person: { name: string; label: string; initials: string; avatarUrl: string | null };
   brandName: string;
   logoLetter: string;
   logoUrl: string | null;
@@ -208,13 +236,18 @@ export function AppShell({
           })}
         </nav>
         <div className="mt-auto flex items-center gap-[11px] overflow-hidden rounded-[10px] bg-[var(--surface2)] p-[9px]">
-          <div className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-full bg-[var(--brand)] text-[13px] font-bold text-[var(--brandfg)]">
-            {person.initials}
-          </div>
+          <PersonAvatar person={person} size={34} />
           <div className={`min-w-0 flex-1 whitespace-nowrap leading-[1.2] ${isRail ? "opacity-0" : "opacity-100"}`}>
             <div className="overflow-hidden text-ellipsis text-[13px] font-semibold text-[var(--text)]">{person.name}</div>
             <div className="text-[11.5px] text-[var(--muted)]">{person.label}</div>
           </div>
+          <Link
+            href="/settings"
+            title="Settings"
+            className={`flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--text)] ${isRail ? "opacity-0" : "opacity-100"}`}
+          >
+            <Icon name="settings" size={16} />
+          </Link>
         </div>
       </aside>
 
@@ -300,13 +333,19 @@ export function AppShell({
             })}
           </nav>
           <div className="flex items-center gap-[11px] border-t border-[var(--border)] p-[14px]">
-            <div className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-full bg-[var(--brand)] text-[13px] font-bold text-[var(--brandfg)]">
-              {person.initials}
-            </div>
+            <PersonAvatar person={person} size={34} />
             <div className="min-w-0 flex-1 leading-[1.2]">
               <div className="truncate text-[13px] font-semibold text-[var(--text)]">{person.name}</div>
               <div className="text-[11.5px] text-[var(--muted)]">{person.label}</div>
             </div>
+            <Link
+              href="/settings"
+              onClick={() => setMobileMenuOpen(false)}
+              title="Settings"
+              className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]"
+            >
+              <Icon name="settings" size={18} />
+            </Link>
           </div>
         </div>
       )}

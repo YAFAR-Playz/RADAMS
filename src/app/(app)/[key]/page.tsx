@@ -27,6 +27,7 @@ import { HiringContent } from "@/components/hiring/hiring-content";
 import { HeadCheckingContent } from "@/components/head-checking/head-checking-content";
 import { OwnerOrgsContent } from "@/components/owner-orgs/owner-orgs-content";
 import { OwnerBrandingContent } from "@/components/owner-branding/owner-branding-content";
+import { SettingsContent } from "@/components/settings/settings-content";
 
 export default async function AppPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
@@ -36,6 +37,10 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
   if (key === "dashboard") {
     const firstName = profile.fullName.split(" ")[0];
     return <DashboardContent role={profile.role} orgName={profile.org?.name ?? null} firstName={firstName} />;
+  }
+
+  if (key === "settings") {
+    return <SettingsContent />;
   }
 
   if (key === "assignments" && profile.role === "head") {
