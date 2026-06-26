@@ -13,16 +13,16 @@ import {
   deleteCategoryOption,
   listCourseRates,
   setCourseRate,
-  listBrackets,
-  addBracket,
-  updateBracket,
-  deleteBracket,
+  getBracketSlots,
+  addBracketSlot,
+  saveBracketSlot,
+  deleteBracketSlot,
   listOtherRates,
   updateOtherRate,
   type PayCategory,
   type CategoryMode,
   type CourseRate,
-  type Bracket,
+  type BracketSlot,
   type OtherRate,
 } from "@/lib/actions/pay-categories";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
@@ -36,7 +36,10 @@ const MODE_DETAIL: Record<CategoryMode, string> = {
 
 type CategoryDraft = { label: string; rate: string };
 type OptionDraft = { label: string; amount: string };
-type BracketDraft = { name: string; lo: string; hi: string; pay: string };
+// lo/hi/pay are only present once the user actually types into that field —
+// that's what lets a blank (differs-across-courses) slot stay untouched for
+// any field the user didn't touch.
+type BracketDraft = { lo?: string; hi?: string; pay?: string };
 
 function CategoryGroup({
   title,
@@ -201,7 +204,8 @@ function CategoryGroup({
 export function PayCategoriesContent() {
   const [categories, setCategories] = useState<PayCategory[] | null>(null);
   const [courseRates, setCourseRates] = useState<CourseRate[] | null>(null);
-  const [brackets, setBrackets] = useState<Bracket[] | null>(null);
+  const [bracketSlots, setBracketSlots] = useState<BracketSlot[] | null>(null);
+  const [bracketsLoading, setBracketsLoading] = useState(false);
   const [otherRates, setOtherRates] = useState<OtherRate[] | null>(null);
   const [currency, setCurrency] = useState("GBP");
   const [loading, setLoading] = useState(true);
@@ -220,24 +224,33 @@ export function PayCategoriesContent() {
   const [otherRateDrafts, setOtherRateDrafts] = useState<Record<string, string>>({});
 
   async function refetchLists() {
-    const [cats, rates, brks, others, settings] = await Promise.all([
+    const [cats, rates, others, settings] = await Promise.all([
       listPayCategories(),
       listCourseRates(),
-      listBrackets(),
       listOtherRates(),
       getPayrollSettings(),
     ]);
     setCategories(cats);
     setCourseRates(rates);
-    setBrackets(brks);
     setOtherRates(others);
     if (settings) setCurrency(settings.currency);
   }
 
+  async function refetchBrackets(scope: string[]) {
+    setBracketsLoading(true);
+    try {
+      setBracketSlots(await getBracketSlots(scope));
+    } catch {
+      setError("Couldn't load brackets for these courses.");
+    } finally {
+      setBracketsLoading(false);
+    }
+  }
+
   // Used for the initial load and after a manual "Save changes" — clears
   // drafts since the server now matches what's on screen. Add/delete
-  // actions use refetchLists() directly so they don't wipe unsaved edits
-  // elsewhere on the page.
+  // actions use refetchLists()/refetchBrackets() directly so they don't
+  // wipe unsaved edits elsewhere on the page.
   async function reload() {
     setLoading(true);
     try {
@@ -259,6 +272,13 @@ export function PayCategoriesContent() {
       await reload();
     })();
   }, []);
+
+  useEffect(() => {
+    (async () => {
+      await refetchBrackets(courseScope);
+      setBracketDrafts({});
+    })();
+  }, [courseScope]);
 
   const sym = CURRENCY_SYMBOL[currency] ?? "£";
 
@@ -323,14 +343,14 @@ export function PayCategoriesContent() {
   }
   async function onAddBracket() {
     await withAdding("bracket", async () => {
-      await addBracket();
-      await refetchLists();
+      await addBracketSlot(courseScope);
+      await refetchBrackets(courseScope);
     });
   }
-  async function onDeleteBracket(id: string) {
-    await withBusy(id, async () => {
-      await deleteBracket(id);
-      await refetchLists();
+  async function onDeleteBracket(name: string) {
+    await withBusy(name, async () => {
+      await deleteBracketSlot(courseScope, name);
+      await refetchBrackets(courseScope);
     });
   }
 
@@ -351,12 +371,8 @@ export function PayCategoriesContent() {
   function draftCourseRate(offeringId: string, value: string) {
     setCourseRateDrafts((prev) => ({ ...prev, [offeringId]: value }));
   }
-  function draftBracket(id: string, patch: Partial<BracketDraft>) {
-    setBracketDrafts((prev) => {
-      const b = brackets?.find((x) => x.id === id);
-      const base = prev[id] ?? { name: b?.name ?? "", lo: String(b?.lo ?? 0), hi: String(b?.hi ?? 0), pay: String(b?.pay ?? 0) };
-      return { ...prev, [id]: { ...base, ...patch } };
-    });
+  function draftBracket(name: string, patch: Partial<BracketDraft>) {
+    setBracketDrafts((prev) => ({ ...prev, [name]: { ...prev[name], ...patch } }));
   }
   function draftOtherRate(id: string, value: string) {
     setOtherRateDrafts((prev) => ({ ...prev, [id]: value }));
@@ -369,12 +385,19 @@ export function PayCategoriesContent() {
         ...Object.entries(categoryDrafts).map(([id, d]) => updatePayCategory(id, { label: d.label, rate: Number(d.rate) || 0 })),
         ...Object.entries(optionDrafts).map(([id, d]) => updateCategoryOption(id, { label: d.label, amount: Number(d.amount) || 0 })),
         ...Object.entries(courseRateDrafts).map(([offeringId, v]) => setCourseRate(offeringId, Number(v) || 0)),
-        ...Object.entries(bracketDrafts).map(([id, d]) =>
-          updateBracket(id, { name: d.name, lo: Number(d.lo) || 0, hi: Number(d.hi) || 0, pay: Number(d.pay) || 0 })
-        ),
+        ...Object.entries(bracketDrafts).map(([name, d]) => {
+          // Only fields the user actually typed into are included in the
+          // patch — anything left blank stays untouched for every course.
+          const patch: { lo?: number; hi?: number; pay?: number } = {};
+          if (d.lo !== undefined) patch.lo = Number(d.lo) || 0;
+          if (d.hi !== undefined) patch.hi = Number(d.hi) || 0;
+          if (d.pay !== undefined) patch.pay = Number(d.pay) || 0;
+          return saveBracketSlot(courseScope, name, patch);
+        }),
         ...Object.entries(otherRateDrafts).map(([id, v]) => updateOtherRate(id, Number(v) || 0)),
       ]);
       await reload();
+      await refetchBrackets(courseScope);
     } catch {
       setError("Couldn't save your changes — try again.");
     } finally {
@@ -389,10 +412,10 @@ export function PayCategoriesContent() {
     setCourseScope((prev) => (prev.includes(offeringId) ? prev.filter((x) => x !== offeringId) : [...prev, offeringId]));
   }
 
-  const visibleCourseRates = courseScope.length ? (courseRates ?? []).filter((c) => courseScope.includes(c.offeringId)) : courseRates ?? [];
+  const visibleCourseRates = courseScope.length ? (courseRates ?? []).filter((c) => courseScope.includes(c.offeringId)) : [];
   const scopeLabel =
     courseScope.length === 0
-      ? "All courses"
+      ? "Select course(s)…"
       : courseScope.length === 1
         ? courseRates?.find((c) => c.offeringId === courseScope[0])?.label ?? "1 course selected"
         : `${courseScope.length} courses selected`;
@@ -416,7 +439,7 @@ export function PayCategoriesContent() {
           Adding/removing items happens instantly; edited values are saved with the button below once you&apos;re ready.
         </p>
         <div className="mt-[14px] flex flex-wrap items-center gap-[9px]">
-          <span className="text-[12.5px] font-semibold text-[var(--muted)]">Per-paper rates apply to</span>
+          <span className="text-[12.5px] font-semibold text-[var(--muted)]">Rates &amp; brackets apply to</span>
           <div className="relative min-w-[240px]">
             <button
               onClick={() => setScopeMenuOpen((p) => !p)}
@@ -513,87 +536,105 @@ export function PayCategoriesContent() {
             <header className="border-b border-[var(--border2)] p-[14px_16px]">
               <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Per-paper rate by course</h3>
             </header>
-            <div className="grid grid-cols-1 gap-[10px] p-[10px] sm:grid-cols-2">
-              {visibleCourseRates.map((c) => (
-                <div key={c.offeringId} className="flex items-center gap-[10px] rounded-[9px] border border-[var(--border2)] p-[10px_12px]">
-                  <span className="flex-1 text-[13px] font-semibold text-[var(--text)]">{c.label}</span>
-                  <span className="text-[11.5px] text-[var(--subtle)]">per paper</span>
-                  <div className="flex h-[34px] w-[88px] flex-none items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[9px]">
-                    <span className="text-[12.5px] font-semibold text-[var(--subtle)]">{sym}</span>
-                    <input
-                      value={courseRateDrafts[c.offeringId] ?? String(c.rate)}
-                      onChange={(e) => draftCourseRate(c.offeringId, e.target.value.replace(/[^0-9]/g, ""))}
-                      inputMode="numeric"
-                      className="w-full border-none bg-transparent font-mono text-[13px] font-bold text-[var(--ok)] outline-none"
-                    />
+            {courseScope.length === 0 ? (
+              <div className="p-[30px] text-center text-[13px] text-[var(--muted)]">Select one or more courses above to set their per-paper rate.</div>
+            ) : (
+              <div className="grid grid-cols-1 gap-[10px] p-[10px] sm:grid-cols-2">
+                {visibleCourseRates.map((c) => (
+                  <div key={c.offeringId} className="flex items-center gap-[10px] rounded-[9px] border border-[var(--border2)] p-[10px_12px]">
+                    <span className="flex-1 text-[13px] font-semibold text-[var(--text)]">{c.label}</span>
+                    <span className="text-[11.5px] text-[var(--subtle)]">per paper</span>
+                    <div className="flex h-[34px] w-[88px] flex-none items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[9px]">
+                      <span className="text-[12.5px] font-semibold text-[var(--subtle)]">{sym}</span>
+                      <input
+                        value={courseRateDrafts[c.offeringId] ?? String(c.rate)}
+                        onChange={(e) => draftCourseRate(c.offeringId, e.target.value.replace(/[^0-9]/g, ""))}
+                        inputMode="numeric"
+                        className="w-full border-none bg-transparent font-mono text-[13px] font-bold text-[var(--ok)] outline-none"
+                      />
+                    </div>
                   </div>
-                </div>
-              ))}
-              {visibleCourseRates.length === 0 && <div className="p-2 text-[12.5px] text-[var(--subtle)]">No courses match this filter.</div>}
-            </div>
+                ))}
+              </div>
+            )}
           </section>
 
-          {/* BRACKETS */}
+          {/* BRACKETS — per selected course(s). A field shows a value only if
+              every selected course currently agrees on it; otherwise it's
+              blank so saving it doesn't silently overwrite courses that
+              intentionally differ. */}
           <section className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
             <header className="flex items-center justify-between border-b border-[var(--border2)] p-[14px_16px]">
               <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Average-paper brackets</h3>
               <button
                 onClick={onAddBracket}
-                disabled={addingId === "bracket"}
+                disabled={addingId === "bracket" || courseScope.length === 0}
                 className="flex items-center gap-[5px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[11px] py-[6px] text-[12px] font-semibold text-[var(--brand)] hover:bg-[var(--brands)] disabled:opacity-60"
               >
                 {addingId === "bracket" ? <Spinner size={13} /> : <Icon name="plus" size={14} />}
                 Add range
               </button>
             </header>
-            <div className="p-2">
-              {(brackets ?? []).map((b) => {
-                const draft = bracketDrafts[b.id] ?? { name: b.name, lo: String(b.lo), hi: String(b.hi), pay: String(b.pay) };
-                return (
-                  <div key={b.id} className="flex flex-wrap items-center gap-[10px] rounded-[9px] p-[9px_11px] hover:bg-[var(--surface2)]">
-                    <input
-                      value={draft.name}
-                      onChange={(e) => draftBracket(b.id, { name: e.target.value })}
-                      className="w-20 flex-none border-none bg-transparent text-[13px] font-semibold text-[var(--text)] outline-none"
-                    />
-                    <div className="flex min-w-[150px] flex-1 items-center gap-[6px]">
-                      <span className="text-[11.5px] text-[var(--subtle)]">papers</span>
-                      <input
-                        value={draft.lo}
-                        onChange={(e) => draftBracket(b.id, { lo: e.target.value.replace(/[^0-9]/g, "") })}
-                        inputMode="numeric"
-                        className="h-8 w-14 rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] text-center font-mono text-[12.5px] text-[var(--text)] outline-none"
-                      />
-                      <span className="text-[var(--subtle)]">–</span>
-                      <input
-                        value={draft.hi}
-                        onChange={(e) => draftBracket(b.id, { hi: e.target.value.replace(/[^0-9]/g, "") })}
-                        inputMode="numeric"
-                        className="h-8 w-14 rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] text-center font-mono text-[12.5px] text-[var(--text)] outline-none"
-                      />
+            {courseScope.length === 0 ? (
+              <div className="p-[30px] text-center text-[13px] text-[var(--muted)]">Select one or more courses above to set their average-paper brackets.</div>
+            ) : bracketsLoading ? (
+              <div className="flex flex-col gap-2 p-3">
+                {Array.from({ length: 2 }, (_, i) => (
+                  <SkeletonRow key={i} className="h-[44px]" />
+                ))}
+              </div>
+            ) : (
+              <div className="p-2">
+                {(bracketSlots ?? []).map((b) => {
+                  const draft = bracketDrafts[b.name] ?? {};
+                  const loVal = draft.lo ?? (b.lo != null ? String(b.lo) : "");
+                  const hiVal = draft.hi ?? (b.hi != null ? String(b.hi) : "");
+                  const payVal = draft.pay ?? (b.pay != null ? String(b.pay) : "");
+                  return (
+                    <div key={b.name} className="flex flex-wrap items-center gap-[10px] rounded-[9px] p-[9px_11px] hover:bg-[var(--surface2)]">
+                      <span className="w-20 flex-none text-[13px] font-semibold text-[var(--text)]">{b.name}</span>
+                      <div className="flex min-w-[150px] flex-1 items-center gap-[6px]">
+                        <span className="text-[11.5px] text-[var(--subtle)]">papers</span>
+                        <input
+                          value={loVal}
+                          placeholder={courseScope.length > 1 ? "Differs" : "0"}
+                          onChange={(e) => draftBracket(b.name, { lo: e.target.value.replace(/[^0-9]/g, "") })}
+                          inputMode="numeric"
+                          className="h-8 w-14 rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] text-center font-mono text-[12.5px] text-[var(--text)] outline-none placeholder:text-[10.5px] placeholder:font-sans"
+                        />
+                        <span className="text-[var(--subtle)]">–</span>
+                        <input
+                          value={hiVal}
+                          placeholder={courseScope.length > 1 ? "Differs" : "0"}
+                          onChange={(e) => draftBracket(b.name, { hi: e.target.value.replace(/[^0-9]/g, "") })}
+                          inputMode="numeric"
+                          className="h-8 w-14 rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] text-center font-mono text-[12.5px] text-[var(--text)] outline-none placeholder:text-[10.5px] placeholder:font-sans"
+                        />
+                      </div>
+                      <div className="flex h-[34px] w-[100px] flex-none items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[9px]">
+                        <span className="text-[12.5px] font-semibold text-[var(--subtle)]">{sym}</span>
+                        <input
+                          value={payVal}
+                          placeholder={courseScope.length > 1 ? "Differs" : "0"}
+                          onChange={(e) => draftBracket(b.name, { pay: e.target.value.replace(/[^0-9]/g, "") })}
+                          inputMode="numeric"
+                          className="w-full border-none bg-transparent font-mono text-[13px] font-bold text-[var(--ok)] outline-none placeholder:text-[10.5px] placeholder:font-sans"
+                        />
+                      </div>
+                      {busyId === b.name && <Spinner size={13} className="text-[var(--subtle)]" />}
+                      <button
+                        onClick={() => onDeleteBracket(b.name)}
+                        disabled={busyId === b.name}
+                        className="flex h-8 w-8 flex-none items-center justify-center rounded-[7px] border border-[var(--border)] bg-[var(--surface)] text-[var(--subtle)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] hover:text-[var(--danger)] disabled:opacity-60"
+                      >
+                        <Icon name="x" size={14} />
+                      </button>
                     </div>
-                    <div className="flex h-[34px] w-[100px] flex-none items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[9px]">
-                      <span className="text-[12.5px] font-semibold text-[var(--subtle)]">{sym}</span>
-                      <input
-                        value={draft.pay}
-                        onChange={(e) => draftBracket(b.id, { pay: e.target.value.replace(/[^0-9]/g, "") })}
-                        inputMode="numeric"
-                        className="w-full border-none bg-transparent font-mono text-[13px] font-bold text-[var(--ok)] outline-none"
-                      />
-                    </div>
-                    {busyId === b.id && <Spinner size={13} className="text-[var(--subtle)]" />}
-                    <button
-                      onClick={() => onDeleteBracket(b.id)}
-                      disabled={busyId === b.id}
-                      className="flex h-8 w-8 flex-none items-center justify-center rounded-[7px] border border-[var(--border)] bg-[var(--surface)] text-[var(--subtle)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] hover:text-[var(--danger)] disabled:opacity-60"
-                    >
-                      <Icon name="x" size={14} />
-                    </button>
-                  </div>
-                );
-              })}
-              {(brackets ?? []).length === 0 && <div className="p-3 text-center text-[12.5px] text-[var(--subtle)]">No brackets yet.</div>}
-            </div>
+                  );
+                })}
+                {(bracketSlots ?? []).length === 0 && <div className="p-3 text-center text-[12.5px] text-[var(--subtle)]">No brackets yet for these courses.</div>}
+              </div>
+            )}
           </section>
 
           {/* OTHER RATES */}
