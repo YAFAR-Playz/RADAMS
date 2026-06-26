@@ -24,6 +24,7 @@ import { PayCategoriesContent } from "@/components/pay-categories/pay-categories
 import { FinanceSalariesContent } from "@/components/finance-salaries/finance-salaries-content";
 import { HrRequestsContent } from "@/components/hr-requests/hr-requests-content";
 import { HiringContent } from "@/components/hiring/hiring-content";
+import { HeadCheckingContent } from "@/components/head-checking/head-checking-content";
 
 export default async function AppPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
@@ -45,6 +46,10 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
 
   if (key === "oversight" && profile.role === "head") {
     return <OversightContent />;
+  }
+
+  if (key === "checking" && profile.role === "head") {
+    return <HeadCheckingContent />;
   }
 
   if (key === "students" && (profile.role === "admin" || profile.role === "head" || profile.role === "assistant" || profile.role === "registration")) {

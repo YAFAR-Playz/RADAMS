@@ -450,7 +450,7 @@ export function StudentsContent({ role }: { role: Role }) {
       </div>
 
       {/* TABLE */}
-      <div className="overflow-x-auto rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
         {loading && !students ? (
           <div className="flex flex-col gap-2 p-[14px_18px]">
             {Array.from({ length: 6 }, (_, i) => (
@@ -458,8 +458,8 @@ export function StudentsContent({ role }: { role: Role }) {
             ))}
           </div>
         ) : (
-          <div className="min-w-[820px]">
-            <div className="flex flex-wrap items-center gap-[10px_14px] border-b border-[var(--border2)] px-[18px] py-[11px] text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">
+          <div>
+            <div className="hidden flex-wrap items-center gap-[10px_14px] border-b border-[var(--border2)] px-[18px] py-[11px] text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)] sm:flex">
               <span className="min-w-0 flex-[2_1_190px]">Student</span>
               {isRegistration ? (
                 <>

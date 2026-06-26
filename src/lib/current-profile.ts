@@ -7,7 +7,7 @@ export type CurrentProfile = {
   fullName: string;
   initials: string;
   email: string;
-  org: { id: string; name: string; brandName: string; logoLetter: string; primaryColor: string; corner: "soft" | "sharp" } | null;
+  org: { id: string; name: string; brandName: string; logoLetter: string; logoUrl: string | null; primaryColor: string; corner: "soft" | "sharp" } | null;
 };
 
 export async function getCurrentProfile(): Promise<CurrentProfile | null> {
@@ -27,7 +27,7 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
   if (profile.org_id) {
     const { data: orgRow } = await supabase
       .from("organizations")
-      .select("id, name, brand_name, logo_letter, primary_color, corner")
+      .select("id, name, brand_name, logo_letter, logo_url, primary_color, corner")
       .eq("id", profile.org_id)
       .single();
     if (orgRow) {
@@ -36,6 +36,7 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
         name: orgRow.name,
         brandName: orgRow.brand_name,
         logoLetter: orgRow.logo_letter,
+        logoUrl: orgRow.logo_url,
         primaryColor: orgRow.primary_color,
         corner: orgRow.corner,
       };

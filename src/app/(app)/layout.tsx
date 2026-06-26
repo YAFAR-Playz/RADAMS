@@ -35,6 +35,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         person={{ name: profile.fullName, label: ROLE_LABELS[profile.role], initials: profile.initials }}
         brandName={profile.org?.brandName ?? "RadAMS"}
         logoLetter={profile.org?.logoLetter ?? "R"}
+        logoUrl={profile.org?.logoUrl ?? null}
         orgName={profile.org?.name ?? null}
       >
         {children}

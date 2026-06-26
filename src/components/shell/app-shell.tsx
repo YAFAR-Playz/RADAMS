@@ -98,11 +98,34 @@ function UserMenu({ person }: { person: { name: string; label: string; initials:
   );
 }
 
+function LogoMark({ logoUrl, logoLetter, size }: { logoUrl: string | null; logoLetter: string; size: number }) {
+  if (logoUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={logoUrl}
+        alt=""
+        className="flex-none rounded-[9px] bg-[var(--brand)] object-contain"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+  return (
+    <div
+      className="flex flex-none items-center justify-center rounded-[9px] bg-[var(--brand)] font-bold text-[var(--brandfg)]"
+      style={{ width: size, height: size, fontSize: size * 0.5 }}
+    >
+      {logoLetter}
+    </div>
+  );
+}
+
 export function AppShell({
   navItems,
   person,
   brandName,
   logoLetter,
+  logoUrl,
   orgName,
   children,
 }: {
@@ -110,6 +133,7 @@ export function AppShell({
   person: { name: string; label: string; initials: string };
   brandName: string;
   logoLetter: string;
+  logoUrl: string | null;
   orgName: string | null;
   children: React.ReactNode;
 }) {
@@ -119,7 +143,7 @@ export function AppShell({
     const saved = localStorage.getItem("radams-nav");
     return saved === "rail" ? "rail" : "sidebar";
   });
-  const [moreOpen, setMoreOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   function toggleNav() {
     const next = navMode === "rail" ? "sidebar" : "rail";
@@ -130,8 +154,6 @@ export function AppShell({
   const active = navItems.find((n) => n.key === activeKey);
   const pageTitle = active?.label ?? "Dashboard";
   const isRail = navMode === "rail";
-  const navPrimary = navItems.slice(0, 4);
-  const moreItems = navItems.slice(4);
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[var(--bg)]">
@@ -148,9 +170,7 @@ export function AppShell({
             <Icon name="menu" size={21} />
           </button>
           <div className={`flex min-w-0 flex-1 items-center gap-[9px] overflow-hidden ${isRail ? "opacity-0" : "opacity-100"}`}>
-            <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] bg-[var(--brand)] text-[16px] font-bold text-[var(--brandfg)]">
-              {logoLetter}
-            </div>
+            <LogoMark logoUrl={logoUrl} logoLetter={logoLetter} size={32} />
             <div className="min-w-0 leading-[1.1] whitespace-nowrap">
               <div className="text-[15px] font-bold tracking-[-0.01em] text-[var(--text)]">{brandName}</div>
               <div className="overflow-hidden text-ellipsis text-[11px] font-medium text-[var(--subtle)]">{orgName ?? "RadAMS Platform"}</div>
@@ -215,10 +235,14 @@ export function AppShell({
 
         {/* MOBILE APP BAR */}
         <header className="flex h-14 flex-none items-center gap-[11px] border-b border-[var(--border)] bg-[var(--surface)] px-4 md:hidden">
-          <div className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-[9px] bg-[var(--brand)] text-[15px] font-bold text-[var(--brandfg)]">
-            {logoLetter}
-          </div>
-          <span className="text-[16px] font-bold tracking-[-0.01em] text-[var(--text)]">{pageTitle}</span>
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]"
+          >
+            <Icon name="menu" size={22} />
+          </button>
+          <LogoMark logoUrl={logoUrl} logoLetter={logoLetter} size={30} />
+          <span className="min-w-0 flex-1 truncate text-[16px] font-bold tracking-[-0.01em] text-[var(--text)]">{pageTitle}</span>
           <div className="ml-auto flex items-center gap-1">
             <button className="relative flex h-9 w-9 items-center justify-center rounded-[9px] text-[var(--muted)]">
               <Icon name="bell" size={19} />
@@ -228,71 +252,63 @@ export function AppShell({
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto px-4 py-5 md:px-7 md:py-[26px]">
-          <div className="pb-[80px] md:pb-0">{children}</div>
-        </main>
-
-        {/* MOBILE BOTTOM NAV */}
-        <nav className="flex h-16 flex-none items-stretch border-t border-[var(--border)] bg-[var(--surface)] px-1 md:hidden">
-          {navPrimary.map((n) => {
-            const isActive = n.key === activeKey;
-            return (
-              <Link
-                key={n.key}
-                href={`/${n.key}`}
-                className="relative flex flex-1 flex-col items-center justify-center gap-[3px]"
-                style={{ color: isActive ? "var(--brand)" : "var(--muted)" }}
-              >
-                <Icon name={n.icon} size={21} />
-                <span className="whitespace-nowrap text-[9.5px] font-semibold">{n.label}</span>
-                {isActive && (
-                  <span className="absolute left-1/2 top-0 h-[3px] w-[22px] -translate-x-1/2 rounded-b-[3px] bg-[var(--brand)]" />
-                )}
-              </Link>
-            );
-          })}
-          {moreItems.length > 0 && (
-            <button
-              onClick={() => setMoreOpen(true)}
-              className="relative flex flex-1 flex-col items-center justify-center gap-[3px]"
-              style={{ color: moreItems.some((n) => n.key === activeKey) ? "var(--brand)" : "var(--subtle)" }}
-            >
-              <Icon name="menu" size={21} />
-              <span className="text-[9.5px] font-semibold">More</span>
-            </button>
-          )}
-        </nav>
+        <main className="flex-1 overflow-y-auto px-4 py-5 md:px-7 md:py-[26px]">{children}</main>
       </div>
 
-      {/* MOBILE MORE SHEET */}
-      {moreOpen && (
-        <>
-          <div className="fixed inset-0 z-40 bg-[rgba(8,12,22,0.4)] md:hidden" onClick={() => setMoreOpen(false)} />
-          <div className="fixed inset-x-0 bottom-0 z-50 rounded-t-[18px] border-t border-[var(--border)] bg-[var(--surface)] p-[8px_14px_22px] shadow-[0_-8px_30px_rgba(8,12,22,.18)] md:hidden">
-            <div className="mx-auto mb-[14px] mt-2 h-1 w-9 rounded-full bg-[var(--border)]" />
-            <div className="grid grid-cols-3 gap-2">
-              {moreItems.map((n) => {
-                const isActive = n.key === activeKey;
-                return (
-                  <Link
-                    key={n.key}
-                    href={`/${n.key}`}
-                    onClick={() => setMoreOpen(false)}
-                    className="flex flex-col items-center justify-center gap-[7px] rounded-[12px] border p-[14px_6px]"
-                    style={{
-                      color: isActive ? "var(--brand)" : "var(--muted)",
-                      background: isActive ? "var(--brands)" : "var(--surface2)",
-                      borderColor: isActive ? "var(--brand)" : "var(--border)",
-                    }}
-                  >
-                    <Icon name={n.icon} size={22} />
-                    <span className="text-center text-[11px] font-semibold leading-[1.2]">{n.label}</span>
-                  </Link>
-                );
-              })}
+      {/* MOBILE FULL-SCREEN MENU */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-[var(--surface)] md:hidden">
+          <div className="flex h-14 flex-none items-center gap-[11px] border-b border-[var(--border)] px-4">
+            <button
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]"
+            >
+              <Icon name="x" size={22} />
+            </button>
+            <LogoMark logoUrl={logoUrl} logoLetter={logoLetter} size={30} />
+            <div className="min-w-0 leading-[1.1]">
+              <div className="truncate text-[15px] font-bold tracking-[-0.01em] text-[var(--text)]">{brandName}</div>
+              <div className="truncate text-[11px] font-medium text-[var(--subtle)]">{orgName ?? "RadAMS Platform"}</div>
             </div>
           </div>
-        </>
+          <nav className="flex flex-1 flex-col gap-[3px] overflow-y-auto p-[12px]">
+            {navItems.map((n) => {
+              const isActive = n.key === activeKey;
+              return (
+                <Link
+                  key={n.key}
+                  href={`/${n.key}`}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 rounded-[10px] px-[13px] py-[13px] text-[15px]"
+                  style={{
+                    color: isActive ? "var(--brand)" : "var(--text)",
+                    background: isActive ? "var(--brands)" : "transparent",
+                    fontWeight: isActive ? 600 : 500,
+                  }}
+                >
+                  <span className="flex h-6 w-6 flex-none items-center justify-center">
+                    <Icon name={n.icon} size={22} />
+                  </span>
+                  <span className="min-w-0 flex-1">{n.label}</span>
+                  {!!n.badge && (
+                    <span className="flex h-[20px] min-w-[20px] flex-none items-center justify-center rounded-full bg-[var(--brand)] px-[6px] text-[11px] font-bold text-[var(--brandfg)]">
+                      {n.badge}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+          <div className="flex items-center gap-[11px] border-t border-[var(--border)] p-[14px]">
+            <div className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-full bg-[var(--brand)] text-[13px] font-bold text-[var(--brandfg)]">
+              {person.initials}
+            </div>
+            <div className="min-w-0 flex-1 leading-[1.2]">
+              <div className="truncate text-[13px] font-semibold text-[var(--text)]">{person.name}</div>
+              <div className="text-[11.5px] text-[var(--muted)]">{person.label}</div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
