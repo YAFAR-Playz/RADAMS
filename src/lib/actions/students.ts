@@ -111,6 +111,76 @@ export async function getEnrollmentCounts(studentIds: string[]): Promise<Record<
   return counts;
 }
 
+export type CourseLabelsByStudent = Record<string, string[]>;
+
+function offeringLabel(o: { session: string; unit: string | null; courses: { name: string } | { name: string }[] | null } | null) {
+  if (!o) return "—";
+  const course = Array.isArray(o.courses) ? o.courses[0] : o.courses;
+  return [course?.name, o.session, o.unit].filter(Boolean).join(" · ");
+}
+
+export async function getCourseLabelsForStudents(studentIds: string[]): Promise<CourseLabelsByStudent> {
+  if (!studentIds.length) return {};
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("enrollments")
+    .select("student_id, course_offerings(session, unit, courses(name))")
+    .in("student_id", studentIds);
+  const result: CourseLabelsByStudent = {};
+  for (const row of data ?? []) {
+    const offering = Array.isArray(row.course_offerings) ? row.course_offerings[0] : row.course_offerings;
+    const list = result[row.student_id] ?? [];
+    list.push(offeringLabel(offering));
+    result[row.student_id] = list;
+  }
+  return result;
+}
+
+export type EnrollmentDetail = { enrollmentId: string; offeringId: string; label: string };
+
+export async function getStudentEnrollments(studentId: string): Promise<EnrollmentDetail[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("enrollments")
+    .select("id, offering_id, course_offerings(session, unit, courses(name))")
+    .eq("student_id", studentId);
+  return (data ?? []).map((r) => {
+    const offering = Array.isArray(r.course_offerings) ? r.course_offerings[0] : r.course_offerings;
+    return { enrollmentId: r.id, offeringId: r.offering_id, label: offeringLabel(offering) };
+  });
+}
+
+export type OfferingChoice = { id: string; label: string };
+
+export async function listAllOfferingsForOrg(): Promise<OfferingChoice[]> {
+  const profile = await getCurrentProfile();
+  const orgId = profile?.org?.id;
+  if (!orgId) return [];
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("course_offerings")
+    .select("id, session, unit, courses(name)")
+    .eq("org_id", orgId);
+  return (data ?? []).map((o) => ({ id: o.id, label: offeringLabel(o) }));
+}
+
+export async function addStudentEnrollment(studentId: string, offeringId: string): Promise<{ enrollmentId: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("enrollments")
+    .insert({ student_id: studentId, offering_id: offeringId })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Failed to enroll student");
+  return { enrollmentId: data.id };
+}
+
+export async function removeStudentEnrollment(enrollmentId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("enrollments").delete().eq("id", enrollmentId);
+  if (error) throw new Error(error.message);
+}
+
 export async function reassignStudentAssistant(enrollmentId: string, assistantId: string | null) {
   const supabase = await createClient();
   const { error } = await supabase.from("enrollments").update({ assistant_id: assistantId }).eq("id", enrollmentId);

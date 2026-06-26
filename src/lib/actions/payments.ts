@@ -248,6 +248,20 @@ export async function setPlanType(planId: string, planType: PlanType) {
   await regenerateInstallments(supabase, planId, plan.offering_id, planType, totalAmount, 0);
 }
 
+export async function getEnrolledPlanCount(offeringId: string): Promise<number> {
+  const supabase = await createClient();
+  const { count } = await supabase.from("payment_plans").select("id", { count: "exact", head: true }).eq("offering_id", offeringId);
+  return count ?? 0;
+}
+
+export async function applyOfferingFeeChangeToPlans(offeringId: string) {
+  const supabase = await createClient();
+  const { data: plans } = await supabase.from("payment_plans").select("id, discount_pct").eq("offering_id", offeringId);
+  for (const plan of plans ?? []) {
+    await setPlanDiscount(plan.id, plan.discount_pct);
+  }
+}
+
 export type PaymentStatusSummary = { planType: PlanType | null; totalAmount: number; paidAmount: number; status: "paid" | "pending" | "partial" | "none" };
 
 export async function getPaymentStatusForOffering(offeringId: string): Promise<Record<string, PaymentStatusSummary>> {

@@ -5,7 +5,14 @@ import { getCurrentProfile } from "@/lib/current-profile";
 import type { AssignmentStatus } from "@/lib/assignments-data";
 
 export type OfferingOption = { id: string; label: string };
-export type AssignmentOption = { id: string; title: string; maxMarks: number; lettered: boolean; dueDate: string | null };
+export type AssignmentOption = {
+  id: string;
+  title: string;
+  maxMarks: number;
+  lettered: boolean;
+  dueDate: string | null;
+  template: "grade" | "checkbox" | "rubric" | "comment";
+};
 
 export type RosterStudent = {
   enrollmentId: string;
@@ -75,11 +82,18 @@ export async function listAssignmentsForOffering(offeringId: string): Promise<As
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("assignments")
-    .select("id, title, max_marks, lettered, due_date")
+    .select("id, title, max_marks, lettered, due_date, template")
     .eq("offering_id", offeringId)
     .order("created_at", { ascending: true });
   if (error || !data) return [];
-  return data.map((a) => ({ id: a.id, title: a.title, maxMarks: a.max_marks, lettered: a.lettered, dueDate: a.due_date }));
+  return data.map((a) => ({
+    id: a.id,
+    title: a.title,
+    maxMarks: a.max_marks,
+    lettered: a.lettered,
+    dueDate: a.due_date,
+    template: (a.template ?? "grade") as AssignmentOption["template"],
+  }));
 }
 
 export async function getRoster(assignmentId: string): Promise<RosterStudent[]> {
@@ -166,6 +180,16 @@ export async function setStatus(assignmentId: string, studentId: string, status:
 }
 
 export async function setGrade(assignmentId: string, studentId: string, grade: string) {
+  if (grade.trim()) {
+    const supabase = await createClient();
+    const { data: assignment } = await supabase.from("assignments").select("max_marks, lettered").eq("id", assignmentId).single();
+    if (assignment && !assignment.lettered) {
+      const numeric = Number(grade);
+      if (Number.isFinite(numeric) && numeric > assignment.max_marks) {
+        throw new Error(`Grade can't exceed ${assignment.max_marks} for this assignment.`);
+      }
+    }
+  }
   await upsertLog(assignmentId, studentId, { grade: grade || null });
 }
 

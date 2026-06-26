@@ -213,3 +213,12 @@ export async function resolveStaffingRequest(id: string, status: "approved" | "d
   const { error } = await supabase.from("staffing_requests").update({ status }).eq("id", id);
   if (error) throw new Error(error.message);
 }
+
+export async function assignStaffToCourses(profileId: string, role: "head" | "assistant", offeringIds: string[]) {
+  if (!offeringIds.length) return;
+  const supabase = await createClient();
+  const table = role === "head" ? "offering_heads" : "offering_assistants";
+  const column = role === "head" ? "head_id" : "assistant_id";
+  const { error } = await supabase.from(table).insert(offeringIds.map((offeringId) => ({ offering_id: offeringId, [column]: profileId })));
+  if (error) throw new Error(error.message);
+}

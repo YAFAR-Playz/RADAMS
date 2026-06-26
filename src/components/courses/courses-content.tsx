@@ -16,6 +16,7 @@ import {
   type EnrolledStudent,
   type CourseInput,
 } from "@/lib/actions/courses";
+import { applyOfferingFeeChangeToPlans } from "@/lib/actions/payments";
 
 type ScheduleDraftRow = { seq: number; amount: string; dueDate: string };
 
@@ -73,6 +74,10 @@ export function CoursesContent() {
   const [saving, setSaving] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [savingDatesId, setSavingDatesId] = useState<string | null>(null);
+  const [editingStudentCount, setEditingStudentCount] = useState(0);
+  const [originalFees, setOriginalFees] = useState<{ feeFull: string; feeInstallmentTotal: string; installmentCount: number } | null>(null);
+  const [feeChangeConfirmOpen, setFeeChangeConfirmOpen] = useState(false);
+  const [applyingFeeChange, setApplyingFeeChange] = useState(false);
 
   // The number of rows shown always equals form.installmentCount — row count
   // can never desync from the selected count, only the amount/date per row
@@ -137,6 +142,8 @@ export function CoursesContent() {
     setEditId(null);
     setForm(emptyForm);
     setScheduleOverrides({});
+    setEditingStudentCount(0);
+    setOriginalFees(null);
     setModalOpen(true);
   }
 
@@ -156,6 +163,12 @@ export function CoursesContent() {
       headIds: heads.filter((h) => c.heads.includes(h.name)).map((h) => h.id),
     });
     setScheduleOverrides({});
+    setEditingStudentCount(c.students);
+    setOriginalFees({
+      feeFull: c.feeFull != null ? String(c.feeFull) : "",
+      feeInstallmentTotal: c.feeInstallmentTotal != null ? String(c.feeInstallmentTotal) : "",
+      installmentCount: c.installmentCount,
+    });
     setModalOpen(true);
     if (c.installmentCount > 1) {
       setScheduleLoading(true);
@@ -176,15 +189,35 @@ export function CoursesContent() {
 
   const canSave = form.courseName.trim().length > 0 && form.session.trim().length > 0;
 
+  const feesChanged =
+    !!originalFees &&
+    (originalFees.feeFull !== form.feeFull ||
+      originalFees.feeInstallmentTotal !== form.feeInstallmentTotal ||
+      originalFees.installmentCount !== form.installmentCount);
+
   async function onSave() {
     if (!canSave) return;
+    if (editId && editingStudentCount > 0 && feesChanged) {
+      setFeeChangeConfirmOpen(true);
+      return;
+    }
+    await doSave();
+  }
+
+  async function doSave(applyToExisting?: boolean) {
     setSaving(true);
     try {
-      await saveCourse({
+      const { id } = await saveCourse({
         ...form,
         id: editId ?? undefined,
         schedule: form.installmentCount > 1 ? schedule.map((r) => ({ seq: r.seq, amount: Number(r.amount) || 0, dueDate: r.dueDate })) : undefined,
       });
+      if (applyToExisting) {
+        setApplyingFeeChange(true);
+        await applyOfferingFeeChangeToPlans(id);
+        setApplyingFeeChange(false);
+      }
+      setFeeChangeConfirmOpen(false);
       setModalOpen(false);
       await reload();
     } catch {
@@ -608,7 +641,7 @@ export function CoursesContent() {
                 </div>
               </div>
               {form.installmentCount > 1 && (
-                <div className="overflow-hidden rounded-[var(--rad-sm)] border border-[var(--border)]">
+                <div key={form.installmentCount} className="overflow-hidden rounded-[var(--rad-sm)] border border-[var(--border)]">
                   <div className="border-b border-[var(--border2)] bg-[var(--surface2)] p-[8px_12px] text-[10.5px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">
                     Installment schedule
                   </div>
@@ -685,6 +718,52 @@ export function CoursesContent() {
               >
                 {saving ? <Spinner size={15} /> : <Icon name="check" size={15} />}
                 {editId ? "Save changes" : "Create offering"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {feeChangeConfirmOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[rgba(8,12,22,0.5)] p-5">
+          <div className="w-full max-w-[460px] overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(8,12,22,.34)]">
+            <div className="flex items-center gap-[11px] border-b border-[var(--border2)] p-[16px_18px]">
+              <div className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-[10px] bg-[var(--warns)] text-[var(--warn)]">
+                <Icon name="alert" size={19} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">This course has {editingStudentCount} enrolled student{editingStudentCount === 1 ? "" : "s"}</h3>
+                <div className="text-[12px] text-[var(--muted)]">You changed the price or installment plan — what should happen to students already enrolled?</div>
+              </div>
+            </div>
+            <div className="flex flex-col gap-[10px] p-[16px_18px]">
+              <button
+                onClick={() => doSave(false)}
+                disabled={saving || applyingFeeChange}
+                className="flex flex-col items-start gap-[3px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[12px_14px] text-left hover:border-[var(--brand)] disabled:opacity-60"
+              >
+                <span className="text-[13.5px] font-semibold text-[var(--text)]">Keep their current price</span>
+                <span className="text-[12px] text-[var(--muted)]">Existing students&apos; payment plans stay as-is. The new price only applies to students who enroll from now on.</span>
+              </button>
+              <button
+                onClick={() => doSave(true)}
+                disabled={saving || applyingFeeChange}
+                className="flex flex-col items-start gap-[3px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[12px_14px] text-left hover:border-[var(--brand)] disabled:opacity-60"
+              >
+                <span className="text-[13.5px] font-semibold text-[var(--text)]">Update everyone to the new price</span>
+                <span className="text-[12px] text-[var(--muted)]">
+                  Recalculates every enrolled student&apos;s plan against the new fee. Anything already marked paid is preserved; only the remaining unpaid installments are rescaled.
+                </span>
+              </button>
+            </div>
+            <div className="flex gap-[10px] border-t border-[var(--border2)] p-[14px_18px]">
+              <button
+                onClick={() => setFeeChangeConfirmOpen(false)}
+                disabled={saving || applyingFeeChange}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)] disabled:opacity-60"
+              >
+                {(saving || applyingFeeChange) && <Spinner size={15} />}
+                {applyingFeeChange ? "Updating student plans…" : saving ? "Saving…" : "Cancel"}
               </button>
             </div>
           </div>
