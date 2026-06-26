@@ -16,6 +16,14 @@ export type BrandingDraft = {
 const ALLOWED_LOGO_TYPES = ["image/png", "image/jpeg", "image/svg+xml", "image/webp"];
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 
+function validateLogoFile(formData: FormData): File {
+  const file = formData.get("file");
+  if (!(file instanceof File)) throw new Error("No file provided");
+  if (!ALLOWED_LOGO_TYPES.includes(file.type)) throw new Error("Logo must be a PNG, JPG, SVG or WEBP image");
+  if (file.size > MAX_LOGO_BYTES) throw new Error("Logo must be under 2MB");
+  return file;
+}
+
 export async function getBranding(): Promise<BrandingDraft | null> {
   const profile = await getCurrentProfile();
   const orgId = profile?.org?.id;
@@ -41,11 +49,7 @@ export async function uploadOrgLogo(formData: FormData): Promise<{ url: string }
   const profile = await getCurrentProfile();
   if (!profile || profile.role !== "admin" || !profile.org) throw new Error("Not authorized");
 
-  const file = formData.get("file");
-  if (!(file instanceof File)) throw new Error("No file provided");
-  if (!ALLOWED_LOGO_TYPES.includes(file.type)) throw new Error("Logo must be a PNG, JPG, SVG or WEBP image");
-  if (file.size > MAX_LOGO_BYTES) throw new Error("Logo must be under 2MB");
-
+  const file = validateLogoFile(formData);
   const admin = createAdminClient();
   const ext = file.name.split(".").pop() || "png";
   const path = `org-logos/${profile.org.id}-${Date.now()}.${ext}`;
@@ -84,5 +88,38 @@ export async function saveBranding(draft: BrandingDraft) {
       logo_letter: (draft.name.trim()[0] ?? "R").toUpperCase(),
     })
     .eq("id", orgId);
+  if (error) throw new Error(error.message);
+}
+
+export async function getPlatformDefaultLogo(): Promise<string | null> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("platform_settings").select("default_logo_url").eq("id", true).single();
+  return data?.default_logo_url ?? null;
+}
+
+export async function uploadPlatformDefaultLogo(formData: FormData): Promise<{ url: string }> {
+  const profile = await getCurrentProfile();
+  if (!profile || profile.role !== "owner") throw new Error("Not authorized");
+
+  const file = validateLogoFile(formData);
+  const admin = createAdminClient();
+  const ext = file.name.split(".").pop() || "png";
+  const path = `platform-default-${Date.now()}.${ext}`;
+
+  const { error: uploadError } = await admin.storage.from("branding").upload(path, file, { contentType: file.type, upsert: true });
+  if (uploadError) throw new Error(uploadError.message);
+
+  const { data: publicUrl } = admin.storage.from("branding").getPublicUrl(path);
+  const { error: updateError } = await admin.from("platform_settings").update({ default_logo_url: publicUrl.publicUrl }).eq("id", true);
+  if (updateError) throw new Error(updateError.message);
+
+  return { url: publicUrl.publicUrl };
+}
+
+export async function removePlatformDefaultLogo() {
+  const profile = await getCurrentProfile();
+  if (!profile || profile.role !== "owner") throw new Error("Not authorized");
+  const admin = createAdminClient();
+  const { error } = await admin.from("platform_settings").update({ default_logo_url: null }).eq("id", true);
   if (error) throw new Error(error.message);
 }

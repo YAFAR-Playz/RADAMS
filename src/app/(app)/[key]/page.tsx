@@ -26,6 +26,7 @@ import { HrRequestsContent } from "@/components/hr-requests/hr-requests-content"
 import { HiringContent } from "@/components/hiring/hiring-content";
 import { HeadCheckingContent } from "@/components/head-checking/head-checking-content";
 import { OwnerOrgsContent } from "@/components/owner-orgs/owner-orgs-content";
+import { OwnerBrandingContent } from "@/components/owner-branding/owner-branding-content";
 
 export default async function AppPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
@@ -107,6 +108,10 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
 
   if (key === "branding" && profile.role === "admin") {
     return <BrandingContent />;
+  }
+
+  if (key === "branding" && profile.role === "owner") {
+    return <OwnerBrandingContent />;
   }
 
   if (key === "evaluations" && profile.role === "head") {

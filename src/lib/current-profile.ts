@@ -31,12 +31,17 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
       .eq("id", profile.org_id)
       .single();
     if (orgRow) {
+      let logoUrl = orgRow.logo_url;
+      if (!logoUrl) {
+        const { data: platformSettings } = await supabase.from("platform_settings").select("default_logo_url").eq("id", true).single();
+        logoUrl = platformSettings?.default_logo_url ?? null;
+      }
       org = {
         id: orgRow.id,
         name: orgRow.name,
         brandName: orgRow.brand_name,
         logoLetter: orgRow.logo_letter,
-        logoUrl: orgRow.logo_url,
+        logoUrl,
         primaryColor: orgRow.primary_color,
         corner: orgRow.corner,
       };
