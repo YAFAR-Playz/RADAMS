@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/icons";
 import { Spinner } from "@/components/ui/spinner";
 import type { NavItem } from "@/lib/roles";
+import { NotificationBell } from "@/components/shell/notification-bell";
 
 type NavMode = "sidebar" | "rail";
 
@@ -259,9 +260,7 @@ export function AppShell({
             <span className="text-[13.5px] text-[var(--subtle)]">Search students, assistants, courses…</span>
           </div>
           <div className="ml-auto flex items-center gap-3">
-            <button className="relative flex h-10 w-10 items-center justify-center rounded-[10px] border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface2)]">
-              <Icon name="bell" size={19} />
-            </button>
+            <NotificationBell />
             <UserMenu person={person} />
           </div>
         </header>
@@ -277,10 +276,7 @@ export function AppShell({
           <LogoMark logoUrl={logoUrl} logoLetter={logoLetter} size={30} />
           <span className="min-w-0 flex-1 truncate text-[16px] font-bold tracking-[-0.01em] text-[var(--text)]">{pageTitle}</span>
           <div className="ml-auto flex items-center gap-1">
-            <button className="relative flex h-9 w-9 items-center justify-center rounded-[9px] text-[var(--muted)]">
-              <Icon name="bell" size={19} />
-              <span className="absolute right-[7px] top-[7px] h-[7px] w-[7px] rounded-full border-[1.5px] border-[var(--surface)] bg-[var(--danger)]" />
-            </button>
+            <NotificationBell />
             <UserMenu person={person} />
           </div>
         </header>
