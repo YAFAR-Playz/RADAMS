@@ -6,17 +6,17 @@ import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import { registerStudent, listRegistrations, type RegistrationRow } from "@/lib/actions/registrations";
 import { getOfferingFees, type OfferingFees, type PlanType } from "@/lib/actions/payments";
+import { getPayrollSettings } from "@/lib/actions/payroll-settings";
+import { currencySymbol } from "@/lib/currency";
 
 const PAGE_SIZE = 15;
 
 const emptyForm = { name: "", phone: "", email: "", guardianName: "", guardianPhone: "", planType: "full" as PlanType };
 
-function fmt(n: number | null) {
-  return n != null ? `£${n.toLocaleString("en-US")}` : "—";
-}
-
 export function RegistrationsContent() {
   const [offerings, setOfferings] = useState<OfferingOption[] | null>(null);
+  const [sym, setSym] = useState("£");
+  const fmt = (n: number | null) => (n != null ? `${sym}${n.toLocaleString("en-US")}` : "—");
   const [offeringId, setOfferingId] = useState<string | null>(null);
   const [registrations, setRegistrations] = useState<RegistrationRow[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -39,6 +39,10 @@ export function RegistrationsContent() {
     })();
     (async () => {
       await reload();
+    })();
+    (async () => {
+      const settings = await getPayrollSettings();
+      setSym(currencySymbol(settings?.currency));
     })();
   }, []);
 

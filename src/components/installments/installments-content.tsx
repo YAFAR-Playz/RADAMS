@@ -5,15 +5,15 @@ import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { listPaymentPlans, markInstallmentPaid, setPlanDiscount, setPlanType, type StudentPaymentRow, type PlanType } from "@/lib/actions/payments";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
-
-function fmt(n: number) {
-  return `£${Math.round(n).toLocaleString("en-US")}`;
-}
+import { getPayrollSettings } from "@/lib/actions/payroll-settings";
+import { currencySymbol } from "@/lib/currency";
 
 type StatusFilter = "all" | "paid" | "pending" | "installments" | "full";
 
 export function InstallmentsContent() {
   const [plans, setPlans] = useState<StudentPaymentRow[] | null>(null);
+  const [sym, setSym] = useState("£");
+  const fmt = (n: number) => `${sym}${Math.round(n).toLocaleString("en-US")}`;
   const [offerings, setOfferings] = useState<OfferingOption[] | null>(null);
   const [offeringFilter, setOfferingFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -39,6 +39,8 @@ export function InstallmentsContent() {
     (async () => {
       await reload();
       setOfferings(await listMyOfferings());
+      const settings = await getPayrollSettings();
+      setSym(currencySymbol(settings?.currency));
     })();
   }, []);
 

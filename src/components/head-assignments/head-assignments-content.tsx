@@ -433,7 +433,7 @@ export function HeadAssignmentsContent() {
               </button>
             </div>
 
-            <div className="flex flex-col gap-[14px] overflow-y-auto p-[18px]">
+            <div className="flex min-h-0 flex-col gap-[14px] overflow-y-auto p-[18px]">
               <div>
                 <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Title</label>
                 <input

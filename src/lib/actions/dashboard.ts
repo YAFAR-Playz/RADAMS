@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
 import type { Kpi, Tone } from "@/lib/roles";
 import { trackInfo } from "@/lib/oversight-data";
+import { currencySymbol } from "@/lib/currency";
 
 export type BarRow = { label: string; n: number; barWPct: number };
 export type OfferingSummary = { id: string; label: string; students: number; pending: number };
@@ -414,6 +415,7 @@ export type FinanceDashboard = {
   kpis: Kpi[];
   salaryOverview: SalaryOverviewRow[];
   paymentMethods: PaymentMethodSlice[];
+  currencySymbol: string;
 };
 
 function currentPeriod() {
@@ -424,9 +426,12 @@ function currentPeriod() {
 export async function getFinanceDashboard(): Promise<FinanceDashboard> {
   const profile = await getCurrentProfile();
   const orgId = profile?.org?.id;
-  if (!orgId) return { kpis: [], salaryOverview: [], paymentMethods: [] };
+  if (!orgId) return { kpis: [], salaryOverview: [], paymentMethods: [], currencySymbol: "£" };
   const supabase = await createClient();
   const period = currentPeriod();
+
+  const { data: org } = await supabase.from("organizations").select("currency").eq("id", orgId).single();
+  const sym = currencySymbol(org?.currency);
 
   const { data: lines } = await supabase
     .from("salary_lines")
@@ -486,11 +491,11 @@ export async function getFinanceDashboard(): Promise<FinanceDashboard> {
     .slice(0, 6);
 
   const kpis: Kpi[] = [
-    { icon: "wallet", value: `£${Math.round(totalPayroll).toLocaleString()}`, label: "Payroll this month", tone: "brand" },
+    { icon: "wallet", value: `${sym}${Math.round(totalPayroll).toLocaleString()}`, label: "Payroll this month", tone: "brand" },
     { icon: "card", value: `${paidCount}/${assistants.length}`, label: "Assistants paid", tone: "neutral" },
     { icon: "clock", value: String(pendingEvaluations ?? 0), label: "Pending approvals", tone: (pendingEvaluations ?? 0) > 0 ? "warn" : "ok" },
     { icon: "trend", value: String(bonusCount), label: "Bonuses issued", tone: "ok" },
   ];
 
-  return { kpis, salaryOverview, paymentMethods };
+  return { kpis, salaryOverview, paymentMethods, currencySymbol: sym };
 }
