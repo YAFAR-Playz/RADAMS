@@ -310,7 +310,7 @@ function FinancePanels({ data }: { data: FinanceDashboard }) {
                   <div className="text-[13.5px] font-semibold text-[var(--text)]">{r.name}</div>
                   <div className="text-[12px] text-[var(--subtle)]">{r.offering}</div>
                 </div>
-                <span className="flex-none text-[14px] font-bold text-[var(--text)]">£{r.amount.toLocaleString()}</span>
+                <span className="flex-none text-[14px] font-bold text-[var(--text)]">{data.currencySymbol}{r.amount.toLocaleString()}</span>
                 <div className="w-[78px] flex-none">
                   <Badge
                     text={r.status === "paid" ? "Paid" : "Pending"}

@@ -159,7 +159,7 @@ export function HiringContent() {
 
       {modalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(8,12,22,0.5)] p-5">
-          <div className="w-full max-w-[440px] overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(8,12,22,.34)]">
+          <div className="flex max-h-[88vh] w-full max-w-[440px] flex-col overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(8,12,22,.34)]">
             <div className="flex items-center gap-[11px] border-b border-[var(--border2)] p-[16px_18px]">
               <div className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-[10px] bg-[var(--brands)] text-[var(--brand)]">
                 <Icon name={kind === "add" ? "user-plus" : "x"} size={19} />
@@ -172,7 +172,7 @@ export function HiringContent() {
                 <Icon name="x" size={18} />
               </button>
             </div>
-            <div className="flex flex-col gap-[14px] p-[16px_18px]">
+            <div className="flex min-h-0 flex-col gap-[14px] overflow-y-auto p-[16px_18px]">
               {kind === "add" ? (
                 <>
                   <div>

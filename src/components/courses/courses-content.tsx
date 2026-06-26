@@ -17,6 +17,8 @@ import {
   type CourseInput,
 } from "@/lib/actions/courses";
 import { applyOfferingFeeChangeToPlans } from "@/lib/actions/payments";
+import { getPayrollSettings } from "@/lib/actions/payroll-settings";
+import { currencySymbol } from "@/lib/currency";
 
 type ScheduleDraftRow = { seq: number; amount: string; dueDate: string };
 
@@ -36,8 +38,8 @@ function defaultScheduleRows(count: number, total: string, startDate: string): S
 const PAGE_SIZE = 8;
 const STUDENT_PAGE_SIZE = 12;
 
-function fmt(n: number | null) {
-  return n != null ? `£${n.toLocaleString("en-US")}` : "—";
+function fmt(n: number | null, sym: string) {
+  return n != null ? `${sym}${n.toLocaleString("en-US")}` : "—";
 }
 
 const emptyForm: CourseInput = {
@@ -57,6 +59,11 @@ export function CoursesContent() {
   const [heads, setHeads] = useState<HeadOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sym, setSym] = useState("£");
+
+  useEffect(() => {
+    getPayrollSettings().then((settings) => setSym(currencySymbol(settings?.currency)));
+  }, []);
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "inactive">("all");
@@ -386,11 +393,11 @@ export function CoursesContent() {
                   <div className="flex flex-wrap gap-[8px] text-[12px]">
                     <div className="min-w-[130px] flex-1 rounded-[8px] border border-[var(--border2)] bg-[var(--surface2)] p-[8px_10px]">
                       <div className="text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Full payment</div>
-                      <div className="mt-[2px] font-mono text-[14px] font-bold text-[var(--text)]">{fmt(c.feeFull)}</div>
+                      <div className="mt-[2px] font-mono text-[14px] font-bold text-[var(--text)]">{fmt(c.feeFull, sym)}</div>
                     </div>
                     <div className="min-w-[130px] flex-1 rounded-[8px] border border-[var(--border2)] bg-[var(--surface2)] p-[8px_10px]">
                       <div className="text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Installments ({c.installmentCount})</div>
-                      <div className="mt-[2px] font-mono text-[14px] font-bold text-[var(--text)]">{fmt(c.feeInstallmentTotal)}</div>
+                      <div className="mt-[2px] font-mono text-[14px] font-bold text-[var(--text)]">{fmt(c.feeInstallmentTotal, sym)}</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-[7px]">
@@ -546,7 +553,7 @@ export function CoursesContent() {
                 <Icon name="x" size={18} />
               </button>
             </div>
-            <div className="flex flex-col gap-[13px] overflow-y-auto p-[16px_18px]">
+            <div className="flex min-h-0 flex-col gap-[13px] overflow-y-auto p-[16px_18px]">
               <div className="grid grid-cols-[1.2fr_1fr_1fr] gap-[10px]">
                 <div>
                   <label className="mb-[6px] block text-[12px] font-semibold text-[var(--text)]">Course</label>
@@ -600,7 +607,7 @@ export function CoursesContent() {
               </div>
               <div className="grid grid-cols-2 gap-[10px]">
                 <div>
-                  <label className="mb-[6px] block text-[12px] font-semibold text-[var(--text)]">Full-payment price (£)</label>
+                  <label className="mb-[6px] block text-[12px] font-semibold text-[var(--text)]">Full-payment price ({sym})</label>
                   <input
                     value={form.feeFull}
                     onChange={(e) => setForm((f) => ({ ...f, feeFull: e.target.value.replace(/[^0-9]/g, "") }))}
@@ -609,7 +616,7 @@ export function CoursesContent() {
                   />
                 </div>
                 <div>
-                  <label className="mb-[6px] block text-[12px] font-semibold text-[var(--text)]">Installments total (£)</label>
+                  <label className="mb-[6px] block text-[12px] font-semibold text-[var(--text)]">Installments total ({sym})</label>
                   <input
                     value={form.feeInstallmentTotal}
                     onChange={(e) => {
@@ -656,7 +663,7 @@ export function CoursesContent() {
                       <div key={row.seq} className="flex flex-wrap items-center gap-2 border-b border-[var(--border2)] p-[9px_12px] last:border-b-0">
                         <span className="w-[80px] flex-none text-[12.5px] font-semibold text-[var(--text)]">Payment {row.seq}</span>
                         <div className="flex h-[34px] min-w-[90px] flex-1 items-center gap-[2px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[9px]">
-                          <span className="text-[12px] font-semibold text-[var(--subtle)]">£</span>
+                          <span className="text-[12px] font-semibold text-[var(--subtle)]">{sym}</span>
                           <input
                             value={row.amount}
                             onChange={(e) => {

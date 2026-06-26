@@ -219,21 +219,29 @@ export function PayCategoriesContent() {
   const [bracketDrafts, setBracketDrafts] = useState<Record<string, BracketDraft>>({});
   const [otherRateDrafts, setOtherRateDrafts] = useState<Record<string, string>>({});
 
+  async function refetchLists() {
+    const [cats, rates, brks, others, settings] = await Promise.all([
+      listPayCategories(),
+      listCourseRates(),
+      listBrackets(),
+      listOtherRates(),
+      getPayrollSettings(),
+    ]);
+    setCategories(cats);
+    setCourseRates(rates);
+    setBrackets(brks);
+    setOtherRates(others);
+    if (settings) setCurrency(settings.currency);
+  }
+
+  // Used for the initial load and after a manual "Save changes" — clears
+  // drafts since the server now matches what's on screen. Add/delete
+  // actions use refetchLists() directly so they don't wipe unsaved edits
+  // elsewhere on the page.
   async function reload() {
     setLoading(true);
     try {
-      const [cats, rates, brks, others, settings] = await Promise.all([
-        listPayCategories(),
-        listCourseRates(),
-        listBrackets(),
-        listOtherRates(),
-        getPayrollSettings(),
-      ]);
-      setCategories(cats);
-      setCourseRates(rates);
-      setBrackets(brks);
-      setOtherRates(others);
-      if (settings) setCurrency(settings.currency);
+      await refetchLists();
       setCategoryDrafts({});
       setOptionDrafts({});
       setCourseRateDrafts({});
@@ -286,43 +294,43 @@ export function PayCategoriesContent() {
   async function onAddCategory(kind: "extra" | "deduction") {
     await withAdding(kind, async () => {
       await addPayCategory(kind, "New category");
-      await reload();
+      await refetchLists();
     });
   }
   function onModeChange(id: string, mode: CategoryMode) {
     withBusy(id, async () => {
       await updatePayCategory(id, { mode });
-      await reload();
+      await refetchLists();
     });
   }
   async function onDeleteCategory(id: string) {
     await withBusy(id, async () => {
       await deletePayCategory(id);
-      await reload();
+      await refetchLists();
     });
   }
   async function onAddOption(categoryId: string) {
     await withAdding(categoryId, async () => {
       await addCategoryOption(categoryId);
-      await reload();
+      await refetchLists();
     });
   }
   async function onDeleteOption(id: string) {
     await withBusy(id, async () => {
       await deleteCategoryOption(id);
-      await reload();
+      await refetchLists();
     });
   }
   async function onAddBracket() {
     await withAdding("bracket", async () => {
       await addBracket();
-      await reload();
+      await refetchLists();
     });
   }
   async function onDeleteBracket(id: string) {
     await withBusy(id, async () => {
       await deleteBracket(id);
-      await reload();
+      await refetchLists();
     });
   }
 

@@ -222,3 +222,22 @@ export async function assignStaffToCourses(profileId: string, role: "head" | "as
   const { error } = await supabase.from(table).insert(offeringIds.map((offeringId) => ({ offering_id: offeringId, [column]: profileId })));
   if (error) throw new Error(error.message);
 }
+
+export async function getAssignedOfferingIds(profileId: string, role: "head" | "assistant"): Promise<string[]> {
+  const supabase = await createClient();
+  const table = role === "head" ? "offering_heads" : "offering_assistants";
+  const column = role === "head" ? "head_id" : "assistant_id";
+  const { data } = await supabase.from(table).select("offering_id").eq(column, profileId);
+  return (data ?? []).map((r) => r.offering_id);
+}
+
+export async function setStaffCourses(profileId: string, role: "head" | "assistant", offeringIds: string[]) {
+  const supabase = await createClient();
+  const table = role === "head" ? "offering_heads" : "offering_assistants";
+  const column = role === "head" ? "head_id" : "assistant_id";
+  await supabase.from(table).delete().eq(column, profileId);
+  if (offeringIds.length) {
+    const { error } = await supabase.from(table).insert(offeringIds.map((offeringId) => ({ offering_id: offeringId, [column]: profileId })));
+    if (error) throw new Error(error.message);
+  }
+}

@@ -25,6 +25,8 @@ import { getEffectiveTemplate, getOrgBrandName } from "@/lib/actions/templates";
 import { applyTemplateVars } from "@/lib/message-vars";
 import { autoAssignUnassigned } from "@/lib/actions/assistant-groups";
 import { getPaymentStatusForOffering, type PaymentStatusSummary } from "@/lib/actions/payments";
+import { getPayrollSettings } from "@/lib/actions/payroll-settings";
+import { currencySymbol } from "@/lib/currency";
 
 const PAGE_SIZE = 20;
 
@@ -72,6 +74,7 @@ export function StudentsContent({ role }: { role: Role }) {
   const [enrollmentBusy, setEnrollmentBusy] = useState(false);
   const isRegistration = role === "registration";
   const canEditCourses = role === "admin" || role === "registration";
+  const [sym, setSym] = useState("£");
 
   useEffect(() => {
     listMyOfferings().then((data) => {
@@ -82,6 +85,7 @@ export function StudentsContent({ role }: { role: Role }) {
       setWelcomeTemplate(tpl);
       setOrgName(org);
     });
+    getPayrollSettings().then((settings) => setSym(currencySymbol(settings?.currency)));
   }, []);
 
   async function reload(id: string) {
@@ -520,7 +524,7 @@ export function StudentsContent({ role }: { role: Role }) {
                                 {label}
                               </span>
                               <span className="text-[11px] text-[var(--subtle)]">
-                                £{payment.paidAmount.toLocaleString()} / £{payment.totalAmount.toLocaleString()}
+                                {sym}{payment.paidAmount.toLocaleString()} / {sym}{payment.totalAmount.toLocaleString()}
                                 {payment.planType === "installments" ? " · installments" : payment.planType === "full" ? " · full" : ""}
                               </span>
                             </div>
@@ -708,7 +712,7 @@ export function StudentsContent({ role }: { role: Role }) {
                 <Icon name="x" size={18} />
               </button>
             </div>
-            <div className="flex flex-col gap-[14px] overflow-y-auto p-[16px_18px]">
+            <div className="flex min-h-0 flex-col gap-[14px] overflow-y-auto p-[16px_18px]">
               <div>
                 <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Full name</label>
                 <input

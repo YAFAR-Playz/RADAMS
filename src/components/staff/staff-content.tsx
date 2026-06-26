@@ -12,9 +12,13 @@ import {
   listPendingRequests,
   resolveStaffingRequest,
   getLoginAsLink,
+  getAssignedOfferingIds,
+  setStaffCourses,
+  assignStaffToCourses,
   type StaffMember,
   type PendingRequest,
 } from "@/lib/actions/staff";
+import { listAllOfferingsForOrg, type OfferingChoice } from "@/lib/actions/students";
 
 const ADMIN_ROLE_OPTIONS: Role[] = ["admin", "hr", "head", "assistant", "registration", "finance"];
 const HR_ROLE_OPTIONS: Role[] = ["hr", "head", "assistant", "registration", "finance"];
@@ -37,7 +41,7 @@ const ROLE_LABEL: Record<Role, string> = {
   finance: "Finance",
 };
 
-const emptyForm = { name: "", email: "", phone: "", role: "assistant" as Role };
+const emptyForm = { name: "", email: "", phone: "", role: "assistant" as Role, courseIds: [] as string[] };
 
 export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | "hr" }) {
   const isHr = viewerRole === "hr";
@@ -54,6 +58,8 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [offerings, setOfferings] = useState<OfferingChoice[] | null>(null);
+  const [coursesLoading, setCoursesLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [loginAsId, setLoginAsId] = useState<string | null>(null);
@@ -62,9 +68,10 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
   async function reload() {
     setLoading(true);
     try {
-      const [s, r] = await Promise.all([listStaff(), listPendingRequests()]);
+      const [s, r, o] = await Promise.all([listStaff(), listPendingRequests(), listAllOfferingsForOrg()]);
       setStaff(s);
       setRequests(r);
+      setOfferings(o);
     } catch {
       setError("Couldn't load staff — try again.");
     } finally {
@@ -99,8 +106,20 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
 
   function openEdit(u: StaffMember) {
     setEditId(u.id);
-    setForm({ name: u.name, email: u.email, phone: u.phone ?? "", role: u.role });
+    setForm({ name: u.name, email: u.email, phone: u.phone ?? "", role: u.role, courseIds: [] });
     setModalOpen(true);
+    if (u.role === "head" || u.role === "assistant") {
+      setCoursesLoading(true);
+      getAssignedOfferingIds(u.id, u.role)
+        .then((ids) => setForm((f) => ({ ...f, courseIds: ids })))
+        .finally(() => setCoursesLoading(false));
+    }
+  }
+
+  const showCourses = form.role === "head" || form.role === "assistant";
+
+  function toggleCourse(id: string) {
+    setForm((f) => ({ ...f, courseIds: f.courseIds.includes(id) ? f.courseIds.filter((x) => x !== id) : [...f.courseIds, id] }));
   }
 
   const canSave = form.name.trim().length > 0 && (editId !== null || form.email.trim().length > 0);
@@ -111,8 +130,10 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
     try {
       if (editId) {
         await updateStaffMember(editId, { name: form.name, phone: form.phone, role: form.role });
+        if (showCourses) await setStaffCourses(editId, form.role as "head" | "assistant", form.courseIds);
       } else {
-        await createStaffMember(form);
+        const { id } = await createStaffMember(form);
+        if (showCourses && form.courseIds.length) await assignStaffToCourses(id, form.role as "head" | "assistant", form.courseIds);
       }
       setModalOpen(false);
       await reload();
@@ -376,7 +397,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
       {/* ADD / EDIT MODAL */}
       {modalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(8,12,22,0.5)] p-5">
-          <div className="w-full max-w-[440px] overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(8,12,22,.34)]">
+          <div className="flex max-h-[88vh] w-full max-w-[440px] flex-col overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(8,12,22,.34)]">
             <div className="flex items-center gap-[11px] border-b border-[var(--border2)] p-[16px_18px]">
               <div className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-[10px] bg-[var(--brands)] text-[var(--brand)]">
                 <Icon name="user-plus" size={19} />
@@ -389,7 +410,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
                 <Icon name="x" size={18} />
               </button>
             </div>
-            <div className="flex flex-col gap-[14px] p-[16px_18px]">
+            <div className="flex min-h-0 flex-col gap-[14px] overflow-y-auto p-[16px_18px]">
               <div>
                 <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Full name</label>
                 <input
@@ -437,6 +458,36 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
                   </div>
                 </div>
               </div>
+              {showCourses && (
+                <div>
+                  <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Assigned course(s)</label>
+                  {coursesLoading ? (
+                    <SkeletonRow className="h-[34px]" />
+                  ) : (
+                    <div className="flex flex-wrap gap-[6px]">
+                      {(offerings ?? []).map((o) => {
+                        const sel = form.courseIds.includes(o.id);
+                        return (
+                          <button
+                            key={o.id}
+                            onClick={() => toggleCourse(o.id)}
+                            className="inline-flex items-center gap-[5px] rounded-full border px-[11px] py-[5px] text-[12px] font-semibold"
+                            style={
+                              sel
+                                ? { borderColor: "var(--brand)", background: "var(--brands)", color: "var(--brand)" }
+                                : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
+                            }
+                          >
+                            {sel && <Icon name="check" size={12} />}
+                            {o.label}
+                          </button>
+                        );
+                      })}
+                      {(offerings ?? []).length === 0 && <span className="text-[12.5px] text-[var(--subtle)]">No course offerings yet.</span>}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex gap-[10px] border-t border-[var(--border2)] p-[14px_18px]">
               <button onClick={() => setModalOpen(false)} className="h-11 flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]">
