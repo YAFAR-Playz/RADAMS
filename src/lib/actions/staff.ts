@@ -14,6 +14,7 @@ export type StaffMember = {
   role: Role;
   joinedAt: string;
   courses: string[];
+  isMainAdmin: boolean;
 };
 
 export type PendingRequest = {
@@ -37,7 +38,7 @@ export async function listStaff(): Promise<StaffMember[]> {
 
   const { data: profiles } = await supabase
     .from("profiles")
-    .select("id, full_name, initials, email, phone, role, created_at")
+    .select("id, full_name, initials, email, phone, role, created_at, is_main_admin")
     .eq("org_id", orgId)
     .order("full_name", { ascending: true });
 
@@ -81,6 +82,7 @@ export async function listStaff(): Promise<StaffMember[]> {
     role: p.role as Role,
     joinedAt: p.created_at,
     courses: coursesByProfile.get(p.id) ?? [],
+    isMainAdmin: !!p.is_main_admin,
   }));
 }
 
@@ -149,8 +151,13 @@ export async function updateStaffMember(id: string, patch: { name: string; phone
 }
 
 export async function removeStaffMember(id: string, leaveDate?: string) {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org) throw new Error("Not authenticated");
+
   const admin = createAdminClient();
-  const { data: target } = await admin.from("profiles").select("org_id, full_name, role").eq("id", id).single();
+  const { data: target } = await admin.from("profiles").select("org_id, full_name, role, is_main_admin").eq("id", id).single();
+  if (!target || target.org_id !== profile.org.id) throw new Error("User not found in your organization");
+  if (target.is_main_admin) throw new Error("This is the organization's main admin and can't be removed.");
 
   const { error } = await admin.auth.admin.deleteUser(id);
   if (error) throw new Error(error.message);

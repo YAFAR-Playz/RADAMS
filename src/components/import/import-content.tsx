@@ -343,28 +343,33 @@ export function ImportContent() {
                 {onlyErrors ? "Show all rows" : "Show errors only"}
               </button>
             </div>
-            <div className="overflow-x-auto">
-              <div className="min-w-[620px]">
-                <div className="flex items-center gap-[14px] border-b border-[var(--border2)] p-[10px_18px] text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">
-                  <span className="w-[30px] flex-none">#</span>
-                  <span className="w-[160px] flex-none">Student</span>
-                  <span className="w-[140px] flex-none">Phone</span>
-                  <span className="w-[170px] flex-none">Guardian phone</span>
-                  <span className="flex-1">Status</span>
-                </div>
-                {visibleRows.map((r) => (
-                  <div key={r.n} className="flex items-center gap-[14px] border-b border-[var(--border2)] p-[11px_18px]" style={{ background: r.error ? "var(--dangers)" : "transparent" }}>
-                    <span className="w-[30px] flex-none font-mono text-[12.5px] text-[var(--subtle)]">{r.n}</span>
-                    <span className="w-[160px] flex-none truncate text-[13.5px] font-semibold text-[var(--text)]">{r.name || "—"}</span>
-                    <span className="w-[140px] flex-none font-mono text-[13px] text-[var(--muted)]">{r.phone || "—"}</span>
-                    <span className="w-[170px] flex-none font-mono text-[13px] text-[var(--muted)]">{r.guardianPhone || "—"}</span>
-                    <span className="flex flex-1 items-center gap-[6px] text-[12.5px] font-semibold" style={{ color: r.error ? "var(--danger)" : "var(--ok)" }}>
-                      <Icon name={r.error ? "alert" : "check"} size={14} />
-                      {r.error ?? "Valid"}
-                    </span>
-                  </div>
-                ))}
+            <div>
+              <div className="hidden flex-wrap items-center gap-[10px_14px] border-b border-[var(--border2)] p-[10px_18px] text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)] sm:flex">
+                <span className="w-[26px] flex-none">#</span>
+                <span className="min-w-0 flex-[1.4_1_140px]">Student</span>
+                <span className="min-w-0 flex-[1_1_110px]">Phone</span>
+                <span className="min-w-0 flex-[1_1_130px]">Guardian phone</span>
+                <span className="min-w-0 flex-[1_1_120px]">Status</span>
               </div>
+              {visibleRows.map((r) => (
+                <div
+                  key={r.n}
+                  className="flex flex-wrap items-center gap-[8px_14px] border-b border-[var(--border2)] p-[11px_18px]"
+                  style={{ background: r.error ? "var(--dangers)" : "transparent" }}
+                >
+                  <span className="w-[26px] flex-none font-mono text-[12.5px] text-[var(--subtle)]">{r.n}</span>
+                  <span className="min-w-0 flex-[1.4_1_140px] truncate text-[13.5px] font-semibold text-[var(--text)]">{r.name || "—"}</span>
+                  <span className="min-w-0 flex-[1_1_110px] font-mono text-[13px] text-[var(--muted)]">{r.phone || "—"}</span>
+                  <span className="min-w-0 flex-[1_1_130px] font-mono text-[13px] text-[var(--muted)]">{r.guardianPhone || "—"}</span>
+                  <span
+                    className="flex min-w-0 flex-[1_1_120px] items-center gap-[6px] text-[12.5px] font-semibold"
+                    style={{ color: r.error ? "var(--danger)" : "var(--ok)" }}
+                  >
+                    <Icon name={r.error ? "alert" : "check"} size={14} />
+                    {r.error ?? "Valid"}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         </>

@@ -24,6 +24,12 @@ import { PayCategoriesContent } from "@/components/pay-categories/pay-categories
 import { FinanceSalariesContent } from "@/components/finance-salaries/finance-salaries-content";
 import { HrRequestsContent } from "@/components/hr-requests/hr-requests-content";
 import { HiringContent } from "@/components/hiring/hiring-content";
+import { HeadCheckingContent } from "@/components/head-checking/head-checking-content";
+import { OwnerOrgsContent } from "@/components/owner-orgs/owner-orgs-content";
+import { OwnerBrandingContent } from "@/components/owner-branding/owner-branding-content";
+import { SettingsContent } from "@/components/settings/settings-content";
+import { OwnerUsersContent } from "@/components/owner-users/owner-users-content";
+import { OwnerSystemContent } from "@/components/owner-system/owner-system-content";
 
 export default async function AppPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
@@ -33,6 +39,10 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
   if (key === "dashboard") {
     const firstName = profile.fullName.split(" ")[0];
     return <DashboardContent role={profile.role} orgName={profile.org?.name ?? null} firstName={firstName} />;
+  }
+
+  if (key === "settings") {
+    return <SettingsContent />;
   }
 
   if (key === "assignments" && profile.role === "head") {
@@ -45,6 +55,22 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
 
   if (key === "oversight" && profile.role === "head") {
     return <OversightContent />;
+  }
+
+  if (key === "checking" && profile.role === "head") {
+    return <HeadCheckingContent />;
+  }
+
+  if (key === "orgs" && profile.role === "owner") {
+    return <OwnerOrgsContent />;
+  }
+
+  if (key === "users" && profile.role === "owner") {
+    return <OwnerUsersContent />;
+  }
+
+  if (key === "system" && profile.role === "owner") {
+    return <OwnerSystemContent />;
   }
 
   if (key === "students" && (profile.role === "admin" || profile.role === "head" || profile.role === "assistant" || profile.role === "registration")) {
@@ -95,8 +121,16 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
     return <TemplatesContent />;
   }
 
+  if (key === "templates" && profile.role === "owner") {
+    return <TemplatesContent scope="platform" />;
+  }
+
   if (key === "branding" && profile.role === "admin") {
     return <BrandingContent />;
+  }
+
+  if (key === "branding" && profile.role === "owner") {
+    return <OwnerBrandingContent />;
   }
 
   if (key === "evaluations" && profile.role === "head") {

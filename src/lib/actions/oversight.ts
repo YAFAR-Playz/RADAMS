@@ -26,11 +26,7 @@ export type OversightComment = {
   studentId: string;
   studentName: string;
   initials: string;
-  assignmentId: string;
   assignment: string;
-  maxMarks: number;
-  lettered: boolean;
-  template: "grade" | "checkbox" | "rubric" | "comment";
   status: AssignmentStatus | null;
   grade: string | null;
   comment: string | null;
@@ -121,9 +117,9 @@ export async function getAssistantComments(offeringId: string, assistantId: stri
 
   const { data: assignmentRows } = await supabase
     .from("assignments")
-    .select("id, title, max_marks, lettered, template")
+    .select("id, title")
     .eq("offering_id", offeringId);
-  const assignmentById = new Map((assignmentRows ?? []).map((a) => [a.id, a]));
+  const titleById = new Map((assignmentRows ?? []).map((a) => [a.id, a.title]));
   const assignmentIds = (assignmentRows ?? []).map((a) => a.id);
 
   if (!assignmentIds.length) return [];
@@ -144,17 +140,12 @@ export async function getAssistantComments(offeringId: string, assistantId: stri
   return (logs ?? [])
     .map((log) => {
       const student = studentById.get(log.student_id);
-      const assignment = assignmentById.get(log.assignment_id);
-      if (!student || !assignment) return null;
+      if (!student) return null;
       return {
         studentId: log.student_id,
         studentName: student.name,
         initials: student.initials,
-        assignmentId: log.assignment_id,
-        assignment: assignment.title,
-        maxMarks: assignment.max_marks,
-        lettered: assignment.lettered,
-        template: (assignment.template ?? "grade") as OversightComment["template"],
+        assignment: titleById.get(log.assignment_id) ?? "—",
         status: log.status as AssignmentStatus | null,
         grade: log.grade,
         comment: log.comment,

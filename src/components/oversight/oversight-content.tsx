@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { toneColors } from "@/lib/tone";
-import { statusDef, STATUS_DEFS, type AssignmentStatus } from "@/lib/assignments-data";
+import { statusDef } from "@/lib/assignments-data";
 import { trackInfo } from "@/lib/oversight-data";
 import {
   listHeadOfferings,
@@ -15,7 +15,6 @@ import {
   type OversightStats,
   type OversightComment,
 } from "@/lib/actions/oversight";
-import { setStatus, setGrade, setComment } from "@/lib/actions/assignments";
 
 const COMMENTS_PAGE_SIZE = 10;
 
@@ -46,56 +45,18 @@ function AssistantRow({
   const [comments, setComments] = useState<OversightComment[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(0);
-  const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [draft, setDraft] = useState<{ status: string; grade: string; comment: string }>({ status: "", grade: "", comment: "" });
-  const [savingKey, setSavingKey] = useState<string | null>(null);
-  const [editError, setEditError] = useState<string | null>(null);
-
-  async function reloadComments() {
-    setComments(await getAssistantComments(offeringId, assistant.id));
-  }
 
   useEffect(() => {
     (async () => {
       if (!expanded || comments !== null) return;
       setLoading(true);
       try {
-        await reloadComments();
+        setComments(await getAssistantComments(offeringId, assistant.id));
       } finally {
         setLoading(false);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expanded, comments, offeringId, assistant.id]);
-
-  function keyOf(c: OversightComment) {
-    return `${c.assignmentId}:${c.studentId}`;
-  }
-
-  function startEdit(c: OversightComment) {
-    setEditingKey(keyOf(c));
-    setDraft({ status: c.status ?? "", grade: c.grade ?? "", comment: c.comment ?? "" });
-    setEditError(null);
-  }
-
-  async function saveEdit(c: OversightComment) {
-    const key = keyOf(c);
-    setSavingKey(key);
-    setEditError(null);
-    try {
-      await Promise.all([
-        setStatus(c.assignmentId, c.studentId, (draft.status || null) as AssignmentStatus | null),
-        setGrade(c.assignmentId, c.studentId, draft.grade),
-        setComment(c.assignmentId, c.studentId, draft.comment),
-      ]);
-      await reloadComments();
-      setEditingKey(null);
-    } catch (e) {
-      setEditError(e instanceof Error ? e.message : "Couldn't save this override — try again.");
-    } finally {
-      setSavingKey(null);
-    }
-  }
 
   const pageCount = Math.max(1, Math.ceil((comments?.length ?? 0) / COMMENTS_PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
@@ -162,103 +123,42 @@ function AssistantRow({
             pageComments.map((c) => {
               const def = statusDef(c.status);
               const { bg, fg } = def ? toneColors(def.tone) : { bg: "var(--surface2)", fg: "var(--muted)" };
-              const key = keyOf(c);
-              const isEditing = editingKey === key;
-              const showGrade = c.template === "grade" || c.template === "rubric";
               return (
-                <div key={key} className="border-t border-[var(--border2)]">
-                  <div className="flex flex-wrap items-center gap-[11px] p-[11px_18px]">
-                    <div className="flex w-[160px] flex-none items-center gap-[9px]">
-                      <div className="flex h-7 w-7 flex-none items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[10.5px] font-bold text-[var(--muted)]">
-                        {c.initials}
+                <div
+                  key={c.studentId + c.assignment}
+                  className="flex flex-wrap items-center gap-[11px] border-t border-[var(--border2)] p-[11px_18px]"
+                >
+                  <div className="flex w-[160px] flex-none items-center gap-[9px]">
+                    <div className="flex h-7 w-7 flex-none items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[10.5px] font-bold text-[var(--muted)]">
+                      {c.initials}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-semibold text-[var(--text)]">
+                        {c.studentName}
                       </div>
-                      <div className="min-w-0">
-                        <div className="overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-semibold text-[var(--text)]">
-                          {c.studentName}
-                        </div>
-                        <div className="overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-[var(--subtle)]">
-                          {c.assignment}
-                        </div>
+                      <div className="overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-[var(--subtle)]">
+                        {c.assignment}
                       </div>
                     </div>
-                    {!isEditing && (
-                      <>
-                        <span
-                          className="inline-flex flex-none items-center gap-1 rounded-full px-2 py-[3px] text-[11px] font-semibold"
-                          style={{ background: bg, color: fg }}
-                        >
-                          <Icon name={def ? def.icon : "clock"} size={12} />
-                          {def ? def.label : "Not logged"}
-                        </span>
-                        {showGrade && <span className="w-[38px] flex-none text-[12.5px] font-bold text-[var(--text)]">{c.grade || "—"}</span>}
-                        <span className="min-w-[150px] flex-1 text-[12.5px] leading-[1.4] text-[var(--muted)]">
-                          {c.comment || "No comment yet"}
-                        </span>
-                        <span
-                          className="inline-flex flex-none items-center gap-[5px] text-[11.5px] font-semibold"
-                          style={{ color: c.sent ? "var(--ok)" : "var(--warn)" }}
-                        >
-                          <Icon name={c.sent ? "check2" : "clock"} size={13} />
-                          {c.sent ? "Sent" : "Pending"}
-                        </span>
-                        <button
-                          onClick={() => startEdit(c)}
-                          title="Override this entry"
-                          className="flex h-7 w-7 flex-none items-center justify-center rounded-[7px] border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:border-[var(--brand)] hover:bg-[var(--brands)] hover:text-[var(--brand)]"
-                        >
-                          <Icon name="settings" size={13} />
-                        </button>
-                      </>
-                    )}
-                    {isEditing && (
-                      <div className="flex min-w-[280px] flex-1 flex-wrap items-center gap-[8px]">
-                        <select
-                          value={draft.status}
-                          onChange={(e) => setDraft((d) => ({ ...d, status: e.target.value }))}
-                          className="h-8 flex-none rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-2 text-[12px] font-semibold text-[var(--text)] outline-none"
-                        >
-                          <option value="">Not logged</option>
-                          {STATUS_DEFS.map((s) => (
-                            <option key={s.key} value={s.key}>
-                              {s.label}
-                            </option>
-                          ))}
-                        </select>
-                        {showGrade && (
-                          <input
-                            value={draft.grade}
-                            onChange={(e) => setDraft((d) => ({ ...d, grade: e.target.value }))}
-                            placeholder={c.lettered ? "Letter" : `/${c.maxMarks}`}
-                            className="h-8 w-[64px] flex-none rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-2 text-center text-[12px] font-semibold text-[var(--text)] outline-none"
-                          />
-                        )}
-                        <input
-                          value={draft.comment}
-                          onChange={(e) => setDraft((d) => ({ ...d, comment: e.target.value }))}
-                          placeholder="Comment"
-                          className="h-8 min-w-[140px] flex-1 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-2 text-[12px] text-[var(--text)] outline-none"
-                        />
-                        <button
-                          onClick={() => saveEdit(c)}
-                          disabled={savingKey === key}
-                          className="flex h-8 flex-none items-center gap-[5px] rounded-[7px] bg-[var(--brand)] px-[10px] text-[12px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
-                        >
-                          {savingKey === key ? <Spinner size={12} /> : <Icon name="check" size={12} />}
-                          Save
-                        </button>
-                        <button
-                          onClick={() => setEditingKey(null)}
-                          disabled={savingKey === key}
-                          className="flex h-8 flex-none items-center justify-center rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[10px] text-[12px] font-semibold text-[var(--muted)] disabled:opacity-60"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    )}
                   </div>
-                  {isEditing && editError && (
-                    <div className="px-[18px] pb-[10px] text-[12px] font-medium text-[var(--danger)]">{editError}</div>
-                  )}
+                  <span
+                    className="inline-flex flex-none items-center gap-1 rounded-full px-2 py-[3px] text-[11px] font-semibold"
+                    style={{ background: bg, color: fg }}
+                  >
+                    <Icon name={def ? def.icon : "clock"} size={12} />
+                    {def ? def.label : "Not logged"}
+                  </span>
+                  <span className="w-[38px] flex-none text-[12.5px] font-bold text-[var(--text)]">{c.grade || "—"}</span>
+                  <span className="min-w-[150px] flex-1 text-[12.5px] leading-[1.4] text-[var(--muted)]">
+                    {c.comment || "No comment yet"}
+                  </span>
+                  <span
+                    className="inline-flex flex-none items-center gap-[5px] text-[11.5px] font-semibold"
+                    style={{ color: c.sent ? "var(--ok)" : "var(--warn)" }}
+                  >
+                    <Icon name={c.sent ? "check2" : "clock"} size={13} />
+                    {c.sent ? "Sent" : "Pending"}
+                  </span>
                 </div>
               );
             })

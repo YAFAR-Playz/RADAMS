@@ -6,7 +6,7 @@ import { Icon, type IconName } from "@/components/icons";
 import { SkeletonRow } from "@/components/ui/spinner";
 import { toneColors } from "@/lib/tone";
 import { mockKpisForRole, type Kpi, type Role, type Tone } from "@/lib/roles";
-import { ORGS, ACTIVITY, dashboardSubtitle, greetingFor, dateLabel } from "@/lib/dashboard-data";
+import { ACTIVITY, dashboardSubtitle, greetingFor, dateLabel } from "@/lib/dashboard-data";
 import {
   getAdminDashboard,
   getAssistantDashboard,
@@ -20,6 +20,7 @@ import {
   type FinanceDashboard,
 } from "@/lib/actions/dashboard";
 import { getHrDashboard, type HrDashboard } from "@/lib/actions/hr";
+import { getOwnerDashboard, listOrgsOverview, type OrgOverview } from "@/lib/actions/owner";
 
 function Badge({ text, tone, icon }: { text: string; tone: Tone; icon?: IconName }) {
   const { bg, fg } = toneColors(tone);
@@ -432,25 +433,32 @@ function ActivityCard() {
   );
 }
 
-function OwnerPanels() {
+function OwnerPanels({ orgs }: { orgs: OrgOverview[] }) {
   return (
     <>
       <Card title="Organizations" action={<ViewAllButton href="/orgs">Manage</ViewAllButton>}>
         <div className="px-2 py-[7px]">
-          {ORGS.map((o) => (
-            <div key={o.name} className="flex items-center gap-3 rounded-[10px] p-[11px] hover:bg-[var(--surface2)]">
-              <div className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] bg-[var(--surface2)] text-[var(--muted)]">
-                <Icon name="building" size={18} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-[13.5px] font-semibold text-[var(--text)]">{o.name}</div>
-                <div className="text-[12px] text-[var(--subtle)]">
-                  {o.users} users · {o.courses} courses
+          {orgs.length === 0 ? (
+            <EmptyRow>No organizations yet.</EmptyRow>
+          ) : (
+            orgs.slice(0, 6).map((o) => (
+              <div key={o.id} className="flex items-center gap-3 rounded-[10px] p-[11px] hover:bg-[var(--surface2)]">
+                <div className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] bg-[var(--surface2)] text-[var(--muted)]">
+                  <Icon name="building" size={18} />
                 </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13.5px] font-semibold text-[var(--text)]">{o.name}</div>
+                  <div className="text-[12px] text-[var(--subtle)]">
+                    {o.metrics.students} students · {o.metrics.courses} courses
+                  </div>
+                </div>
+                <Badge
+                  text={o.status === "active" ? "Active" : o.status === "trial" ? "Trial" : "Suspended"}
+                  tone={o.status === "active" ? "ok" : o.status === "trial" ? "info" : "danger"}
+                />
               </div>
-              <Badge text={o.badge.text} tone={o.badge.tone} />
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </Card>
       <ActivityCard />
@@ -561,7 +569,7 @@ function RegistrationPanels({ data }: { data: RegistrationDashboard }) {
   );
 }
 
-const MOCK_DASHBOARD_ROLES = new Set<Role>(["owner"]);
+const MOCK_DASHBOARD_ROLES = new Set<Role>([]);
 
 export function DashboardContent({
   role,
@@ -580,6 +588,8 @@ export function DashboardContent({
   const [registrationData, setRegistrationData] = useState<RegistrationDashboard | null>(null);
   const [financeData, setFinanceData] = useState<FinanceDashboard | null>(null);
   const [hrData, setHrData] = useState<HrDashboard | null>(null);
+  const [ownerKpis, setOwnerKpis] = useState<Kpi[] | null>(null);
+  const [ownerOrgs, setOwnerOrgs] = useState<OrgOverview[]>([]);
   const [loading, setLoading] = useState(!isMock);
 
   useEffect(() => {
@@ -592,6 +602,11 @@ export function DashboardContent({
       else if (role === "registration") setRegistrationData(await getRegistrationDashboard());
       else if (role === "finance") setFinanceData(await getFinanceDashboard());
       else if (role === "hr") setHrData(await getHrDashboard());
+      else if (role === "owner") {
+        const [dash, orgs] = await Promise.all([getOwnerDashboard(), listOrgsOverview()]);
+        setOwnerKpis(dash.kpis);
+        setOwnerOrgs(orgs);
+      }
       setLoading(false);
     })();
   }, [role, isMock]);
@@ -610,7 +625,9 @@ export function DashboardContent({
               ? financeData?.kpis ?? null
               : role === "hr"
                 ? hrData?.kpis ?? null
-                : null;
+                : role === "owner"
+                  ? ownerKpis
+                  : null;
 
   return (
     <div className="flex flex-col">
@@ -627,7 +644,7 @@ export function DashboardContent({
       <KpiRow kpis={kpis} />
 
       <div className="mt-[18px] grid items-start gap-4 lg:grid-cols-[1.7fr_1fr]">
-        {role === "owner" && <OwnerPanels />}
+        {role === "owner" && (loading ? <PanelSkeleton /> : <OwnerPanels orgs={ownerOrgs} />)}
         {role === "admin" && (loading || !adminData ? <PanelSkeleton /> : <AdminPanels data={adminData} />)}
         {role === "hr" && (loading || !hrData ? <PanelSkeleton /> : <HrPanels data={hrData} />)}
         {role === "head" && (loading || !headData ? <PanelSkeleton /> : <HeadPanels data={headData} />)}

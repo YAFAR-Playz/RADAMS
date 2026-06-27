@@ -336,6 +336,16 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
                     <span className="h-[7px] w-[7px] rounded-full" style={{ background: ROLE_COLOR[u.role] }} />
                     {ROLE_LABEL[u.role]}
                   </span>
+                  {u.isMainAdmin && (
+                    <span
+                      title="Assigned by the platform owner — can't be removed"
+                      className="inline-flex flex-none items-center gap-[5px] rounded-full px-[9px] py-[4px] text-[11px] font-semibold"
+                      style={{ background: "var(--brands)", color: "var(--brand)" }}
+                    >
+                      <Icon name="shield" size={11} />
+                      Main admin
+                    </span>
+                  )}
                   <div className="ml-auto flex flex-none items-center gap-[7px]">
                     <button
                       onClick={() => setOpen((p) => ({ ...p, [u.id]: !p[u.id] }))}
@@ -362,14 +372,16 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
                         Login as
                       </button>
                     )}
-                    <button
-                      onClick={() => onRemove(u.id)}
-                      disabled={removingId === u.id}
-                      title="Remove user"
-                      className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--subtle)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] hover:text-[var(--danger)] disabled:opacity-60"
-                    >
-                      {removingId === u.id ? <Spinner size={14} /> : <Icon name="x" size={15} />}
-                    </button>
+                    {!u.isMainAdmin && (
+                      <button
+                        onClick={() => onRemove(u.id)}
+                        disabled={removingId === u.id}
+                        title="Remove user"
+                        className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--subtle)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] hover:text-[var(--danger)] disabled:opacity-60"
+                      >
+                        {removingId === u.id ? <Spinner size={14} /> : <Icon name="x" size={15} />}
+                      </button>
+                    )}
                   </div>
                 </div>
                 {expanded && (

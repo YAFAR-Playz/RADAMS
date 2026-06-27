@@ -32,9 +32,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div style={brandVars as React.CSSProperties}>
       <AppShell
         navItems={navItems}
-        person={{ name: profile.fullName, label: ROLE_LABELS[profile.role], initials: profile.initials }}
+        person={{ name: profile.fullName, label: ROLE_LABELS[profile.role], initials: profile.initials, avatarUrl: profile.avatarUrl }}
         brandName={profile.org?.brandName ?? "RadAMS"}
         logoLetter={profile.org?.logoLetter ?? "R"}
+        logoUrl={profile.org?.logoUrl ?? null}
         orgName={profile.org?.name ?? null}
       >
         {children}

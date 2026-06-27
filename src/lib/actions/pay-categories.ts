@@ -8,6 +8,7 @@ export type CategoryOption = { id: string; label: string; amount: number };
 export type PayCategory = { id: string; kind: "extra" | "deduction"; label: string; mode: CategoryMode; rate: number | null; options: CategoryOption[] };
 export type CourseRate = { offeringId: string; label: string; rate: number };
 export type Bracket = { id: string; name: string; lo: number; hi: number; pay: number };
+export type BracketSlot = { name: string; lo: number | null; hi: number | null; pay: number | null };
 export type OtherRate = { id: string; label: string; unit: string; rate: number };
 
 function offeringLabel(o: { session: string; unit: string | null; courses: { name: string } | { name: string }[] | null }) {
@@ -125,35 +126,89 @@ export async function setCourseRate(offeringId: string, rate: number) {
   if (error) throw new Error(error.message);
 }
 
-export async function listBrackets(): Promise<Bracket[]> {
-  const profile = await getCurrentProfile();
-  const orgId = profile?.org?.id;
-  if (!orgId) return [];
+// Brackets are stored per course offering. When several courses are
+// selected at once, a "slot" (identified by name) only shows a value for
+// lo/hi/pay if every selected course currently agrees on that field —
+// otherwise it's left blank so editing it doesn't silently overwrite
+// courses that intentionally differ. Saving a blank field leaves every
+// course's existing value alone; saving a filled field applies it to
+// every selected course (creating the slot for any course that didn't
+// have it yet).
+export async function getBracketSlots(offeringIds: string[]): Promise<BracketSlot[]> {
+  if (!offeringIds.length) return [];
   const supabase = await createClient();
-  const { data } = await supabase.from("pay_brackets").select("id, name, lo, hi, pay").eq("org_id", orgId).order("sort_order", { ascending: true });
-  return (data ?? []).map((b) => ({ id: b.id, name: b.name, lo: b.lo, hi: b.hi, pay: Number(b.pay) }));
+  const { data } = await supabase
+    .from("pay_brackets")
+    .select("name, lo, hi, pay, offering_id")
+    .in("offering_id", offeringIds)
+    .order("sort_order", { ascending: true });
+
+  const byName = new Map<string, { lo: number; hi: number; pay: number; offeringId: string }[]>();
+  for (const r of data ?? []) {
+    const list = byName.get(r.name) ?? [];
+    list.push({ lo: r.lo, hi: r.hi, pay: Number(r.pay), offeringId: r.offering_id });
+    byName.set(r.name, list);
+  }
+
+  const slots: BracketSlot[] = [];
+  for (const [name, rows] of byName) {
+    const allHave = offeringIds.every((id) => rows.some((r) => r.offeringId === id));
+    const agree = <T,>(sel: (r: (typeof rows)[number]) => T): T | null =>
+      allHave && rows.every((r) => sel(r) === sel(rows[0])) ? sel(rows[0]) : null;
+    slots.push({ name, lo: agree((r) => r.lo), hi: agree((r) => r.hi), pay: agree((r) => r.pay) });
+  }
+  return slots;
 }
 
-export async function addBracket(): Promise<{ id: string }> {
+export async function addBracketSlot(offeringIds: string[]): Promise<{ name: string }> {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org) throw new Error("Not authenticated");
+  if (!offeringIds.length) throw new Error("Select at least one course first");
   const supabase = await createClient();
-  const { count } = await supabase.from("pay_brackets").select("id", { count: "exact", head: true }).eq("org_id", profile.org.id);
-  const name = `Bracket ${String.fromCharCode(65 + (count ?? 0))}`;
-  const { data, error } = await supabase.from("pay_brackets").insert({ org_id: profile.org.id, name, lo: 0, hi: 0, pay: 0 }).select("id").single();
-  if (error || !data) throw new Error(error?.message ?? "Failed to add bracket");
-  return { id: data.id };
-}
 
-export async function updateBracket(id: string, patch: { name?: string; lo?: number; hi?: number; pay?: number }) {
-  const supabase = await createClient();
-  const { error } = await supabase.from("pay_brackets").update(patch).eq("id", id);
+  const { data: existing } = await supabase.from("pay_brackets").select("name").in("offering_id", offeringIds);
+  const count = new Set((existing ?? []).map((r) => r.name)).size;
+  const name = `Bracket ${String.fromCharCode(65 + count)}`;
+
+  const { error } = await supabase
+    .from("pay_brackets")
+    .insert(offeringIds.map((offeringId) => ({ org_id: profile.org!.id, offering_id: offeringId, name, lo: 0, hi: 0, pay: 0 })));
   if (error) throw new Error(error.message);
+  return { name };
 }
 
-export async function deleteBracket(id: string) {
+export async function saveBracketSlot(offeringIds: string[], currentName: string, patch: { name?: string; lo?: number; hi?: number; pay?: number }) {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org) throw new Error("Not authenticated");
+  if (!offeringIds.length) return;
   const supabase = await createClient();
-  const { error } = await supabase.from("pay_brackets").delete().eq("id", id);
+
+  const { data: existing } = await supabase.from("pay_brackets").select("id, offering_id").eq("name", currentName).in("offering_id", offeringIds);
+  const rowByOffering = new Map((existing ?? []).map((r) => [r.offering_id, r.id]));
+
+  for (const offeringId of offeringIds) {
+    const rowId = rowByOffering.get(offeringId);
+    if (rowId) {
+      const { error } = await supabase.from("pay_brackets").update(patch).eq("id", rowId);
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await supabase.from("pay_brackets").insert({
+        org_id: profile.org.id,
+        offering_id: offeringId,
+        name: patch.name ?? currentName,
+        lo: patch.lo ?? 0,
+        hi: patch.hi ?? 0,
+        pay: patch.pay ?? 0,
+      });
+      if (error) throw new Error(error.message);
+    }
+  }
+}
+
+export async function deleteBracketSlot(offeringIds: string[], name: string) {
+  if (!offeringIds.length) return;
+  const supabase = await createClient();
+  const { error } = await supabase.from("pay_brackets").delete().eq("name", name).in("offering_id", offeringIds);
   if (error) throw new Error(error.message);
 }
 

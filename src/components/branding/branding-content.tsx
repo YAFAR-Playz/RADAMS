@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
-import { getBranding, saveBranding, type BrandingDraft } from "@/lib/actions/branding";
+import { getBranding, saveBranding, uploadOrgLogo, removeOrgLogo, type BrandingDraft } from "@/lib/actions/branding";
 
 const PRIMARIES = ["#2563eb", "#0d9488", "#4f46e5", "#db2777", "#ea580c", "#16a34a", "#0891b2", "#1e293b"];
 const SECONDARIES = ["#7c3aed", "#0d9488", "#f59e0b", "#e11d48", "#2563eb", "#64748b"];
@@ -35,6 +35,7 @@ export function BrandingContent() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -66,6 +67,36 @@ export function BrandingContent() {
 
   function onReset() {
     if (saved) setDraft(saved);
+  }
+
+  async function onLogoSelected(file: File) {
+    setLogoUploading(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.set("file", file);
+      const { url } = await uploadOrgLogo(formData);
+      setDraft((d) => d && { ...d, logoUrl: url });
+      setSaved((s) => s && { ...s, logoUrl: url });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't upload this logo — try again.");
+    } finally {
+      setLogoUploading(false);
+    }
+  }
+
+  async function onLogoRemove() {
+    setLogoUploading(true);
+    setError(null);
+    try {
+      await removeOrgLogo();
+      setDraft((d) => d && { ...d, logoUrl: null });
+      setSaved((s) => s && { ...s, logoUrl: null });
+    } catch {
+      setError("Couldn't remove this logo — try again.");
+    } finally {
+      setLogoUploading(false);
+    }
   }
 
   if (loading || !draft) {
@@ -115,12 +146,50 @@ export function BrandingContent() {
             <h3 className="m-0 mb-[14px] text-[14px] font-semibold text-[var(--text)]">Logo &amp; name</h3>
             <div className="flex items-center gap-[15px]">
               <div
-                className="flex h-16 w-16 flex-none items-center justify-center rounded-[16px] text-[30px] font-bold tracking-[-0.02em] text-white"
-                style={{ background: draft.primary }}
+                className="relative flex h-16 w-16 flex-none items-center justify-center overflow-hidden rounded-[16px] text-[30px] font-bold tracking-[-0.02em] text-white"
+                style={{ background: draft.logoUrl ? "var(--surface2)" : draft.primary }}
               >
-                {logoLetter}
+                {logoUploading ? (
+                  <Spinner size={20} className="text-[var(--muted)]" />
+                ) : draft.logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={draft.logoUrl} alt="Org logo" className="h-full w-full object-contain" />
+                ) : (
+                  logoLetter
+                )}
               </div>
-              <span className="text-[11.5px] leading-[1.4] text-[var(--subtle)]">Derived automatically from your brand name&apos;s first letter.</span>
+              <div className="flex flex-col gap-[8px]">
+                <div className="flex items-center gap-[8px]">
+                  <label className="flex cursor-pointer items-center gap-[6px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[12px] py-[7px] text-[12.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]">
+                    <Icon name="upload" size={14} />
+                    Upload logo
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                      className="hidden"
+                      disabled={logoUploading}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) onLogoSelected(file);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                  {draft.logoUrl && (
+                    <button
+                      onClick={onLogoRemove}
+                      disabled={logoUploading}
+                      className="flex items-center gap-[5px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px] py-[7px] text-[12.5px] font-semibold text-[var(--danger)] hover:bg-[var(--dangers)] disabled:opacity-60"
+                    >
+                      <Icon name="x" size={13} />
+                      Remove
+                    </button>
+                  )}
+                </div>
+                <span className="text-[11.5px] leading-[1.4] text-[var(--subtle)]">
+                  PNG, JPG, SVG or WEBP, up to 2MB. {draft.logoUrl ? "Shown wherever your logo appears." : "Falls back to your brand name's first letter until you upload one."}
+                </span>
+              </div>
             </div>
             <div className="mt-4">
               <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Brand name</label>
@@ -266,8 +335,13 @@ export function BrandingContent() {
               <div className="bg-[var(--bg)] p-[18px]">
                 <div className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)]">
                   <div className="flex items-center gap-[9px] border-b border-[var(--border2)] p-[11px_13px]">
-                    <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px] bg-[var(--brand)] text-[14px] font-bold text-[var(--brandfg)]">
-                      {logoLetter}
+                    <div className="flex h-[30px] w-[30px] items-center justify-center overflow-hidden rounded-[8px] bg-[var(--brand)] text-[14px] font-bold text-[var(--brandfg)]">
+                      {draft.logoUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={draft.logoUrl} alt="" className="h-full w-full object-contain" />
+                      ) : (
+                        logoLetter
+                      )}
                     </div>
                     <span className="text-[14px] font-bold text-[var(--text)]">{draft.name}</span>
                     <div className="ml-auto flex h-[26px] w-[26px] items-center justify-center rounded-full bg-[var(--brands)] text-[10px] font-bold text-[var(--brand)]">MB</div>

@@ -1,22 +1,8 @@
 import type { Role, Tone } from "@/lib/roles";
 
-// Head, Assistant, Registration, Finance and HR dashboards are backed by
-// real data — see src/lib/actions/dashboard.ts and src/lib/actions/hr.ts.
-// Owner below remains mock until its backend phase.
-
-// ---- OWNER / ADMIN ----
-const ORG_DEFS: [string, number, number, string, Tone][] = [
-  ["Cambridge Prep Center", 128, 14, "Active", "ok"],
-  ["Oxford Tutorials", 96, 11, "Active", "ok"],
-  ["Bright Future Academy", 54, 8, "Trial", "info"],
-  ["Elite IGCSE Hub", 40, 6, "Active", "ok"],
-];
-export const ORGS = ORG_DEFS.map(([name, users, courses, text, tone]) => ({
-  name,
-  users,
-  courses,
-  badge: { text, tone },
-}));
+// Head, Assistant, Registration, Finance, HR and Owner dashboards are
+// backed by real data — see src/lib/actions/dashboard.ts,
+// src/lib/actions/hr.ts and src/lib/actions/owner.ts.
 
 const ACT_DEFS: [string, string, string, Tone][] = [
   ["New course created: Nov · Unit 2", "12m ago", "clipboard-list", "brand"],
