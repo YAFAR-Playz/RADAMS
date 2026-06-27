@@ -53,6 +53,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Role | "all">("all");
+  const [page, setPage] = useState(0);
   const [open, setOpen] = useState<Record<string, boolean>>({});
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -95,6 +96,12 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
       return true;
     });
   }, [staff, search, filter, isHr]);
+
+  const STAFF_PAGE_SIZE = 10;
+  const pageCount = Math.max(1, Math.ceil(filtered.length / STAFF_PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageStart = safePage * STAFF_PAGE_SIZE;
+  const pageRows = filtered.slice(pageStart, pageStart + STAFF_PAGE_SIZE);
 
   const pendingRequests = (requests ?? []).filter((r) => r.status === "pending");
 
@@ -162,8 +169,8 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
       const redirectTo = `${window.location.origin}/dashboard`;
       const { url } = await getLoginAsLink(id, redirectTo);
       window.location.href = url;
-    } catch {
-      setError("Couldn't sign in as this user — try again.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't sign in as this user — try again.");
       setLoginAsId(null);
     }
   }
@@ -278,7 +285,10 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
           <Icon name="search" size={16} className="text-[var(--subtle)]" />
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(0);
+            }}
             placeholder="Search users…"
             className="h-full w-full border-none bg-transparent text-[13.5px] text-[var(--text)] outline-none"
           />
@@ -292,7 +302,10 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
             return (
               <button
                 key={v}
-                onClick={() => setFilter(v)}
+                onClick={() => {
+                  setFilter(v);
+                  setPage(0);
+                }}
                 className="rounded-full border px-3 py-[7px] text-[12.5px] font-semibold"
                 style={
                   active
@@ -318,7 +331,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
         ) : filtered.length === 0 ? (
           <div className="p-[30px] text-center text-[13px] text-[var(--muted)]">No users match your search.</div>
         ) : (
-          filtered.map((u) => {
+          pageRows.map((u) => {
             const expanded = !!open[u.id];
             return (
               <div key={u.id} className="border-b border-[var(--border2)] last:border-b-0">
@@ -403,6 +416,34 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
               </div>
             );
           })
+        )}
+        {!loading && filtered.length > 0 && pageCount > 1 && (
+          <div className="flex flex-wrap items-center justify-between gap-[10px] border-t border-[var(--border2)] p-[11px_16px]">
+            <span className="text-[12.5px] text-[var(--subtle)]">
+              {pageStart + 1}–{Math.min(pageStart + STAFF_PAGE_SIZE, filtered.length)} of {filtered.length}
+            </span>
+            <div className="flex items-center gap-[5px]">
+              {Array.from({ length: pageCount }, (_, i) => i)
+                .filter((i) => i >= safePage - 2 && i <= safePage + 2)
+                .map((i) => {
+                  const active = i === safePage;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => setPage(i)}
+                      className="h-8 min-w-8 rounded-[7px] border px-2 text-[12.5px] font-semibold"
+                      style={
+                        active
+                          ? { borderColor: "var(--brand)", background: "var(--brand)", color: "var(--brandfg)" }
+                          : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
+                      }
+                    >
+                      {i + 1}
+                    </button>
+                  );
+                })}
+            </div>
+          </div>
         )}
       </div>
 

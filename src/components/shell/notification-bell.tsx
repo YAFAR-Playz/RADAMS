@@ -8,10 +8,21 @@ import { toneColors } from "@/lib/tone";
 import { getNotifications, type NotificationItem } from "@/lib/actions/notifications";
 
 const POLL_MS = 60_000;
+const DISMISSED_KEY = "radams-dismissed-notifications";
+
+function loadDismissed(): Set<string> {
+  if (typeof localStorage === "undefined") return new Set();
+  try {
+    return new Set(JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? "[]"));
+  } catch {
+    return new Set();
+  }
+}
 
 export function NotificationBell() {
   const [items, setItems] = useState<NotificationItem[] | null>(null);
   const [open, setOpen] = useState(false);
+  const [dismissed, setDismissed] = useState<Set<string>>(() => loadDismissed());
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -19,7 +30,14 @@ export function NotificationBell() {
     async function load() {
       try {
         const data = await getNotifications();
-        if (!cancelled) setItems(data);
+        if (cancelled) return;
+        setItems(data);
+        const liveIds = new Set(data.map((n) => n.id));
+        setDismissed((prev) => {
+          const next = new Set([...prev].filter((id) => liveIds.has(id)));
+          localStorage.setItem(DISMISSED_KEY, JSON.stringify([...next]));
+          return next;
+        });
       } catch {
         if (!cancelled) setItems([]);
       }
@@ -40,7 +58,17 @@ export function NotificationBell() {
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
-  const count = items?.length ?? 0;
+  function dismiss(id: string) {
+    setDismissed((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      localStorage.setItem(DISMISSED_KEY, JSON.stringify([...next]));
+      return next;
+    });
+  }
+
+  const visibleItems = (items ?? []).filter((n) => !dismissed.has(n.id));
+  const count = items === null ? 0 : visibleItems.length;
 
   return (
     <div className="relative" ref={ref}>
@@ -64,17 +92,20 @@ export function NotificationBell() {
                 <SkeletonRow key={i} className="h-[52px]" />
               ))}
             </div>
-          ) : items.length === 0 ? (
+          ) : visibleItems.length === 0 ? (
             <div className="p-[26px] text-center text-[12.5px] text-[var(--muted)]">You&apos;re all caught up.</div>
           ) : (
             <div className="p-[6px]">
-              {items.map((n) => {
+              {visibleItems.map((n) => {
                 const { bg, fg } = toneColors(n.tone);
                 return (
                   <Link
                     key={n.id}
                     href={n.href}
-                    onClick={() => setOpen(false)}
+                    onClick={() => {
+                      dismiss(n.id);
+                      setOpen(false);
+                    }}
                     className="flex items-start gap-[10px] rounded-[8px] p-[9px_10px] hover:bg-[var(--surface2)]"
                   >
                     <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px]" style={{ background: bg, color: fg }}>

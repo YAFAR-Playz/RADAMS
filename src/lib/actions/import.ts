@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
+import { createPaymentPlan } from "@/lib/actions/payments";
 
 export type ImportRow = {
   name: string;
@@ -45,6 +46,10 @@ export async function importStudents(offeringId: string, rows: ImportRow[]): Pro
     .from("enrollments")
     .insert(created.map((s) => ({ student_id: s.id, offering_id: offeringId })));
   if (enrollError) throw new Error(enrollError.message);
+
+  for (const s of created) {
+    await createPaymentPlan({ studentId: s.id, offeringId, planType: "full" });
+  }
 
   return { imported: created.length };
 }

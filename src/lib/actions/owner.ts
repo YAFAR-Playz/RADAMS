@@ -45,14 +45,18 @@ export async function listOrgsOverview(): Promise<OrgOverview[]> {
   const orgIds = orgs.map((o) => o.id);
 
   const [{ data: admins }, { data: students }, { data: profiles }, { data: offerings }, { data: assignments }] = await Promise.all([
-    supabase.from("profiles").select("id, org_id, full_name, phone, email").eq("role", "admin").in("org_id", orgIds),
+    supabase.from("profiles").select("id, org_id, full_name, phone, email, is_main_admin").eq("role", "admin").in("org_id", orgIds),
     supabase.from("students").select("org_id").in("org_id", orgIds),
     supabase.from("profiles").select("org_id, role").in("org_id", orgIds),
     supabase.from("course_offerings").select("id, org_id").in("org_id", orgIds),
     supabase.from("assignments").select("id, offering_id"),
   ]);
 
-  const adminByOrg = new Map((admins ?? []).map((a) => [a.org_id, a]));
+  const adminByOrg = new Map<string, NonNullable<typeof admins>[number]>();
+  for (const a of admins ?? []) {
+    const existing = adminByOrg.get(a.org_id);
+    if (!existing || (a.is_main_admin && !existing.is_main_admin)) adminByOrg.set(a.org_id, a);
+  }
   const studentCounts = new Map<string, number>();
   for (const s of students ?? []) studentCounts.set(s.org_id, (studentCounts.get(s.org_id) ?? 0) + 1);
   const assistantCounts = new Map<string, number>();
@@ -212,14 +216,34 @@ export type PlatformStaffMember = {
   isMainAdmin: boolean;
 };
 
-export async function listAllStaff(): Promise<PlatformStaffMember[]> {
+const STAFF_PAGE_SIZE = 20;
+
+export async function listAllStaff(params: { page?: number; search?: string; role?: Role | "all" } = {}): Promise<{
+  rows: PlatformStaffMember[];
+  total: number;
+  pageSize: number;
+}> {
   await requireOwner();
   const supabase = await createClient();
-  const { data } = await supabase
+  const page = params.page ?? 0;
+  const pageSize = STAFF_PAGE_SIZE;
+  const from = page * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = supabase
     .from("profiles")
-    .select("id, full_name, initials, email, phone, role, org_id, created_at, is_main_admin, organizations(name)")
+    .select("id, full_name, initials, email, phone, role, org_id, created_at, is_main_admin, organizations(name)", { count: "exact" })
     .order("full_name", { ascending: true });
-  return (data ?? [])
+
+  if (params.search?.trim()) {
+    const term = params.search.trim();
+    query = query.or(`full_name.ilike.%${term}%,email.ilike.%${term}%`);
+  }
+  if (params.role && params.role !== "all") query = query.eq("role", params.role);
+
+  const { data, count } = await query.range(from, to);
+
+  const rows = (data ?? [])
     .map((p) => {
       const org = Array.isArray(p.organizations) ? p.organizations[0] : p.organizations;
       if (!org) return null;
@@ -237,6 +261,8 @@ export async function listAllStaff(): Promise<PlatformStaffMember[]> {
       };
     })
     .filter((x): x is PlatformStaffMember => !!x);
+
+  return { rows, total: count ?? rows.length, pageSize };
 }
 
 export async function updateAnyStaffRole(id: string, role: Role) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import type { Role } from "@/lib/roles";
@@ -27,10 +27,14 @@ const ROLE_LABEL: Record<Role, string> = {
 };
 
 export function OwnerUsersContent() {
-  const [staff, setStaff] = useState<PlatformStaffMember[] | null>(null);
+  const [rows, setRows] = useState<PlatformStaffMember[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
+  const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<Role | "all">("all");
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -40,7 +44,10 @@ export function OwnerUsersContent() {
   async function reload() {
     setLoading(true);
     try {
-      setStaff(await listAllStaff());
+      const res = await listAllStaff({ page, search, role: roleFilter });
+      setRows(res.rows);
+      setTotal(res.total);
+      setPageSize(res.pageSize);
     } catch {
       setError("Couldn't load users.");
     } finally {
@@ -52,21 +59,21 @@ export function OwnerUsersContent() {
     (async () => {
       await reload();
     })();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, search, roleFilter]);
 
-  const filtered = useMemo(() => {
-    if (!staff) return [];
-    const q = search.trim().toLowerCase();
-    return staff.filter((u) => {
-      if (roleFilter !== "all" && u.role !== roleFilter) return false;
-      if (q && !u.name.toLowerCase().includes(q) && !u.orgName.toLowerCase().includes(q) && !u.email.toLowerCase().includes(q)) return false;
-      return true;
-    });
-  }, [staff, search, roleFilter]);
+  // Debounce search input -> committed search, and reset to page 0 on any filter change.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setPage(0);
+      setSearch(searchInput);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   async function onRoleChange(id: string, role: Role) {
     setSavingId(id);
-    setStaff((prev) => (prev ? prev.map((u) => (u.id === id ? { ...u, role } : u)) : prev));
+    setRows((prev) => (prev ? prev.map((u) => (u.id === id ? { ...u, role } : u)) : prev));
     try {
       await updateAnyStaffRole(id, role);
     } catch {
@@ -82,7 +89,8 @@ export function OwnerUsersContent() {
     setRemovingId(id);
     try {
       await removeAnyStaffMember(id);
-      setStaff((prev) => (prev ? prev.filter((u) => u.id !== id) : prev));
+      setRows((prev) => (prev ? prev.filter((u) => u.id !== id) : prev));
+      setTotal((t) => Math.max(0, t - 1));
     } catch {
       setError("Couldn't remove this user — try again.");
     } finally {
@@ -96,19 +104,13 @@ export function OwnerUsersContent() {
       const redirectTo = `${window.location.origin}/dashboard`;
       const { url } = await getOwnerLoginAsLink(id, redirectTo);
       window.location.assign(url);
-    } catch {
-      setError("Couldn't sign in as this user — try again.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't sign in as this user — try again.");
       setLoginAsId(null);
     }
   }
 
-  const stats = staff
-    ? [
-        { value: String(staff.length), label: "Total users", color: "var(--brand)" },
-        { value: String(new Set(staff.map((u) => u.orgId)).size), label: "Organizations represented", color: "var(--ok)" },
-        { value: String(staff.filter((u) => u.role === "admin").length), label: "Admins", color: "var(--text)" },
-      ]
-    : [];
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <div className="flex flex-col gap-4">
@@ -125,17 +127,9 @@ export function OwnerUsersContent() {
         <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Owner · all organizations</div>
         <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Users</h1>
         <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">Every user across every organization on the platform.</p>
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {loading || !staff
-            ? Array.from({ length: 3 }, (_, i) => <SkeletonRow key={i} className="h-[58px]" />)
-            : stats.map((s) => (
-                <div key={s.label} className="rounded-[var(--rad-sm)] border border-[var(--border2)] bg-[var(--surface2)] p-[12px_14px]">
-                  <div className="text-[21px] font-bold leading-[1.1] tracking-[-0.02em]" style={{ color: s.color }}>
-                    {s.value}
-                  </div>
-                  <div className="mt-[2px] text-[12px] font-medium text-[var(--muted)]">{s.label}</div>
-                </div>
-              ))}
+        <div className="mt-4 rounded-[var(--rad-sm)] border border-[var(--border2)] bg-[var(--surface2)] p-[12px_14px]">
+          <div className="text-[21px] font-bold leading-[1.1] tracking-[-0.02em] text-[var(--brand)]">{total.toLocaleString()}</div>
+          <div className="mt-[2px] text-[12px] font-medium text-[var(--muted)]">Total users on the platform</div>
         </div>
       </div>
 
@@ -143,9 +137,9 @@ export function OwnerUsersContent() {
         <div className="flex h-10 min-w-[220px] max-w-[320px] flex-1 items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-3">
           <Icon name="search" size={16} className="text-[var(--subtle)]" />
           <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name, email or organization…"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search name or email…"
             className="h-full w-full border-none bg-transparent text-[13.5px] text-[var(--text)] outline-none"
           />
         </div>
@@ -155,7 +149,10 @@ export function OwnerUsersContent() {
             return (
               <button
                 key={v}
-                onClick={() => setRoleFilter(v)}
+                onClick={() => {
+                  setPage(0);
+                  setRoleFilter(v);
+                }}
                 className="rounded-full border px-3 py-[7px] text-[12.5px] font-semibold"
                 style={
                   active
@@ -171,16 +168,16 @@ export function OwnerUsersContent() {
       </div>
 
       <div className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
-        {loading && !staff ? (
+        {loading ? (
           <div className="flex flex-col gap-2 p-[14px_18px]">
             {Array.from({ length: 6 }, (_, i) => (
               <SkeletonRow key={i} className="h-[56px]" />
             ))}
           </div>
-        ) : filtered.length === 0 ? (
+        ) : !rows || rows.length === 0 ? (
           <div className="p-[30px] text-center text-[13px] text-[var(--muted)]">No users match your search.</div>
         ) : (
-          filtered.map((u) => (
+          rows.map((u) => (
             <div key={u.id} className="flex flex-wrap items-center gap-3 border-b border-[var(--border2)] p-[12px_16px] last:border-b-0 hover:bg-[var(--surface2)]">
               <div className="flex min-w-[180px] flex-1 items-center gap-[11px]">
                 <div className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-[var(--brands)] text-[12.5px] font-bold text-[var(--brand)]">
@@ -234,6 +231,34 @@ export function OwnerUsersContent() {
               </div>
             </div>
           ))
+        )}
+        {!loading && rows && rows.length > 0 && pageCount > 1 && (
+          <div className="flex flex-wrap items-center justify-between gap-[10px] border-t border-[var(--border2)] p-[10px_16px]">
+            <span className="text-[12.5px] text-[var(--subtle)]">
+              {page * pageSize + 1}–{Math.min(page * pageSize + pageSize, total)} of {total.toLocaleString()}
+            </span>
+            <div className="flex items-center gap-[5px]">
+              {Array.from({ length: pageCount }, (_, i) => i)
+                .filter((i) => i >= page - 2 && i <= page + 2)
+                .map((i) => {
+                  const active = i === page;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => setPage(i)}
+                      className="h-8 min-w-8 rounded-[7px] border px-2 text-[12.5px] font-semibold"
+                      style={
+                        active
+                          ? { borderColor: "var(--brand)", background: "var(--brand)", color: "var(--brandfg)" }
+                          : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
+                      }
+                    >
+                      {i + 1}
+                    </button>
+                  );
+                })}
+            </div>
+          </div>
         )}
       </div>
     </div>
