@@ -166,7 +166,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
   async function onLoginAs(id: string) {
     setLoginAsId(id);
     try {
-      const redirectTo = `${window.location.origin}/dashboard`;
+      const redirectTo = `${window.location.origin}/auth/callback`;
       const { url } = await getLoginAsLink(id, redirectTo);
       window.location.href = url;
     } catch (e) {

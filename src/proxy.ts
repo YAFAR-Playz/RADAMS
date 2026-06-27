@@ -1,7 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/reset-password"];
+const PUBLIC_PATHS = ["/login", "/reset-password", "/auth/callback"];
+const NO_AUTO_REDIRECT_PATHS = ["/reset-password", "/auth/callback"];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -36,7 +37,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (isAuthed && isPublic && path !== "/reset-password") {
+  if (isAuthed && isPublic && !NO_AUTO_REDIRECT_PATHS.includes(path)) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
