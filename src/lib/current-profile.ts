@@ -28,23 +28,33 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
   if (profile.org_id) {
     const { data: orgRow } = await supabase
       .from("organizations")
-      .select("id, name, brand_name, logo_letter, logo_url, primary_color, corner")
+      .select("id, name, brand_name, logo_url, primary_color, corner")
       .eq("id", profile.org_id)
       .single();
     if (orgRow) {
       let logoUrl = orgRow.logo_url;
-      if (!logoUrl) {
-        const { data: platformSettings } = await supabase.from("platform_settings").select("default_logo_url").eq("id", true).single();
-        logoUrl = platformSettings?.default_logo_url ?? null;
+      let brandName = orgRow.brand_name;
+      let primaryColor = orgRow.primary_color;
+      let corner = orgRow.corner as "soft" | "sharp" | null;
+      if (!logoUrl || !brandName || !primaryColor || !corner) {
+        const { data: platformSettings } = await supabase
+          .from("platform_settings")
+          .select("default_logo_url, default_brand_name, default_primary_color, default_corner")
+          .eq("id", true)
+          .single();
+        logoUrl = logoUrl ?? platformSettings?.default_logo_url ?? null;
+        brandName = brandName ?? platformSettings?.default_brand_name ?? "RadAMS";
+        primaryColor = primaryColor ?? platformSettings?.default_primary_color ?? "#2563eb";
+        corner = corner ?? (platformSettings?.default_corner as "soft" | "sharp" | undefined) ?? "soft";
       }
       org = {
         id: orgRow.id,
         name: orgRow.name,
-        brandName: orgRow.brand_name,
-        logoLetter: orgRow.logo_letter,
+        brandName,
+        logoLetter: (brandName.trim()[0] ?? "R").toUpperCase(),
         logoUrl,
-        primaryColor: orgRow.primary_color,
-        corner: orgRow.corner,
+        primaryColor,
+        corner,
       };
     }
   }

@@ -34,6 +34,22 @@ async function removeStalePrefixed(admin: ReturnType<typeof createAdminClient>, 
   if (stale.length) await admin.storage.from("branding").remove(stale);
 }
 
+async function getPlatformDefaults(supabase: Awaited<ReturnType<typeof createClient>>): Promise<BrandingDraft> {
+  const { data } = await supabase
+    .from("platform_settings")
+    .select("default_brand_name, default_primary_color, default_secondary_color, default_font, default_corner, default_logo_url")
+    .eq("id", true)
+    .single();
+  return {
+    name: data?.default_brand_name ?? "RadAMS",
+    primary: data?.default_primary_color ?? "#2563eb",
+    secondary: data?.default_secondary_color ?? "#7c3aed",
+    font: data?.default_font ?? "geist",
+    corner: (data?.default_corner as "soft" | "sharp") ?? "soft",
+    logoUrl: data?.default_logo_url ?? null,
+  };
+}
+
 export async function getBranding(): Promise<BrandingDraft | null> {
   const profile = await getCurrentProfile();
   const orgId = profile?.org?.id;
@@ -45,13 +61,17 @@ export async function getBranding(): Promise<BrandingDraft | null> {
     .eq("id", orgId)
     .single();
   if (!data) return null;
+
+  const needsDefaults = !data.brand_name || !data.primary_color || !data.secondary_color || !data.font || !data.corner || !data.logo_url;
+  const defaults = needsDefaults ? await getPlatformDefaults(supabase) : null;
+
   return {
-    name: data.brand_name,
-    primary: data.primary_color,
-    secondary: data.secondary_color,
-    font: data.font,
-    corner: data.corner as "soft" | "sharp",
-    logoUrl: data.logo_url,
+    name: data.brand_name ?? defaults!.name,
+    primary: data.primary_color ?? defaults!.primary,
+    secondary: data.secondary_color ?? defaults!.secondary,
+    font: data.font ?? defaults!.font,
+    corner: (data.corner as "soft" | "sharp" | null) ?? defaults!.corner,
+    logoUrl: data.logo_url ?? defaults!.logoUrl,
   };
 }
 
@@ -103,10 +123,26 @@ export async function saveBranding(draft: BrandingDraft) {
   if (error) throw new Error(error.message);
 }
 
-export async function getPlatformDefaultLogo(): Promise<string | null> {
+export async function getPlatformDefaultBranding(): Promise<BrandingDraft> {
   const supabase = await createClient();
-  const { data } = await supabase.from("platform_settings").select("default_logo_url").eq("id", true).single();
-  return data?.default_logo_url ?? null;
+  return getPlatformDefaults(supabase);
+}
+
+export async function savePlatformDefaultBranding(draft: Omit<BrandingDraft, "logoUrl">) {
+  const profile = await getCurrentProfile();
+  if (!profile || profile.role !== "owner") throw new Error("Not authorized");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("platform_settings")
+    .update({
+      default_brand_name: draft.name.trim() || "RadAMS",
+      default_primary_color: draft.primary,
+      default_secondary_color: draft.secondary,
+      default_font: draft.font,
+      default_corner: draft.corner,
+    })
+    .eq("id", true);
+  if (error) throw new Error(error.message);
 }
 
 export async function uploadPlatformDefaultLogo(formData: FormData): Promise<{ url: string }> {
