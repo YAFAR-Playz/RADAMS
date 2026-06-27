@@ -172,7 +172,18 @@ export function AppShell({
     const saved = localStorage.getItem("radams-nav");
     return saved === "rail" ? "rail" : "sidebar";
   });
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileMenuMounted, setMobileMenuMounted] = useState(false);
+  const [mobileMenuVisible, setMobileMenuVisible] = useState(false);
+
+  function openMobileMenu() {
+    setMobileMenuMounted(true);
+    requestAnimationFrame(() => requestAnimationFrame(() => setMobileMenuVisible(true)));
+  }
+
+  function closeMobileMenu() {
+    setMobileMenuVisible(false);
+    setTimeout(() => setMobileMenuMounted(false), 200);
+  }
 
   function toggleNav() {
     const next = navMode === "rail" ? "sidebar" : "rail";
@@ -268,7 +279,7 @@ export function AppShell({
         {/* MOBILE APP BAR */}
         <header className="flex h-14 flex-none items-center gap-[11px] border-b border-[var(--border)] bg-[var(--surface)] px-4 md:hidden">
           <button
-            onClick={() => setMobileMenuOpen(true)}
+            onClick={openMobileMenu}
             className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]"
           >
             <Icon name="menu" size={22} />
@@ -285,11 +296,15 @@ export function AppShell({
       </div>
 
       {/* MOBILE FULL-SCREEN MENU */}
-      {mobileMenuOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-[var(--surface)] md:hidden">
-          <div className="flex h-14 flex-none items-center gap-[11px] border-b border-[var(--border)] px-4">
+      {mobileMenuMounted && (
+        <div
+          className={`fixed inset-0 z-50 flex flex-col bg-[var(--surface)] transition-opacity duration-200 md:hidden ${mobileMenuVisible ? "opacity-100" : "opacity-0"}`}
+        >
+          <div
+            className={`flex h-14 flex-none items-center gap-[11px] border-b border-[var(--border)] px-4 transition-transform duration-200 ${mobileMenuVisible ? "translate-y-0" : "-translate-y-2"}`}
+          >
             <button
-              onClick={() => setMobileMenuOpen(false)}
+              onClick={closeMobileMenu}
               className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]"
             >
               <Icon name="x" size={22} />
@@ -307,7 +322,7 @@ export function AppShell({
                 <Link
                   key={n.key}
                   href={`/${n.key}`}
-                  onClick={() => setMobileMenuOpen(false)}
+                  onClick={closeMobileMenu}
                   className="flex items-center gap-3 rounded-[10px] px-[13px] py-[13px] text-[15px]"
                   style={{
                     color: isActive ? "var(--brand)" : "var(--text)",
@@ -336,7 +351,7 @@ export function AppShell({
             </div>
             <Link
               href="/settings"
-              onClick={() => setMobileMenuOpen(false)}
+              onClick={closeMobileMenu}
               title="Settings"
               className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]"
             >

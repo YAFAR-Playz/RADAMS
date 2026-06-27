@@ -96,8 +96,8 @@ export function OwnerUsersContent() {
       const redirectTo = `${window.location.origin}/dashboard`;
       const { url } = await getOwnerLoginAsLink(id, redirectTo);
       window.location.assign(url);
-    } catch {
-      setError("Couldn't sign in as this user — try again.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't sign in as this user — try again.");
       setLoginAsId(null);
     }
   }

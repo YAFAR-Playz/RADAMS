@@ -113,8 +113,8 @@ export function OwnerOrgsContent() {
       const redirectTo = `${window.location.origin}/dashboard`;
       const { url } = await getOwnerLoginAsLink(o.adminId, redirectTo);
       window.location.assign(url);
-    } catch {
-      setError("Couldn't sign in as this admin — try again.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't sign in as this admin — try again.");
       setLoginAsId(null);
     }
   }

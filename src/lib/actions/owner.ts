@@ -45,14 +45,18 @@ export async function listOrgsOverview(): Promise<OrgOverview[]> {
   const orgIds = orgs.map((o) => o.id);
 
   const [{ data: admins }, { data: students }, { data: profiles }, { data: offerings }, { data: assignments }] = await Promise.all([
-    supabase.from("profiles").select("id, org_id, full_name, phone, email").eq("role", "admin").in("org_id", orgIds),
+    supabase.from("profiles").select("id, org_id, full_name, phone, email, is_main_admin").eq("role", "admin").in("org_id", orgIds),
     supabase.from("students").select("org_id").in("org_id", orgIds),
     supabase.from("profiles").select("org_id, role").in("org_id", orgIds),
     supabase.from("course_offerings").select("id, org_id").in("org_id", orgIds),
     supabase.from("assignments").select("id, offering_id"),
   ]);
 
-  const adminByOrg = new Map((admins ?? []).map((a) => [a.org_id, a]));
+  const adminByOrg = new Map<string, NonNullable<typeof admins>[number]>();
+  for (const a of admins ?? []) {
+    const existing = adminByOrg.get(a.org_id);
+    if (!existing || (a.is_main_admin && !existing.is_main_admin)) adminByOrg.set(a.org_id, a);
+  }
   const studentCounts = new Map<string, number>();
   for (const s of students ?? []) studentCounts.set(s.org_id, (studentCounts.get(s.org_id) ?? 0) + 1);
   const assistantCounts = new Map<string, number>();
