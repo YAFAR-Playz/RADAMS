@@ -648,7 +648,7 @@ export function CoursesContent() {
                 </div>
               </div>
               {form.installmentCount > 1 && (
-                <div key={form.installmentCount} className="overflow-hidden rounded-[var(--rad-sm)] border border-[var(--border)]">
+                <div key={form.installmentCount} className="shrink-0 overflow-hidden rounded-[var(--rad-sm)] border border-[var(--border)]">
                   <div className="border-b border-[var(--border2)] bg-[var(--surface2)] p-[8px_12px] text-[10.5px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">
                     Installment schedule
                   </div>
