@@ -1,14 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { signInWithPassword } from "@/lib/actions/auth";
 import { Icon } from "@/components/icons";
 
-type Step = "contact" | "password" | "otp" | "create";
+type Step = "contact" | "password" | "sent";
 type Method = "email" | "phone";
-type Mode = "login" | "reset";
 
 const EMAIL_RE = /^\S+@\S+\.\S+$/;
 const RESEND_SECONDS = 30;
@@ -19,20 +18,15 @@ export function LoginForm() {
 
   const [step, setStep] = useState<Step>("contact");
   const [method, setMethod] = useState<Method>("email");
-  const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
-  const [otp, setOtp] = useState<string[]>(["", "", "", "", "", ""]);
-  const [newPw, setNewPw] = useState("");
-  const [confirmPw, setConfirmPw] = useState("");
   const [resendIn, setResendIn] = useState(RESEND_SECONDS);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
-    if (step !== "otp" || resendIn <= 0) return;
+    if (step !== "sent" || resendIn <= 0) return;
     const t = setInterval(() => setResendIn((v) => v - 1), 1000);
     return () => clearInterval(t);
   }, [step, resendIn]);
@@ -43,7 +37,7 @@ export function LoginForm() {
 
   function goBack() {
     setError(null);
-    setStep((s) => (s === "otp" ? "password" : "contact"));
+    setStep((s) => (s === "sent" ? "password" : "contact"));
   }
 
   function handleContinue() {
@@ -74,68 +68,16 @@ export function LoginForm() {
   async function sendResetCode() {
     setLoading(true);
     setError(null);
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email);
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
     setLoading(false);
     if (resetError) {
       setError(resetError.message || "Something went wrong. Please try again.");
       return;
     }
-    setMode("reset");
-    setOtp(["", "", "", "", "", ""]);
     setResendIn(RESEND_SECONDS);
-    setStep("otp");
-  }
-
-  function handleOtpChange(i: number, value: string) {
-    const v = value.replace(/\D/g, "").slice(-1);
-    setOtp((prev) => {
-      const next = prev.slice();
-      next[i] = v;
-      return next;
-    });
-    if (v && i < 5) otpRefs.current[i + 1]?.focus();
-  }
-
-  function handleOtpKeyDown(i: number, e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Backspace" && !otp[i] && i > 0) {
-      otpRefs.current[i - 1]?.focus();
-    }
-  }
-
-  const otpComplete = otp.every((d) => d !== "");
-
-  async function handleVerify() {
-    if (!otpComplete) return;
-    setLoading(true);
-    setError(null);
-    const { error: verifyError } = await supabase.auth.verifyOtp({
-      email,
-      token: otp.join(""),
-      type: "recovery",
-    });
-    setLoading(false);
-    if (verifyError) {
-      setError(verifyError.message || "Something went wrong. Please try again.");
-      return;
-    }
-    setStep("create");
-  }
-
-  const createValid = newPw.length >= 8 && newPw === confirmPw;
-  const pwMismatch = confirmPw.length > 0 && newPw !== confirmPw;
-
-  async function handleCreatePassword() {
-    if (!createValid) return;
-    setLoading(true);
-    setError(null);
-    const { error: updateError } = await supabase.auth.updateUser({ password: newPw });
-    setLoading(false);
-    if (updateError) {
-      setError(updateError.message || "Something went wrong. Please try again.");
-      return;
-    }
-    router.push("/dashboard");
-    router.refresh();
+    setStep("sent");
   }
 
   return (
@@ -264,7 +206,8 @@ export function LoginForm() {
           <div className="flex justify-end mt-[10px]">
             <button
               onClick={sendResetCode}
-              className="bg-none border-none text-[var(--brand)] text-[13px] font-semibold cursor-pointer p-0"
+              disabled={loading}
+              className="bg-none border-none text-[var(--brand)] text-[13px] font-semibold cursor-pointer p-0 disabled:opacity-60"
             >
               Forgot password?
             </button>
@@ -284,7 +227,7 @@ export function LoginForm() {
         </>
       )}
 
-      {step === "otp" && (
+      {step === "sent" && (
         <>
           <button
             onClick={goBack}
@@ -293,111 +236,30 @@ export function LoginForm() {
             <Icon name="arrow-r" size={15} className="rotate-180" />
             Back
           </button>
+          <div className="mb-[18px] flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[var(--brands)] text-[var(--brand)]">
+            <Icon name="mail" size={24} />
+          </div>
           <h1 className="m-0 mb-[7px] text-[27px] font-semibold text-[var(--text)] tracking-[-0.02em]">
-            Enter verification code
+            Check your email
           </h1>
           <p className="m-0 mb-6 text-[14.5px] text-[var(--muted)] leading-relaxed">
-            {mode === "reset" ? "Enter the reset code we sent to" : "Enter the one-time code we sent to"}{" "}
-            <span className="text-[var(--text)] font-semibold">{contactDisplay}</span>
+            We sent a password reset link to <span className="text-[var(--text)] font-semibold">{contactDisplay}</span>.
+            Open it on this device to set a new password.
           </p>
-          <div className="flex gap-[9px]">
-            {otp.map((v, i) => (
-              <input
-                key={i}
-                ref={(el) => {
-                  otpRefs.current[i] = el;
-                }}
-                value={v}
-                onChange={(e) => handleOtpChange(i, e.target.value)}
-                onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                inputMode="numeric"
-                maxLength={1}
-                className="w-full flex-1 h-14 text-center text-[22px] font-semibold text-[var(--text)] bg-[var(--surface)] border border-[var(--border)] rounded-[var(--rad-sm)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
-              />
-            ))}
-          </div>
-          {error && <p className="mt-3 text-[12.5px] text-[var(--danger)] font-medium">{error}</p>}
-          <button
-            onClick={handleVerify}
-            disabled={!otpComplete || loading}
-            className="mt-6 w-full h-[50px] rounded-[var(--rad-sm)] text-[var(--brandfg)] text-[15px] font-semibold"
-            style={{
-              background: otpComplete ? "var(--brand)" : "var(--subtle)",
-              cursor: otpComplete ? "pointer" : "not-allowed",
-            }}
-          >
-            {loading ? "Verifying…" : "Verify"}
-          </button>
-          <div className="mt-4 flex justify-between items-center text-[13px]">
+          {error && <p className="mb-3 text-[12.5px] text-[var(--danger)] font-medium">{error}</p>}
+          <div className="flex items-center text-[13px]">
             {resendIn > 0 ? (
-              <span className="text-[var(--subtle)]">Resend code in {resendIn}s</span>
+              <span className="text-[var(--subtle)]">Resend email in {resendIn}s</span>
             ) : (
               <button
                 onClick={sendResetCode}
-                className="bg-none border-none text-[var(--brand)] font-semibold cursor-pointer p-0"
+                disabled={loading}
+                className="bg-none border-none text-[var(--brand)] font-semibold cursor-pointer p-0 disabled:opacity-60"
               >
-                Resend code
+                {loading ? "Sending…" : "Resend email"}
               </button>
             )}
           </div>
-        </>
-      )}
-
-      {step === "create" && (
-        <>
-          <h1 className="m-0 mb-[7px] text-[27px] font-semibold text-[var(--text)] tracking-[-0.02em]">
-            Reset your password
-          </h1>
-          <p className="m-0 mb-[22px] text-[14.5px] text-[var(--muted)] leading-relaxed">
-            Set a password to finish resetting your account.
-          </p>
-          <label className="text-[13px] font-semibold text-[var(--text)] block mb-2">New password</label>
-          <div className="flex items-center gap-[9px] bg-[var(--surface)] border border-[var(--border)] rounded-[var(--rad-sm)] px-[13px] h-[50px] focus-within:border-[var(--brand)] focus-within:shadow-[0_0_0_3px_var(--brands)]">
-            <Icon name="shield" size={17} className="text-[var(--subtle)]" />
-            <input
-              value={newPw}
-              onChange={(e) => setNewPw(e.target.value)}
-              type={showPw ? "text" : "password"}
-              placeholder="At least 8 characters"
-              className="border-none outline-none bg-transparent text-[15px] text-[var(--text)] w-full h-full"
-            />
-            <button
-              onClick={() => setShowPw((v) => !v)}
-              className="bg-none border-none text-[var(--subtle)] cursor-pointer p-1 flex items-center"
-            >
-              <Icon name={showPw ? "eye-off" : "eye"} size={18} />
-            </button>
-          </div>
-          <label className="text-[13px] font-semibold text-[var(--text)] block mt-[14px] mb-2">
-            Confirm password
-          </label>
-          <div className="flex items-center gap-[9px] bg-[var(--surface)] border border-[var(--border)] rounded-[var(--rad-sm)] px-[13px] h-[50px] focus-within:border-[var(--brand)] focus-within:shadow-[0_0_0_3px_var(--brands)]">
-            <Icon name="shield" size={17} className="text-[var(--subtle)]" />
-            <input
-              value={confirmPw}
-              onChange={(e) => setConfirmPw(e.target.value)}
-              type={showPw ? "text" : "password"}
-              placeholder="Re-enter password"
-              className="border-none outline-none bg-transparent text-[15px] text-[var(--text)] w-full h-full"
-            />
-          </div>
-          {pwMismatch && (
-            <div className="mt-[9px] text-[12.5px] text-[var(--danger)] font-medium">
-              Passwords don&apos;t match yet.
-            </div>
-          )}
-          {error && <p className="mt-3 text-[12.5px] text-[var(--danger)] font-medium">{error}</p>}
-          <button
-            onClick={handleCreatePassword}
-            disabled={!createValid || loading}
-            className="mt-[18px] w-full h-[50px] rounded-[var(--rad-sm)] text-[var(--brandfg)] text-[15px] font-semibold"
-            style={{
-              background: createValid ? "var(--brand)" : "var(--subtle)",
-              cursor: createValid ? "pointer" : "not-allowed",
-            }}
-          >
-            {loading ? "Saving…" : "Create password & sign in"}
-          </button>
         </>
       )}
     </div>

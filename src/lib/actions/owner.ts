@@ -43,6 +43,11 @@ export async function listOrgsOverview(): Promise<OrgOverview[]> {
   if (!orgs || orgs.length === 0) return [];
 
   const orgIds = orgs.map((o) => o.id);
+  let defaultPrimaryColor = "#2563eb";
+  if (orgs.some((o) => !o.primary_color)) {
+    const { data: platformSettings } = await supabase.from("platform_settings").select("default_primary_color").eq("id", true).single();
+    defaultPrimaryColor = platformSettings?.default_primary_color ?? defaultPrimaryColor;
+  }
 
   const [{ data: admins }, { data: students }, { data: profiles }, { data: offerings }, { data: assignments }] = await Promise.all([
     supabase.from("profiles").select("id, org_id, full_name, phone, email, is_main_admin").eq("role", "admin").in("org_id", orgIds),
@@ -84,7 +89,7 @@ export async function listOrgsOverview(): Promise<OrgOverview[]> {
       id: o.id,
       name: o.name,
       mark: markOf(o.name),
-      primaryColor: o.primary_color,
+      primaryColor: o.primary_color ?? defaultPrimaryColor,
       adminName: admin?.full_name ?? null,
       adminPhone: admin?.phone ?? null,
       adminEmail: admin?.email ?? null,

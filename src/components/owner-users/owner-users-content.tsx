@@ -101,7 +101,7 @@ export function OwnerUsersContent() {
   async function onLoginAs(id: string) {
     setLoginAsId(id);
     try {
-      const redirectTo = `${window.location.origin}/dashboard`;
+      const redirectTo = `${window.location.origin}/auth/callback`;
       const { url } = await getOwnerLoginAsLink(id, redirectTo);
       window.location.assign(url);
     } catch (e) {

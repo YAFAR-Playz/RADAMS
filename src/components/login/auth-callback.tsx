@@ -1,0 +1,56 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+import { Icon } from "@/components/icons";
+
+export function AuthCallback() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const supabase = createClient();
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const code = searchParams.get("code");
+      if (!code) {
+        setFailed(true);
+        return;
+      }
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      if (error) {
+        setFailed(true);
+        return;
+      }
+      router.push("/dashboard");
+      router.refresh();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (failed) {
+    return (
+      <>
+        <div className="mb-[18px] flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[var(--dangers)] text-[var(--danger)]">
+          <Icon name="alert" size={24} />
+        </div>
+        <h1 className="m-0 mb-[7px] text-[27px] font-semibold text-[var(--text)] tracking-[-0.02em]">
+          This link has expired
+        </h1>
+        <p className="m-0 mb-6 text-[14.5px] text-[var(--muted)] leading-relaxed">
+          Sign-in links only work once and expire after a while. Try again from where you got this link.
+        </p>
+        <Link
+          href="/login"
+          className="flex h-[50px] w-full items-center justify-center rounded-[var(--rad-sm)] bg-[var(--brand)] text-[15px] font-semibold text-[var(--brandfg)]"
+        >
+          Back to sign in
+        </Link>
+      </>
+    );
+  }
+
+  return <p className="text-[14.5px] text-[var(--muted)]">Signing you in…</p>;
+}

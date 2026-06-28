@@ -110,7 +110,7 @@ export function OwnerOrgsContent() {
     }
     setLoginAsId(o.id);
     try {
-      const redirectTo = `${window.location.origin}/dashboard`;
+      const redirectTo = `${window.location.origin}/auth/callback`;
       const { url } = await getOwnerLoginAsLink(o.adminId, redirectTo);
       window.location.assign(url);
     } catch (e) {
