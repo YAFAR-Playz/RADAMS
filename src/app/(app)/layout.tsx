@@ -4,6 +4,7 @@ import { navForRole, ROLE_LABELS } from "@/lib/roles";
 import { AppShell } from "@/components/shell/app-shell";
 import { listAllStaffingRequests } from "@/lib/actions/hr";
 import { getAssistantPendingLogCount } from "@/lib/actions/dashboard";
+import { getPlatformDefaultBranding } from "@/lib/actions/branding";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await getCurrentProfile();
@@ -20,7 +21,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     navItems = navItems.map((n) => (n.key === "assignments" ? { ...n, badge: pending > 0 ? pending : undefined } : n));
   }
 
-  const primaryColor = profile.org?.primaryColor ?? "#2563eb";
+  // Owner has no org, so there's nothing for getCurrentProfile() to resolve
+  // branding from — fetch the platform default directly so the owner's own
+  // sidebar reflects what they've set instead of hardcoded fallbacks.
+  const platformBranding = profile.org ? null : await getPlatformDefaultBranding();
+
+  const primaryColor = profile.org?.primaryColor ?? platformBranding?.primary ?? "#2563eb";
   const brandVars: Record<string, string> = {
     "--brand": primaryColor,
     "--brandh": `color-mix(in srgb, ${primaryColor} 84%, black)`,
@@ -28,7 +34,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     "--info": primaryColor,
     "--infos": `color-mix(in srgb, ${primaryColor} 8%, var(--surface))`,
   };
-  if (profile.org?.corner === "sharp") {
+  if ((profile.org?.corner ?? platformBranding?.corner) === "sharp") {
     brandVars["--rad"] = "6px";
     brandVars["--rad-sm"] = "5px";
   }
@@ -38,9 +44,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <AppShell
         navItems={navItems}
         person={{ name: profile.fullName, label: ROLE_LABELS[profile.role], initials: profile.initials, avatarUrl: profile.avatarUrl }}
-        brandName={profile.org?.brandName ?? "RadAMS"}
-        logoLetter={profile.org?.logoLetter ?? "R"}
-        logoUrl={profile.org?.logoUrl ?? null}
+        brandName={profile.org?.brandName ?? platformBranding?.name ?? "RadAMS"}
+        logoLetter={profile.org?.logoLetter ?? (platformBranding?.name.trim()[0] ?? "R").toUpperCase()}
+        logoUrl={profile.org?.logoUrl ?? platformBranding?.logoUrl ?? null}
         orgName={profile.org?.name ?? null}
       >
         {children}
