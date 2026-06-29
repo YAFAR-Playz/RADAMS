@@ -22,6 +22,18 @@ export function ResetPasswordForm() {
 
   useEffect(() => {
     (async () => {
+      // The reset link may arrive as #access_token=... (no browser-side PKCE
+      // verifier available — e.g. opened on a different device than the one
+      // that requested it) or as ?code=... (same browser, PKCE). Handle both.
+      const hashParams = new URLSearchParams(window.location.hash.slice(1));
+      const accessToken = hashParams.get("access_token");
+      const refreshToken = hashParams.get("refresh_token");
+      if (accessToken && refreshToken) {
+        const { error: sessionError } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+        setStatus(sessionError ? "invalid" : "ready");
+        return;
+      }
+
       const code = searchParams.get("code");
       if (!code) {
         setStatus("invalid");
