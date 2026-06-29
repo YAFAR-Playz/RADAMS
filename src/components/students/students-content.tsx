@@ -22,6 +22,7 @@ import {
   type OfferingChoice,
 } from "@/lib/actions/students";
 import { getEffectiveTemplate, getOrgBrandName } from "@/lib/actions/templates";
+import { getParentWhatsappLink } from "@/lib/actions/branding";
 import { applyTemplateVars } from "@/lib/message-vars";
 import { autoAssignUnassigned } from "@/lib/actions/assistant-groups";
 import { getPaymentStatusForOffering, type PaymentStatusSummary } from "@/lib/actions/payments";
@@ -65,6 +66,7 @@ export function StudentsContent({ role }: { role: Role }) {
   const [savingEdit, setSavingEdit] = useState(false);
   const [welcomeTemplate, setWelcomeTemplate] = useState<string | null>(null);
   const [orgName, setOrgName] = useState("RadAMS");
+  const [parentWhatsappLink, setParentWhatsappLink] = useState<string | null>(null);
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [paymentByStudent, setPaymentByStudent] = useState<Record<string, PaymentStatusSummary>>({});
   const [courseLabelsByStudent, setCourseLabelsByStudent] = useState<Record<string, string[]>>({});
@@ -81,9 +83,10 @@ export function StudentsContent({ role }: { role: Role }) {
       setOfferings(data);
       setOfferingId(data[0]?.id ?? null);
     });
-    Promise.all([getEffectiveTemplate("welcome"), getOrgBrandName()]).then(([tpl, org]) => {
+    Promise.all([getEffectiveTemplate("welcome"), getOrgBrandName(), getParentWhatsappLink()]).then(([tpl, org, link]) => {
       setWelcomeTemplate(tpl);
       setOrgName(org);
+      setParentWhatsappLink(link);
     });
     getPayrollSettings().then((settings) => setSym(currencySymbol(settings?.currency)));
   }, []);
@@ -261,6 +264,8 @@ export function StudentsContent({ role }: { role: Role }) {
           student: welcomeStudent.name,
           course: current?.label ?? "this course",
           assistant_name: welcomeStudent.assistantName ?? "your assistant",
+          student_group_link: welcomeStudent.assistantWhatsappLink ?? "(not set yet — ask your head)",
+          parent_group_link: parentWhatsappLink ?? "(not set yet — ask your admin)",
         })
       : "";
   const welcomeDigits = welcomeStudent?.guardianPhone ? welcomeStudent.guardianPhone.replace(/[^\d]/g, "") : "";

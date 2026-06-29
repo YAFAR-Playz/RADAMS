@@ -1,10 +1,11 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 
 export type GroupStudent = { id: string; enrollmentId: string; name: string; initials: string };
-export type AssistantGroup = { id: string; name: string; initials: string; students: GroupStudent[] };
+export type AssistantGroup = { id: string; name: string; initials: string; whatsappLink: string | null; students: GroupStudent[] };
 export type UnassignedStudent = { enrollmentId: string; studentId: string; name: string; initials: string };
 
 export type StaffingRequest = {
@@ -22,7 +23,7 @@ export async function getAssistantGroups(offeringId: string): Promise<{ groups: 
 
   const { data: assistantLinks } = await supabase
     .from("offering_assistants")
-    .select("profiles(id, full_name, initials)")
+    .select("profiles(id, full_name, initials, student_whatsapp_link)")
     .eq("offering_id", offeringId);
 
   const { data: enrollments } = await supabase
@@ -42,7 +43,7 @@ export async function getAssistantGroups(offeringId: string): Promise<{ groups: 
         })
         .filter((x): x is GroupStudent => !!x)
         .sort((a, b) => a.name.localeCompare(b.name));
-      return { id: p.id, name: p.full_name, initials: p.initials, students };
+      return { id: p.id, name: p.full_name, initials: p.initials, whatsappLink: p.student_whatsapp_link ?? null, students };
     })
     .filter((x): x is AssistantGroup => !!x);
 
@@ -60,6 +61,22 @@ export async function getAssistantGroups(offeringId: string): Promise<{ groups: 
 export async function reassignToGroup(enrollmentId: string, assistantId: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("enrollments").update({ assistant_id: assistantId }).eq("id", enrollmentId);
+  if (error) throw new Error(error.message);
+}
+
+export async function setAssistantWhatsappLink(assistantId: string, link: string) {
+  const profile = await getCurrentProfile();
+  if (!profile || (profile.role !== "head" && profile.role !== "admin") || !profile.org) throw new Error("Not authorized");
+
+  // profiles has no RLS UPDATE policy, so this goes through the admin
+  // client — scope it to assistants in the caller's own org so a head
+  // can't rewrite another organization's data.
+  const supabase = await createClient();
+  const { data: target } = await supabase.from("profiles").select("org_id, role").eq("id", assistantId).single();
+  if (!target || target.org_id !== profile.org.id || target.role !== "assistant") throw new Error("Not authorized");
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("profiles").update({ student_whatsapp_link: link.trim() || null }).eq("id", assistantId);
   if (error) throw new Error(error.message);
 }
 

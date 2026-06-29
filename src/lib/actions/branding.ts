@@ -114,6 +114,23 @@ export async function removeOrgLogo() {
   if (error) throw new Error(error.message);
 }
 
+export async function getParentWhatsappLink(): Promise<string | null> {
+  const profile = await getCurrentProfile();
+  const orgId = profile?.org?.id;
+  if (!orgId) return null;
+  const supabase = await createClient();
+  const { data } = await supabase.from("organizations").select("parent_whatsapp_link").eq("id", orgId).single();
+  return data?.parent_whatsapp_link ?? null;
+}
+
+export async function saveParentWhatsappLink(link: string) {
+  const profile = await getCurrentProfile();
+  if (!profile || profile.role !== "admin" || !profile.org) throw new Error("Not authorized");
+  const supabase = await createClient();
+  const { error } = await supabase.from("organizations").update({ parent_whatsapp_link: link.trim() || null }).eq("id", profile.org.id);
+  if (error) throw new Error(error.message);
+}
+
 export async function saveBranding(draft: BrandingDraft) {
   const profile = await getCurrentProfile();
   const orgId = profile?.org?.id;

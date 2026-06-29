@@ -16,6 +16,7 @@ export type StudentRow = {
   guardianPhone: string | null;
   assistantId: string | null;
   assistantName: string | null;
+  assistantWhatsappLink: string | null;
   enrolledAt: string;
   leftAt: string | null;
   avgGrade: number | null;
@@ -32,7 +33,7 @@ export async function getStudentsForOffering(offeringId: string): Promise<Studen
   let query = supabase
     .from("enrollments")
     .select(
-      "id, student_id, assistant_id, created_at, students(id, name, initials, email, phone, guardian_name, guardian_phone, left_at), profiles(id, full_name)"
+      "id, student_id, assistant_id, created_at, students(id, name, initials, email, phone, guardian_name, guardian_phone, left_at), profiles(id, full_name, student_whatsapp_link)"
     )
     .eq("offering_id", offeringId);
 
@@ -91,6 +92,7 @@ export async function getStudentsForOffering(offeringId: string): Promise<Studen
         guardianPhone: student.guardian_phone,
         assistantId: e.assistant_id,
         assistantName: assistant?.full_name ?? null,
+        assistantWhatsappLink: assistant?.student_whatsapp_link ?? null,
         enrolledAt: e.created_at,
         leftAt: student.left_at,
         avgGrade,

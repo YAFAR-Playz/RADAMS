@@ -27,6 +27,6 @@ export const TEMPLATE_DEFS: { key: TemplateKey; label: string; usage: string; ic
     label: "Welcome message",
     usage: "Sent by assistant on enrollment",
     icon: "user-plus",
-    def: "Assalamu alaikum, I'm {assistant_name}, {student}'s teaching assistant for {course} at {org}. I'll be sharing their progress with you this term. Please feel free to reach out any time.",
+    def: "Assalamu alaikum, I'm {assistant_name}, {student}'s teaching assistant for {course} at {org}. I'll be sharing their progress with you this term. Please feel free to reach out any time.\n\nJoin the student group: {student_group_link}\nJoin the parent group: {parent_group_link}",
   },
 ];

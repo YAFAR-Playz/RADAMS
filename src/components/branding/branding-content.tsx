@@ -3,7 +3,15 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
-import { getBranding, saveBranding, uploadOrgLogo, removeOrgLogo, type BrandingDraft } from "@/lib/actions/branding";
+import {
+  getBranding,
+  saveBranding,
+  uploadOrgLogo,
+  removeOrgLogo,
+  getParentWhatsappLink,
+  saveParentWhatsappLink,
+  type BrandingDraft,
+} from "@/lib/actions/branding";
 import { PRIMARIES, SECONDARIES, FONTS, CORNERS, mixHex } from "@/lib/branding-options";
 
 export function BrandingContent() {
@@ -14,13 +22,19 @@ export function BrandingContent() {
   const [error, setError] = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
 
+  const [parentLink, setParentLink] = useState("");
+  const [savedParentLink, setSavedParentLink] = useState("");
+  const [savingParentLink, setSavingParentLink] = useState(false);
+
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
-        const data = await getBranding();
+        const [data, link] = await Promise.all([getBranding(), getParentWhatsappLink()]);
         setSaved(data);
         setDraft(data);
+        setParentLink(link ?? "");
+        setSavedParentLink(link ?? "");
       } catch {
         setError("Couldn't load branding settings.");
       } finally {
@@ -28,6 +42,18 @@ export function BrandingContent() {
       }
     })();
   }, []);
+
+  async function onSaveParentLink() {
+    setSavingParentLink(true);
+    try {
+      await saveParentWhatsappLink(parentLink);
+      setSavedParentLink(parentLink);
+    } catch {
+      setError("Couldn't save the parent WhatsApp link — try again.");
+    } finally {
+      setSavingParentLink(false);
+    }
+  }
 
   async function onSave() {
     if (!draft) return;
@@ -353,6 +379,30 @@ export function BrandingContent() {
             Everyone in your organization sees these colors, font and shape.
           </p>
         </aside>
+      </div>
+
+      {/* PARENT WHATSAPP GROUP LINK */}
+      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[18px]">
+        <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Parent WhatsApp group link</h3>
+        <p className="m-0 mt-1 text-[12.5px] text-[var(--subtle)]">
+          One shared group link for parents, inserted into the welcome message sent to every new student.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-[10px]">
+          <input
+            value={parentLink}
+            onChange={(e) => setParentLink(e.target.value)}
+            placeholder="https://chat.whatsapp.com/..."
+            className="h-[42px] min-w-[280px] flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--bg)] px-[13px] text-[13.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+          />
+          <button
+            onClick={onSaveParentLink}
+            disabled={parentLink === savedParentLink || savingParentLink}
+            className="flex items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[15px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+          >
+            {savingParentLink ? <Spinner size={15} /> : <Icon name="check" size={15} />}
+            Save
+          </button>
+        </div>
       </div>
 
       {/* ACTION BAR */}

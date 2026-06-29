@@ -11,6 +11,7 @@ import {
   listStaffingRequests,
   createStaffingRequest,
   cancelStaffingRequest,
+  setAssistantWhatsappLink,
   type AssistantGroup,
   type UnassignedStudent,
   type StaffingRequest,
@@ -35,6 +36,9 @@ export function AssistantsContent() {
   const [error, setError] = useState<string | null>(null);
 
   const [requests, setRequests] = useState<StaffingRequest[] | null>(null);
+
+  const [linkDrafts, setLinkDrafts] = useState<Record<string, string>>({});
+  const [savingLink, setSavingLink] = useState<string | null>(null);
 
   const [autoOpen, setAutoOpen] = useState(false);
   const [autoStrategy, setAutoStrategy] = useState<"equal" | "alpha">("equal");
@@ -65,6 +69,7 @@ export function AssistantsContent() {
       setGroups(groups);
       setUnassigned(unassigned);
       setOpen((prev) => (Object.keys(prev).length ? prev : { [groups[0]?.id ?? ""]: true }));
+      setLinkDrafts(Object.fromEntries(groups.map((g) => [g.id, g.whatsappLink ?? ""])));
     } catch {
       setError("Couldn't load assistant groups.");
     } finally {
@@ -98,6 +103,18 @@ export function AssistantsContent() {
       setError("Couldn't reassign this student — try again.");
     } finally {
       setReassigning(null);
+    }
+  }
+
+  async function onSaveLink(assistantId: string) {
+    setSavingLink(assistantId);
+    try {
+      await setAssistantWhatsappLink(assistantId, linkDrafts[assistantId] ?? "");
+      setGroups((prev) => prev?.map((g) => (g.id === assistantId ? { ...g, whatsappLink: linkDrafts[assistantId] || null } : g)) ?? null);
+    } catch {
+      setError("Couldn't save this WhatsApp link — try again.");
+    } finally {
+      setSavingLink(null);
     }
   }
 
@@ -319,6 +336,24 @@ export function AssistantsContent() {
                     Remove
                   </button>
                 </header>
+                <div className="flex flex-wrap items-center gap-[8px] border-b border-[var(--border2)] p-[10px_16px]">
+                  <Icon name="message" size={14} className="flex-none text-[var(--subtle)]" />
+                  <span className="flex-none text-[12px] font-medium text-[var(--subtle)]">Student WhatsApp group</span>
+                  <input
+                    value={linkDrafts[g.id] ?? ""}
+                    onChange={(e) => setLinkDrafts((prev) => ({ ...prev, [g.id]: e.target.value }))}
+                    placeholder="https://chat.whatsapp.com/..."
+                    className="h-[32px] min-w-[200px] flex-1 rounded-[7px] border border-[var(--border)] bg-[var(--bg)] px-[10px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+                  />
+                  <button
+                    onClick={() => onSaveLink(g.id)}
+                    disabled={(linkDrafts[g.id] ?? "") === (g.whatsappLink ?? "") || savingLink === g.id}
+                    className="flex flex-none items-center gap-[5px] rounded-[7px] bg-[var(--brand)] px-[11px] py-[6px] text-[11.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+                  >
+                    {savingLink === g.id ? <Spinner size={11} /> : <Icon name="check" size={12} />}
+                    Save
+                  </button>
+                </div>
                 <div className="p-[10px_12px]">
                   <div
                     onClick={() => toggleGroup(g.id)}
