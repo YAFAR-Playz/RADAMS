@@ -36,11 +36,15 @@ export async function listStaff(): Promise<StaffMember[]> {
   if (!orgId) return [];
   const supabase = await createClient();
 
-  const { data: profiles } = await supabase
+  let query = supabase
     .from("profiles")
     .select("id, full_name, initials, email, phone, role, created_at, is_main_admin")
     .eq("org_id", orgId)
     .order("full_name", { ascending: true });
+  // HR manages non-admin staff only — keep admin/owner rows (and their PII)
+  // out of the response entirely rather than just hiding them client-side.
+  if (profile.role === "hr") query = query.not("role", "in", '("admin","owner")');
+  const { data: profiles } = await query;
 
   const heads = (profiles ?? []).filter((p) => p.role === "head").map((p) => p.id);
   const assistants = (profiles ?? []).filter((p) => p.role === "assistant").map((p) => p.id);
