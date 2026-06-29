@@ -5,8 +5,10 @@ import { getCurrentProfile } from "@/lib/current-profile";
 
 export type SalaryLineRow = {
   id: string;
+  offeringId: string | null;
   offering: string;
   method: string;
+  calcMethod: "per_paper" | "bracket" | "manual" | null;
   basis: string | null;
   base: number;
   bonus: number;
@@ -48,7 +50,7 @@ export async function listSalariesForPeriod(period: string): Promise<AssistantSa
   const { data: lines } = await supabase
     .from("salary_lines")
     .select(
-      "id, payee_id, method, basis, base, bonus, deduction, bonus_reason, deduction_reason, status, pay_method, profiles(full_name, initials), course_offerings(session, unit, courses(name))"
+      "id, payee_id, offering_id, method, calc_method, basis, base, bonus, deduction, bonus_reason, deduction_reason, status, pay_method, profiles(full_name, initials), course_offerings(session, unit, courses(name))"
     )
     .eq("org_id", orgId)
     .eq("period", period);
@@ -76,8 +78,10 @@ export async function listSalariesForPeriod(period: string): Promise<AssistantSa
           const offering = Array.isArray(r.course_offerings) ? r.course_offerings[0] : r.course_offerings;
           return {
             id: r.id,
+            offeringId: r.offering_id,
             offering: offeringLabel(offering),
             method: r.method,
+            calcMethod: r.calc_method as SalaryLineRow["calcMethod"],
             basis: r.basis,
             base: Number(r.base),
             bonus: Number(r.bonus),
@@ -118,5 +122,139 @@ export async function setPayeeStatus(payeeId: string, period: string, status: "p
     .eq("org_id", orgId)
     .eq("payee_id", payeeId)
     .eq("period", period);
+  if (error) throw new Error(error.message);
+}
+
+// "Papers checked" for an assistant on an offering, within a period, is the
+// number of that assistant's assigned students (via enrollments.assistant_id
+// for that offering) whose assignment_log status is "checked" on an
+// assignment due — or if undated, created — within that calendar month.
+async function countCheckedPapers(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  offeringId: string,
+  assistantId: string,
+  period: string
+): Promise<number> {
+  const [y, m] = period.split("-").map(Number);
+  const monthStart = `${period}-01`;
+  const monthEnd = new Date(y, m, 1).toISOString().slice(0, 10);
+
+  const { data: assignments } = await supabase
+    .from("assignments")
+    .select("id, due_date, created_at")
+    .eq("offering_id", offeringId);
+  const assignmentIds = (assignments ?? [])
+    .filter((a) => {
+      const d = a.due_date ?? a.created_at.slice(0, 10);
+      return d >= monthStart && d < monthEnd;
+    })
+    .map((a) => a.id);
+  if (!assignmentIds.length) return 0;
+
+  const { data: studentRows } = await supabase.from("enrollments").select("student_id").eq("offering_id", offeringId).eq("assistant_id", assistantId);
+  const studentIds = (studentRows ?? []).map((s) => s.student_id);
+  if (!studentIds.length) return 0;
+
+  const { count } = await supabase
+    .from("assignment_logs")
+    .select("id", { count: "exact", head: true })
+    .in("assignment_id", assignmentIds)
+    .in("student_id", studentIds)
+    .eq("status", "checked");
+  return count ?? 0;
+}
+
+async function computeBaseForMethod(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  offeringId: string,
+  method: "per_paper" | "bracket",
+  checkedCount: number
+): Promise<{ base: number; methodLabel: string }> {
+  if (method === "bracket") {
+    const { data: brackets } = await supabase.from("pay_brackets").select("lo, hi, pay").eq("offering_id", offeringId);
+    const match = (brackets ?? []).find((b) => checkedCount >= b.lo && checkedCount <= b.hi);
+    return { base: match ? Number(match.pay) : 0, methodLabel: "Bracket" };
+  }
+  const { data: rateRow } = await supabase.from("per_paper_rates").select("rate").eq("offering_id", offeringId).maybeSingle();
+  const rate = rateRow ? Number(rateRow.rate) : 8;
+  return { base: checkedCount * rate, methodLabel: "Per paper" };
+}
+
+async function defaultMethodForOffering(supabase: Awaited<ReturnType<typeof createClient>>, offeringId: string): Promise<"per_paper" | "bracket"> {
+  const { count } = await supabase.from("pay_brackets").select("id", { count: "exact", head: true }).eq("offering_id", offeringId);
+  return count && count > 0 ? "bracket" : "per_paper";
+}
+
+// Generates one salary_line per (assistant, offering) that has at least one
+// checked paper in this period. Existing lines for that exact
+// (org, payee, offering, period) combination are left completely untouched
+// — this only fills in gaps, so it's safe to re-run without clobbering
+// anything Finance has already reviewed or hand-edited.
+export async function generateSalariesForPeriod(period: string): Promise<{ created: number }> {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");
+  const orgId = profile.org.id;
+  const supabase = await createClient();
+
+  const { data: offerings } = await supabase.from("course_offerings").select("id").eq("org_id", orgId);
+  let created = 0;
+
+  for (const offering of offerings ?? []) {
+    const { data: enrollments } = await supabase.from("enrollments").select("assistant_id").eq("offering_id", offering.id).not("assistant_id", "is", null);
+    const assistantIds = Array.from(new Set((enrollments ?? []).map((e) => e.assistant_id as string)));
+    if (!assistantIds.length) continue;
+
+    const method = await defaultMethodForOffering(supabase, offering.id);
+
+    for (const assistantId of assistantIds) {
+      const checkedCount = await countCheckedPapers(supabase, offering.id, assistantId, period);
+      if (checkedCount <= 0) continue;
+      const { base, methodLabel } = await computeBaseForMethod(supabase, offering.id, method, checkedCount);
+
+      const { error } = await supabase
+        .from("salary_lines")
+        .upsert(
+          {
+            org_id: orgId,
+            payee_id: assistantId,
+            offering_id: offering.id,
+            period,
+            method: methodLabel,
+            calc_method: method,
+            basis: `${checkedCount} papers checked`,
+            base,
+          },
+          { onConflict: "org_id,payee_id,offering_id,period", ignoreDuplicates: true }
+        );
+      if (!error) created++;
+    }
+  }
+
+  return { created };
+}
+
+// Finance overriding a line's calc method recomputes its base from scratch
+// using that method — "manual" leaves the existing base alone so Finance can
+// type any number directly.
+export async function setLineCalcMethod(lineId: string, method: "per_paper" | "bracket" | "manual") {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org) throw new Error("Not authenticated");
+  const supabase = await createClient();
+
+  const { data: line } = await supabase.from("salary_lines").select("offering_id, payee_id, period").eq("id", lineId).single();
+  if (!line) throw new Error("Salary line not found");
+
+  if (method === "manual" || !line.offering_id) {
+    const { error } = await supabase.from("salary_lines").update({ calc_method: "manual", method: "Manual" }).eq("id", lineId);
+    if (error) throw new Error(error.message);
+    return;
+  }
+
+  const checkedCount = await countCheckedPapers(supabase, line.offering_id, line.payee_id, line.period);
+  const { base, methodLabel } = await computeBaseForMethod(supabase, line.offering_id, method, checkedCount);
+  const { error } = await supabase
+    .from("salary_lines")
+    .update({ calc_method: method, method: methodLabel, basis: `${checkedCount} papers checked`, base, updated_at: new Date().toISOString() })
+    .eq("id", lineId);
   if (error) throw new Error(error.message);
 }
