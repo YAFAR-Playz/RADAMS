@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
-import { getMyPay, sendFinanceMessage, type MyPay } from "@/lib/actions/pay";
+import { getMyPay, sendFinanceMessage, getMyReceiptUrl, type MyPay } from "@/lib/actions/pay";
 
 function periodLabel(period: string) {
   if (!period) return "";
@@ -25,6 +25,19 @@ export function MyPayContent() {
   const [msgBody, setMsgBody] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [receiptLoading, setReceiptLoading] = useState(false);
+
+  async function onViewReceipt() {
+    if (!data?.period) return;
+    setReceiptLoading(true);
+    try {
+      const url = await getMyReceiptUrl(data.period);
+      if (url) window.open(url, "_blank", "noopener,noreferrer");
+      else setError("Couldn't open this receipt — try again.");
+    } finally {
+      setReceiptLoading(false);
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -202,8 +215,20 @@ export function MyPayContent() {
               )}
             </div>
           ))}
-          <div className="flex items-center justify-between gap-3 bg-[var(--surface2)] p-[13px_18px]">
-            <span className="text-[12.5px] font-medium text-[var(--muted)]">Paid via {data.payMethod}</span>
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-[var(--surface2)] p-[13px_18px]">
+            <div className="flex items-center gap-[10px]">
+              <span className="text-[12.5px] font-medium text-[var(--muted)]">Paid via {data.payMethod}</span>
+              {data.hasReceipt && (
+                <button
+                  onClick={onViewReceipt}
+                  disabled={receiptLoading}
+                  className="flex items-center gap-[5px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[9px] py-[5px] text-[11.5px] font-semibold text-[var(--brand)] hover:bg-[var(--brands)] disabled:opacity-60"
+                >
+                  {receiptLoading ? <Spinner size={11} /> : <Icon name="file-up" size={12} />}
+                  View receipt
+                </button>
+              )}
+            </div>
             <div className="flex items-center gap-[10px]">
               <span className="text-[13px] text-[var(--muted)]">Total this month</span>
               <span className="font-mono text-[19px] font-bold text-[var(--text)]">{fmt(data.total)}</span>

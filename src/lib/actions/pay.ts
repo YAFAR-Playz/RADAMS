@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 
 export type SalaryCourseLine = {
@@ -22,6 +23,7 @@ export type MyPay = {
   payMethod: string;
   total: number;
   courses: SalaryCourseLine[];
+  hasReceipt: boolean;
 };
 
 function offeringLabel(o: { session: string; unit: string | null; courses: { name: string } | { name: string }[] | null } | null) {
@@ -42,13 +44,16 @@ export async function getMyPay(period?: string): Promise<MyPay | null> {
     .order("period", { ascending: false });
   const periods = Array.from(new Set((allLines ?? []).map((l) => l.period)));
   const targetPeriod = period ?? periods[0];
-  if (!targetPeriod) return { period: "", periods: [], paid: false, payMethod: "Bank transfer", total: 0, courses: [] };
+  if (!targetPeriod) return { period: "", periods: [], paid: false, payMethod: "Bank transfer", total: 0, courses: [], hasReceipt: false };
 
-  const { data: lines } = await supabase
-    .from("salary_lines")
-    .select("offering_id, method, basis, base, bonus, deduction, bonus_reason, deduction_reason, status, pay_method, course_offerings(session, unit, courses(name))")
-    .eq("payee_id", profile.id)
-    .eq("period", targetPeriod);
+  const [{ data: lines }, { data: receipt }] = await Promise.all([
+    supabase
+      .from("salary_lines")
+      .select("offering_id, method, basis, base, bonus, deduction, bonus_reason, deduction_reason, status, pay_method, course_offerings(session, unit, courses(name))")
+      .eq("payee_id", profile.id)
+      .eq("period", targetPeriod),
+    supabase.from("salary_receipts").select("id").eq("payee_id", profile.id).eq("period", targetPeriod).maybeSingle(),
+  ]);
 
   const rows = lines ?? [];
   const paid = rows.length > 0 && rows.every((l) => l.status === "paid");
@@ -74,7 +79,20 @@ export async function getMyPay(period?: string): Promise<MyPay | null> {
 
   const total = courses.reduce((sum, c) => sum + c.subtotal, 0);
 
-  return { period: targetPeriod, periods, paid, payMethod, total, courses };
+  return { period: targetPeriod, periods, paid, payMethod, total, courses, hasReceipt: !!receipt };
+}
+
+export async function getMyReceiptUrl(period: string): Promise<string | null> {
+  const profile = await getCurrentProfile();
+  if (!profile) return null;
+  const supabase = await createClient();
+  const { data: receipt } = await supabase.from("salary_receipts").select("path").eq("payee_id", profile.id).eq("period", period).maybeSingle();
+  if (!receipt) return null;
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.storage.from("receipts").createSignedUrl(receipt.path, 60 * 10);
+  if (error || !data) return null;
+  return data.signedUrl;
 }
 
 export async function sendFinanceMessage(body: string, period: string) {

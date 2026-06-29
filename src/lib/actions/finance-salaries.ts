@@ -1,7 +1,11 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/current-profile";
+
+const ALLOWED_RECEIPT_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/webp"];
+const MAX_RECEIPT_BYTES = 8 * 1024 * 1024;
 
 export type SalaryLineRow = {
   id: string;
@@ -23,6 +27,7 @@ export type AssistantSalary = {
   initials: string;
   payMethod: string;
   status: "paid" | "pending";
+  hasReceipt: boolean;
   lines: SalaryLineRow[];
 };
 
@@ -63,6 +68,9 @@ export async function listSalariesForPeriod(period: string): Promise<AssistantSa
     byPayee.set(l.payee_id, list);
   }
 
+  const { data: receipts } = await supabase.from("salary_receipts").select("payee_id").eq("org_id", orgId).eq("period", period);
+  const payeesWithReceipt = new Set((receipts ?? []).map((r) => r.payee_id));
+
   return Array.from(byPayee.entries())
     .map(([payeeId, rows]) => {
       const payee = Array.isArray(rows[0].profiles) ? rows[0].profiles[0] : rows[0].profiles;
@@ -74,6 +82,7 @@ export async function listSalariesForPeriod(period: string): Promise<AssistantSa
         initials: payee.initials,
         payMethod: rows[0].pay_method,
         status: allPaid ? ("paid" as const) : ("pending" as const),
+        hasReceipt: payeesWithReceipt.has(payeeId),
         lines: rows.map((r) => {
           const offering = Array.isArray(r.course_offerings) ? r.course_offerings[0] : r.course_offerings;
           return {
@@ -257,4 +266,55 @@ export async function setLineCalcMethod(lineId: string, method: "per_paper" | "b
     .update({ calc_method: method, method: methodLabel, basis: `${checkedCount} papers checked`, base, updated_at: new Date().toISOString() })
     .eq("id", lineId);
   if (error) throw new Error(error.message);
+}
+
+export async function getReceiptInfo(payeeId: string, period: string): Promise<{ exists: boolean; uploadedAt: string | null }> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { exists: false, uploadedAt: null };
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("salary_receipts")
+    .select("created_at")
+    .eq("payee_id", payeeId)
+    .eq("period", period)
+    .maybeSingle();
+  return { exists: !!data, uploadedAt: data?.created_at ?? null };
+}
+
+export async function uploadReceipt(payeeId: string, period: string, formData: FormData) {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");
+
+  const file = formData.get("file");
+  if (!(file instanceof File)) throw new Error("No file provided");
+  if (!ALLOWED_RECEIPT_TYPES.includes(file.type)) throw new Error("Receipt must be a PDF, PNG, JPG or WEBP");
+  if (file.size > MAX_RECEIPT_BYTES) throw new Error("Receipt must be under 8MB");
+
+  const admin = createAdminClient();
+  const ext = file.name.split(".").pop() || "pdf";
+  const path = `${profile.org.id}/${payeeId}/${period}.${ext}`;
+
+  const { error: uploadError } = await admin.storage.from("receipts").upload(path, file, { contentType: file.type, upsert: true });
+  if (uploadError) throw new Error(uploadError.message);
+
+  const { error } = await admin
+    .from("salary_receipts")
+    .upsert({ org_id: profile.org.id, payee_id: payeeId, period, path, uploaded_by: profile.id }, { onConflict: "org_id,payee_id,period" });
+  if (error) throw new Error(error.message);
+}
+
+export async function getReceiptSignedUrl(payeeId: string, period: string): Promise<string | null> {
+  const profile = await getCurrentProfile();
+  if (!profile) return null;
+  // Finance/admin can view anyone's in their org; a payee can only view their own.
+  if (profile.id !== payeeId && profile.role !== "finance" && profile.role !== "admin" && profile.role !== "owner") return null;
+
+  const supabase = await createClient();
+  const { data: receipt } = await supabase.from("salary_receipts").select("path").eq("payee_id", payeeId).eq("period", period).maybeSingle();
+  if (!receipt) return null;
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.storage.from("receipts").createSignedUrl(receipt.path, 60 * 10);
+  if (error || !data) return null;
+  return data.signedUrl;
 }

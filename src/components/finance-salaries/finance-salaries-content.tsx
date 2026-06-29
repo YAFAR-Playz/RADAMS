@@ -11,6 +11,8 @@ import {
   setPayeeStatus,
   generateSalariesForPeriod,
   setLineCalcMethod,
+  uploadReceipt,
+  getReceiptSignedUrl,
   type AssistantSalary,
 } from "@/lib/actions/finance-salaries";
 
@@ -32,6 +34,8 @@ export function FinanceSalariesContent() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [newPeriod, setNewPeriod] = useState(() => new Date().toISOString().slice(0, 7));
   const [generating, setGenerating] = useState(false);
+  const [receiptTarget, setReceiptTarget] = useState<string | null>(null);
+  const [receiptBusy, setReceiptBusy] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -109,6 +113,34 @@ export function FinanceSalariesContent() {
     }
   }
 
+  async function onReceiptSelected(payeeId: string, file: File) {
+    if (!period) return;
+    setReceiptBusy(payeeId);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.set("file", file);
+      await uploadReceipt(payeeId, period, formData);
+      await reload(period);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't upload this receipt — try again.");
+    } finally {
+      setReceiptBusy(null);
+    }
+  }
+
+  async function onViewReceipt(payeeId: string) {
+    if (!period) return;
+    setReceiptBusy(payeeId);
+    try {
+      const url = await getReceiptSignedUrl(payeeId, period);
+      if (url) window.open(url, "_blank", "noopener,noreferrer");
+      else setError("Couldn't open this receipt — try again.");
+    } finally {
+      setReceiptBusy(null);
+    }
+  }
+
   async function onTogglePaid(a: AssistantSalary) {
     if (!period) return;
     setBusyId(a.payeeId);
@@ -128,6 +160,17 @@ export function FinanceSalariesContent() {
 
   return (
     <div className="flex flex-col gap-4">
+      <input
+        id="receipt-file-input"
+        type="file"
+        accept="application/pdf,image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file && receiptTarget) onReceiptSelected(receiptTarget, file);
+          e.target.value = "";
+        }}
+      />
       {error && (
         <div className="flex items-center justify-between gap-3 rounded-[var(--rad-sm)] border border-[var(--danger)] bg-[var(--dangers)] px-4 py-3 text-[13px] font-medium text-[var(--danger)]">
           {error}
@@ -263,6 +306,22 @@ export function FinanceSalariesContent() {
                   >
                     {busyId === a.payeeId ? <Spinner size={13} /> : <Icon name={a.status === "paid" ? "clock" : "check"} size={13} />}
                     {a.status === "paid" ? "Mark pending" : "Mark as paid"}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (a.hasReceipt) onViewReceipt(a.payeeId);
+                      else {
+                        setReceiptTarget(a.payeeId);
+                        document.getElementById("receipt-file-input")?.click();
+                      }
+                    }}
+                    disabled={receiptBusy === a.payeeId}
+                    title={a.hasReceipt ? "View receipt" : "Attach receipt (optional)"}
+                    className="flex flex-none items-center gap-[5px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px] py-[7px] text-[12px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
+                  >
+                    {receiptBusy === a.payeeId ? <Spinner size={13} /> : <Icon name={a.hasReceipt ? "file-up" : "file-up"} size={13} />}
+                    {a.hasReceipt ? "Receipt" : "Attach"}
                   </button>
                   <Icon name="chevron-down" size={18} className="flex-none text-[var(--subtle)]" style={{ transform: expanded ? "rotate(180deg)" : "none" }} />
                 </div>
