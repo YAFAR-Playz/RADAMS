@@ -396,24 +396,45 @@ export async function getRegistrationDashboard(): Promise<RegistrationDashboard>
 
   const { count: studentsCount } = await supabase.from("students").select("id", { count: "exact", head: true }).eq("org_id", orgId);
 
-  const weekAgo = new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
-  const { data: enrollments } = offeringIds.length
-    ? await supabase
-        .from("enrollments")
-        .select("offering_id, assistant_id, created_at, students(name, initials)")
-        .in("offering_id", offeringIds)
-        .order("created_at", { ascending: false })
-    : { data: [] as { offering_id: string; assistant_id: string | null; created_at: string; students: { name: string; initials: string } | { name: string; initials: string }[] | null }[] };
+  if (!offeringIds.length) {
+    return {
+      kpis: [
+        { icon: "user-plus", value: "0", label: "New this week", tone: "brand" },
+        { icon: "grad", value: String(studentsCount ?? 0), label: "Total students", tone: "neutral" },
+        { icon: "clipboard-list", value: "0", label: "Active courses", tone: "neutral" },
+        { icon: "alert", value: "0", label: "Unassigned students", tone: "ok" },
+      ],
+      recentEnrollments: [],
+      unassigned: [],
+    };
+  }
 
-  const newThisWeek = (enrollments ?? []).filter((e) => e.created_at >= weekAgo).length;
-  const unassignedRows = (enrollments ?? []).filter((e) => !e.assistant_id);
+  const weekAgo = new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
+
+  // Counts only — fetching every enrollment row just to count/filter them
+  // client-side silently truncates at Supabase's default 1000-row cap once
+  // an org has more enrollments than that.
+  const [{ count: newThisWeek }, { data: unassignedRows }, { data: recentRows }] = await Promise.all([
+    supabase
+      .from("enrollments")
+      .select("id", { count: "exact", head: true })
+      .in("offering_id", offeringIds)
+      .gte("created_at", weekAgo),
+    supabase.from("enrollments").select("offering_id").in("offering_id", offeringIds).is("assistant_id", null).limit(2000),
+    supabase
+      .from("enrollments")
+      .select("offering_id, created_at, students(name, initials)")
+      .in("offering_id", offeringIds)
+      .order("created_at", { ascending: false })
+      .limit(6),
+  ]);
 
   const unassignedByOffering = new Map<string, number>();
-  for (const e of unassignedRows) {
+  for (const e of unassignedRows ?? []) {
     unassignedByOffering.set(e.offering_id, (unassignedByOffering.get(e.offering_id) ?? 0) + 1);
   }
 
-  const recentEnrollments: RecentEnrollment[] = (enrollments ?? []).slice(0, 6).map((e) => {
+  const recentEnrollments: RecentEnrollment[] = (recentRows ?? []).map((e) => {
     const s = Array.isArray(e.students) ? e.students[0] : e.students;
     return {
       name: s?.name ?? "—",
@@ -427,12 +448,13 @@ export async function getRegistrationDashboard(): Promise<RegistrationDashboard>
     offering: labelById.get(id) ?? "—",
     count,
   }));
+  const unassignedCount = (unassignedRows ?? []).length;
 
   const kpis: Kpi[] = [
-    { icon: "user-plus", value: String(newThisWeek), label: "New this week", tone: "brand" },
+    { icon: "user-plus", value: String(newThisWeek ?? 0), label: "New this week", tone: "brand" },
     { icon: "grad", value: String(studentsCount ?? 0), label: "Total students", tone: "neutral" },
     { icon: "clipboard-list", value: String(offeringIds.length), label: "Active courses", tone: "neutral" },
-    { icon: "alert", value: String(unassignedRows.length), label: "Unassigned students", tone: unassignedRows.length > 0 ? "warn" : "ok" },
+    { icon: "alert", value: String(unassignedCount), label: "Unassigned students", tone: unassignedCount > 0 ? "warn" : "ok" },
   ];
 
   return { kpis, recentEnrollments, unassigned };
