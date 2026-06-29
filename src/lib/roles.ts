@@ -68,7 +68,7 @@ const NAV_DEF: Record<Role, NavItem[]> = {
   assistant: [
     { icon: "dashboard", label: "Dashboard", key: "dashboard" },
     { icon: "grad", label: "My Students", key: "students" },
-    { icon: "clipboard-list", label: "Assignments", key: "assignments", badge: 12 },
+    { icon: "clipboard-list", label: "Assignments", key: "assignments" },
     { icon: "cal-check", label: "Attendance", key: "attendance" },
     { icon: "wallet", label: "My Pay", key: "mypay" },
     { icon: "message", label: "Chat", key: "chat" },

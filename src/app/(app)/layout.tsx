@@ -3,6 +3,7 @@ import { getCurrentProfile } from "@/lib/current-profile";
 import { navForRole, ROLE_LABELS } from "@/lib/roles";
 import { AppShell } from "@/components/shell/app-shell";
 import { listAllStaffingRequests } from "@/lib/actions/hr";
+import { getAssistantPendingLogCount } from "@/lib/actions/dashboard";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await getCurrentProfile();
@@ -13,6 +14,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     const requests = await listAllStaffingRequests();
     const pending = requests.filter((r) => r.status === "pending").length;
     navItems = navItems.map((n) => (n.key === "requests" ? { ...n, badge: pending > 0 ? pending : undefined } : n));
+  }
+  if (profile.role === "assistant") {
+    const pending = await getAssistantPendingLogCount();
+    navItems = navItems.map((n) => (n.key === "assignments" ? { ...n, badge: pending > 0 ? pending : undefined } : n));
   }
 
   const primaryColor = profile.org?.primaryColor ?? "#2563eb";

@@ -205,6 +205,36 @@ export async function getAssistantDashboard(): Promise<AssistantDashboard> {
   return { kpis, pendingStudents, myOfferings };
 }
 
+// Lean count-only version of the "Pending logs" KPI above, for the
+// Assignments nav badge — avoids pulling the full dashboard payload just
+// to show a number in the sidebar.
+export async function getAssistantPendingLogCount(): Promise<number> {
+  const profile = await getCurrentProfile();
+  if (!profile) return 0;
+  const supabase = await createClient();
+
+  const { data: assignedRows } = await supabase.from("assignment_assistants").select("assignment_id").eq("assistant_id", profile.id);
+  const assignedAssignmentIds = (assignedRows ?? []).map((r) => r.assignment_id);
+  if (!assignedAssignmentIds.length) return 0;
+
+  const { data: assignments } = await supabase.from("assignments").select("id, offering_id, closed_at").in("id", assignedAssignmentIds);
+  const openAssignments = (assignments ?? []).filter((a) => !a.closed_at);
+  if (!openAssignments.length) return 0;
+
+  const { data: enrollments } = await supabase.from("enrollments").select("offering_id, student_id").eq("assistant_id", profile.id);
+  const { data: logs } = await supabase.from("assignment_logs").select("assignment_id, student_id, status").in("assignment_id", assignedAssignmentIds);
+  const loggedSet = new Set((logs ?? []).filter((l) => l.status).map((l) => `${l.assignment_id}:${l.student_id}`));
+
+  let pendingCount = 0;
+  for (const a of openAssignments) {
+    const studentsInOffering = (enrollments ?? []).filter((e) => e.offering_id === a.offering_id);
+    for (const e of studentsInOffering) {
+      if (!loggedSet.has(`${a.id}:${e.student_id}`)) pendingCount++;
+    }
+  }
+  return pendingCount;
+}
+
 export async function getHeadDashboard(): Promise<HeadDashboard> {
   const profile = await getCurrentProfile();
   if (!profile) {
