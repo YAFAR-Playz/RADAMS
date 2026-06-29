@@ -49,9 +49,8 @@ export async function listOrgsOverview(): Promise<OrgOverview[]> {
     defaultPrimaryColor = platformSettings?.default_primary_color ?? defaultPrimaryColor;
   }
 
-  const [{ data: admins }, { data: students }, { data: profiles }, { data: offerings }, { data: assignments }] = await Promise.all([
+  const [{ data: admins }, { data: profiles }, { data: offerings }, { data: assignments }] = await Promise.all([
     supabase.from("profiles").select("id, org_id, full_name, phone, email, is_main_admin").eq("role", "admin").in("org_id", orgIds),
-    supabase.from("students").select("org_id").in("org_id", orgIds),
     supabase.from("profiles").select("org_id, role").in("org_id", orgIds),
     supabase.from("course_offerings").select("id, org_id").in("org_id", orgIds),
     supabase.from("assignments").select("id, offering_id"),
@@ -62,8 +61,16 @@ export async function listOrgsOverview(): Promise<OrgOverview[]> {
     const existing = adminByOrg.get(a.org_id);
     if (!existing || (a.is_main_admin && !existing.is_main_admin)) adminByOrg.set(a.org_id, a);
   }
+  // One count-only query per org rather than fetching every student row for
+  // every org — an unbounded select here silently truncated at Supabase's
+  // default 1000-row cap once total students across orgs passed that count.
   const studentCounts = new Map<string, number>();
-  for (const s of students ?? []) studentCounts.set(s.org_id, (studentCounts.get(s.org_id) ?? 0) + 1);
+  await Promise.all(
+    orgIds.map(async (id) => {
+      const { count } = await supabase.from("students").select("id", { count: "exact", head: true }).eq("org_id", id);
+      studentCounts.set(id, count ?? 0);
+    })
+  );
   const assistantCounts = new Map<string, number>();
   const headCounts = new Map<string, number>();
   for (const p of profiles ?? []) {
