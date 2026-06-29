@@ -36,8 +36,10 @@ export async function updateMyDetails(patch: { fullName: string; phone: string }
     .join("")
     .toUpperCase();
 
-  const supabase = await createClient();
-  const { error } = await supabase
+  // profiles has no RLS UPDATE policy (by design — role/org_id must stay
+  // service-role-only), so self-edits go through the admin client.
+  const admin = createAdminClient();
+  const { error } = await admin
     .from("profiles")
     .update({ full_name: patch.fullName.trim(), initials, phone: patch.phone || null })
     .eq("id", profile.id);
