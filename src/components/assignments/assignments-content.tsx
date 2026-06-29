@@ -252,9 +252,13 @@ export function AssignmentsContent() {
               {currentAssignment?.title ?? (assignmentsLoading ? "Loading…" : "No assignments yet")}
             </h1>
             <div className="mt-[3px] text-[13px] text-[var(--muted)]">
-              {currentAssignment ? `Out of ${currentAssignment.maxMarks}` : ""}
-              {currentAssignment?.dueDate ? ` · Due ${currentAssignment.dueDate}` : ""}
-              {currentOffering ? ` · ${currentOffering.label}` : ""}
+              {[
+                currentAssignment ? `Out of ${currentAssignment.maxMarks}` : null,
+                currentAssignment?.dueDate ? `Due ${currentAssignment.dueDate}` : null,
+                currentOffering ? currentOffering.label : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
             </div>
           </div>
           <button
