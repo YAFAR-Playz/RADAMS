@@ -9,6 +9,8 @@ import {
   listSalariesForPeriod,
   updateSalaryLine,
   setPayeeStatus,
+  generateSalariesForPeriod,
+  setLineCalcMethod,
   type AssistantSalary,
 } from "@/lib/actions/finance-salaries";
 
@@ -28,6 +30,8 @@ export function FinanceSalariesContent() {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [newPeriod, setNewPeriod] = useState(() => new Date().toISOString().slice(0, 7));
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -76,6 +80,35 @@ export function FinanceSalariesContent() {
     }
   }
 
+  async function onGenerate() {
+    if (!newPeriod) return;
+    setGenerating(true);
+    setError(null);
+    try {
+      await generateSalariesForPeriod(newPeriod);
+      const p = await listPeriods();
+      setPeriods(p);
+      setPeriod(newPeriod);
+      await reload(newPeriod);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't generate salaries for this period.");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function onChangeCalcMethod(lineId: string, method: "per_paper" | "bracket" | "manual") {
+    setBusyId(lineId);
+    try {
+      await setLineCalcMethod(lineId, method);
+      if (period) await reload(period);
+    } catch {
+      setError("Couldn't change the calc method — try again.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function onTogglePaid(a: AssistantSalary) {
     if (!period) return;
     setBusyId(a.payeeId);
@@ -111,22 +144,40 @@ export function FinanceSalariesContent() {
             <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Salary breakdown</h1>
             <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">Edit per-course adjustments and release payments when ready.</p>
           </div>
-          {periods && periods.length > 0 && (
-            <div className="flex h-10 items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3">
-              <Icon name="cal-check" size={15} className="text-[var(--subtle)]" />
-              <select
-                value={period ?? ""}
-                onChange={(e) => setPeriod(e.target.value)}
-                className="cursor-pointer appearance-none border-none bg-transparent text-[13.5px] font-semibold text-[var(--text)] outline-none"
+          <div className="flex flex-wrap items-center gap-2">
+            {periods && periods.length > 0 && (
+              <div className="flex h-10 items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3">
+                <Icon name="cal-check" size={15} className="text-[var(--subtle)]" />
+                <select
+                  value={period ?? ""}
+                  onChange={(e) => setPeriod(e.target.value)}
+                  className="cursor-pointer appearance-none border-none bg-transparent text-[13.5px] font-semibold text-[var(--text)] outline-none"
+                >
+                  {periods.map((p) => (
+                    <option key={p} value={p}>
+                      {periodLabel(p)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className="flex h-10 items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-3">
+              <input
+                type="month"
+                value={newPeriod}
+                onChange={(e) => setNewPeriod(e.target.value)}
+                className="border-none bg-transparent text-[13px] text-[var(--text)] outline-none"
+              />
+              <button
+                onClick={onGenerate}
+                disabled={generating || !newPeriod}
+                className="flex items-center gap-[6px] rounded-[7px] bg-[var(--brand)] px-[11px] py-[6px] text-[12px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
               >
-                {periods.map((p) => (
-                  <option key={p} value={p}>
-                    {periodLabel(p)}
-                  </option>
-                ))}
-              </select>
+                {generating ? <Spinner size={13} /> : <Icon name="trend" size={13} />}
+                Generate
+              </button>
             </div>
-          )}
+          </div>
         </div>
         <div className="mt-4 grid grid-cols-3 gap-3">
           {loading || !assistants
@@ -222,9 +273,19 @@ export function FinanceSalariesContent() {
                       <div key={l.id} className="border-b border-[var(--border2)] p-[11px_18px]">
                         <div className="flex flex-wrap items-center gap-[10px_12px]">
                           <span className="w-[148px] flex-none text-[12.5px] font-semibold text-[var(--text)]">{l.offering}</span>
-                          <span className="flex-none">
-                            <span className="rounded-full bg-[var(--infos)] px-2 py-[2px] text-[11px] font-semibold text-[var(--info)]">{l.method}</span>
-                          </span>
+                          <div className="flex h-7 flex-none items-center rounded-full bg-[var(--infos)] px-[9px]">
+                            <select
+                              value={l.calcMethod ?? "manual"}
+                              onChange={(e) => onChangeCalcMethod(l.id, e.target.value as "per_paper" | "bracket" | "manual")}
+                              disabled={!l.offeringId || busyId === l.id}
+                              title={l.offeringId ? "Calc method" : "No course linked — manual only"}
+                              className="cursor-pointer appearance-none border-none bg-transparent text-[11px] font-semibold text-[var(--info)] outline-none disabled:cursor-not-allowed"
+                            >
+                              <option value="per_paper">Per paper</option>
+                              <option value="bracket">Bracket</option>
+                              <option value="manual">Manual</option>
+                            </select>
+                          </div>
                           <span className="min-w-[120px] flex-1 text-[12.5px] text-[var(--muted)]">{l.basis}</span>
                           <div className="flex h-8 w-20 flex-none items-center gap-[1px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[7px]">
                             <span className="text-[11px] font-bold text-[var(--subtle)]">{sym}</span>
