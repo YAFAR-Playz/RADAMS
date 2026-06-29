@@ -127,6 +127,18 @@ function UserMenu({ person }: { person: { name: string; label: string; initials:
   );
 }
 
+function BrandHeader({ brandName, orgName }: { brandName: string; orgName: string | null }) {
+  if (orgName) {
+    return <div className="truncate text-[15px] font-bold tracking-[-0.01em] text-[var(--text)]">{orgName}</div>;
+  }
+  return (
+    <>
+      <div className="truncate text-[15px] font-bold tracking-[-0.01em] text-[var(--text)]">{brandName}</div>
+      <div className="truncate text-[11px] font-medium text-[var(--subtle)]">RadAMS Platform</div>
+    </>
+  );
+}
+
 function LogoMark({ logoUrl, logoLetter, size }: { logoUrl: string | null; logoLetter: string; size: number }) {
   if (logoUrl) {
     return (
@@ -212,8 +224,7 @@ export function AppShell({
           <div className={`flex min-w-0 flex-1 items-center gap-[9px] overflow-hidden ${isRail ? "opacity-0" : "opacity-100"}`}>
             <LogoMark logoUrl={logoUrl} logoLetter={logoLetter} size={32} />
             <div className="min-w-0 leading-[1.1] whitespace-nowrap">
-              <div className="text-[15px] font-bold tracking-[-0.01em] text-[var(--text)]">{brandName}</div>
-              <div className="overflow-hidden text-ellipsis text-[11px] font-medium text-[var(--subtle)]">{orgName ?? "RadAMS Platform"}</div>
+              <BrandHeader brandName={brandName} orgName={orgName} />
             </div>
           </div>
         </div>
@@ -311,8 +322,7 @@ export function AppShell({
             </button>
             <LogoMark logoUrl={logoUrl} logoLetter={logoLetter} size={30} />
             <div className="min-w-0 leading-[1.1]">
-              <div className="truncate text-[15px] font-bold tracking-[-0.01em] text-[var(--text)]">{brandName}</div>
-              <div className="truncate text-[11px] font-medium text-[var(--subtle)]">{orgName ?? "RadAMS Platform"}</div>
+              <BrandHeader brandName={brandName} orgName={orgName} />
             </div>
           </div>
           <nav className="flex flex-1 flex-col gap-[3px] overflow-y-auto p-[12px]">
