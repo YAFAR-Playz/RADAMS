@@ -14,6 +14,25 @@ export function AuthCallback() {
 
   useEffect(() => {
     (async () => {
+      // Admin-generated links (Login as) verify server-side and redirect
+      // with the session in the URL hash (#access_token=...), since there's
+      // no browser-side PKCE verifier for a link nobody's browser requested.
+      // Self-requested links (password reset, run from the same browser)
+      // use a ?code= instead. Handle whichever one shows up.
+      const hashParams = new URLSearchParams(window.location.hash.slice(1));
+      const accessToken = hashParams.get("access_token");
+      const refreshToken = hashParams.get("refresh_token");
+      if (accessToken && refreshToken) {
+        const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+        if (error) {
+          setFailed(true);
+          return;
+        }
+        router.push("/dashboard");
+        router.refresh();
+        return;
+      }
+
       const code = searchParams.get("code");
       if (!code) {
         setFailed(true);
