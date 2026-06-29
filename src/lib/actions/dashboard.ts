@@ -66,14 +66,17 @@ export async function getAdminDashboard(): Promise<AdminDashboard> {
   const today = new Date().toISOString().slice(0, 10);
   const pendingTasks = (assignmentRows ?? []).filter((a) => !a.closed_at && a.due_date && a.due_date < today).length;
 
-  const { data: enrollmentRows } = offeringIds.length
-    ? await supabase.from("enrollments").select("offering_id, student_id").in("offering_id", offeringIds)
-    : { data: [] as { offering_id: string; student_id: string }[] };
-
+  // One count-only query per offering rather than fetching every enrollment
+  // row for the whole org — a single unbounded select here silently
+  // truncated at Supabase's default 1000-row cap once enrollments passed
+  // that count, under-reporting students for every offering after the cut.
   const studentsByOffering = new Map<string, number>();
-  for (const e of enrollmentRows ?? []) {
-    studentsByOffering.set(e.offering_id, (studentsByOffering.get(e.offering_id) ?? 0) + 1);
-  }
+  await Promise.all(
+    offeringIds.map(async (id) => {
+      const { count } = await supabase.from("enrollments").select("id", { count: "exact", head: true }).eq("offering_id", id);
+      studentsByOffering.set(id, count ?? 0);
+    })
+  );
 
   const roleCount = new Map<string, number>();
   for (const s of staff ?? []) {
