@@ -14,6 +14,14 @@ export type MyProfile = {
 const ALLOWED_AVATAR_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
+// The storage path is stable (same profile id every upload), so the public
+// URL never changes between re-uploads. Without a cache-busting suffix,
+// browsers/CDNs keep serving whatever was cached for that exact URL from
+// the very first upload, no matter how many times the file is replaced.
+function withCacheBust(url: string): string {
+  return `${url}?v=${Date.now()}`;
+}
+
 export async function getMyProfile(): Promise<MyProfile | null> {
   const profile = await getCurrentProfile();
   if (!profile) return null;
@@ -89,10 +97,11 @@ export async function uploadMyAvatar(formData: FormData): Promise<{ url: string 
   if (uploadError) throw new Error(uploadError.message);
 
   const { data: publicUrl } = admin.storage.from("avatars").getPublicUrl(path);
-  const { error: updateError } = await admin.from("profiles").update({ avatar_url: publicUrl.publicUrl }).eq("id", profile.id);
+  const url = withCacheBust(publicUrl.publicUrl);
+  const { error: updateError } = await admin.from("profiles").update({ avatar_url: url }).eq("id", profile.id);
   if (updateError) throw new Error(updateError.message);
 
-  return { url: publicUrl.publicUrl };
+  return { url };
 }
 
 export async function removeMyAvatar() {

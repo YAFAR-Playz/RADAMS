@@ -34,6 +34,15 @@ async function removeStalePrefixed(admin: ReturnType<typeof createAdminClient>, 
   if (stale.length) await admin.storage.from("branding").remove(stale);
 }
 
+// The storage path is stable (same org/platform id every upload), so the
+// public URL never changes between re-uploads. Without a cache-busting
+// suffix, browsers and CDNs keep serving whatever was cached for that exact
+// URL from the very first upload, no matter how many times the file is
+// replaced afterward.
+function withCacheBust(url: string): string {
+  return `${url}?v=${Date.now()}`;
+}
+
 async function getPlatformDefaults(supabase: Awaited<ReturnType<typeof createClient>>): Promise<BrandingDraft> {
   const { data } = await supabase
     .from("platform_settings")
@@ -89,10 +98,11 @@ export async function uploadOrgLogo(formData: FormData): Promise<{ url: string }
   if (uploadError) throw new Error(uploadError.message);
 
   const { data: publicUrl } = admin.storage.from("branding").getPublicUrl(path);
-  const { error: updateError } = await admin.from("organizations").update({ logo_url: publicUrl.publicUrl }).eq("id", profile.org.id);
+  const url = withCacheBust(publicUrl.publicUrl);
+  const { error: updateError } = await admin.from("organizations").update({ logo_url: url }).eq("id", profile.org.id);
   if (updateError) throw new Error(updateError.message);
 
-  return { url: publicUrl.publicUrl };
+  return { url };
 }
 
 export async function removeOrgLogo() {
@@ -159,10 +169,11 @@ export async function uploadPlatformDefaultLogo(formData: FormData): Promise<{ u
   if (uploadError) throw new Error(uploadError.message);
 
   const { data: publicUrl } = admin.storage.from("branding").getPublicUrl(path);
-  const { error: updateError } = await admin.from("platform_settings").update({ default_logo_url: publicUrl.publicUrl }).eq("id", true);
+  const url = withCacheBust(publicUrl.publicUrl);
+  const { error: updateError } = await admin.from("platform_settings").update({ default_logo_url: url }).eq("id", true);
   if (updateError) throw new Error(updateError.message);
 
-  return { url: publicUrl.publicUrl };
+  return { url };
 }
 
 export async function removePlatformDefaultLogo() {
