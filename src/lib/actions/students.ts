@@ -8,6 +8,7 @@ export type ProgressCell = { assignmentTitle: string; status: string | null };
 export type StudentRow = {
   enrollmentId: string;
   studentId: string;
+  studentCode: string;
   name: string;
   initials: string;
   email: string | null;
@@ -33,7 +34,7 @@ export async function getStudentsForOffering(offeringId: string): Promise<Studen
   let query = supabase
     .from("enrollments")
     .select(
-      "id, student_id, assistant_id, created_at, students(id, name, initials, email, phone, guardian_name, guardian_phone, left_at), profiles(id, full_name, student_whatsapp_link)"
+      "id, student_id, assistant_id, created_at, students(id, name, initials, student_code, email, phone, guardian_name, guardian_phone, left_at), profiles(id, full_name, student_whatsapp_link)"
     )
     .eq("offering_id", offeringId);
 
@@ -84,6 +85,7 @@ export async function getStudentsForOffering(offeringId: string): Promise<Studen
       return {
         enrollmentId: e.id,
         studentId: e.student_id,
+        studentCode: student.student_code,
         name: student.name,
         initials: student.initials,
         email: student.email,
@@ -186,6 +188,31 @@ export async function removeStudentEnrollment(enrollmentId: string) {
 export async function reassignStudentAssistant(enrollmentId: string, assistantId: string | null) {
   const supabase = await createClient();
   const { error } = await supabase.from("enrollments").update({ assistant_id: assistantId }).eq("id", enrollmentId);
+  if (error) throw new Error(error.message);
+}
+
+export type TopicFlag = { id: string; topic: string };
+
+export async function listTopicFlags(studentId: string): Promise<TopicFlag[]> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("student_topic_flags").select("id, topic").eq("student_id", studentId).order("created_at");
+  return (data ?? []).map((r) => ({ id: r.id, topic: r.topic }));
+}
+
+export async function addTopicFlag(studentId: string, topic: string) {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org) throw new Error("Not authenticated");
+  if (!topic.trim()) return;
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("student_topic_flags")
+    .insert({ org_id: profile.org.id, student_id: studentId, topic: topic.trim(), created_by: profile.id });
+  if (error) throw new Error(error.message);
+}
+
+export async function removeTopicFlag(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("student_topic_flags").delete().eq("id", id);
   if (error) throw new Error(error.message);
 }
 

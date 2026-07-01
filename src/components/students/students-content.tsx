@@ -17,9 +17,13 @@ import {
   listAllOfferingsForOrg,
   addStudentEnrollment,
   removeStudentEnrollment,
+  listTopicFlags,
+  addTopicFlag,
+  removeTopicFlag,
   type StudentRow,
   type EnrollmentDetail,
   type OfferingChoice,
+  type TopicFlag,
 } from "@/lib/actions/students";
 import { getEffectiveTemplate, getOrgBrandName } from "@/lib/actions/templates";
 import { getParentWhatsappLink } from "@/lib/actions/branding";
@@ -73,6 +77,9 @@ export function StudentsContent({ role }: { role: Role }) {
   const [editEnrollments, setEditEnrollments] = useState<EnrollmentDetail[] | null>(null);
   const [allOfferings, setAllOfferings] = useState<OfferingChoice[] | null>(null);
   const [addOfferingId, setAddOfferingId] = useState("");
+  const [topicFlags, setTopicFlags] = useState<TopicFlag[] | null>(null);
+  const [newTopic, setNewTopic] = useState("");
+  const [topicBusy, setTopicBusy] = useState(false);
   const [enrollmentBusy, setEnrollmentBusy] = useState(false);
   const isRegistration = role === "registration";
   const canEditCourses = role === "admin" || role === "registration";
@@ -131,7 +138,7 @@ export function StudentsContent({ role }: { role: Role }) {
     if (!students) return [];
     const q = search.trim().toLowerCase();
     const rows = students.filter((s) => {
-      if (q && !s.name.toLowerCase().includes(q)) return false;
+      if (q && !s.name.toLowerCase().includes(q) && !s.studentCode.includes(q)) return false;
       if (isRegistration && paymentFilter !== "all") {
         const payment = paymentByStudent[s.studentId];
         if (paymentFilter === "paid" && payment?.status !== "paid") return false;
@@ -203,6 +210,35 @@ export function StudentsContent({ role }: { role: Role }) {
       setEditEnrollments(null);
       getStudentEnrollments(s.studentId).then(setEditEnrollments);
       if (!allOfferings) listAllOfferingsForOrg().then(setAllOfferings);
+    }
+    setTopicFlags(null);
+    setNewTopic("");
+    listTopicFlags(s.studentId).then(setTopicFlags);
+  }
+
+  async function onAddTopic() {
+    if (!editDraft || !newTopic.trim()) return;
+    setTopicBusy(true);
+    try {
+      await addTopicFlag(editDraft.studentId, newTopic.trim());
+      setTopicFlags(await listTopicFlags(editDraft.studentId));
+      setNewTopic("");
+    } catch {
+      setError("Couldn't add that topic — try again.");
+    } finally {
+      setTopicBusy(false);
+    }
+  }
+
+  async function onRemoveTopic(id: string) {
+    setTopicBusy(true);
+    try {
+      await removeTopicFlag(id);
+      setTopicFlags((prev) => (prev ? prev.filter((t) => t.id !== id) : prev));
+    } catch {
+      setError("Couldn't remove that topic — try again.");
+    } finally {
+      setTopicBusy(false);
     }
   }
 
@@ -496,6 +532,9 @@ export function StudentsContent({ role }: { role: Role }) {
                     <div className="min-w-0">
                       <div className="overflow-hidden text-ellipsis whitespace-nowrap text-[13.5px] font-semibold text-[var(--text)]">
                         {st.name}
+                        <span className="ml-[6px] rounded-[4px] bg-[var(--surface2)] px-[5px] py-[1px] font-mono text-[10.5px] font-semibold text-[var(--subtle)]">
+                          #{st.studentCode}
+                        </span>
                         {savingId === st.studentId && <Spinner size={12} className="ml-2 inline text-[var(--subtle)]" />}
                       </div>
                       {st.email && (
@@ -813,6 +852,47 @@ export function StudentsContent({ role }: { role: Role }) {
                   )}
                 </div>
               )}
+              <div>
+                <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Weak / revision topics</label>
+                {topicFlags === null ? (
+                  <SkeletonRow className="h-[40px]" />
+                ) : (
+                  <div className="flex flex-col gap-[10px]">
+                    {topicFlags.length > 0 && (
+                      <div className="flex flex-wrap gap-[6px]">
+                        {topicFlags.map((t) => (
+                          <span
+                            key={t.id}
+                            className="flex items-center gap-[6px] rounded-full bg-[var(--warns)] py-[4px] pl-[10px] pr-[6px] text-[12px] font-semibold text-[var(--warn)]"
+                          >
+                            {t.topic}
+                            <button onClick={() => onRemoveTopic(t.id)} disabled={topicBusy} className="flex h-4 w-4 items-center justify-center rounded-full hover:bg-black/10 disabled:opacity-60">
+                              <Icon name="x" size={11} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-[8px]">
+                      <input
+                        value={newTopic}
+                        onChange={(e) => setNewTopic(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && onAddTopic()}
+                        placeholder="e.g. Quadratic equations"
+                        className="h-9 flex-1 rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+                      />
+                      <button
+                        onClick={onAddTopic}
+                        disabled={!newTopic.trim() || topicBusy}
+                        className="flex h-9 flex-none items-center gap-[6px] rounded-[8px] bg-[var(--brand)] px-[12px] text-[12.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+                      >
+                        {topicBusy ? <Spinner size={13} /> : <Icon name="plus" size={13} />}
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
               <div
                 className="flex items-center gap-[11px] rounded-[var(--rad-sm)] border p-[12px_13px]"
                 style={{ background: editDraft.left ? "var(--dangers)" : "var(--surface2)", borderColor: editDraft.left ? "var(--danger)" : "var(--border)" }}
