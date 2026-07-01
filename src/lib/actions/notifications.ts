@@ -18,6 +18,60 @@ export type NotificationItem = {
 const RECENT_DAYS = 7;
 const RECENT_MESSAGE_DAYS = 14;
 const UPCOMING_DAYS = 7;
+const MISSING_ASSIGNMENTS_THRESHOLD = 5;
+
+// Students with MISSING_ASSIGNMENTS_THRESHOLD+ assignments logged "missing"
+// across the given offerings, scoped to the given assistant if provided.
+async function getMissingAssignmentsAlerts(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  offeringIds: string[],
+  assistantId?: string
+): Promise<NotificationItem[]> {
+  if (!offeringIds.length) return [];
+
+  let enrollmentQuery = supabase.from("enrollments").select("student_id, students(name)").in("offering_id", offeringIds);
+  if (assistantId) enrollmentQuery = enrollmentQuery.eq("assistant_id", assistantId);
+  const { data: enrollments } = await enrollmentQuery;
+  const studentIds = Array.from(new Set((enrollments ?? []).map((e) => e.student_id)));
+  if (!studentIds.length) return [];
+  const nameByStudent = new Map(
+    (enrollments ?? []).map((e) => {
+      const s = Array.isArray(e.students) ? e.students[0] : e.students;
+      return [e.student_id, s?.name ?? "—"];
+    })
+  );
+
+  const { data: assignments } = await supabase.from("assignments").select("id").in("offering_id", offeringIds);
+  const assignmentIds = (assignments ?? []).map((a) => a.id);
+  if (!assignmentIds.length) return [];
+
+  const { data: logs } = await supabase
+    .from("assignment_logs")
+    .select("student_id")
+    .in("assignment_id", assignmentIds)
+    .in("student_id", studentIds)
+    .eq("status", "missing");
+
+  const missingByStudent = new Map<string, number>();
+  for (const l of logs ?? []) {
+    missingByStudent.set(l.student_id, (missingByStudent.get(l.student_id) ?? 0) + 1);
+  }
+
+  const items: NotificationItem[] = [];
+  for (const [studentId, count] of missingByStudent) {
+    if (count < MISSING_ASSIGNMENTS_THRESHOLD) continue;
+    items.push({
+      id: `missing-${studentId}`,
+      icon: "alert",
+      tone: "danger",
+      title: `${nameByStudent.get(studentId) ?? "A student"} has ${count} missing assignments`,
+      detail: "Check their assignment log",
+      href: "/students",
+      createdAt: new Date().toISOString(),
+    });
+  }
+  return items;
+}
 
 function daysAgoIso(days: number) {
   const d = new Date();
@@ -86,6 +140,8 @@ async function getAssistantNotifications(orgId: string, assistantId: string): Pr
       createdAt: e.created_at,
     });
   }
+
+  items.push(...(await getMissingAssignmentsAlerts(supabase, offeringIds, assistantId)));
 
   return items;
 }
@@ -172,6 +228,8 @@ async function getHeadNotifications(orgId: string, headId: string): Promise<Noti
       }
     }
   }
+
+  items.push(...(await getMissingAssignmentsAlerts(supabase, offeringIds)));
 
   return items;
 }

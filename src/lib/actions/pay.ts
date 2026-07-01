@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 
 export type SalaryCourseLine = {
@@ -75,6 +76,24 @@ export async function getMyPay(period?: string): Promise<MyPay | null> {
   const total = courses.reduce((sum, c) => sum + c.subtotal, 0);
 
   return { period: targetPeriod, periods, paid, payMethod, total, courses };
+}
+
+export async function getMyReceiptUrl(period: string): Promise<string | null> {
+  const profile = await getCurrentProfile();
+  if (!profile) return null;
+  const supabase = await createClient();
+  const { data: receipt } = await supabase
+    .from("salary_receipts")
+    .select("path")
+    .eq("payee_id", profile.id)
+    .eq("period", period)
+    .maybeSingle();
+  if (!receipt) return null;
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.storage.from("receipts").createSignedUrl(receipt.path, 60 * 5);
+  if (error || !data) return null;
+  return data.signedUrl;
 }
 
 export async function sendFinanceMessage(body: string, period: string) {

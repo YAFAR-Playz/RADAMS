@@ -154,7 +154,7 @@ export async function updateStaffMember(id: string, patch: { name: string; phone
   if (error) throw new Error(error.message);
 }
 
-export async function removeStaffMember(id: string, leaveDate?: string) {
+export async function removeStaffMember(id: string, leaveDate?: string, gaveNotice?: boolean) {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org) throw new Error("Not authenticated");
 
@@ -173,6 +173,7 @@ export async function removeStaffMember(id: string, leaveDate?: string) {
       target_name: target.full_name,
       target_role: target.role,
       leave_date: leaveDate || new Date().toISOString().slice(0, 10),
+      gave_notice: gaveNotice ?? null,
     });
   }
 }

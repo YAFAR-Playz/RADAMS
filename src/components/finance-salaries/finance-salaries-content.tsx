@@ -11,6 +11,8 @@ import {
   setPayeeStatus,
   generateSalariesForPeriod,
   setLineCalcMethod,
+  uploadSalaryReceipt,
+  getSalaryReceiptUrl,
   type AssistantSalary,
 } from "@/lib/actions/finance-salaries";
 
@@ -32,6 +34,10 @@ export function FinanceSalariesContent() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [newPeriod, setNewPeriod] = useState(() => new Date().toISOString().slice(0, 7));
   const [generating, setGenerating] = useState(false);
+  const [receiptTarget, setReceiptTarget] = useState<AssistantSalary | null>(null);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptSaving, setReceiptSaving] = useState(false);
+  const [viewingReceiptId, setViewingReceiptId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -111,14 +117,52 @@ export function FinanceSalariesContent() {
 
   async function onTogglePaid(a: AssistantSalary) {
     if (!period) return;
+    if (a.status !== "paid") {
+      setReceiptTarget(a);
+      setReceiptFile(null);
+      return;
+    }
     setBusyId(a.payeeId);
     try {
-      await setPayeeStatus(a.payeeId, period, a.status === "paid" ? "pending" : "paid");
+      await setPayeeStatus(a.payeeId, period, "pending");
       await reload(period);
     } catch {
       setError("Couldn't update payment status — try again.");
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function onConfirmMarkPaid() {
+    if (!period || !receiptTarget) return;
+    setReceiptSaving(true);
+    try {
+      if (receiptFile) {
+        const formData = new FormData();
+        formData.set("file", receiptFile);
+        await uploadSalaryReceipt(receiptTarget.payeeId, period, formData);
+      }
+      await setPayeeStatus(receiptTarget.payeeId, period, "paid");
+      await reload(period);
+      setReceiptTarget(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't mark as paid — try again.");
+    } finally {
+      setReceiptSaving(false);
+    }
+  }
+
+  async function onViewReceipt(payeeId: string) {
+    if (!period) return;
+    setViewingReceiptId(payeeId);
+    try {
+      const url = await getSalaryReceiptUrl(payeeId, period);
+      if (url) window.open(url, "_blank", "noopener,noreferrer");
+      else setError("No receipt was attached for this period.");
+    } catch {
+      setError("Couldn't open the receipt — try again.");
+    } finally {
+      setViewingReceiptId(null);
     }
   }
 
@@ -248,6 +292,20 @@ export function FinanceSalariesContent() {
                     <Icon name={a.status === "paid" ? "check2" : "clock"} size={12} />
                     {a.status === "paid" ? "Paid" : "Pending"}
                   </span>
+                  {a.status === "paid" && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onViewReceipt(a.payeeId);
+                      }}
+                      disabled={viewingReceiptId === a.payeeId}
+                      title="View receipt"
+                      className="flex flex-none items-center gap-[6px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 py-[7px] text-[12px] font-semibold text-[var(--muted)] disabled:opacity-60"
+                    >
+                      {viewingReceiptId === a.payeeId ? <Spinner size={13} /> : <Icon name="file-up" size={13} />}
+                      Receipt
+                    </button>
+                  )}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -347,6 +405,47 @@ export function FinanceSalariesContent() {
           })
         )}
       </section>
+
+      {receiptTarget && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(8,12,22,0.5)] p-5">
+          <div className="flex w-full max-w-[420px] flex-col rounded-[var(--rad)] bg-[var(--surface)] shadow-[var(--shadow-lg)]">
+            <div className="flex items-center gap-3 border-b border-[var(--border2)] p-[16px_18px]">
+              <div className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] bg-[var(--oks)] text-[var(--ok)]">
+                <Icon name="check" size={16} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Mark {receiptTarget.name} as paid?</h3>
+                <div className="text-[12px] text-[var(--muted)]">Attaching a receipt is optional.</div>
+              </div>
+              <button onClick={() => setReceiptTarget(null)} className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]">
+                <Icon name="x" size={18} />
+              </button>
+            </div>
+            <div className="flex flex-col gap-[10px] p-[16px_18px]">
+              <label className="mb-[2px] block text-[12.5px] font-semibold text-[var(--text)]">Receipt (PDF or photo, optional)</label>
+              <input
+                type="file"
+                accept="application/pdf,image/png,image/jpeg,image/webp"
+                onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+                className="w-full text-[12.5px] text-[var(--muted)] file:mr-3 file:rounded-[7px] file:border file:border-[var(--border)] file:bg-[var(--surface2)] file:px-3 file:py-[6px] file:text-[12px] file:font-semibold file:text-[var(--text)]"
+              />
+            </div>
+            <div className="flex gap-[10px] border-t border-[var(--border2)] p-[14px_18px]">
+              <button onClick={() => setReceiptTarget(null)} className="h-11 flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]">
+                Cancel
+              </button>
+              <button
+                onClick={onConfirmMarkPaid}
+                disabled={receiptSaving}
+                className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--ok)] text-[13.5px] font-semibold text-white disabled:opacity-60"
+              >
+                {receiptSaving ? <Spinner size={15} /> : <Icon name="check" size={15} />}
+                Mark as paid
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

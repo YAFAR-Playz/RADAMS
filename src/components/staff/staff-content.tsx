@@ -66,6 +66,10 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
   const [loginAsId, setLoginAsId] = useState<string | null>(null);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
 
+  const [removeTarget, setRemoveTarget] = useState<StaffMember | null>(null);
+  const [removeLeaveDate, setRemoveLeaveDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [removeGaveNotice, setRemoveGaveNotice] = useState(false);
+
   async function reload() {
     setLoading(true);
     try {
@@ -151,11 +155,20 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
     }
   }
 
-  async function onRemove(id: string) {
+  function openRemove(u: StaffMember) {
+    setRemoveTarget(u);
+    setRemoveLeaveDate(new Date().toISOString().slice(0, 10));
+    setRemoveGaveNotice(false);
+  }
+
+  async function onConfirmRemove() {
+    if (!removeTarget) return;
+    const id = removeTarget.id;
     setRemovingId(id);
     try {
-      await removeStaffMember(id);
+      await removeStaffMember(id, removeLeaveDate, removeGaveNotice);
       setStaff((prev) => (prev ? prev.filter((u) => u.id !== id) : prev));
+      setRemoveTarget(null);
     } catch {
       setError("Couldn't remove this user — try again.");
     } finally {
@@ -387,7 +400,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
                     )}
                     {!u.isMainAdmin && (
                       <button
-                        onClick={() => onRemove(u.id)}
+                        onClick={() => openRemove(u)}
                         disabled={removingId === u.id}
                         title="Remove user"
                         className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--subtle)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] hover:text-[var(--danger)] disabled:opacity-60"
@@ -553,6 +566,58 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
               >
                 {saving ? <Spinner size={15} /> : <Icon name="check" size={15} />}
                 {editId ? "Save changes" : "Add user"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {removeTarget && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(8,12,22,0.5)] p-5">
+          <div className="flex w-full max-w-[420px] flex-col rounded-[var(--rad)] bg-[var(--surface)] shadow-[var(--shadow-lg)]">
+            <div className="flex items-center gap-3 border-b border-[var(--border2)] p-[16px_18px]">
+              <div className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] bg-[var(--dangers)] text-[var(--danger)]">
+                <Icon name="x" size={16} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Remove {removeTarget.name}?</h3>
+                <div className="text-[12px] text-[var(--muted)]">This deletes their account and login access.</div>
+              </div>
+              <button onClick={() => setRemoveTarget(null)} className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]">
+                <Icon name="x" size={18} />
+              </button>
+            </div>
+            <div className="flex flex-col gap-[14px] p-[16px_18px]">
+              <div>
+                <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Leave date</label>
+                <input
+                  type="date"
+                  value={removeLeaveDate}
+                  onChange={(e) => setRemoveLeaveDate(e.target.value)}
+                  className="h-10 w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                />
+              </div>
+              <label className="flex cursor-pointer items-center gap-[9px] text-[13px] font-medium text-[var(--text)]">
+                <input
+                  type="checkbox"
+                  checked={removeGaveNotice}
+                  onChange={(e) => setRemoveGaveNotice(e.target.checked)}
+                  className="h-[17px] w-[17px] cursor-pointer accent-[var(--brand)]"
+                />
+                Gave two weeks&apos; notice
+              </label>
+            </div>
+            <div className="flex gap-[10px] border-t border-[var(--border2)] p-[14px_18px]">
+              <button onClick={() => setRemoveTarget(null)} className="h-11 flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]">
+                Cancel
+              </button>
+              <button
+                onClick={onConfirmRemove}
+                disabled={removingId === removeTarget.id}
+                className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--danger)] text-[13.5px] font-semibold text-white disabled:opacity-60"
+              >
+                {removingId === removeTarget.id ? <Spinner size={15} /> : <Icon name="x" size={15} />}
+                Remove user
               </button>
             </div>
           </div>

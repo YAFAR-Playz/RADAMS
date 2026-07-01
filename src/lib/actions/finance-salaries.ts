@@ -1,7 +1,11 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/current-profile";
+
+const ALLOWED_RECEIPT_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/webp"];
+const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
 
 export type SalaryLineRow = {
   id: string;
@@ -123,6 +127,56 @@ export async function setPayeeStatus(payeeId: string, period: string, status: "p
     .eq("payee_id", payeeId)
     .eq("period", period);
   if (error) throw new Error(error.message);
+}
+
+// Optional proof-of-payment attached when marking a payee paid. Storage lives
+// in a private bucket — only ever accessed through the admin client, gated
+// by the salary_receipts RLS policy (finance/admin, or the payee themself).
+export async function uploadSalaryReceipt(payeeId: string, period: string, formData: FormData) {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");
+
+  const file = formData.get("file");
+  if (!(file instanceof File)) throw new Error("No file provided");
+  if (!ALLOWED_RECEIPT_TYPES.includes(file.type)) throw new Error("Receipt must be a PDF, PNG, JPG or WEBP file");
+  if (file.size > MAX_RECEIPT_BYTES) throw new Error("Receipt must be under 5MB");
+
+  const admin = createAdminClient();
+  const ext = file.name.split(".").pop() || "pdf";
+  const path = `${profile.org.id}/${payeeId}/${period}.${ext}`;
+
+  const { data: existing } = await admin.storage.from("receipts").list(`${profile.org.id}/${payeeId}`, { search: period });
+  const stale = (existing ?? []).map((f) => `${profile.org!.id}/${payeeId}/${f.name}`);
+  if (stale.length) await admin.storage.from("receipts").remove(stale);
+
+  const { error: uploadError } = await admin.storage.from("receipts").upload(path, file, { contentType: file.type, upsert: true });
+  if (uploadError) throw new Error(uploadError.message);
+
+  const { error } = await admin
+    .from("salary_receipts")
+    .upsert(
+      { org_id: profile.org.id, payee_id: payeeId, period, path, uploaded_by: profile.id },
+      { onConflict: "org_id,payee_id,period" }
+    );
+  if (error) throw new Error(error.message);
+}
+
+export async function getSalaryReceiptUrl(payeeId: string, period: string): Promise<string | null> {
+  const profile = await getCurrentProfile();
+  if (!profile) return null;
+  const supabase = await createClient();
+  const { data: receipt } = await supabase
+    .from("salary_receipts")
+    .select("path")
+    .eq("payee_id", payeeId)
+    .eq("period", period)
+    .maybeSingle();
+  if (!receipt) return null;
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.storage.from("receipts").createSignedUrl(receipt.path, 60 * 5);
+  if (error || !data) return null;
+  return data.signedUrl;
 }
 
 // "Papers checked" for an assistant on an offering, within a period, is the

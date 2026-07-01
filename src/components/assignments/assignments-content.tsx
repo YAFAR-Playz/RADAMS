@@ -172,10 +172,10 @@ export function AssignmentsContent() {
 
   async function onStatusChange(studentId: string, status: AssignmentStatus | "") {
     if (!assignmentId) return;
-    patchLocal(studentId, { status: status || null });
     setSavingId(studentId);
     try {
       await setStatus(assignmentId, studentId, status || null);
+      patchLocal(studentId, { status: status || null });
     } catch {
       setError("Couldn't save status — try again.");
     } finally {
