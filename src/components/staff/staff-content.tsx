@@ -19,6 +19,7 @@ import {
   type PendingRequest,
 } from "@/lib/actions/staff";
 import { listAllOfferingsForOrg, type OfferingChoice } from "@/lib/actions/students";
+import { downloadCsv } from "@/lib/csv-export";
 
 const ADMIN_ROLE_OPTIONS: Role[] = ["admin", "hr", "head", "assistant", "registration", "finance"];
 const HR_ROLE_OPTIONS: Role[] = ["hr", "head", "assistant", "registration", "finance"];
@@ -108,6 +109,14 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
   const pageRows = filtered.slice(pageStart, pageStart + STAFF_PAGE_SIZE);
 
   const pendingRequests = (requests ?? []).filter((r) => r.status === "pending");
+
+  function onExport() {
+    downloadCsv(
+      "staff",
+      ["Name", "Email", "Phone", "Role", "Joined", "Courses"],
+      filtered.map((u) => [u.name, u.email, u.phone ?? "", ROLE_LABEL[u.role], u.joinedAt, u.courses.join("; ")])
+    );
+  }
 
   function openAdd() {
     setEditId(null);
@@ -231,13 +240,23 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
                 : "Manage your organization's users. Add or remove staff and edit their role."}
             </p>
           </div>
-          <button
-            onClick={openAdd}
-            className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[15px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)]"
-          >
-            <Icon name="user-plus" size={16} />
-            Add user
-          </button>
+          <div className="flex flex-none items-center gap-[8px]">
+            <button
+              onClick={onExport}
+              disabled={filtered.length === 0}
+              className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-[14px] py-[10px] text-[13px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
+            >
+              <Icon name="file-up" size={16} />
+              Export CSV
+            </button>
+            <button
+              onClick={openAdd}
+              className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[15px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)]"
+            >
+              <Icon name="user-plus" size={16} />
+              Add user
+            </button>
+          </div>
         </div>
         <div className="mt-4 grid grid-cols-3 gap-3">
           {loading || !staff

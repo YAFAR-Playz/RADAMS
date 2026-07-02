@@ -17,16 +17,15 @@ import {
   listAllOfferingsForOrg,
   addStudentEnrollment,
   removeStudentEnrollment,
-  listTopicFlags,
-  addTopicFlag,
-  removeTopicFlag,
   type StudentRow,
   type EnrollmentDetail,
   type OfferingChoice,
-  type TopicFlag,
 } from "@/lib/actions/students";
+import { getGradeScale, type GradeScaleSetting } from "@/lib/actions/oversight";
+import { getStudentAttendance, type StudentAttendanceSummary } from "@/lib/actions/attendance";
+import { downloadCsv } from "@/lib/csv-export";
 import { getEffectiveTemplate, getOrgBrandName } from "@/lib/actions/templates";
-import { getParentWhatsappLink } from "@/lib/actions/branding";
+import { getOfferingParentWhatsappLink } from "@/lib/actions/assistant-groups";
 import { applyTemplateVars } from "@/lib/message-vars";
 import { autoAssignUnassigned } from "@/lib/actions/assistant-groups";
 import { getPaymentStatusForOffering, type PaymentStatusSummary } from "@/lib/actions/payments";
@@ -77,9 +76,7 @@ export function StudentsContent({ role }: { role: Role }) {
   const [editEnrollments, setEditEnrollments] = useState<EnrollmentDetail[] | null>(null);
   const [allOfferings, setAllOfferings] = useState<OfferingChoice[] | null>(null);
   const [addOfferingId, setAddOfferingId] = useState("");
-  const [topicFlags, setTopicFlags] = useState<TopicFlag[] | null>(null);
-  const [newTopic, setNewTopic] = useState("");
-  const [topicBusy, setTopicBusy] = useState(false);
+  const [studentAttendance, setStudentAttendance] = useState<StudentAttendanceSummary | null>(null);
   const [enrollmentBusy, setEnrollmentBusy] = useState(false);
   const isRegistration = role === "registration";
   const canEditCourses = role === "admin" || role === "registration";
@@ -90,13 +87,22 @@ export function StudentsContent({ role }: { role: Role }) {
       setOfferings(data);
       setOfferingId(data[0]?.id ?? null);
     });
-    Promise.all([getEffectiveTemplate("welcome"), getOrgBrandName(), getParentWhatsappLink()]).then(([tpl, org, link]) => {
+    Promise.all([getEffectiveTemplate("welcome"), getOrgBrandName()]).then(([tpl, org]) => {
       setWelcomeTemplate(tpl);
       setOrgName(org);
-      setParentWhatsappLink(link);
     });
     getPayrollSettings().then((settings) => setSym(currencySymbol(settings?.currency)));
   }, []);
+
+  useEffect(() => {
+    (() => {
+      if (!offeringId) {
+        setParentWhatsappLink(null);
+        return;
+      }
+      getOfferingParentWhatsappLink(offeringId).then(setParentWhatsappLink);
+    })();
+  }, [offeringId]);
 
   async function reload(id: string) {
     setLoading(true);
@@ -130,6 +136,21 @@ export function StudentsContent({ role }: { role: Role }) {
       await reload(offeringId);
     })();
   }, [offeringId]);
+
+  const [gradeScale, setGradeScaleState] = useState<GradeScaleSetting>({ scale: "percentage", bands: [] });
+  useEffect(() => {
+    if (!offeringId) return;
+    getGradeScale(offeringId).then(setGradeScaleState);
+  }, [offeringId]);
+
+  function formatGrade(avgGrade: number | null): string {
+    if (avgGrade == null) return "—";
+    if (gradeScale.scale === "letter" && gradeScale.bands.length) {
+      const band = gradeScale.bands.find((b) => avgGrade >= b.min);
+      if (band) return band.label;
+    }
+    return `${avgGrade}%`;
+  }
 
   const offeringsLoading = offerings === null;
   const current = offerings?.find((o) => o.id === offeringId) ?? null;
@@ -195,6 +216,25 @@ export function StudentsContent({ role }: { role: Role }) {
     }
   }
 
+  function onExport() {
+    downloadCsv(
+      `students-${current?.label ?? "all"}`,
+      ["Student ID", "Name", "Email", "Phone", "Guardian name", "Guardian phone", "Assistant", "Enrolled", "Left", "Avg grade"],
+      filtered.map((s) => [
+        s.studentId,
+        s.name,
+        s.email ?? "",
+        s.phone ?? "",
+        s.guardianName ?? "",
+        s.guardianPhone ?? "",
+        s.assistantName ?? "",
+        s.enrolledAt,
+        s.leftAt ?? "",
+        s.avgGrade ?? "",
+      ])
+    );
+  }
+
   function openEdit(s: StudentRow) {
     setEditDraft({
       studentId: s.studentId,
@@ -211,35 +251,8 @@ export function StudentsContent({ role }: { role: Role }) {
       getStudentEnrollments(s.studentId).then(setEditEnrollments);
       if (!allOfferings) listAllOfferingsForOrg().then(setAllOfferings);
     }
-    setTopicFlags(null);
-    setNewTopic("");
-    listTopicFlags(s.studentId).then(setTopicFlags);
-  }
-
-  async function onAddTopic() {
-    if (!editDraft || !newTopic.trim()) return;
-    setTopicBusy(true);
-    try {
-      await addTopicFlag(editDraft.studentId, newTopic.trim());
-      setTopicFlags(await listTopicFlags(editDraft.studentId));
-      setNewTopic("");
-    } catch {
-      setError("Couldn't add that topic — try again.");
-    } finally {
-      setTopicBusy(false);
-    }
-  }
-
-  async function onRemoveTopic(id: string) {
-    setTopicBusy(true);
-    try {
-      await removeTopicFlag(id);
-      setTopicFlags((prev) => (prev ? prev.filter((t) => t.id !== id) : prev));
-    } catch {
-      setError("Couldn't remove that topic — try again.");
-    } finally {
-      setTopicBusy(false);
-    }
+    setStudentAttendance(null);
+    getStudentAttendance(s.studentId).then(setStudentAttendance);
   }
 
   async function onAddEnrollment(studentId: string) {
@@ -363,6 +376,16 @@ export function StudentsContent({ role }: { role: Role }) {
               >
                 {unassignedCount}
               </span>
+            </button>
+          )}
+          {!isAssistant && (
+            <button
+              onClick={onExport}
+              disabled={filtered.length === 0}
+              className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-[14px] py-[10px] text-[13px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
+            >
+              <Icon name="file-up" size={16} />
+              Export CSV
             </button>
           )}
         </div>
@@ -635,7 +658,7 @@ export function StudentsContent({ role }: { role: Role }) {
                         </div>
                       )}
                       <span className="w-[54px] flex-none text-right font-mono text-[13px] font-bold text-[var(--text)]">
-                        {st.leftAt ? "—" : st.avgGrade != null ? `${st.avgGrade}%` : "—"}
+                        {st.leftAt ? "—" : formatGrade(st.avgGrade)}
                       </span>
                     </>
                   )}
@@ -853,42 +876,38 @@ export function StudentsContent({ role }: { role: Role }) {
                 </div>
               )}
               <div>
-                <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Weak / revision topics</label>
-                {topicFlags === null ? (
+                <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Attendance</label>
+                {studentAttendance === null ? (
                   <SkeletonRow className="h-[40px]" />
+                ) : studentAttendance.records.length === 0 ? (
+                  <div className="text-[12.5px] text-[var(--subtle)]">No attendance recorded yet.</div>
                 ) : (
-                  <div className="flex flex-col gap-[10px]">
-                    {topicFlags.length > 0 && (
-                      <div className="flex flex-wrap gap-[6px]">
-                        {topicFlags.map((t) => (
-                          <span
-                            key={t.id}
-                            className="flex items-center gap-[6px] rounded-full bg-[var(--warns)] py-[4px] pl-[10px] pr-[6px] text-[12px] font-semibold text-[var(--warn)]"
-                          >
-                            {t.topic}
-                            <button onClick={() => onRemoveTopic(t.id)} disabled={topicBusy} className="flex h-4 w-4 items-center justify-center rounded-full hover:bg-black/10 disabled:opacity-60">
-                              <Icon name="x" size={11} />
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <div className="flex items-center gap-[8px]">
-                      <input
-                        value={newTopic}
-                        onChange={(e) => setNewTopic(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && onAddTopic()}
-                        placeholder="e.g. Quadratic equations"
-                        className="h-9 flex-1 rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
-                      />
-                      <button
-                        onClick={onAddTopic}
-                        disabled={!newTopic.trim() || topicBusy}
-                        className="flex h-9 flex-none items-center gap-[6px] rounded-[8px] bg-[var(--brand)] px-[12px] text-[12.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+                  <div className="flex flex-col gap-[8px]">
+                    <div className="flex items-center gap-[10px] rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] p-[10px_12px]">
+                      <span
+                        className="font-mono text-[16px] font-bold"
+                        style={{ color: studentAttendance.presentPct >= 80 ? "var(--ok)" : studentAttendance.presentPct >= 60 ? "var(--warn)" : "var(--danger)" }}
                       >
-                        {topicBusy ? <Spinner size={13} /> : <Icon name="plus" size={13} />}
-                        Add
-                      </button>
+                        {studentAttendance.presentPct}%
+                      </span>
+                      <span className="text-[12px] text-[var(--muted)]">
+                        present across {studentAttendance.records.length} session{studentAttendance.records.length === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                    <div className="flex max-h-[160px] flex-col gap-[4px] overflow-y-auto">
+                      {studentAttendance.records.map((r) => {
+                        const tone = r.status === "present" ? "var(--ok)" : r.status === "late" ? "var(--warn)" : "var(--danger)";
+                        return (
+                          <div key={r.sessionId} className="flex items-center justify-between rounded-[7px] bg-[var(--surface2)] px-[10px] py-[6px] text-[12px]">
+                            <span className="text-[var(--text)]">
+                              {r.title} <span className="text-[var(--subtle)]">· {new Date(r.date).toLocaleDateString()}</span>
+                            </span>
+                            <span className="font-semibold capitalize" style={{ color: tone }}>
+                              {r.status}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

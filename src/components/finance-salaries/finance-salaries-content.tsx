@@ -15,6 +15,7 @@ import {
   getSalaryReceiptUrl,
   type AssistantSalary,
 } from "@/lib/actions/finance-salaries";
+import { downloadCsv } from "@/lib/csv-export";
 
 const CURRENCY_SYMBOL: Record<string, string> = { GBP: "£", USD: "$", EUR: "€", EGP: "E£", AED: "د.إ" };
 
@@ -84,6 +85,15 @@ export function FinanceSalariesContent() {
     } finally {
       setBusyId(null);
     }
+  }
+
+  function onExport() {
+    if (!assistants) return;
+    downloadCsv(
+      `salaries-${period ?? "period"}`,
+      ["Name", "Pay method", "Status", "Total"],
+      assistants.map((a) => [a.name, a.payMethod, a.status, total(a)])
+    );
   }
 
   async function onGenerate() {
@@ -221,6 +231,14 @@ export function FinanceSalariesContent() {
                 Generate
               </button>
             </div>
+            <button
+              onClick={onExport}
+              disabled={!assistants || assistants.length === 0}
+              className="flex h-10 flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-[14px] text-[13px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
+            >
+              <Icon name="file-up" size={16} />
+              Export CSV
+            </button>
           </div>
         </div>
         <div className="mt-4 grid grid-cols-3 gap-3">

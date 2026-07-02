@@ -80,6 +80,24 @@ export async function setAssistantWhatsappLink(assistantId: string, link: string
   if (error) throw new Error(error.message);
 }
 
+export async function getOfferingParentWhatsappLink(offeringId: string): Promise<string | null> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("course_offerings").select("parent_whatsapp_link").eq("id", offeringId).single();
+  return data?.parent_whatsapp_link ?? null;
+}
+
+export async function setOfferingParentWhatsappLink(offeringId: string, link: string) {
+  const profile = await getCurrentProfile();
+  if (!profile || (profile.role !== "head" && profile.role !== "admin") || !profile.org) throw new Error("Not authorized");
+
+  const supabase = await createClient();
+  const { data: offering } = await supabase.from("course_offerings").select("org_id").eq("id", offeringId).single();
+  if (!offering || offering.org_id !== profile.org.id) throw new Error("Not authorized");
+
+  const { error } = await supabase.from("course_offerings").update({ parent_whatsapp_link: link.trim() || null }).eq("id", offeringId);
+  if (error) throw new Error(error.message);
+}
+
 export async function autoAssignUnassigned(offeringId: string, strategy: "equal" | "alpha") {
   const supabase = await createClient();
   const { groups, unassigned } = await getAssistantGroups(offeringId);
@@ -144,6 +162,7 @@ export async function createStaffingRequest(input: {
   candidateEmail: string;
   reason: string;
   proposedDate: string;
+  gaveNotice?: boolean;
 }) {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org) throw new Error("Not authenticated");
@@ -159,6 +178,7 @@ export async function createStaffingRequest(input: {
     reason: input.reason || null,
     requested_by: profile.id,
     proposed_date: input.proposedDate || null,
+    gave_notice: input.kind === "add" ? null : input.gaveNotice ?? null,
   });
   if (error) throw new Error(error.message);
 }

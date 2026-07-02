@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { createPaymentPlan, type PlanType } from "@/lib/actions/payments";
+import { logActivity } from "@/lib/actions/activity-log";
 
 export type RegistrationFields = {
   name: string;
@@ -63,6 +64,7 @@ export async function registerStudent(offeringId: string, fields: RegistrationFi
   if (enrollError) throw new Error(enrollError.message);
 
   await createPaymentPlan({ studentId: student.id, offeringId, planType: fields.planType });
+  await logActivity("students", `Registered ${fields.name.trim()}`);
 
   return { studentId: student.id };
 }

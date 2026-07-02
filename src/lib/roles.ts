@@ -44,6 +44,8 @@ const NAV_DEF: Record<Role, NavItem[]> = {
     { icon: "wallet", label: "Payroll", key: "payroll" },
     { icon: "mail", label: "Templates", key: "templates" },
     { icon: "palette", label: "Branding", key: "branding" },
+    { icon: "trend", label: "Monthly report", key: "report" },
+    { icon: "clock", label: "History", key: "history" },
     { icon: "message", label: "Chat", key: "chat" },
   ],
   hr: [
@@ -62,7 +64,9 @@ const NAV_DEF: Record<Role, NavItem[]> = {
     { icon: "user-check", label: "Assistants", key: "assistants" },
     { icon: "cal-check", label: "Attendance", key: "attendance" },
     { icon: "chart", label: "Evaluations", key: "evaluations" },
+    { icon: "target", label: "Weak Topics", key: "weak-topics" },
     { icon: "wallet", label: "My Pay", key: "mypay" },
+    { icon: "trend", label: "Monthly report", key: "report" },
     { icon: "message", label: "Chat", key: "chat" },
   ],
   assistant: [
@@ -70,13 +74,13 @@ const NAV_DEF: Record<Role, NavItem[]> = {
     { icon: "grad", label: "My Students", key: "students" },
     { icon: "clipboard-list", label: "Assignments", key: "assignments" },
     { icon: "cal-check", label: "Attendance", key: "attendance" },
+    { icon: "target", label: "Weak Topics", key: "weak-topics" },
     { icon: "wallet", label: "My Pay", key: "mypay" },
     { icon: "message", label: "Chat", key: "chat" },
   ],
   registration: [
     { icon: "dashboard", label: "Dashboard", key: "dashboard" },
     { icon: "user-plus", label: "Registrations", key: "registrations" },
-    { icon: "card", label: "Installments", key: "installments" },
     { icon: "cal-check", label: "Attendance", key: "attendance" },
     { icon: "file-up", label: "Import", key: "import" },
     { icon: "grad", label: "Students", key: "students" },

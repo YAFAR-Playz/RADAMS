@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/current-profile";
+import { logActivity } from "@/lib/actions/activity-log";
 import type { Role } from "@/lib/roles";
 
 export type StaffMember = {
@@ -134,6 +135,7 @@ export async function createStaffMember(input: { name: string; email: string; ph
     target_role: input.role,
     hire_date: hiredAt,
   });
+  await logActivity("staff", `Added ${input.name.trim()} as ${input.role}`);
 
   return { id: created.user.id };
 }
@@ -152,6 +154,7 @@ export async function updateStaffMember(id: string, patch: { name: string; phone
     .update({ full_name: patch.name.trim(), initials, phone: patch.phone || null, role: patch.role })
     .eq("id", id);
   if (error) throw new Error(error.message);
+  await logActivity("staff", `Updated ${patch.name.trim()}'s profile`);
 }
 
 export async function removeStaffMember(id: string, leaveDate?: string, gaveNotice?: boolean) {
@@ -175,6 +178,7 @@ export async function removeStaffMember(id: string, leaveDate?: string, gaveNoti
       leave_date: leaveDate || new Date().toISOString().slice(0, 10),
       gave_notice: gaveNotice ?? null,
     });
+    await logActivity("staff", `Removed ${target.full_name} (${target.role})${gaveNotice ? " — gave notice" : ""}`);
   }
 }
 
@@ -222,8 +226,10 @@ export async function listPendingRequests(): Promise<PendingRequest[]> {
 
 export async function resolveStaffingRequest(id: string, status: "approved" | "declined") {
   const supabase = await createClient();
+  const { data: request } = await supabase.from("staffing_requests").select("kind, candidate_name").eq("id", id).single();
   const { error } = await supabase.from("staffing_requests").update({ status }).eq("id", id);
   if (error) throw new Error(error.message);
+  if (request) await logActivity("requests", `${status === "approved" ? "Approved" : "Declined"} ${request.kind} request for ${request.candidate_name ?? "a staff change"}`);
 }
 
 export async function assignStaffToCourses(profileId: string, role: "head" | "assistant", offeringIds: string[]) {

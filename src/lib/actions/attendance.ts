@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
+import { logActivity } from "@/lib/actions/activity-log";
 
 export type AttendanceStatus = "present" | "late" | "absent";
 
@@ -96,6 +97,31 @@ export async function getSessionRoster(sessionId: string): Promise<AttendanceRos
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+export type StudentAttendanceRow = { sessionId: string; title: string; date: string; status: AttendanceStatus };
+export type StudentAttendanceSummary = { records: StudentAttendanceRow[]; presentPct: number };
+
+export async function getStudentAttendance(studentId: string): Promise<StudentAttendanceSummary> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("attendance_records")
+    .select("session_id, status, attendance_sessions(title, session_date)")
+    .eq("student_id", studentId);
+
+  const records: StudentAttendanceRow[] = (data ?? [])
+    .map((r) => {
+      const session = Array.isArray(r.attendance_sessions) ? r.attendance_sessions[0] : r.attendance_sessions;
+      if (!session) return null;
+      return { sessionId: r.session_id, title: session.title, date: session.session_date, status: r.status as AttendanceStatus };
+    })
+    .filter((x): x is StudentAttendanceRow => !!x)
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
+
+  const presentCount = records.filter((r) => r.status === "present" || r.status === "late").length;
+  const presentPct = records.length ? Math.round((presentCount / records.length) * 100) : 0;
+
+  return { records, presentPct };
+}
+
 export async function createSession(input: { offeringId: string; title: string; date: string; time: string }): Promise<{ id: string }> {
   const profile = await getCurrentProfile();
   if (!profile) throw new Error("Not authenticated");
@@ -121,6 +147,8 @@ export async function createSession(input: { offeringId: string; title: string; 
       .insert(enrollments.map((e) => ({ session_id: session.id, student_id: e.student_id, status: "present" as const })));
     if (recError) throw new Error(recError.message);
   }
+
+  await logActivity("attendance", `Created session "${input.title || "New session"}" on ${input.date}`);
 
   return { id: session.id };
 }

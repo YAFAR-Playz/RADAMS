@@ -9,6 +9,7 @@ import {
   updateOrganization,
   deleteOrganization,
   getOwnerLoginAsLink,
+  setOrgStatus,
   type OrgOverview,
 } from "@/lib/actions/owner";
 
@@ -26,7 +27,7 @@ const STATUS_BADGE: Record<OrgOverview["status"], { text: string; bg: string; fg
   suspended: { text: "Suspended", bg: "var(--dangers)", fg: "var(--danger)" },
 };
 
-const emptyForm = { name: "", adminName: "", adminPhone: "", adminEmail: "" };
+const emptyForm = { name: "", adminName: "", adminPhone: "", adminEmail: "", status: "trial" as OrgOverview["status"] };
 
 export function OwnerOrgsContent() {
   const [orgs, setOrgs] = useState<OrgOverview[] | null>(null);
@@ -65,7 +66,7 @@ export function OwnerOrgsContent() {
 
   function openEdit(o: OrgOverview) {
     setEditId(o.id);
-    setForm({ name: o.name, adminName: o.adminName ?? "", adminPhone: o.adminPhone ?? "", adminEmail: o.adminEmail ?? "" });
+    setForm({ name: o.name, adminName: o.adminName ?? "", adminPhone: o.adminPhone ?? "", adminEmail: o.adminEmail ?? "", status: o.status });
     setModalOpen(true);
   }
 
@@ -78,6 +79,7 @@ export function OwnerOrgsContent() {
       if (editId) {
         const org = orgs?.find((o) => o.id === editId);
         await updateOrganization(editId, { name: form.name, adminId: org?.adminId ?? null, adminName: form.adminName, adminPhone: form.adminPhone });
+        if (org && org.status !== form.status) await setOrgStatus(editId, form.status);
       } else {
         await createOrganization(form);
       }
@@ -272,6 +274,28 @@ export function OwnerOrgsContent() {
                   className="h-[42px] w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                 />
               </div>
+              {editId && (
+                <div>
+                  <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Status</label>
+                  <div className="flex gap-[6px] rounded-[10px] border border-[var(--border)] bg-[var(--surface2)] p-[3px]">
+                    {(["trial", "active", "suspended"] as const).map((s) => {
+                      const active = form.status === s;
+                      const badge = STATUS_BADGE[s];
+                      return (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setForm((f) => ({ ...f, status: s }))}
+                          className="h-9 flex-1 rounded-[8px] text-[12.5px] font-semibold capitalize"
+                          style={active ? { background: badge.bg, color: badge.fg } : { color: "var(--muted)" }}
+                        >
+                          {badge.text}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               <div className="h-px bg-[var(--border2)]" />
               <div className="text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Main admin</div>
               <div>
