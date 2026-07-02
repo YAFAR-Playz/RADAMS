@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "RadAMS",
+  title: "ZAD-AMS",
   description: "The operating system for your tutoring center.",
 };
 

@@ -134,7 +134,7 @@ function BrandHeader({ brandName, orgName }: { brandName: string; orgName: strin
   return (
     <>
       <div className="truncate text-[15px] font-bold tracking-[-0.01em] text-[var(--text)]">{brandName}</div>
-      <div className="truncate text-[11px] font-medium text-[var(--subtle)]">RadAMS Platform</div>
+      <div className="truncate text-[11px] font-medium text-[var(--subtle)]">ZAD-AMS Platform</div>
     </>
   );
 }

@@ -127,16 +127,12 @@ export function MonthlyReportContent() {
                   <span className="ml-[8px] text-[13px] text-[var(--muted)]">{t.topicLabel}</span>
                 </div>
                 <div className="flex items-center gap-[12px] text-[12px]">
-                  {t.videoLink && (
-                    <a href={t.videoLink} target="_blank" rel="noreferrer" className="text-[var(--brand)] hover:underline">
-                      Video
+                  {t.materials.map((m, j) => (
+                    <a key={j} href={m.link} target="_blank" rel="noreferrer" className="text-[var(--brand)] hover:underline">
+                      {m.kind === "video" ? "Video" : "Drive"}
+                      {m.duration ? ` (${m.duration})` : ""}
                     </a>
-                  )}
-                  {t.driveLink && (
-                    <a href={t.driveLink} target="_blank" rel="noreferrer" className="text-[var(--brand)] hover:underline">
-                      Drive
-                    </a>
-                  )}
+                  ))}
                 </div>
               </div>
             ))}

@@ -12,6 +12,7 @@ import {
   createSession,
   markAttendance,
   markAllPresent,
+  getFullAttendanceExport,
   type SessionSummary,
   type AttendanceRosterRow,
   type AttendanceStatus,
@@ -21,6 +22,7 @@ import { applyTemplateVars } from "@/lib/message-vars";
 import { downloadCsv } from "@/lib/csv-export";
 
 const PAGE_SIZE = 20;
+const SESSION_PAGE_SIZE = 10;
 const STATUS_OPTS: { key: AttendanceStatus; label: string; icon: "check" | "clock" | "x"; tone: Tone }[] = [
   { key: "present", label: "Present", icon: "check", tone: "ok" },
   { key: "late", label: "Late", icon: "clock", tone: "warn" },
@@ -30,6 +32,8 @@ const STATUS_OPTS: { key: AttendanceStatus; label: string; icon: "check" | "cloc
 function statusMeta(status: AttendanceStatus) {
   return STATUS_OPTS.find((o) => o.key === status) ?? STATUS_OPTS[0];
 }
+
+type Recipient = "student" | "parent";
 
 export function AttendanceContent({ role }: { role: Role }) {
   const canEdit = role === "registration";
@@ -43,10 +47,12 @@ export function AttendanceContent({ role }: { role: Role }) {
   const [rosterLoading, setRosterLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
+  const [sessionPage, setSessionPage] = useState(0);
   const [waId, setWaId] = useState<string | null>(null);
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -54,16 +60,19 @@ export function AttendanceContent({ role }: { role: Role }) {
   const [newDate, setNewDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [newTime, setNewTime] = useState("16:00");
   const [creating, setCreating] = useState(false);
-  const [template, setTemplate] = useState<string | null>(null);
-  const [orgName, setOrgName] = useState("RadAMS");
+  const [templateStudent, setTemplateStudent] = useState<string | null>(null);
+  const [templateParent, setTemplateParent] = useState<string | null>(null);
+  const [orgName, setOrgName] = useState("ZAD-AMS");
+  const [recipient, setRecipient] = useState<Recipient>("parent");
 
   useEffect(() => {
     listMyOfferings().then((data) => {
       setOfferings(data);
       setOfferingId(data[0]?.id ?? null);
     });
-    Promise.all([getEffectiveTemplate("attendance"), getOrgBrandName()]).then(([tpl, org]) => {
-      setTemplate(tpl);
+    Promise.all([getEffectiveTemplate("attendance_student"), getEffectiveTemplate("attendance_parent"), getOrgBrandName()]).then(([tplS, tplP, org]) => {
+      setTemplateStudent(tplS);
+      setTemplateParent(tplP);
       setOrgName(org);
     });
   }, []);
@@ -76,6 +85,7 @@ export function AttendanceContent({ role }: { role: Role }) {
 
   useEffect(() => {
     (async () => {
+      setSessionPage(0);
       if (!offeringId) {
         setSessions([]);
         setSessionId(null);
@@ -109,6 +119,11 @@ export function AttendanceContent({ role }: { role: Role }) {
   const offeringsLoading = offerings === null;
   const current = offerings?.find((o) => o.id === offeringId) ?? null;
   const activeSession = sessions?.find((s) => s.id === sessionId) ?? null;
+
+  const sessionPageCount = Math.max(1, Math.ceil((sessions?.length ?? 0) / SESSION_PAGE_SIZE));
+  const safeSessionPage = Math.min(sessionPage, sessionPageCount - 1);
+  const sessionPageStart = safeSessionPage * SESSION_PAGE_SIZE;
+  const pagedSessions = (sessions ?? []).slice(sessionPageStart, sessionPageStart + SESSION_PAGE_SIZE);
 
   const filtered = useMemo(() => {
     if (!roster) return [];
@@ -160,14 +175,19 @@ export function AttendanceContent({ role }: { role: Role }) {
     }
   }
 
-  function onExport() {
-    if (!roster) return;
-    const session = sessions?.find((s) => s.id === sessionId);
-    downloadCsv(
-      `attendance-${session?.title ?? "session"}-${session?.date ?? ""}`,
-      ["Student", "Guardian phone", "Status"],
-      roster.map((r) => [r.name, r.guardianPhone ?? "", r.status])
-    );
+  async function onExport() {
+    if (!offeringId) return;
+    setExporting(true);
+    try {
+      const rows = await getFullAttendanceExport(offeringId);
+      downloadCsv(
+        `attendance-${current?.label ?? "course"}`,
+        ["Student", "Guardian phone", "Session", "Date", "Status"],
+        rows.map((r) => [r.studentName, r.guardianPhone ?? "", r.sessionTitle, r.sessionDate, r.status])
+      );
+    } finally {
+      setExporting(false);
+    }
   }
 
   async function onCreateSession() {
@@ -188,9 +208,10 @@ export function AttendanceContent({ role }: { role: Role }) {
   const waStudent = waId ? roster?.find((r) => r.studentId === waId) ?? null : null;
   const waMeta = waStudent ? statusMeta(waStudent.status) : null;
   const waToneColors = waMeta ? toneColors(waMeta.tone) : toneColors("neutral");
+  const waActiveTemplate = recipient === "student" ? templateStudent : templateParent;
   const waMessage =
-    waStudent && waMeta && template
-      ? applyTemplateVars(template, {
+    waStudent && waMeta && waActiveTemplate
+      ? applyTemplateVars(waActiveTemplate, {
           org: orgName,
           student: waStudent.name,
           status: waMeta.label,
@@ -198,7 +219,8 @@ export function AttendanceContent({ role }: { role: Role }) {
           date: activeSession?.date ?? "",
         })
       : "";
-  const waDigits = waStudent?.guardianPhone ? waStudent.guardianPhone.replace(/[^\d]/g, "") : "";
+  const waPhone = recipient === "student" ? waStudent?.phone : waStudent?.guardianPhone;
+  const waDigits = waPhone ? waPhone.replace(/[^\d]/g, "") : "";
   const waUrl = `https://wa.me/${waDigits}?text=${encodeURIComponent(waMessage)}`;
 
   return (
@@ -232,10 +254,11 @@ export function AttendanceContent({ role }: { role: Role }) {
             {role !== "assistant" && (
               <button
                 onClick={onExport}
-                disabled={!roster || roster.length === 0}
+                disabled={!offeringId || !sessions || sessions.length === 0 || exporting}
+                title="Export every session and student for this course"
                 className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-[14px] py-[10px] text-[13px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
               >
-                <Icon name="file-up" size={16} />
+                {exporting ? <Spinner size={15} /> : <Icon name="file-up" size={16} />}
                 Export CSV
               </button>
             )}
@@ -318,7 +341,7 @@ export function AttendanceContent({ role }: { role: Role }) {
             ) : sessions.length === 0 ? (
               <div className="p-[28px_12px] text-center text-[13px] text-[var(--muted)]">No sessions yet for this course.</div>
             ) : (
-              sessions.map((s) => {
+              pagedSessions.map((s) => {
                 const active = s.id === sessionId;
                 const d = new Date(s.date);
                 const mon = d.toLocaleDateString("en-US", { month: "short" });
@@ -351,6 +374,34 @@ export function AttendanceContent({ role }: { role: Role }) {
               })
             )}
           </div>
+          {sessionPageCount > 1 && (
+            <div className="flex flex-wrap items-center justify-between gap-[10px] border-t border-[var(--border2)] p-[11px_14px]">
+              <span className="text-[12px] text-[var(--subtle)]">
+                Showing {sessionPageStart + 1}–{Math.min(sessionPageStart + SESSION_PAGE_SIZE, sessions?.length ?? 0)} of {sessions?.length ?? 0} sessions
+              </span>
+              <div className="flex items-center gap-[5px]">
+                {Array.from({ length: sessionPageCount }, (_, i) => i)
+                  .filter((i) => i >= safeSessionPage - 2 && i <= safeSessionPage + 2)
+                  .map((i) => {
+                    const active = i === safeSessionPage;
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => setSessionPage(i)}
+                        className="h-8 min-w-8 rounded-[7px] border px-2 text-[12.5px] font-semibold"
+                        style={
+                          active
+                            ? { borderColor: "var(--brand)", background: "var(--brand)", color: "var(--brandfg)" }
+                            : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
+                        }
+                      >
+                        {i + 1}
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* ROSTER */}
@@ -463,8 +514,11 @@ export function AttendanceContent({ role }: { role: Role }) {
                           {meta.label}
                         </span>
                         <button
-                          onClick={() => setWaId(r.studentId)}
-                          title="Message parent about attendance"
+                          onClick={() => {
+                            setRecipient("parent");
+                            setWaId(r.studentId);
+                          }}
+                          title="Message about attendance"
                           className="flex h-[34px] w-[34px] items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[#1ea952] hover:border-[var(--ok)] hover:bg-[var(--oks)]"
                         >
                           <Icon name="send" size={16} />
@@ -517,7 +571,7 @@ export function AttendanceContent({ role }: { role: Role }) {
                 <Icon name="send" size={19} />
               </div>
               <div className="min-w-0 flex-1">
-                <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Message parent · attendance</h3>
+                <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Message · attendance</h3>
                 <div className="text-[12px] text-[var(--muted)]">{activeSession?.title}</div>
               </div>
               <button onClick={() => setWaId(null)} className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]">
@@ -525,13 +579,31 @@ export function AttendanceContent({ role }: { role: Role }) {
               </button>
             </div>
             <div className="p-[18px]">
+              <div className="mb-[11px] flex gap-[6px] rounded-[9px] border border-[var(--border)] bg-[var(--surface2)] p-[3px]">
+                {(["student", "parent"] as Recipient[]).map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => setRecipient(r)}
+                    className="flex-1 rounded-[7px] py-[7px] text-[12.5px] font-semibold"
+                    style={{
+                      background: recipient === r ? "var(--surface)" : "transparent",
+                      color: recipient === r ? "var(--text)" : "var(--muted)",
+                      boxShadow: recipient === r ? "var(--shadow)" : "none",
+                    }}
+                  >
+                    {r === "student" ? "To student" : "To parent"}
+                  </button>
+                ))}
+              </div>
               <div className="mb-[14px] flex items-center gap-[11px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[11px_13px]">
                 <div className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-[var(--brands)] text-[12px] font-bold text-[var(--brand)]">
                   {waStudent.initials}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-[13.5px] font-semibold text-[var(--text)]">{waStudent.name.split(" ")[0]}&apos;s guardian</div>
-                  <div className="font-mono text-[12px] text-[var(--muted)]">{waStudent.guardianPhone ?? "No phone on file"}</div>
+                  <div className="text-[13.5px] font-semibold text-[var(--text)]">
+                    {recipient === "student" ? waStudent.name : `${waStudent.name.split(" ")[0]}'s guardian`}
+                  </div>
+                  <div className="font-mono text-[12px] text-[var(--muted)]">{waPhone ?? "No phone on file"}</div>
                 </div>
                 <span className="inline-flex flex-none items-center gap-[5px] rounded-full px-[9px] py-[4px] text-[11.5px] font-semibold" style={{ background: waToneColors.bg, color: waToneColors.fg }}>
                   <Icon name={waMeta.icon} size={12} />

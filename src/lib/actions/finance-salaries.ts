@@ -316,3 +316,166 @@ export async function setLineCalcMethod(lineId: string, method: "per_paper" | "b
     .eq("id", lineId);
   if (error) throw new Error(error.message);
 }
+
+export type AssistantDetailRow = {
+  assistantId: string;
+  assistantName: string;
+  email: string | null;
+  phone: string | null;
+  offering: string;
+  period: string;
+  papersChecked: number;
+  payMethod: string;
+  calcMethod: string | null;
+  base: number;
+  bonus: number;
+  bonusReason: string | null;
+  deduction: number;
+  deductionReason: string | null;
+  totalPayout: number;
+  status: "paid" | "pending";
+  evalRating: string | null;
+  evalNotes: string | null;
+  evalExtraTotal: number;
+  evalDeductionTotal: number;
+};
+
+export type AssistantSummaryRow = {
+  assistantId: string;
+  assistantName: string;
+  monthsActive: number;
+  totalPapersChecked: number;
+  avgPapersCheckedPerMonth: number;
+  totalBase: number;
+  totalBonus: number;
+  totalDeduction: number;
+  totalPayout: number;
+  totalEvalExtra: number;
+  totalEvalDeduction: number;
+  evaluationCount: number;
+};
+
+// Every salary line ever generated for this org, one row per
+// (assistant, course, month), joined with that same slice's evaluation
+// (extras/deductions/rating a head logged) and an authoritative
+// papers-checked count — not the freeform "basis" text, which Finance can
+// hand-edit and so can't be trusted for reporting. Used for the full
+// per-assistant CSV export; heads/assistants never see this — same access
+// as the rest of salary_lines (finance/admin only).
+export async function getAssistantDetailedExport(): Promise<{ detail: AssistantDetailRow[]; summary: AssistantSummaryRow[] }> {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) return { detail: [], summary: [] };
+  const orgId = profile.org.id;
+  const supabase = await createClient();
+
+  const { data: lines } = await supabase
+    .from("salary_lines")
+    .select(
+      "id, payee_id, offering_id, period, method, calc_method, base, bonus, deduction, bonus_reason, deduction_reason, status, pay_method, profiles(full_name, email, phone), course_offerings(session, unit, courses(name))"
+    )
+    .eq("org_id", orgId)
+    .order("period", { ascending: false });
+  if (!lines || lines.length === 0) return { detail: [], summary: [] };
+
+  const { data: evals } = await supabase
+    .from("evaluations")
+    .select("id, assistant_id, offering_id, period, rating, notes, evaluation_lines(kind, amount)")
+    .eq("org_id", orgId);
+
+  const evalKey = (assistantId: string, offeringId: string | null, period: string) => `${assistantId}::${offeringId}::${period}`;
+  const evalByKey = new Map<string, { rating: string | null; notes: string | null; extraTotal: number; deductionTotal: number }>();
+  for (const ev of evals ?? []) {
+    const lines2 = Array.isArray(ev.evaluation_lines) ? ev.evaluation_lines : [];
+    const extraTotal = lines2.filter((l) => l.kind === "extra").reduce((sum, l) => sum + Number(l.amount), 0);
+    const deductionTotal = lines2.filter((l) => l.kind === "deduction").reduce((sum, l) => sum + Number(l.amount), 0);
+    evalByKey.set(evalKey(ev.assistant_id, ev.offering_id, ev.period), { rating: ev.rating, notes: ev.notes, extraTotal, deductionTotal });
+  }
+
+  const detail: AssistantDetailRow[] = [];
+  const summaryAcc = new Map<
+    string,
+    { name: string; periods: Set<string>; papers: number; base: number; bonus: number; deduction: number; evalExtra: number; evalDeduction: number; evalCount: number }
+  >();
+
+  for (const l of lines) {
+    const payee = Array.isArray(l.profiles) ? l.profiles[0] : l.profiles;
+    if (!payee) continue;
+    const offering = Array.isArray(l.course_offerings) ? l.course_offerings[0] : l.course_offerings;
+    const course = offering ? (Array.isArray(offering.courses) ? offering.courses[0] : offering.courses) : null;
+    const offeringLabel2 = offering ? [course?.name, offering.session, offering.unit].filter(Boolean).join(" · ") : "—";
+
+    const papersChecked = l.offering_id ? await countCheckedPapers(supabase, l.offering_id, l.payee_id, l.period) : 0;
+    const ev = evalByKey.get(evalKey(l.payee_id, l.offering_id, l.period));
+    const base = Number(l.base);
+    const bonus = Number(l.bonus);
+    const deduction = Number(l.deduction);
+
+    detail.push({
+      assistantId: l.payee_id,
+      assistantName: payee.full_name,
+      email: payee.email ?? null,
+      phone: payee.phone ?? null,
+      offering: offeringLabel2,
+      period: l.period,
+      papersChecked,
+      payMethod: l.pay_method,
+      calcMethod: l.calc_method,
+      base,
+      bonus,
+      bonusReason: l.bonus_reason,
+      deduction,
+      deductionReason: l.deduction_reason,
+      totalPayout: base + bonus - deduction,
+      status: l.status as "paid" | "pending",
+      evalRating: ev?.rating ?? null,
+      evalNotes: ev?.notes ?? null,
+      evalExtraTotal: ev?.extraTotal ?? 0,
+      evalDeductionTotal: ev?.deductionTotal ?? 0,
+    });
+
+    const acc = summaryAcc.get(l.payee_id) ?? {
+      name: payee.full_name,
+      periods: new Set<string>(),
+      papers: 0,
+      base: 0,
+      bonus: 0,
+      deduction: 0,
+      evalExtra: 0,
+      evalDeduction: 0,
+      evalCount: 0,
+    };
+    acc.periods.add(l.period);
+    acc.papers += papersChecked;
+    acc.base += base;
+    acc.bonus += bonus;
+    acc.deduction += deduction;
+    if (ev) {
+      acc.evalExtra += ev.extraTotal;
+      acc.evalDeduction += ev.deductionTotal;
+      acc.evalCount += 1;
+    }
+    summaryAcc.set(l.payee_id, acc);
+  }
+
+  const summary: AssistantSummaryRow[] = Array.from(summaryAcc.entries())
+    .map(([assistantId, acc]) => {
+      const monthsActive = acc.periods.size;
+      return {
+        assistantId,
+        assistantName: acc.name,
+        monthsActive,
+        totalPapersChecked: acc.papers,
+        avgPapersCheckedPerMonth: monthsActive ? Math.round((acc.papers / monthsActive) * 10) / 10 : 0,
+        totalBase: acc.base,
+        totalBonus: acc.bonus,
+        totalDeduction: acc.deduction,
+        totalPayout: acc.base + acc.bonus - acc.deduction,
+        totalEvalExtra: acc.evalExtra,
+        totalEvalDeduction: acc.evalDeduction,
+        evaluationCount: acc.evalCount,
+      };
+    })
+    .sort((a, b) => a.assistantName.localeCompare(b.assistantName));
+
+  return { detail: detail.sort((a, b) => a.assistantName.localeCompare(b.assistantName) || b.period.localeCompare(a.period)), summary };
+}

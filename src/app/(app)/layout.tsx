@@ -6,6 +6,13 @@ import { listAllStaffingRequests } from "@/lib/actions/hr";
 import { getAssistantPendingLogCount } from "@/lib/actions/dashboard";
 import { getPlatformDefaultBranding } from "@/lib/actions/branding";
 
+// The tab title otherwise falls back to the root layout's static "ZAD-AMS" —
+// once inside an org, show that org's own name instead.
+export async function generateMetadata() {
+  const profile = await getCurrentProfile();
+  return { title: profile?.org?.name ?? "ZAD-AMS" };
+}
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
@@ -44,8 +51,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <AppShell
         navItems={navItems}
         person={{ name: profile.fullName, label: ROLE_LABELS[profile.role], initials: profile.initials, avatarUrl: profile.avatarUrl }}
-        brandName={profile.org?.brandName ?? platformBranding?.name ?? "RadAMS"}
-        logoLetter={profile.org?.logoLetter ?? (platformBranding?.name.trim()[0] ?? "R").toUpperCase()}
+        brandName={profile.org?.brandName ?? platformBranding?.name ?? "ZAD-AMS"}
+        logoLetter={profile.org?.logoLetter ?? (platformBranding?.name.trim()[0] ?? "Z").toUpperCase()}
         logoUrl={profile.org?.logoUrl ?? platformBranding?.logoUrl ?? null}
         orgName={profile.org?.name ?? null}
       >

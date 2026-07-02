@@ -43,7 +43,7 @@ export function OwnerSystemContent() {
       <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
         <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Owner · Platform</div>
         <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">System</h1>
-        <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">Platform-wide composition — who&apos;s on RadAMS and how organizations are doing.</p>
+        <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">Platform-wide composition — who&apos;s on ZAD-AMS and how organizations are doing.</p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

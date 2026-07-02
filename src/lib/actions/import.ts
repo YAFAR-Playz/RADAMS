@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { createPaymentPlan } from "@/lib/actions/payments";
+import { logActivity } from "@/lib/actions/activity-log";
 
 export type ImportRow = {
   name: string;
@@ -50,6 +51,8 @@ export async function importStudents(offeringId: string, rows: ImportRow[]): Pro
   for (const s of created) {
     await createPaymentPlan({ studentId: s.id, offeringId, planType: "full" });
   }
+
+  await logActivity("students", `Imported ${created.length} student${created.length === 1 ? "" : "s"}`);
 
   return { imported: created.length };
 }

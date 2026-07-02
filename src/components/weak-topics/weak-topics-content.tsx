@@ -6,7 +6,7 @@ import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import type { Role } from "@/lib/roles";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import {
-  listCoursesForOrg,
+  getOfferingCourse,
   listTopicCatalog,
   createTopic,
   updateTopic,
@@ -17,9 +17,11 @@ import {
   listPendingTopicApprovals,
   reviewTopicSubmission,
   type TopicOption,
+  type MaterialInput,
   type AssistantStudentTopics,
   type StudentTopicSubmission,
 } from "@/lib/actions/weak-topics";
+import { getMyStudentMonthlyComments, setStudentMonthlyComment } from "@/lib/actions/academic-report";
 
 function currentPeriod() {
   return new Date().toISOString().slice(0, 7);
@@ -30,6 +32,68 @@ const STATUS_TONE: Record<string, string> = {
   approved: "bg-[var(--oks)] text-[var(--ok)]",
   rejected: "bg-[var(--dangers)] text-[var(--danger)]",
 };
+
+function MaterialLinks({ materials }: { materials: { id: string; kind: "video" | "drive"; link: string; duration: string | null }[] }) {
+  if (materials.length === 0) return null;
+  return (
+    <>
+      {materials.map((m) => (
+        <a key={m.id} href={m.link} target="_blank" rel="noreferrer" className="text-[var(--brand)] hover:underline">
+          {m.kind === "video" ? "Video" : "Drive"}
+          {m.duration ? ` (${m.duration})` : ""}
+        </a>
+      ))}
+    </>
+  );
+}
+
+function MaterialsEditor({ materials, onChange }: { materials: MaterialInput[]; onChange: (m: MaterialInput[]) => void }) {
+  function update(i: number, patch: Partial<MaterialInput>) {
+    onChange(materials.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
+  }
+  function add() {
+    onChange([...materials, { kind: "video", link: "", duration: "" }]);
+  }
+  function remove(i: number) {
+    onChange(materials.filter((_, idx) => idx !== i));
+  }
+
+  return (
+    <div className="flex flex-col gap-[6px]">
+      {materials.map((m, i) => (
+        <div key={i} className="flex items-center gap-[6px]">
+          <select
+            value={m.kind}
+            onChange={(e) => update(i, { kind: e.target.value as "video" | "drive" })}
+            className="h-9 flex-none rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[8px] text-[12.5px] text-[var(--text)] outline-none"
+          >
+            <option value="video">Video</option>
+            <option value="drive">Drive</option>
+          </select>
+          <input
+            value={m.link}
+            onChange={(e) => update(i, { link: e.target.value })}
+            placeholder="Link"
+            className="h-9 min-w-0 flex-1 rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+          />
+          <input
+            value={m.duration}
+            onChange={(e) => update(i, { duration: e.target.value })}
+            placeholder="Duration"
+            className="h-9 w-[90px] flex-none rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+          />
+          <button onClick={() => remove(i)} className="flex h-9 w-9 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]">
+            <Icon name="x" size={14} />
+          </button>
+        </div>
+      ))}
+      <button onClick={add} className="flex h-8 w-fit items-center gap-[5px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px] text-[12px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)]">
+        <Icon name="plus" size={12} />
+        Add link
+      </button>
+    </div>
+  );
+}
 
 export function WeakTopicsContent({ role }: { role: Role }) {
   const [tab, setTab] = useState<"submit" | "catalog" | "approvals">(role === "assistant" ? "submit" : "catalog");
@@ -113,7 +177,7 @@ export function WeakTopicsContent({ role }: { role: Role }) {
       ) : role === "assistant" || tab === "submit" ? (
         <AssistantSubmitPanel offeringId={offeringId} period={period} setError={setError} />
       ) : tab === "catalog" ? (
-        <CatalogPanel setError={setError} />
+        <CatalogPanel offeringId={offeringId} setError={setError} />
       ) : (
         <ApprovalsPanel offeringId={offeringId} period={period} setError={setError} />
       )}
@@ -121,39 +185,37 @@ export function WeakTopicsContent({ role }: { role: Role }) {
   );
 }
 
-function CatalogPanel({ setError }: { setError: (e: string | null) => void }) {
-  const [courses, setCourses] = useState<{ id: string; name: string }[]>([]);
-  const [courseFilter, setCourseFilter] = useState("");
+function CatalogPanel({ offeringId, setError }: { offeringId: string; setError: (e: string | null) => void }) {
+  const [courseId, setCourseId] = useState<string | null>(null);
+  const [courseName, setCourseName] = useState<string>("");
   const [topics, setTopics] = useState<TopicOption[] | null>(null);
   const [label, setLabel] = useState("");
-  const [courseId, setCourseId] = useState("");
-  const [videoLink, setVideoLink] = useState("");
-  const [driveLink, setDriveLink] = useState("");
+  const [materials, setMaterials] = useState<MaterialInput[]>([]);
   const [busy, setBusy] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    listCoursesForOrg().then(setCourses);
-  }, []);
-
   function reload() {
+    if (!offeringId) return;
     setTopics(null);
-    listTopicCatalog(courseFilter || undefined).then(setTopics);
+    getOfferingCourse(offeringId).then((c) => {
+      setCourseId(c?.courseId ?? null);
+      setCourseName(c?.courseName ?? "");
+      listTopicCatalog(c?.courseId ?? undefined).then(setTopics);
+    });
   }
 
   useEffect(() => {
     (() => reload())();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courseFilter]);
+  }, [offeringId]);
 
   async function onCreate() {
     if (!label.trim()) return;
     setBusy(true);
     try {
-      await createTopic({ courseId: courseId || null, label, videoLink, driveLink });
+      await createTopic({ courseId, label, materials });
       setLabel("");
-      setVideoLink("");
-      setDriveLink("");
+      setMaterials([]);
       reload();
     } catch {
       setError("Couldn't create that topic — try again.");
@@ -177,53 +239,17 @@ function CatalogPanel({ setError }: { setError: (e: string | null) => void }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[16px_18px] shadow-[var(--shadow)]">
-        <div className="mb-3 flex flex-wrap items-center gap-[8px]">
-          <select
-            value={courseFilter}
-            onChange={(e) => setCourseFilter(e.target.value)}
-            className="h-9 rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none"
-          >
-            <option value="">All courses</option>
-            {courses.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+        <div className="mb-3 text-[12.5px] font-semibold text-[var(--muted)]">
+          Topics for <span className="text-[var(--text)]">{courseName || "this course"}</span>
         </div>
 
-        <div className="grid grid-cols-1 gap-[8px] sm:grid-cols-2 lg:grid-cols-5">
-          <input
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            placeholder="Topic label, e.g. Quadratic equations"
-            className="h-9 rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] lg:col-span-2"
-          />
-          <select
-            value={courseId}
-            onChange={(e) => setCourseId(e.target.value)}
-            className="h-9 rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none"
-          >
-            <option value="">No course</option>
-            {courses.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          <input
-            value={videoLink}
-            onChange={(e) => setVideoLink(e.target.value)}
-            placeholder="Video link (optional)"
-            className="h-9 rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
-          />
-          <input
-            value={driveLink}
-            onChange={(e) => setDriveLink(e.target.value)}
-            placeholder="Drive link (optional)"
-            className="h-9 rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
-          />
-        </div>
+        <input
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Topic label, e.g. Quadratic equations"
+          className="mb-[8px] h-9 w-full rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+        />
+        <MaterialsEditor materials={materials} onChange={setMaterials} />
         <button
           onClick={onCreate}
           disabled={!label.trim() || busy}
@@ -267,21 +293,16 @@ function CatalogPanel({ setError }: { setError: (e: string | null) => void }) {
                     <div>
                       <div className="text-[13.5px] font-semibold text-[var(--text)]">{t.label}</div>
                       <div className="mt-[2px] flex flex-wrap items-center gap-[10px] text-[12px] text-[var(--muted)]">
-                        {t.courseName && <span>{t.courseName}</span>}
-                        {t.videoLink && (
-                          <a href={t.videoLink} target="_blank" rel="noreferrer" className="text-[var(--brand)] hover:underline">
-                            Video
-                          </a>
-                        )}
-                        {t.driveLink && (
-                          <a href={t.driveLink} target="_blank" rel="noreferrer" className="text-[var(--brand)] hover:underline">
-                            Drive
-                          </a>
-                        )}
+                        <MaterialLinks materials={t.materials} />
                       </div>
                     </div>
                     <div className="flex items-center gap-[8px]">
-                      <button onClick={() => setEditingId(t.id)} className="text-[12.5px] font-semibold text-[var(--muted)] hover:text-[var(--text)]">
+                      <button
+                        onClick={() => {
+                          setEditingId(t.id);
+                        }}
+                        className="text-[12.5px] font-semibold text-[var(--muted)] hover:text-[var(--text)]"
+                      >
                         Edit
                       </button>
                       <button onClick={() => onDelete(t.id)} disabled={busy} className="text-[12.5px] font-semibold text-[var(--danger)] disabled:opacity-60">
@@ -305,38 +326,28 @@ function EditTopicRow({
   onCancel,
 }: {
   topic: TopicOption;
-  onSave: (patch: { label: string; videoLink: string; driveLink: string }) => void;
+  onSave: (patch: { label: string; materials: MaterialInput[] }) => void;
   onCancel: () => void;
 }) {
   const [label, setLabel] = useState(topic.label);
-  const [videoLink, setVideoLink] = useState(topic.videoLink ?? "");
-  const [driveLink, setDriveLink] = useState(topic.driveLink ?? "");
+  const [materials, setMaterials] = useState<MaterialInput[]>(topic.materials.map((m) => ({ kind: m.kind, link: m.link, duration: m.duration ?? "" })));
 
   return (
-    <div className="flex w-full flex-wrap items-center gap-[8px]">
+    <div className="flex w-full flex-col gap-[8px]">
       <input
         value={label}
         onChange={(e) => setLabel(e.target.value)}
-        className="h-9 flex-1 rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none"
+        className="h-9 w-full rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none"
       />
-      <input
-        value={videoLink}
-        onChange={(e) => setVideoLink(e.target.value)}
-        placeholder="Video link"
-        className="h-9 flex-1 rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none"
-      />
-      <input
-        value={driveLink}
-        onChange={(e) => setDriveLink(e.target.value)}
-        placeholder="Drive link"
-        className="h-9 flex-1 rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none"
-      />
-      <button onClick={() => onSave({ label, videoLink, driveLink })} className="h-9 rounded-[8px] bg-[var(--brand)] px-[12px] text-[12.5px] font-semibold text-[var(--brandfg)]">
-        Save
-      </button>
-      <button onClick={onCancel} className="h-9 rounded-[8px] border border-[var(--border)] px-[12px] text-[12.5px] font-semibold text-[var(--muted)]">
-        Cancel
-      </button>
+      <MaterialsEditor materials={materials} onChange={setMaterials} />
+      <div className="flex items-center gap-[8px]">
+        <button onClick={() => onSave({ label, materials })} className="h-9 rounded-[8px] bg-[var(--brand)] px-[12px] text-[12.5px] font-semibold text-[var(--brandfg)]">
+          Save
+        </button>
+        <button onClick={onCancel} className="h-9 rounded-[8px] border border-[var(--border)] px-[12px] text-[12.5px] font-semibold text-[var(--muted)]">
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }
@@ -346,11 +357,20 @@ function AssistantSubmitPanel({ offeringId, period, setError }: { offeringId: st
   const [catalog, setCatalog] = useState<TopicOption[] | null>(null);
   const [picks, setPicks] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [comments, setComments] = useState<Record<string, string>>({});
+  const [savedComments, setSavedComments] = useState<Record<string, string>>({});
+  const [savingComment, setSavingComment] = useState<string | null>(null);
 
   function reload() {
     if (!offeringId) return;
     setStudents(null);
     listStudentTopicsForOffering(offeringId, period).then(setStudents);
+    getMyStudentMonthlyComments(offeringId, period).then((c) => {
+      setComments(c);
+      setSavedComments(c);
+    });
+    setCatalog(null);
+    getOfferingCourse(offeringId).then((c) => listTopicCatalog(c?.courseId ?? undefined).then(setCatalog));
   }
 
   useEffect(() => {
@@ -358,9 +378,17 @@ function AssistantSubmitPanel({ offeringId, period, setError }: { offeringId: st
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offeringId, period]);
 
-  useEffect(() => {
-    listTopicCatalog().then(setCatalog);
-  }, []);
+  async function onSaveComment(studentId: string) {
+    setSavingComment(studentId);
+    try {
+      await setStudentMonthlyComment(studentId, offeringId, period, comments[studentId] ?? "");
+      setSavedComments((c) => ({ ...c, [studentId]: comments[studentId] ?? "" }));
+    } catch {
+      setError("Couldn't save that comment — try again.");
+    } finally {
+      setSavingComment(null);
+    }
+  }
 
   async function onSubmit(studentId: string) {
     const topicId = picks[studentId];
@@ -443,6 +471,22 @@ function AssistantSubmitPanel({ offeringId, period, setError }: { offeringId: st
                   ))}
                 </div>
               )}
+              <div className="flex items-start gap-[8px]">
+                <textarea
+                  value={comments[s.studentId] ?? ""}
+                  onChange={(e) => setComments((c) => ({ ...c, [s.studentId]: e.target.value }))}
+                  placeholder="Overall comment for this student this month — shown in the head's monthly report…"
+                  className="h-[54px] flex-1 resize-none rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] py-[7px] text-[12px] leading-[1.4] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+                />
+                <button
+                  onClick={() => onSaveComment(s.studentId)}
+                  disabled={(comments[s.studentId] ?? "") === (savedComments[s.studentId] ?? "") || savingComment === s.studentId}
+                  className="flex h-9 flex-none items-center gap-[6px] self-end rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px] text-[12px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
+                >
+                  {savingComment === s.studentId ? <Spinner size={13} /> : <Icon name="check" size={13} />}
+                  Save
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -496,7 +540,10 @@ function ApprovalsPanel({ offeringId, period, setError }: { offeringId: string; 
                 <div className="text-[13.5px] font-semibold text-[var(--text)]">
                   {it.studentName} <span className="font-normal text-[var(--muted)]">— {it.topicLabel}</span>
                 </div>
-                <div className="mt-[2px] text-[12px] text-[var(--muted)]">Submitted by {it.assistantName ?? "—"}</div>
+                <div className="mt-[2px] flex flex-wrap items-center gap-[10px] text-[12px] text-[var(--muted)]">
+                  <span>Submitted by {it.assistantName ?? "—"}</span>
+                  <MaterialLinks materials={it.materials} />
+                </div>
               </div>
               <div className="flex items-center gap-[8px]">
                 <span className={`rounded-full px-[10px] py-[4px] text-[12px] font-semibold ${STATUS_TONE[it.status]}`}>{it.status}</span>

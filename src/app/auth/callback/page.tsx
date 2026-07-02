@@ -9,7 +9,7 @@ export default function AuthCallbackPage() {
           <div className="flex h-[42px] w-[42px] items-center justify-center rounded-[12px] bg-[var(--brand)] text-[20px] font-bold tracking-[-0.02em] text-[var(--brandfg)]">
             R
           </div>
-          <span className="text-[22px] font-bold tracking-[-0.02em] text-[var(--text)]">RadAMS</span>
+          <span className="text-[22px] font-bold tracking-[-0.02em] text-[var(--text)]">ZAD-AMS</span>
         </div>
         <Suspense fallback={<p className="text-[14.5px] text-[var(--muted)]">Signing you in…</p>}>
           <AuthCallback />
@@ -20,5 +20,5 @@ export default function AuthCallbackPage() {
 }
 
 export function generateMetadata() {
-  return { title: "Signing in — RadAMS" };
+  return { title: "Signing in — ZAD-AMS" };
 }

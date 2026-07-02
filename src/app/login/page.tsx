@@ -10,7 +10,7 @@ const CHECKLIST = [
 
 export default async function LoginPage() {
   const branding = await getPlatformDefaultBranding();
-  const logoLetter = (branding.name.trim()[0] ?? "R").toUpperCase();
+  const logoLetter = (branding.name.trim()[0] ?? "Z").toUpperCase();
   const brandVars = {
     "--brand": branding.primary,
     "--brandfg": "#ffffff",

@@ -17,6 +17,8 @@ export type StaffingRequestDetail = {
   offeringLabel: string;
   reason: string | null;
   proposedDate: string | null;
+  leaveDate: string | null;
+  gaveNotice: boolean | null;
 };
 
 function offeringLabel(o: { session: string; unit: string | null; courses: { name: string } | { name: string }[] | null } | null) {
@@ -102,7 +104,7 @@ export async function listAllStaffingRequests(): Promise<StaffingRequestDetail[]
   const { data } = await supabase
     .from("staffing_requests")
     .select(
-      "id, kind, status, created_at, reason, proposed_date, candidate_name, candidate_phone, candidate_email, requested_by, profiles!staffing_requests_target_assistant_id_fkey(full_name), course_offerings(session, unit, courses(name))"
+      "id, kind, status, created_at, reason, proposed_date, leave_date, gave_notice, candidate_name, candidate_phone, candidate_email, requested_by, profiles!staffing_requests_target_assistant_id_fkey(full_name), course_offerings(session, unit, courses(name))"
     )
     .eq("org_id", profile.org.id)
     .order("created_at", { ascending: false });
@@ -130,6 +132,8 @@ export async function listAllStaffingRequests(): Promise<StaffingRequestDetail[]
       offeringLabel: offeringLabel(offering),
       reason: r.reason,
       proposedDate: r.proposed_date,
+      leaveDate: r.leave_date,
+      gaveNotice: r.gave_notice,
     };
   });
 }

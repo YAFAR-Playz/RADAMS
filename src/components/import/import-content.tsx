@@ -274,14 +274,14 @@ export function ImportContent() {
         <div className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
           <div className="border-b border-[var(--border2)] p-[16px_18px]">
             <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Map columns</h3>
-            <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">Match each column from your file to a RadAMS field.</p>
+            <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">Match each column from your file to a ZAD-AMS field.</p>
           </div>
           <div className="overflow-x-auto">
             <div className="min-w-[560px]">
               <div className="flex items-center gap-[14px] border-b border-[var(--border2)] p-[10px_18px] text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">
                 <span className="w-[170px] flex-none">File column</span>
                 <span className="w-[160px] flex-none">Sample</span>
-                <span className="flex-1">RadAMS field</span>
+                <span className="flex-1">ZAD-AMS field</span>
               </div>
               {headers.map((h, i) => (
                 <div key={h} className="flex items-center gap-[14px] border-b border-[var(--border2)] p-[12px_18px]">

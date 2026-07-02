@@ -13,6 +13,7 @@ import {
   setLineCalcMethod,
   uploadSalaryReceipt,
   getSalaryReceiptUrl,
+  getAssistantDetailedExport,
   type AssistantSalary,
 } from "@/lib/actions/finance-salaries";
 import { downloadCsv } from "@/lib/csv-export";
@@ -39,6 +40,7 @@ export function FinanceSalariesContent() {
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptSaving, setReceiptSaving] = useState(false);
   const [viewingReceiptId, setViewingReceiptId] = useState<string | null>(null);
+  const [exportingFull, setExportingFull] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -94,6 +96,76 @@ export function FinanceSalariesContent() {
       ["Name", "Pay method", "Status", "Total"],
       assistants.map((a) => [a.name, a.payMethod, a.status, total(a)])
     );
+  }
+
+  async function onExportFullHistory() {
+    setExportingFull(true);
+    try {
+      const { detail, summary } = await getAssistantDetailedExport();
+      const detailHeaders = [
+        "Assistant",
+        "Email",
+        "Phone",
+        "Course",
+        "Month",
+        "Papers checked",
+        "Pay method",
+        "Calc method",
+        "Base",
+        "Bonus",
+        "Bonus reason",
+        "Deduction",
+        "Deduction reason",
+        "Total payout",
+        "Status",
+        "Evaluation rating",
+        "Evaluation notes",
+        "Evaluation extras",
+        "Evaluation deductions",
+      ];
+      const detailRows = detail.map((r) => [
+        r.assistantName,
+        r.email ?? "",
+        r.phone ?? "",
+        r.offering,
+        r.period,
+        r.papersChecked,
+        r.payMethod,
+        r.calcMethod ?? "",
+        r.base,
+        r.bonus,
+        r.bonusReason ?? "",
+        r.deduction,
+        r.deductionReason ?? "",
+        r.totalPayout,
+        r.status,
+        r.evalRating ?? "",
+        r.evalNotes ?? "",
+        r.evalExtraTotal,
+        r.evalDeductionTotal,
+      ]);
+      const summaryRows = [
+        [],
+        ["ASSISTANT SUMMARY (all courses, all months)"],
+        ["Assistant", "Months active", "Total papers checked", "Avg papers/month", "Total base", "Total bonus", "Total deduction", "Total payout", "Total eval extras", "Total eval deductions", "Evaluations"],
+        ...summary.map((s) => [
+          s.assistantName,
+          s.monthsActive,
+          s.totalPapersChecked,
+          s.avgPapersCheckedPerMonth,
+          s.totalBase,
+          s.totalBonus,
+          s.totalDeduction,
+          s.totalPayout,
+          s.totalEvalExtra,
+          s.totalEvalDeduction,
+          s.evaluationCount,
+        ]),
+      ];
+      downloadCsv("assistants-full-history", detailHeaders, [...detailRows, ...summaryRows]);
+    } finally {
+      setExportingFull(false);
+    }
   }
 
   async function onGenerate() {
@@ -238,6 +310,15 @@ export function FinanceSalariesContent() {
             >
               <Icon name="file-up" size={16} />
               Export CSV
+            </button>
+            <button
+              onClick={onExportFullHistory}
+              disabled={exportingFull}
+              title="Every assistant's full salary, evaluation and papers-checked history across every course and month"
+              className="flex h-10 flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-[14px] text-[13px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
+            >
+              {exportingFull ? <Spinner size={15} /> : <Icon name="file-up" size={16} />}
+              Export full history
             </button>
           </div>
         </div>

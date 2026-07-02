@@ -5,10 +5,14 @@ import { getCurrentProfile } from "@/lib/current-profile";
 import { TEMPLATE_DEFS, type TemplateKey } from "@/lib/template-defs";
 import { applyTemplateVars } from "@/lib/message-vars";
 
+function emptyTemplateRecord(): Record<TemplateKey, string | null> {
+  return Object.fromEntries(TEMPLATE_DEFS.map((t) => [t.key, null])) as Record<TemplateKey, string | null>;
+}
+
 export async function getOrgTemplates(): Promise<Record<TemplateKey, string | null>> {
   const profile = await getCurrentProfile();
   const orgId = profile?.org?.id;
-  const result: Record<TemplateKey, string | null> = { assignment: null, attendance: null, payment: null, welcome: null };
+  const result = emptyTemplateRecord();
   if (!orgId) return result;
   const supabase = await createClient();
   const { data } = await supabase.from("message_templates").select("key, body").eq("org_id", orgId);
@@ -33,7 +37,7 @@ export async function getEffectiveTemplate(key: TemplateKey): Promise<string> {
 }
 
 export async function getPlatformTemplates(): Promise<Record<TemplateKey, string | null>> {
-  const result: Record<TemplateKey, string | null> = { assignment: null, attendance: null, payment: null, welcome: null };
+  const result = emptyTemplateRecord();
   const supabase = await createClient();
   const { data } = await supabase.from("platform_message_templates").select("key, body");
   for (const row of data ?? []) {
@@ -67,7 +71,7 @@ export async function renderTemplate(key: TemplateKey, vars: Record<string, stri
 
 export async function getOrgBrandName(): Promise<string> {
   const profile = await getCurrentProfile();
-  return profile?.org?.name ?? "RadAMS";
+  return profile?.org?.name ?? "ZAD-AMS";
 }
 
 export async function saveOrgTemplate(key: TemplateKey, body: string) {

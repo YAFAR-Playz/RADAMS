@@ -15,15 +15,8 @@ export type StaffMember = {
   role: Role;
   joinedAt: string;
   courses: string[];
+  offeringIds: string[];
   isMainAdmin: boolean;
-};
-
-export type PendingRequest = {
-  id: string;
-  kind: "add" | "remove" | "replace";
-  title: string;
-  detail: string;
-  status: string;
 };
 
 function offeringLabel(o: { session: string; unit: string | null; courses: { name: string } | { name: string }[] | null }) {
@@ -51,30 +44,29 @@ export async function listStaff(): Promise<StaffMember[]> {
   const assistants = (profiles ?? []).filter((p) => p.role === "assistant").map((p) => p.id);
 
   const coursesByProfile = new Map<string, string[]>();
+  const offeringIdsByProfile = new Map<string, string[]>();
   if (heads.length) {
     const { data } = await supabase
       .from("offering_heads")
-      .select("head_id, course_offerings(session, unit, courses(name))")
+      .select("head_id, offering_id, course_offerings(session, unit, courses(name))")
       .in("head_id", heads);
     for (const row of data ?? []) {
       const o = Array.isArray(row.course_offerings) ? row.course_offerings[0] : row.course_offerings;
       if (!o) continue;
-      const list = coursesByProfile.get(row.head_id) ?? [];
-      list.push(offeringLabel(o));
-      coursesByProfile.set(row.head_id, list);
+      coursesByProfile.set(row.head_id, [...(coursesByProfile.get(row.head_id) ?? []), offeringLabel(o)]);
+      offeringIdsByProfile.set(row.head_id, [...(offeringIdsByProfile.get(row.head_id) ?? []), row.offering_id]);
     }
   }
   if (assistants.length) {
     const { data } = await supabase
       .from("offering_assistants")
-      .select("assistant_id, course_offerings(session, unit, courses(name))")
+      .select("assistant_id, offering_id, course_offerings(session, unit, courses(name))")
       .in("assistant_id", assistants);
     for (const row of data ?? []) {
       const o = Array.isArray(row.course_offerings) ? row.course_offerings[0] : row.course_offerings;
       if (!o) continue;
-      const list = coursesByProfile.get(row.assistant_id) ?? [];
-      list.push(offeringLabel(o));
-      coursesByProfile.set(row.assistant_id, list);
+      coursesByProfile.set(row.assistant_id, [...(coursesByProfile.get(row.assistant_id) ?? []), offeringLabel(o)]);
+      offeringIdsByProfile.set(row.assistant_id, [...(offeringIdsByProfile.get(row.assistant_id) ?? []), row.offering_id]);
     }
   }
 
@@ -87,6 +79,7 @@ export async function listStaff(): Promise<StaffMember[]> {
     role: p.role as Role,
     joinedAt: p.created_at,
     courses: coursesByProfile.get(p.id) ?? [],
+    offeringIds: offeringIdsByProfile.get(p.id) ?? [],
     isMainAdmin: !!p.is_main_admin,
   }));
 }
@@ -201,27 +194,6 @@ export async function getLoginAsLink(targetProfileId: string, redirectTo: string
   }
 
   return { url: data.properties.action_link };
-}
-
-export async function listPendingRequests(): Promise<PendingRequest[]> {
-  const profile = await getCurrentProfile();
-  if (!profile || !profile.org) return [];
-  const supabase = await createClient();
-
-  const { data } = await supabase
-    .from("staffing_requests")
-    .select("id, kind, status, candidate_name, reason, profiles!staffing_requests_target_assistant_id_fkey(full_name), course_offerings(session, unit, courses(name))")
-    .eq("org_id", profile.org.id)
-    .order("created_at", { ascending: false });
-
-  return (data ?? []).map((r) => {
-    const target = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles;
-    const offering = Array.isArray(r.course_offerings) ? r.course_offerings[0] : r.course_offerings;
-    const title = r.kind === "add" ? "New assistant requested" : r.kind === "remove" ? "Removal requested" : "Replacement requested";
-    const who = r.candidate_name || target?.full_name || "—";
-    const detail = `${who} · ${offering ? offeringLabel(offering) : "—"}`;
-    return { id: r.id, kind: r.kind as PendingRequest["kind"], title, detail, status: r.status };
-  });
 }
 
 export async function resolveStaffingRequest(id: string, status: "approved" | "declined") {

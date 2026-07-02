@@ -43,7 +43,7 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
           .eq("id", true)
           .single();
         logoUrl = logoUrl ?? platformSettings?.default_logo_url ?? null;
-        brandName = brandName ?? platformSettings?.default_brand_name ?? "RadAMS";
+        brandName = brandName ?? platformSettings?.default_brand_name ?? "ZAD-AMS";
         primaryColor = primaryColor ?? platformSettings?.default_primary_color ?? "#2563eb";
         corner = corner ?? (platformSettings?.default_corner as "soft" | "sharp" | undefined) ?? "soft";
       }
@@ -51,7 +51,7 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
         id: orgRow.id,
         name: orgRow.name,
         brandName,
-        logoLetter: (brandName.trim()[0] ?? "R").toUpperCase(),
+        logoLetter: (brandName.trim()[0] ?? "Z").toUpperCase(),
         logoUrl,
         primaryColor,
         corner,

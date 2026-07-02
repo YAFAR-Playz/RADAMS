@@ -9,15 +9,14 @@ import {
   createStaffMember,
   updateStaffMember,
   removeStaffMember,
-  listPendingRequests,
   resolveStaffingRequest,
   getLoginAsLink,
   getAssignedOfferingIds,
   setStaffCourses,
   assignStaffToCourses,
   type StaffMember,
-  type PendingRequest,
 } from "@/lib/actions/staff";
+import { listAllStaffingRequests, type StaffingRequestDetail } from "@/lib/actions/hr";
 import { listAllOfferingsForOrg, type OfferingChoice } from "@/lib/actions/students";
 import { downloadCsv } from "@/lib/csv-export";
 
@@ -48,12 +47,14 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
   const isHr = viewerRole === "hr";
   const roleOptions = isHr ? HR_ROLE_OPTIONS : ADMIN_ROLE_OPTIONS;
   const [staff, setStaff] = useState<StaffMember[] | null>(null);
-  const [requests, setRequests] = useState<PendingRequest[] | null>(null);
+  const [requests, setRequests] = useState<StaffingRequestDetail[] | null>(null);
+  const [viewingRequest, setViewingRequest] = useState<StaffingRequestDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Role | "all">("all");
+  const [courseFilter, setCourseFilter] = useState<string>("all");
   const [page, setPage] = useState(0);
   const [open, setOpen] = useState<Record<string, boolean>>({});
 
@@ -74,7 +75,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
   async function reload() {
     setLoading(true);
     try {
-      const [s, r, o] = await Promise.all([listStaff(), listPendingRequests(), listAllOfferingsForOrg()]);
+      const [s, r, o] = await Promise.all([listStaff(), listAllStaffingRequests(), listAllOfferingsForOrg()]);
       setStaff(s);
       setRequests(r);
       setOfferings(o);
@@ -97,10 +98,11 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
     return staff.filter((u) => {
       if (isHr && (u.role === "admin" || u.role === "owner")) return false;
       if (filter !== "all" && u.role !== filter) return false;
+      if (courseFilter !== "all" && !u.offeringIds.includes(courseFilter)) return false;
       if (q && !u.name.toLowerCase().includes(q) && !u.role.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [staff, search, filter, isHr]);
+  }, [staff, search, filter, courseFilter, isHr]);
 
   const STAFF_PAGE_SIZE = 10;
   const pageCount = Math.max(1, Math.ceil(filtered.length / STAFF_PAGE_SIZE));
@@ -280,33 +282,45 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
             <span className="rounded-full bg-[var(--warns)] px-2 py-[2px] text-[11px] font-bold text-[var(--warn)]">{pendingRequests.length} pending</span>
           </header>
           <div className="p-[7px_8px]">
-            {pendingRequests.map((r) => (
-              <div key={r.id} className="flex flex-wrap items-center gap-3 rounded-[10px] p-[10px_11px] hover:bg-[var(--surface2)]">
-                <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] bg-[var(--surface2)] text-[var(--text)]">
-                  <Icon name={r.kind === "add" ? "user-plus" : r.kind === "remove" ? "x" : "users"} size={16} />
+            {pendingRequests.map((r) => {
+              const title = r.kind === "add" ? "New assistant requested" : r.kind === "remove" ? "Removal requested" : "Replacement requested";
+              const who = r.candidateName ?? r.targetName ?? "—";
+              return (
+                <div key={r.id} className="flex flex-wrap items-center gap-3 rounded-[10px] p-[10px_11px] hover:bg-[var(--surface2)]">
+                  <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] bg-[var(--surface2)] text-[var(--text)]">
+                    <Icon name={r.kind === "add" ? "user-plus" : r.kind === "remove" ? "x" : "users"} size={16} />
+                  </div>
+                  <div className="min-w-[150px] flex-1">
+                    <div className="text-[13px] font-semibold text-[var(--text)]">{title}</div>
+                    <div className="text-[12px] text-[var(--subtle)]">
+                      {who} · {r.offeringLabel}
+                    </div>
+                  </div>
+                  <div className="flex flex-none gap-[7px]">
+                    <button
+                      onClick={() => setViewingRequest(r)}
+                      className="rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[13px] py-[7px] text-[12px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)]"
+                    >
+                      View details
+                    </button>
+                    <button
+                      onClick={() => onResolve(r.id, "approved")}
+                      disabled={resolvingId === r.id}
+                      className="rounded-[8px] bg-[var(--brand)] px-[13px] py-[7px] text-[12px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => onResolve(r.id, "declined")}
+                      disabled={resolvingId === r.id}
+                      className="rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[13px] py-[7px] text-[12px] font-semibold text-[var(--muted)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] hover:text-[var(--danger)] disabled:opacity-60"
+                    >
+                      Decline
+                    </button>
+                  </div>
                 </div>
-                <div className="min-w-[150px] flex-1">
-                  <div className="text-[13px] font-semibold text-[var(--text)]">{r.title}</div>
-                  <div className="text-[12px] text-[var(--subtle)]">{r.detail}</div>
-                </div>
-                <div className="flex flex-none gap-[7px]">
-                  <button
-                    onClick={() => onResolve(r.id, "approved")}
-                    disabled={resolvingId === r.id}
-                    className="rounded-[8px] bg-[var(--brand)] px-[13px] py-[7px] text-[12px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
-                  >
-                    Approve
-                  </button>
-                  <button
-                    onClick={() => onResolve(r.id, "declined")}
-                    disabled={resolvingId === r.id}
-                    className="rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[13px] py-[7px] text-[12px] font-semibold text-[var(--muted)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] hover:text-[var(--danger)] disabled:opacity-60"
-                  >
-                    Decline
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       )}
@@ -325,10 +339,25 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
             className="h-full w-full border-none bg-transparent text-[13.5px] text-[var(--text)] outline-none"
           />
         </div>
+        <select
+          value={courseFilter}
+          onChange={(e) => {
+            setCourseFilter(e.target.value);
+            setPage(0);
+          }}
+          className="h-10 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] text-[var(--text)] outline-none"
+        >
+          <option value="all">All courses</option>
+          {(offerings ?? []).map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.label}
+            </option>
+          ))}
+        </select>
         <div className="flex flex-wrap items-center gap-[6px]">
           {(isHr
             ? (["all", "head", "assistant", "finance", "registration"] as const)
-            : (["all", "admin", "head", "assistant", "finance"] as const)
+            : (["all", "admin", "hr", "head", "assistant", "registration", "finance"] as const)
           ).map((v) => {
             const active = filter === v;
             return (
@@ -638,6 +667,93 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
                 {removingId === removeTarget.id ? <Spinner size={15} /> : <Icon name="x" size={15} />}
                 Remove user
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewingRequest && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(8,12,22,0.5)] p-5">
+          <div className="w-full max-w-[440px] overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(8,12,22,.34)]">
+            <div className="flex items-center gap-[11px] border-b border-[var(--border2)] p-[16px_18px]">
+              <div className="min-w-0 flex-1">
+                <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Request details</h3>
+                <div className="text-[12px] text-[var(--muted)]">
+                  Requested by {viewingRequest.requestedByName ?? "—"} · {new Date(viewingRequest.createdAt).toLocaleDateString()}
+                </div>
+              </div>
+              <button onClick={() => setViewingRequest(null)} className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]">
+                <Icon name="x" size={18} />
+              </button>
+            </div>
+            <div className="flex flex-col gap-[13px] p-[18px]">
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Course</div>
+                <div className="text-[13.5px] text-[var(--text)]">{viewingRequest.offeringLabel}</div>
+              </div>
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">{viewingRequest.kind === "add" ? "Candidate" : "Staff member"}</div>
+                <div className="text-[13.5px] text-[var(--text)]">{viewingRequest.candidateName ?? viewingRequest.targetName ?? "—"}</div>
+              </div>
+              {viewingRequest.candidatePhone && (
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Phone</div>
+                  <div className="font-mono text-[13.5px] text-[var(--text)]">{viewingRequest.candidatePhone}</div>
+                </div>
+              )}
+              {viewingRequest.candidateEmail && (
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Email</div>
+                  <div className="text-[13.5px] text-[var(--text)]">{viewingRequest.candidateEmail}</div>
+                </div>
+              )}
+              {viewingRequest.kind === "replace" && viewingRequest.leaveDate && (
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Leave date (outgoing)</div>
+                  <div className="text-[13.5px] text-[var(--text)]">{new Date(viewingRequest.leaveDate).toLocaleDateString()}</div>
+                </div>
+              )}
+              {viewingRequest.proposedDate && (
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">
+                    {viewingRequest.kind === "remove" ? "Leave date" : viewingRequest.kind === "replace" ? "Proposed start (incoming)" : "Proposed start"}
+                  </div>
+                  <div className="text-[13.5px] text-[var(--text)]">{new Date(viewingRequest.proposedDate).toLocaleDateString()}</div>
+                </div>
+              )}
+              {(viewingRequest.kind === "remove" || viewingRequest.kind === "replace") && viewingRequest.gaveNotice !== null && (
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Gave two weeks&apos; notice</div>
+                  <div className="text-[13.5px] text-[var(--text)]">{viewingRequest.gaveNotice ? "Yes" : "No"}</div>
+                </div>
+              )}
+              {viewingRequest.reason && (
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Reason</div>
+                  <div className="text-[13.5px] leading-[1.5] text-[var(--text)]">{viewingRequest.reason}</div>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-[10px] border-t border-[var(--border2)] p-[14px_18px]">
+              <button
+                onClick={() => setViewingRequest(null)}
+                className="h-11 flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]"
+              >
+                Close
+              </button>
+              {viewingRequest.status === "pending" && (
+                <button
+                  onClick={() => {
+                    onResolve(viewingRequest.id, "approved");
+                    setViewingRequest(null);
+                  }}
+                  disabled={resolvingId === viewingRequest.id}
+                  className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+                >
+                  <Icon name="check" size={15} />
+                  Approve
+                </button>
+              )}
             </div>
           </div>
         </div>

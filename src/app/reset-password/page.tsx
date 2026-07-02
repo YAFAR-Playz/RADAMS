@@ -4,7 +4,7 @@ import { getPlatformDefaultBranding } from "@/lib/actions/branding";
 
 export default async function ResetPasswordPage() {
   const branding = await getPlatformDefaultBranding();
-  const logoLetter = (branding.name.trim()[0] ?? "R").toUpperCase();
+  const logoLetter = (branding.name.trim()[0] ?? "Z").toUpperCase();
   const brandVars = {
     "--brand": branding.primary,
     "--brandfg": "#ffffff",
@@ -33,5 +33,5 @@ export default async function ResetPasswordPage() {
 }
 
 export function generateMetadata() {
-  return { title: "Reset password — RadAMS" };
+  return { title: "Reset password — ZAD-AMS" };
 }
