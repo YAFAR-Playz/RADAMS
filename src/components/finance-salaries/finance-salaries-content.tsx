@@ -17,6 +17,7 @@ import {
   type AssistantSalary,
 } from "@/lib/actions/finance-salaries";
 import { downloadCsv } from "@/lib/csv-export";
+import { consumeSearchHandoff } from "@/lib/search-handoff";
 
 const CURRENCY_SYMBOL: Record<string, string> = { GBP: "£", USD: "$", EUR: "€", EGP: "E£", AED: "د.إ" };
 
@@ -41,8 +42,13 @@ export function FinanceSalariesContent() {
   const [receiptSaving, setReceiptSaving] = useState(false);
   const [viewingReceiptId, setViewingReceiptId] = useState<string | null>(null);
   const [exportingFull, setExportingFull] = useState(false);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
+    (() => {
+      const handoff = consumeSearchHandoff();
+      if (handoff) setSearch(handoff);
+    })();
     (async () => {
       const [p, settings] = await Promise.all([listPeriods(), getPayrollSettings()]);
       setPeriods(p);
@@ -251,6 +257,10 @@ export function FinanceSalariesContent() {
   const totalPayroll = (assistants ?? []).reduce((sum, a) => sum + total(a), 0);
   const paidAmt = (assistants ?? []).filter((a) => a.status === "paid").reduce((sum, a) => sum + total(a), 0);
   const pendingCount = (assistants ?? []).filter((a) => a.status !== "paid").length;
+  const q = search.trim().toLowerCase();
+  const visibleAssistants = (assistants ?? []).filter(
+    (a) => !q || a.name.toLowerCase().includes(q) || a.lines.some((l) => l.offering.toLowerCase().includes(q))
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -350,8 +360,25 @@ export function FinanceSalariesContent() {
         <div className="flex items-start gap-[10px] border-b border-[var(--border2)] bg-[var(--infos)] p-[11px_18px]">
           <Icon name="trend" size={16} className="mt-[1px] flex-none text-[var(--info)]" />
           <span className="text-[12px] leading-[1.45] text-[var(--text)]">
-            Amounts are editable before you release payment — bonus/deduction reasons show up on the assistant&apos;s own view too.
+            Amounts are editable before you release payment — bonus/deduction reasons show up on the assistant&apos;s own view too. Only assistants with a
+            checked paper due in this month appear — someone missing usually just has nothing due yet this period.
           </span>
+        </div>
+        <div className="flex items-center gap-2 border-b border-[var(--border2)] p-[11px_18px]">
+          <div className="flex h-9 w-full max-w-[320px] items-center gap-[8px] rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[11px]">
+            <Icon name="search" size={15} className="flex-none text-[var(--subtle)]" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search assistant or course…"
+              className="h-full w-full border-none bg-transparent text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--subtle)]"
+            />
+            {search && (
+              <button onClick={() => setSearch("")} className="flex-none text-[var(--subtle)]">
+                <Icon name="x" size={13} />
+              </button>
+            )}
+          </div>
         </div>
 
         {loading && !assistants ? (
@@ -362,8 +389,10 @@ export function FinanceSalariesContent() {
           </div>
         ) : !assistants || assistants.length === 0 ? (
           <div className="p-10 text-center text-[13.5px] text-[var(--muted)]">No salary lines for this period yet.</div>
+        ) : visibleAssistants.length === 0 ? (
+          <div className="p-10 text-center text-[13.5px] text-[var(--muted)]">No assistants match your search.</div>
         ) : (
-          assistants.map((a) => {
+          visibleAssistants.map((a) => {
             const expanded = !!open[a.payeeId];
             const t = total(a);
             return (
@@ -430,7 +459,7 @@ export function FinanceSalariesContent() {
                       <div key={l.id} className="border-b border-[var(--border2)] p-[11px_18px]">
                         <div className="flex flex-wrap items-center gap-[10px_12px]">
                           <span className="w-[148px] flex-none text-[12.5px] font-semibold text-[var(--text)]">{l.offering}</span>
-                          <div className="flex h-7 flex-none items-center rounded-full bg-[var(--infos)] px-[9px]">
+                          <div className="flex h-7 flex-none items-center gap-[4px] rounded-full bg-[var(--infos)] pl-[9px] pr-[4px]">
                             <select
                               value={l.calcMethod ?? "manual"}
                               onChange={(e) => onChangeCalcMethod(l.id, e.target.value as "per_paper" | "bracket" | "manual")}
@@ -442,11 +471,22 @@ export function FinanceSalariesContent() {
                               <option value="bracket">Bracket</option>
                               <option value="manual">Manual</option>
                             </select>
+                            {l.offeringId && l.calcMethod !== "manual" && (
+                              <button
+                                onClick={() => onChangeCalcMethod(l.id, l.calcMethod ?? "bracket")}
+                                disabled={busyId === l.id}
+                                title="Recalculate from current rates/brackets"
+                                className="flex h-5 w-5 flex-none items-center justify-center rounded-full text-[var(--info)] hover:bg-[rgba(0,0,0,0.06)] disabled:opacity-60"
+                              >
+                                <Icon name="clock" size={11} />
+                              </button>
+                            )}
                           </div>
                           <span className="min-w-[120px] flex-1 text-[12.5px] text-[var(--muted)]">{l.basis}</span>
                           <div className="flex h-8 w-20 flex-none items-center gap-[1px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[7px]">
                             <span className="text-[11px] font-bold text-[var(--subtle)]">{sym}</span>
                             <input
+                              key={`base-${l.id}-${l.base}`}
                               defaultValue={l.base}
                               onBlur={(e) => onEditLine(l.id, { base: Number(e.target.value.replace(/[^0-9]/g, "")) || 0 })}
                               inputMode="numeric"
@@ -456,6 +496,7 @@ export function FinanceSalariesContent() {
                           <div className="flex h-8 w-[78px] flex-none items-center gap-[1px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[7px]">
                             <span className="text-[11px] font-bold text-[var(--ok)]">+{sym}</span>
                             <input
+                              key={`bonus-${l.id}-${l.bonus}`}
                               defaultValue={l.bonus}
                               onBlur={(e) => onEditLine(l.id, { bonus: Number(e.target.value.replace(/[^0-9]/g, "")) || 0 })}
                               inputMode="numeric"
@@ -465,6 +506,7 @@ export function FinanceSalariesContent() {
                           <div className="flex h-8 w-[82px] flex-none items-center gap-[1px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[7px]">
                             <span className="text-[11px] font-bold text-[var(--danger)]">−{sym}</span>
                             <input
+                              key={`deduction-${l.id}-${l.deduction}`}
                               defaultValue={l.deduction}
                               onBlur={(e) => onEditLine(l.id, { deduction: Number(e.target.value.replace(/[^0-9]/g, "")) || 0 })}
                               inputMode="numeric"
@@ -476,12 +518,14 @@ export function FinanceSalariesContent() {
                         </div>
                         <div className="mt-2 flex flex-wrap gap-2">
                           <input
+                            key={`bonus-reason-${l.id}-${l.bonusReason ?? ""}`}
                             defaultValue={l.bonusReason ?? ""}
                             onBlur={(e) => onEditLine(l.id, { bonusReason: e.target.value })}
                             placeholder="Reason for bonus…"
                             className="h-[34px] min-w-[200px] flex-1 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[10px] text-[12px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
                           />
                           <input
+                            key={`deduction-reason-${l.id}-${l.deductionReason ?? ""}`}
                             defaultValue={l.deductionReason ?? ""}
                             onBlur={(e) => onEditLine(l.id, { deductionReason: e.target.value })}
                             placeholder="Reason for deduction…"

@@ -19,6 +19,7 @@ import {
 import { applyOfferingFeeChangeToPlans } from "@/lib/actions/payments";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
 import { currencySymbol } from "@/lib/currency";
+import { consumeSearchHandoff } from "@/lib/search-handoff";
 
 type ScheduleDraftRow = { seq: number; amount: string; dueDate: string };
 
@@ -60,12 +61,16 @@ export function CoursesContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sym, setSym] = useState("£");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
+    (() => {
+      const handoff = consumeSearchHandoff();
+      if (handoff) setSearch(handoff);
+    })();
     getPayrollSettings().then((settings) => setSym(currencySymbol(settings?.currency)));
   }, []);
 
-  const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "inactive">("all");
   const [page, setPage] = useState(0);
 

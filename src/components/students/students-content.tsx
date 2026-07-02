@@ -28,6 +28,7 @@ import { downloadCsv } from "@/lib/csv-export";
 import { getEffectiveTemplate, getOrgBrandName } from "@/lib/actions/templates";
 import { getOfferingParentWhatsappLink } from "@/lib/actions/assistant-groups";
 import { applyTemplateVars } from "@/lib/message-vars";
+import { consumeSearchHandoff } from "@/lib/search-handoff";
 import { autoAssignUnassigned } from "@/lib/actions/assistant-groups";
 import { getPaymentStatusForOffering, type PaymentStatusSummary } from "@/lib/actions/payments";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
@@ -87,6 +88,10 @@ export function StudentsContent({ role }: { role: Role }) {
   const [sym, setSym] = useState("£");
 
   useEffect(() => {
+    (() => {
+      const handoff = consumeSearchHandoff();
+      if (handoff) setSearch(handoff);
+    })();
     listMyOfferings().then((data) => {
       setOfferings(data);
       setOfferingId(data[0]?.id ?? null);
