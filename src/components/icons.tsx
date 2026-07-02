@@ -45,6 +45,7 @@ import {
   ArrowRight,
   Eye,
   EyeOff,
+  Target,
   type LucideIcon,
 } from "lucide-react";
 
@@ -94,6 +95,7 @@ export const ICONS = {
   "arrow-r": ArrowRight,
   eye: Eye,
   "eye-off": EyeOff,
+  target: Target,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;

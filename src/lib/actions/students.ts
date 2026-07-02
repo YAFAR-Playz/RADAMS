@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
+import { logActivity } from "@/lib/actions/activity-log";
 
 export type ProgressCell = { assignmentTitle: string; status: string | null };
 
@@ -191,31 +192,6 @@ export async function reassignStudentAssistant(enrollmentId: string, assistantId
   if (error) throw new Error(error.message);
 }
 
-export type TopicFlag = { id: string; topic: string };
-
-export async function listTopicFlags(studentId: string): Promise<TopicFlag[]> {
-  const supabase = await createClient();
-  const { data } = await supabase.from("student_topic_flags").select("id, topic").eq("student_id", studentId).order("created_at");
-  return (data ?? []).map((r) => ({ id: r.id, topic: r.topic }));
-}
-
-export async function addTopicFlag(studentId: string, topic: string) {
-  const profile = await getCurrentProfile();
-  if (!profile || !profile.org) throw new Error("Not authenticated");
-  if (!topic.trim()) return;
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("student_topic_flags")
-    .insert({ org_id: profile.org.id, student_id: studentId, topic: topic.trim(), created_by: profile.id });
-  if (error) throw new Error(error.message);
-}
-
-export async function removeTopicFlag(id: string) {
-  const supabase = await createClient();
-  const { error } = await supabase.from("student_topic_flags").delete().eq("id", id);
-  if (error) throw new Error(error.message);
-}
-
 export async function updateStudent(
   studentId: string,
   patch: {
@@ -240,4 +216,5 @@ export async function updateStudent(
     })
     .eq("id", studentId);
   if (error) throw new Error(error.message);
+  await logActivity("students", `Updated ${patch.name}${patch.left ? " — marked as left" : ""}`);
 }

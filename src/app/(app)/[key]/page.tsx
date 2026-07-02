@@ -30,6 +30,9 @@ import { OwnerBrandingContent } from "@/components/owner-branding/owner-branding
 import { SettingsContent } from "@/components/settings/settings-content";
 import { OwnerUsersContent } from "@/components/owner-users/owner-users-content";
 import { OwnerSystemContent } from "@/components/owner-system/owner-system-content";
+import { HistoryContent } from "@/components/history/history-content";
+import { MonthlyReportContent } from "@/components/monthly-report/monthly-report-content";
+import { WeakTopicsContent } from "@/components/weak-topics/weak-topics-content";
 
 export default async function AppPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
@@ -133,8 +136,20 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
     return <OwnerBrandingContent />;
   }
 
+  if (key === "history" && profile.role === "admin") {
+    return <HistoryContent />;
+  }
+
+  if (key === "report" && (profile.role === "admin" || profile.role === "head")) {
+    return <MonthlyReportContent />;
+  }
+
   if (key === "evaluations" && profile.role === "head") {
     return <EvaluationsContent />;
+  }
+
+  if (key === "weak-topics" && (profile.role === "head" || profile.role === "assistant")) {
+    return <WeakTopicsContent role={profile.role} />;
   }
 
   if (key === "installments" && profile.role === "registration") {

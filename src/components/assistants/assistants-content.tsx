@@ -12,6 +12,8 @@ import {
   createStaffingRequest,
   cancelStaffingRequest,
   setAssistantWhatsappLink,
+  getOfferingParentWhatsappLink,
+  setOfferingParentWhatsappLink,
   type AssistantGroup,
   type UnassignedStudent,
   type StaffingRequest,
@@ -40,6 +42,10 @@ export function AssistantsContent() {
   const [linkDrafts, setLinkDrafts] = useState<Record<string, string>>({});
   const [savingLink, setSavingLink] = useState<string | null>(null);
 
+  const [parentLinkDraft, setParentLinkDraft] = useState("");
+  const [parentLinkSaved, setParentLinkSaved] = useState("");
+  const [savingParentLink, setSavingParentLink] = useState(false);
+
   const [autoOpen, setAutoOpen] = useState(false);
   const [autoStrategy, setAutoStrategy] = useState<"equal" | "alpha">("equal");
   const [autoRunning, setAutoRunning] = useState(false);
@@ -52,6 +58,7 @@ export function AssistantsContent() {
   const [candidateEmail, setCandidateEmail] = useState("");
   const [reason, setReason] = useState("");
   const [proposedDate, setProposedDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [gaveNotice, setGaveNotice] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -86,8 +93,24 @@ export function AssistantsContent() {
       }
       setOpen({});
       await reload(offeringId);
+      const link = await getOfferingParentWhatsappLink(offeringId);
+      setParentLinkDraft(link ?? "");
+      setParentLinkSaved(link ?? "");
     })();
   }, [offeringId]);
+
+  async function onSaveParentLink() {
+    if (!offeringId) return;
+    setSavingParentLink(true);
+    try {
+      await setOfferingParentWhatsappLink(offeringId, parentLinkDraft);
+      setParentLinkSaved(parentLinkDraft);
+    } catch {
+      setError("Couldn't save the parent group link — try again.");
+    } finally {
+      setSavingParentLink(false);
+    }
+  }
 
   function toggleGroup(id: string) {
     setOpen((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -140,6 +163,7 @@ export function AssistantsContent() {
     setCandidateEmail("");
     setReason("");
     setProposedDate(new Date().toISOString().slice(0, 10));
+    setGaveNotice(false);
     setModalOpen(true);
   }
 
@@ -157,6 +181,7 @@ export function AssistantsContent() {
         candidateEmail,
         reason,
         proposedDate,
+        gaveNotice,
       });
       setModalOpen(false);
       setRequests(await listStaffingRequests());
@@ -259,6 +284,30 @@ export function AssistantsContent() {
             <span className="text-[13px] text-[var(--subtle)]">No courses yet.</span>
           )}
         </div>
+
+        {offeringId && (
+          <div className="mt-[12px]">
+            <label className="mb-[6px] block text-[12px] font-semibold text-[var(--muted)]">
+              Parent WhatsApp group link <span className="text-[var(--subtle)]">— for this course · unit · session</span>
+            </label>
+            <div className="flex items-center gap-[8px]">
+              <input
+                value={parentLinkDraft}
+                onChange={(e) => setParentLinkDraft(e.target.value)}
+                placeholder="https://chat.whatsapp.com/…"
+                className="h-[38px] flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+              />
+              <button
+                onClick={onSaveParentLink}
+                disabled={parentLinkDraft === parentLinkSaved || savingParentLink}
+                className="flex h-[38px] flex-none items-center gap-[6px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[14px] text-[12.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+              >
+                {savingParentLink ? <Spinner size={13} /> : <Icon name="check" size={13} />}
+                Save
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* PENDING REQUESTS */}
@@ -514,6 +563,18 @@ export function AssistantsContent() {
                   className="h-10 w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                 />
               </div>
+
+              {(kind === "remove" || kind === "replace") && (
+                <label className="flex cursor-pointer items-center gap-[9px] text-[13px] font-medium text-[var(--text)]">
+                  <input
+                    type="checkbox"
+                    checked={gaveNotice}
+                    onChange={(e) => setGaveNotice(e.target.checked)}
+                    className="h-[17px] w-[17px] cursor-pointer accent-[var(--brand)]"
+                  />
+                  Gave two weeks&apos; notice
+                </label>
+              )}
 
               <div>
                 <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">
