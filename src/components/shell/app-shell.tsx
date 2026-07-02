@@ -8,6 +8,8 @@ import { Icon } from "@/components/icons";
 import { Spinner } from "@/components/ui/spinner";
 import type { NavItem } from "@/lib/roles";
 import { NotificationBell } from "@/components/shell/notification-bell";
+import { globalSearch, type SearchResult } from "@/lib/actions/global-search";
+import { setSearchHandoff } from "@/lib/search-handoff";
 
 type NavMode = "sidebar" | "rail";
 
@@ -161,6 +163,95 @@ function LogoMark({ logoUrl, logoLetter, size }: { logoUrl: string | null; logoL
   );
 }
 
+const KIND_ICON = { student: "grad", staff: "users", course: "book" } as const;
+
+function HeaderSearch() {
+  const router = useRouter();
+  const ref = useRef<HTMLDivElement>(null);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      (() => {
+        setResults([]);
+        setLoading(false);
+      })();
+      return;
+    }
+    (() => setLoading(true))();
+    const timer = setTimeout(() => {
+      globalSearch(q)
+        .then((r) => setResults(r))
+        .finally(() => setLoading(false));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  function onSelect(r: SearchResult) {
+    setSearchHandoff(r.label);
+    setQuery("");
+    setResults([]);
+    setOpen(false);
+    router.push(r.href);
+  }
+
+  return (
+    <div className="relative" ref={ref}>
+      <div className="flex h-10 w-[320px] max-w-[42%] items-center gap-[9px] rounded-[10px] border border-[var(--border)] bg-[var(--surface2)] px-[13px] focus-within:border-[var(--brand)]">
+        <Icon name="search" size={17} className="flex-none text-[var(--subtle)]" />
+        <input
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          placeholder="Search students, assistants, courses…"
+          className="h-full w-full border-none bg-transparent text-[13.5px] text-[var(--text)] outline-none placeholder:text-[var(--subtle)]"
+        />
+        {loading && <Spinner size={14} className="flex-none text-[var(--subtle)]" />}
+      </div>
+      {open && query.trim().length >= 2 && (
+        <div className="absolute left-0 top-[calc(100%+6px)] z-50 w-[360px] max-h-[360px] overflow-y-auto rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] p-[6px] shadow-[var(--shadow)]">
+          {loading && results.length === 0 ? (
+            <div className="p-[14px] text-center text-[12.5px] text-[var(--subtle)]">Searching…</div>
+          ) : results.length === 0 ? (
+            <div className="p-[14px] text-center text-[12.5px] text-[var(--subtle)]">No matches for &quot;{query}&quot;.</div>
+          ) : (
+            results.map((r) => (
+              <button
+                key={`${r.kind}-${r.id}`}
+                onClick={() => onSelect(r)}
+                className="flex w-full items-center gap-[10px] rounded-[8px] px-[10px] py-[9px] text-left hover:bg-[var(--surface2)]"
+              >
+                <span className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] bg-[var(--brands)] text-[var(--brand)]">
+                  <Icon name={KIND_ICON[r.kind]} size={15} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <div className="truncate text-[13px] font-semibold text-[var(--text)]">{r.label}</div>
+                  <div className="truncate text-[11.5px] text-[var(--subtle)]">{r.subtitle}</div>
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AppShell({
   navItems,
   person,
@@ -277,10 +368,7 @@ export function AppShell({
       <div className="flex min-w-0 flex-1 flex-col">
         {/* DESKTOP HEADER STRIP */}
         <header className="hidden h-[62px] flex-none items-center gap-4 border-b border-[var(--border)] bg-[var(--surface)] px-6 md:flex">
-          <div className="flex h-10 w-[320px] max-w-[42%] cursor-default items-center gap-[9px] rounded-[10px] border border-[var(--border)] bg-[var(--surface2)] px-[13px]">
-            <Icon name="search" size={17} className="text-[var(--subtle)]" />
-            <span className="text-[13.5px] text-[var(--subtle)]">Search students, assistants, courses…</span>
-          </div>
+          <HeaderSearch />
           <div className="ml-auto flex items-center gap-3">
             <NotificationBell />
             <UserMenu person={person} />

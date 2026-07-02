@@ -19,6 +19,7 @@ import {
 import { listAllStaffingRequests, type StaffingRequestDetail } from "@/lib/actions/hr";
 import { listAllOfferingsForOrg, type OfferingChoice } from "@/lib/actions/students";
 import { downloadCsv } from "@/lib/csv-export";
+import { consumeSearchHandoff } from "@/lib/search-handoff";
 
 const ADMIN_ROLE_OPTIONS: Role[] = ["admin", "hr", "head", "assistant", "registration", "finance"];
 const HR_ROLE_OPTIONS: Role[] = ["hr", "head", "assistant", "registration", "finance"];
@@ -87,6 +88,10 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
   }
 
   useEffect(() => {
+    (() => {
+      const handoff = consumeSearchHandoff();
+      if (handoff) setSearch(handoff);
+    })();
     (async () => {
       await reload();
     })();

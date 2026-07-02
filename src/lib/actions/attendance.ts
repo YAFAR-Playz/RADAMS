@@ -92,7 +92,11 @@ export async function getSessionRoster(sessionId: string): Promise<AttendanceRos
         initials: student.initials,
         phone: student.phone,
         guardianPhone: student.guardian_phone,
-        status: statusByStudent.get(e.student_id) ?? "present",
+        // A student with no record for this session was never marked for it
+        // — most often because they enrolled after the session was created
+        // and attendance already taken, so they genuinely weren't there.
+        // Defaulting to absent (not present) reflects that correctly.
+        status: statusByStudent.get(e.student_id) ?? "absent",
       };
     })
     .filter((x): x is AttendanceRosterRow => !!x)
@@ -220,7 +224,9 @@ export async function getFullAttendanceExport(offeringId: string): Promise<Atten
         guardianPhone: student.guardian_phone,
         sessionTitle: s.title,
         sessionDate: s.session_date,
-        status: statusByKey.get(`${s.id}::${e.student_id}`) ?? "present",
+        // Same rule as getSessionRoster — no record means they weren't
+        // enrolled (or weren't marked) for that session, so default absent.
+        status: statusByKey.get(`${s.id}::${e.student_id}`) ?? "absent",
       });
     }
   }

@@ -7,7 +7,8 @@ import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments"
 import { listOfferingAssistants, type AssistantOption } from "@/lib/actions/head-assignments";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
 import { listMyAssistants, getOrCreateEvaluation, saveEvaluation, countCheckedPapers, type EvalLine, type EvalRating } from "@/lib/actions/evaluations";
-import { EXTRA_CATS, DED_CATS, categoryAmount, type CategoryDef } from "@/lib/evaluation-categories";
+import { listPayCategories, type PayCategory } from "@/lib/actions/pay-categories";
+import { resolveCategoryDefs, categoryAmount, type CategoryDef } from "@/lib/evaluation-categories";
 
 const CURRENCY_SYMBOL: Record<string, string> = { GBP: "£", USD: "$", EUR: "€", EGP: "E£", AED: "د.إ" };
 const RATINGS: { value: EvalRating; label: string }[] = [
@@ -109,6 +110,7 @@ function CategoryRow({
 export function EvaluationsContent() {
   const period = currentPeriod();
 
+  const [payCategories, setPayCategories] = useState<PayCategory[]>([]);
   const [offerings, setOfferings] = useState<OfferingOption[] | null>(null);
   const [offeringId, setOfferingId] = useState<string | null>(null);
   const [assistants, setAssistants] = useState<AssistantOption[] | null>(null);
@@ -139,7 +141,11 @@ export function EvaluationsContent() {
         setCurrency(s.currency);
       }
     });
+    listPayCategories().then(setPayCategories);
   }, []);
+
+  const extraCats = useMemo(() => resolveCategoryDefs(payCategories, "extra"), [payCategories]);
+  const dedCats = useMemo(() => resolveCategoryDefs(payCategories, "deduction"), [payCategories]);
 
   useEffect(() => {
     (async () => {
@@ -184,7 +190,7 @@ export function EvaluationsContent() {
   }, [assistantId, offeringId]);
 
   function addLine(kind: "extra" | "deduction") {
-    const cats = kind === "extra" ? EXTRA_CATS : DED_CATS;
+    const cats = kind === "extra" ? extraCats : dedCats;
     const line: EvalLine = { id: `tmp-${Date.now()}`, kind, category: cats[0].label, note: "", qty: "", sub: cats[0].subs?.[0]?.[0] ?? "" };
     if (kind === "extra") setExtras((prev) => [...prev, line]);
     else setDeductions((prev) => [...prev, line]);
@@ -200,8 +206,14 @@ export function EvaluationsContent() {
     setter((prev) => prev.filter((l) => l.id !== id));
   }
 
-  const extraSum = useMemo(() => extras.reduce((sum, l) => sum + categoryAmount(EXTRA_CATS.find((c) => c.label === l.category) ?? EXTRA_CATS[0], l.qty, l.sub), 0), [extras]);
-  const dedSum = useMemo(() => deductions.reduce((sum, l) => sum + categoryAmount(DED_CATS.find((c) => c.label === l.category) ?? DED_CATS[0], l.qty, l.sub), 0), [deductions]);
+  const extraSum = useMemo(
+    () => extras.reduce((sum, l) => sum + categoryAmount(extraCats.find((c) => c.label === l.category) ?? extraCats[0], l.qty, l.sub), 0),
+    [extras, extraCats]
+  );
+  const dedSum = useMemo(
+    () => deductions.reduce((sum, l) => sum + categoryAmount(dedCats.find((c) => c.label === l.category) ?? dedCats[0], l.qty, l.sub), 0),
+    [deductions, dedCats]
+  );
   const total = (Number(baseAmount) || 0) + extraSum - dedSum;
   const sym = CURRENCY_SYMBOL[currency] ?? "£";
   const fmt = (n: number) => `${sym}${Math.round(n).toLocaleString("en-US")}`;
@@ -347,7 +359,7 @@ export function EvaluationsContent() {
                       <CategoryRow
                         key={l.id}
                         line={l}
-                        cats={EXTRA_CATS}
+                        cats={extraCats}
                         onChange={(patch) => updateLine("extra", l.id, patch)}
                         onRemove={() => removeLine("extra", l.id)}
                       />
@@ -381,7 +393,7 @@ export function EvaluationsContent() {
                       <CategoryRow
                         key={l.id}
                         line={l}
-                        cats={DED_CATS}
+                        cats={dedCats}
                         onChange={(patch) => updateLine("deduction", l.id, patch)}
                         onRemove={() => removeLine("deduction", l.id)}
                       />

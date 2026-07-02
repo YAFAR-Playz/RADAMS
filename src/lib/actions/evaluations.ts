@@ -2,7 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
-import { EXTRA_CATS, DED_CATS, categoryAmount } from "@/lib/evaluation-categories";
+import { resolveCategoryDefs, categoryAmount } from "@/lib/evaluation-categories";
+import { listPayCategories } from "@/lib/actions/pay-categories";
 
 export type EvalLine = { id: string; kind: "extra" | "deduction"; category: string; note: string; qty: string; sub: string };
 export type EvalRating = "outstanding" | "exceeds" | "meets" | "below";
@@ -142,7 +143,8 @@ export async function saveEvaluation(input: {
   }
 
   if (input.lines.length) {
-    const cats = (kind: "extra" | "deduction") => (kind === "extra" ? EXTRA_CATS : DED_CATS);
+    const payCategories = await listPayCategories();
+    const cats = (kind: "extra" | "deduction") => resolveCategoryDefs(payCategories, kind);
     const { error } = await supabase.from("evaluation_lines").insert(
       input.lines.map((l) => {
         const cfg = cats(l.kind).find((c) => c.label === l.category) ?? cats(l.kind)[0];
