@@ -58,6 +58,7 @@ export function AssistantsContent() {
   const [candidateEmail, setCandidateEmail] = useState("");
   const [reason, setReason] = useState("");
   const [proposedDate, setProposedDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [leaveDate, setLeaveDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [gaveNotice, setGaveNotice] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -163,6 +164,7 @@ export function AssistantsContent() {
     setCandidateEmail("");
     setReason("");
     setProposedDate(new Date().toISOString().slice(0, 10));
+    setLeaveDate(new Date().toISOString().slice(0, 10));
     setGaveNotice(false);
     setModalOpen(true);
   }
@@ -181,6 +183,7 @@ export function AssistantsContent() {
         candidateEmail,
         reason,
         proposedDate,
+        leaveDate,
         gaveNotice,
       });
       setModalOpen(false);
@@ -552,17 +555,40 @@ export function AssistantsContent() {
                 </>
               )}
 
-              <div>
-                <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">
-                  {kind === "remove" ? "Leave date" : "Proposed start date"}
-                </label>
-                <input
-                  type="date"
-                  value={proposedDate}
-                  onChange={(e) => setProposedDate(e.target.value)}
-                  className="h-10 w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
-                />
-              </div>
+              {kind === "replace" ? (
+                <div className="grid grid-cols-2 gap-[10px]">
+                  <div>
+                    <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Leave date (outgoing)</label>
+                    <input
+                      type="date"
+                      value={leaveDate}
+                      onChange={(e) => setLeaveDate(e.target.value)}
+                      className="h-10 w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Proposed start (incoming)</label>
+                    <input
+                      type="date"
+                      value={proposedDate}
+                      onChange={(e) => setProposedDate(e.target.value)}
+                      className="h-10 w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">
+                    {kind === "remove" ? "Leave date" : "Proposed start date"}
+                  </label>
+                  <input
+                    type="date"
+                    value={proposedDate}
+                    onChange={(e) => setProposedDate(e.target.value)}
+                    className="h-10 w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                  />
+                </div>
+              )}
 
               {(kind === "remove" || kind === "replace") && (
                 <label className="flex cursor-pointer items-center gap-[9px] text-[13px] font-medium text-[var(--text)]">

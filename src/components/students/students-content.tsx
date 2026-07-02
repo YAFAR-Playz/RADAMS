@@ -17,6 +17,7 @@ import {
   listAllOfferingsForOrg,
   addStudentEnrollment,
   removeStudentEnrollment,
+  getStudentDetailedExport,
   type StudentRow,
   type EnrollmentDetail,
   type OfferingChoice,
@@ -65,10 +66,12 @@ export function StudentsContent({ role }: { role: Role }) {
   const [savingId, setSavingId] = useState<string | null>(null);
 
   const [welcomeId, setWelcomeId] = useState<string | null>(null);
+  const [welcomeRecipient, setWelcomeRecipient] = useState<"student" | "parent">("parent");
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
-  const [welcomeTemplate, setWelcomeTemplate] = useState<string | null>(null);
-  const [orgName, setOrgName] = useState("RadAMS");
+  const [welcomeTemplateStudent, setWelcomeTemplateStudent] = useState<string | null>(null);
+  const [welcomeTemplateParent, setWelcomeTemplateParent] = useState<string | null>(null);
+  const [orgName, setOrgName] = useState("ZAD-AMS");
   const [parentWhatsappLink, setParentWhatsappLink] = useState<string | null>(null);
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [paymentByStudent, setPaymentByStudent] = useState<Record<string, PaymentStatusSummary>>({});
@@ -78,6 +81,7 @@ export function StudentsContent({ role }: { role: Role }) {
   const [addOfferingId, setAddOfferingId] = useState("");
   const [studentAttendance, setStudentAttendance] = useState<StudentAttendanceSummary | null>(null);
   const [enrollmentBusy, setEnrollmentBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const isRegistration = role === "registration";
   const canEditCourses = role === "admin" || role === "registration";
   const [sym, setSym] = useState("£");
@@ -87,8 +91,9 @@ export function StudentsContent({ role }: { role: Role }) {
       setOfferings(data);
       setOfferingId(data[0]?.id ?? null);
     });
-    Promise.all([getEffectiveTemplate("welcome"), getOrgBrandName()]).then(([tpl, org]) => {
-      setWelcomeTemplate(tpl);
+    Promise.all([getEffectiveTemplate("welcome_student"), getEffectiveTemplate("welcome_parent"), getOrgBrandName()]).then(([tplS, tplP, org]) => {
+      setWelcomeTemplateStudent(tplS);
+      setWelcomeTemplateParent(tplP);
       setOrgName(org);
     });
     getPayrollSettings().then((settings) => setSym(currencySymbol(settings?.currency)));
@@ -216,23 +221,57 @@ export function StudentsContent({ role }: { role: Role }) {
     }
   }
 
-  function onExport() {
-    downloadCsv(
-      `students-${current?.label ?? "all"}`,
-      ["Student ID", "Name", "Email", "Phone", "Guardian name", "Guardian phone", "Assistant", "Enrolled", "Left", "Avg grade"],
-      filtered.map((s) => [
-        s.studentId,
-        s.name,
-        s.email ?? "",
-        s.phone ?? "",
-        s.guardianName ?? "",
-        s.guardianPhone ?? "",
-        s.assistantName ?? "",
-        s.enrolledAt,
-        s.leftAt ?? "",
-        s.avgGrade ?? "",
-      ])
-    );
+  async function onExport() {
+    if (!offeringId) return;
+    setExporting(true);
+    try {
+      const rows = await getStudentDetailedExport(offeringId);
+      downloadCsv(
+        `students-detailed-${current?.label ?? "all"}`,
+        [
+          "Student ID",
+          "Name",
+          "Email",
+          "Phone",
+          "Guardian name",
+          "Guardian phone",
+          "Assistant",
+          "Enrolled",
+          "Left",
+          "Assignment",
+          "Due date",
+          "Max marks",
+          "Status",
+          "Grade",
+          "Comment",
+          "Logged by",
+          "Sent to parent",
+          "Last updated",
+        ],
+        rows.map((r) => [
+          r.studentCode,
+          r.studentName,
+          r.email ?? "",
+          r.phone ?? "",
+          r.guardianName ?? "",
+          r.guardianPhone ?? "",
+          r.assistantName ?? "",
+          r.enrolledAt,
+          r.leftAt ?? "",
+          r.assignmentTitle,
+          r.dueDate ?? "",
+          r.maxMarks || "",
+          r.status,
+          r.grade,
+          r.comment,
+          r.loggedBy ?? "",
+          r.sentAt ?? "",
+          r.updatedAt ?? "",
+        ])
+      );
+    } finally {
+      setExporting(false);
+    }
   }
 
   function openEdit(s: StudentRow) {
@@ -306,9 +345,10 @@ export function StudentsContent({ role }: { role: Role }) {
   }
 
   const welcomeStudent = welcomeId ? students?.find((s) => s.studentId === welcomeId) ?? null : null;
+  const welcomeActiveTemplate = welcomeRecipient === "student" ? welcomeTemplateStudent : welcomeTemplateParent;
   const welcomeMessage =
-    welcomeStudent && welcomeTemplate
-      ? applyTemplateVars(welcomeTemplate, {
+    welcomeStudent && welcomeActiveTemplate
+      ? applyTemplateVars(welcomeActiveTemplate, {
           org: orgName,
           student: welcomeStudent.name,
           course: current?.label ?? "this course",
@@ -317,7 +357,8 @@ export function StudentsContent({ role }: { role: Role }) {
           parent_group_link: parentWhatsappLink ?? "(not set yet — ask your admin)",
         })
       : "";
-  const welcomeDigits = welcomeStudent?.guardianPhone ? welcomeStudent.guardianPhone.replace(/[^\d]/g, "") : "";
+  const welcomePhone = welcomeRecipient === "student" ? welcomeStudent?.phone : welcomeStudent?.guardianPhone;
+  const welcomeDigits = welcomePhone ? welcomePhone.replace(/[^\d]/g, "") : "";
   const welcomeWaUrl = `https://wa.me/${welcomeDigits}?text=${encodeURIComponent(welcomeMessage)}`;
 
   const pageNumbers = useMemo(() => {
@@ -381,10 +422,10 @@ export function StudentsContent({ role }: { role: Role }) {
           {!isAssistant && (
             <button
               onClick={onExport}
-              disabled={filtered.length === 0}
+              disabled={filtered.length === 0 || exporting}
               className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-[14px] py-[10px] text-[13px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
             >
-              <Icon name="file-up" size={16} />
+              {exporting ? <Spinner size={15} /> : <Icon name="file-up" size={16} />}
               Export CSV
             </button>
           )}
@@ -665,7 +706,10 @@ export function StudentsContent({ role }: { role: Role }) {
                   <div className="flex w-[74px] flex-none justify-end gap-[6px]">
                     {isAssistant && (
                       <button
-                        onClick={() => setWelcomeId(st.studentId)}
+                        onClick={() => {
+                          setWelcomeRecipient("parent");
+                          setWelcomeId(st.studentId);
+                        }}
                         title="Send welcome message"
                         className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[8px] border border-[#25D366] bg-[var(--surface)] text-[#1ea952] hover:bg-[rgba(37,211,102,0.1)]"
                       >
@@ -726,7 +770,15 @@ export function StudentsContent({ role }: { role: Role }) {
               <div className="min-w-0 flex-1">
                 <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Welcome message</h3>
                 <div className="text-[12px] text-[var(--muted)]">
-                  To {welcomeStudent.name}&apos;s guardian · {welcomeStudent.guardianPhone ?? "no phone on file"}
+                  {welcomeRecipient === "student" ? (
+                    <>
+                      To {welcomeStudent.name} · {welcomePhone ?? "no phone on file"}
+                    </>
+                  ) : (
+                    <>
+                      To {welcomeStudent.name}&apos;s guardian · {welcomePhone ?? "no phone on file"}
+                    </>
+                  )}
                 </div>
               </div>
               <button onClick={() => setWelcomeId(null)} className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]">
@@ -734,6 +786,22 @@ export function StudentsContent({ role }: { role: Role }) {
               </button>
             </div>
             <div className="p-[18px]">
+              <div className="mb-[11px] flex gap-[6px] rounded-[9px] border border-[var(--border)] bg-[var(--surface2)] p-[3px]">
+                {(["student", "parent"] as const).map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => setWelcomeRecipient(r)}
+                    className="flex-1 rounded-[7px] py-[7px] text-[12.5px] font-semibold"
+                    style={{
+                      background: welcomeRecipient === r ? "var(--surface)" : "transparent",
+                      color: welcomeRecipient === r ? "var(--text)" : "var(--muted)",
+                      boxShadow: welcomeRecipient === r ? "var(--shadow)" : "none",
+                    }}
+                  >
+                    {r === "student" ? "To student" : "To parent"}
+                  </button>
+                ))}
+              </div>
               <div className="mb-[7px] text-[12px] font-semibold text-[var(--muted)]">Message preview</div>
               <div className="whitespace-pre-wrap rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[13px] text-[13px] leading-[1.55] text-[var(--text)]">
                 {welcomeMessage}

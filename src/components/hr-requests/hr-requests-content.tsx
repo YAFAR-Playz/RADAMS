@@ -155,10 +155,24 @@ export function HrRequestsContent() {
                               <div className="truncate text-[12.5px] text-[var(--text)]">{r.candidateEmail}</div>
                             </div>
                           )}
+                          {r.kind === "replace" && r.leaveDate && (
+                            <div>
+                              <div className="text-[10px] font-bold uppercase text-[var(--subtle)]">Leave date (outgoing)</div>
+                              <div className="text-[12.5px] text-[var(--text)]">{new Date(r.leaveDate).toLocaleDateString()}</div>
+                            </div>
+                          )}
                           {r.proposedDate && (
                             <div>
-                              <div className="text-[10px] font-bold uppercase text-[var(--subtle)]">{r.kind === "remove" ? "Leave date" : "Proposed start"}</div>
+                              <div className="text-[10px] font-bold uppercase text-[var(--subtle)]">
+                                {r.kind === "remove" ? "Leave date" : r.kind === "replace" ? "Proposed start (incoming)" : "Proposed start"}
+                              </div>
                               <div className="text-[12.5px] text-[var(--text)]">{new Date(r.proposedDate).toLocaleDateString()}</div>
+                            </div>
+                          )}
+                          {(r.kind === "remove" || r.kind === "replace") && r.gaveNotice !== null && (
+                            <div>
+                              <div className="text-[10px] font-bold uppercase text-[var(--subtle)]">Gave notice</div>
+                              <div className="text-[12.5px] text-[var(--text)]">{r.gaveNotice ? "Yes" : "No"}</div>
                             </div>
                           )}
                         </div>

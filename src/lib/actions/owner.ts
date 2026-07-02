@@ -123,7 +123,7 @@ export async function createOrganization(input: { name: string; adminName: strin
 
   const { data: org, error: orgError } = await admin
     .from("organizations")
-    .insert({ name: input.name.trim(), brand_name: input.name.trim(), logo_letter: mark.slice(0, 1) || "R", status: "trial" })
+    .insert({ name: input.name.trim(), brand_name: input.name.trim(), logo_letter: mark.slice(0, 1) || "Z", status: "trial" })
     .select("id")
     .single();
   if (orgError || !org) throw new Error(orgError?.message ?? "Failed to create organization");

@@ -218,3 +218,132 @@ export async function updateStudent(
   if (error) throw new Error(error.message);
   await logActivity("students", `Updated ${patch.name}${patch.left ? " — marked as left" : ""}`);
 }
+
+export type StudentAssignmentDetailRow = {
+  studentCode: string;
+  studentName: string;
+  email: string | null;
+  phone: string | null;
+  guardianName: string | null;
+  guardianPhone: string | null;
+  assistantName: string | null;
+  enrolledAt: string;
+  leftAt: string | null;
+  assignmentTitle: string;
+  dueDate: string | null;
+  maxMarks: number;
+  status: string;
+  grade: string;
+  comment: string;
+  loggedBy: string | null;
+  sentAt: string | null;
+  updatedAt: string | null;
+};
+
+// One row per (student, assignment) for the offering — every assignment
+// detail and comment a student has, not just a summary — so heads/admins can
+// audit exactly what was logged rather than a single rolled-up average.
+export async function getStudentDetailedExport(offeringId: string): Promise<StudentAssignmentDetailRow[]> {
+  const profile = await getCurrentProfile();
+  if (!profile || profile.role === "assistant") return [];
+  const supabase = await createClient();
+
+  const { data: enrollments } = await supabase
+    .from("enrollments")
+    .select("student_id, created_at, students(name, initials, student_code, email, phone, guardian_name, guardian_phone, left_at), profiles(full_name)")
+    .eq("offering_id", offeringId);
+  if (!enrollments || enrollments.length === 0) return [];
+
+  const { data: assignmentRows } = await supabase
+    .from("assignments")
+    .select("id, title, due_date, max_marks")
+    .eq("offering_id", offeringId)
+    .order("created_at", { ascending: true });
+  const assignments = assignmentRows ?? [];
+
+  type LogRow = {
+    assignment_id: string;
+    student_id: string;
+    status: string | null;
+    grade: string | null;
+    comment: string | null;
+    sent_at: string | null;
+    updated_at: string;
+    profiles: { full_name: string } | { full_name: string }[] | null;
+  };
+
+  const studentIds = enrollments.map((e) => e.student_id);
+  const assignmentIds = assignments.map((a) => a.id);
+  const logs: LogRow[] =
+    assignmentIds.length && studentIds.length
+      ? ((
+          await supabase
+            .from("assignment_logs")
+            .select("assignment_id, student_id, status, grade, comment, sent_at, updated_at, profiles(full_name)")
+            .in("assignment_id", assignmentIds)
+            .in("student_id", studentIds)
+        ).data ?? [])
+      : [];
+
+  const logKey = (assignmentId: string, studentId: string) => `${assignmentId}::${studentId}`;
+  const logByKey = new Map<string, LogRow>();
+  for (const l of logs) logByKey.set(logKey(l.assignment_id, l.student_id), l);
+
+  const rows: StudentAssignmentDetailRow[] = [];
+  for (const e of enrollments) {
+    const student = Array.isArray(e.students) ? e.students[0] : e.students;
+    const assistant = Array.isArray(e.profiles) ? e.profiles[0] : e.profiles;
+    if (!student) continue;
+
+    if (assignments.length === 0) {
+      rows.push({
+        studentCode: student.student_code,
+        studentName: student.name,
+        email: student.email,
+        phone: student.phone,
+        guardianName: student.guardian_name,
+        guardianPhone: student.guardian_phone,
+        assistantName: assistant?.full_name ?? null,
+        enrolledAt: e.created_at,
+        leftAt: student.left_at,
+        assignmentTitle: "",
+        dueDate: null,
+        maxMarks: 0,
+        status: "",
+        grade: "",
+        comment: "",
+        loggedBy: null,
+        sentAt: null,
+        updatedAt: null,
+      });
+      continue;
+    }
+
+    for (const a of assignments) {
+      const log = logByKey.get(logKey(a.id, e.student_id));
+      const loggedBy = log ? (Array.isArray(log.profiles) ? log.profiles[0] : log.profiles) : null;
+      rows.push({
+        studentCode: student.student_code,
+        studentName: student.name,
+        email: student.email,
+        phone: student.phone,
+        guardianName: student.guardian_name,
+        guardianPhone: student.guardian_phone,
+        assistantName: assistant?.full_name ?? null,
+        enrolledAt: e.created_at,
+        leftAt: student.left_at,
+        assignmentTitle: a.title,
+        dueDate: a.due_date,
+        maxMarks: a.max_marks,
+        status: log?.status ?? "not logged",
+        grade: log?.grade ?? "",
+        comment: log?.comment ?? "",
+        loggedBy: loggedBy?.full_name ?? null,
+        sentAt: log?.sent_at ?? null,
+        updatedAt: log?.updated_at ?? null,
+      });
+    }
+  }
+
+  return rows.sort((a, b) => a.studentName.localeCompare(b.studentName));
+}

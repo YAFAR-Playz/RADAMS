@@ -50,7 +50,7 @@ async function getPlatformDefaults(supabase: Awaited<ReturnType<typeof createCli
     .eq("id", true)
     .single();
   return {
-    name: data?.default_brand_name ?? "RadAMS",
+    name: data?.default_brand_name ?? "ZAD-AMS",
     primary: data?.default_primary_color ?? "#2563eb",
     secondary: data?.default_secondary_color ?? "#7c3aed",
     font: data?.default_font ?? "geist",
@@ -122,12 +122,12 @@ export async function saveBranding(draft: BrandingDraft) {
   const { error } = await supabase
     .from("organizations")
     .update({
-      brand_name: draft.name.trim() || "RadAMS",
+      brand_name: draft.name.trim() || "ZAD-AMS",
       primary_color: draft.primary,
       secondary_color: draft.secondary,
       font: draft.font,
       corner: draft.corner,
-      logo_letter: (draft.name.trim()[0] ?? "R").toUpperCase(),
+      logo_letter: (draft.name.trim()[0] ?? "Z").toUpperCase(),
     })
     .eq("id", orgId);
   if (error) throw new Error(error.message);
@@ -145,7 +145,7 @@ export async function savePlatformDefaultBranding(draft: Omit<BrandingDraft, "lo
   const { error } = await supabase
     .from("platform_settings")
     .update({
-      default_brand_name: draft.name.trim() || "RadAMS",
+      default_brand_name: draft.name.trim() || "ZAD-AMS",
       default_primary_color: draft.primary,
       default_secondary_color: draft.secondary,
       default_font: draft.font,

@@ -19,6 +19,7 @@ export type AttendanceRosterRow = {
   studentId: string;
   name: string;
   initials: string;
+  phone: string | null;
   guardianPhone: string | null;
   status: AttendanceStatus;
 };
@@ -67,7 +68,7 @@ export async function getSessionRoster(sessionId: string): Promise<AttendanceRos
 
   let enrollmentQuery = supabase
     .from("enrollments")
-    .select("student_id, assistant_id, students(id, name, initials, guardian_phone)")
+    .select("student_id, assistant_id, students(id, name, initials, phone, guardian_phone)")
     .eq("offering_id", session.offering_id);
   if (profile.role === "assistant") {
     enrollmentQuery = enrollmentQuery.eq("assistant_id", profile.id);
@@ -89,6 +90,7 @@ export async function getSessionRoster(sessionId: string): Promise<AttendanceRos
         studentId: e.student_id,
         name: student.name,
         initials: student.initials,
+        phone: student.phone,
         guardianPhone: student.guardian_phone,
         status: statusByStudent.get(e.student_id) ?? "present",
       };
@@ -168,4 +170,59 @@ export async function markAllPresent(sessionId: string) {
     .update({ status: "present", updated_at: new Date().toISOString() })
     .eq("session_id", sessionId);
   if (error) throw new Error(error.message);
+}
+
+export type AttendanceExportRow = {
+  studentName: string;
+  guardianPhone: string | null;
+  sessionTitle: string;
+  sessionDate: string;
+  status: AttendanceStatus;
+};
+
+// Every session × every student for the offering, in one shot — scoped to
+// whatever the caller can already see (an assistant's own students only;
+// head/registration get the full course they picked), rather than the
+// single currently-open session.
+export async function getFullAttendanceExport(offeringId: string): Promise<AttendanceExportRow[]> {
+  const profile = await getCurrentProfile();
+  if (!profile) return [];
+  const supabase = await createClient();
+
+  let enrollmentQuery = supabase.from("enrollments").select("student_id, assistant_id, students(id, name, guardian_phone)").eq("offering_id", offeringId);
+  if (profile.role === "assistant") enrollmentQuery = enrollmentQuery.eq("assistant_id", profile.id);
+  const { data: enrollments } = await enrollmentQuery;
+  if (!enrollments || !enrollments.length) return [];
+
+  const { data: sessionsData } = await supabase
+    .from("attendance_sessions")
+    .select("id, title, session_date")
+    .eq("offering_id", offeringId)
+    .order("session_date", { ascending: true });
+  if (!sessionsData || !sessionsData.length) return [];
+
+  const studentIds = enrollments.map((e) => e.student_id);
+  const sessionIds = sessionsData.map((s) => s.id);
+  const { data: records } = await supabase
+    .from("attendance_records")
+    .select("session_id, student_id, status")
+    .in("session_id", sessionIds)
+    .in("student_id", studentIds);
+  const statusByKey = new Map((records ?? []).map((r) => [`${r.session_id}::${r.student_id}`, r.status]));
+
+  const rows: AttendanceExportRow[] = [];
+  for (const s of sessionsData) {
+    for (const e of enrollments) {
+      const student = Array.isArray(e.students) ? e.students[0] : e.students;
+      if (!student) continue;
+      rows.push({
+        studentName: student.name,
+        guardianPhone: student.guardian_phone,
+        sessionTitle: s.title,
+        sessionDate: s.session_date,
+        status: statusByKey.get(`${s.id}::${e.student_id}`) ?? "present",
+      });
+    }
+  }
+  return rows;
 }

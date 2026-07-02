@@ -32,6 +32,7 @@ import { OwnerUsersContent } from "@/components/owner-users/owner-users-content"
 import { OwnerSystemContent } from "@/components/owner-system/owner-system-content";
 import { HistoryContent } from "@/components/history/history-content";
 import { MonthlyReportContent } from "@/components/monthly-report/monthly-report-content";
+import { AcademicReportContent } from "@/components/academic-report/academic-report-content";
 import { WeakTopicsContent } from "@/components/weak-topics/weak-topics-content";
 
 export default async function AppPage({ params }: { params: Promise<{ key: string }> }) {
@@ -140,8 +141,12 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
     return <HistoryContent />;
   }
 
-  if (key === "report" && (profile.role === "admin" || profile.role === "head")) {
+  if (key === "report" && profile.role === "admin") {
     return <MonthlyReportContent />;
+  }
+
+  if (key === "report" && profile.role === "head") {
+    return <AcademicReportContent />;
   }
 
   if (key === "evaluations" && profile.role === "head") {
@@ -156,7 +161,7 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
     return <InstallmentsContent />;
   }
 
-  if (key === "salaries" && profile.role === "finance") {
+  if (key === "salaries" && (profile.role === "finance" || profile.role === "admin")) {
     return <FinanceSalariesContent />;
   }
 

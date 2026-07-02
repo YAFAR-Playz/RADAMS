@@ -162,6 +162,7 @@ export async function createStaffingRequest(input: {
   candidateEmail: string;
   reason: string;
   proposedDate: string;
+  leaveDate?: string;
   gaveNotice?: boolean;
 }) {
   const profile = await getCurrentProfile();
@@ -178,6 +179,7 @@ export async function createStaffingRequest(input: {
     reason: input.reason || null,
     requested_by: profile.id,
     proposed_date: input.proposedDate || null,
+    leave_date: input.kind === "replace" ? input.leaveDate || null : null,
     gave_notice: input.kind === "add" ? null : input.gaveNotice ?? null,
   });
   if (error) throw new Error(error.message);

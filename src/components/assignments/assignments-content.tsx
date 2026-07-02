@@ -22,6 +22,8 @@ import { applyTemplateVars } from "@/lib/message-vars";
 
 const PAGE_SIZE = 10;
 
+type Recipient = "student" | "parent";
+
 function buildMessage(template: string, orgName: string, student: RosterStudent, assignmentTitle: string) {
   const def = statusDef(student.status);
   return applyTemplateVars(template, {
@@ -83,16 +85,19 @@ export function AssignmentsContent() {
   const [page, setPage] = useState(0);
   const [modalId, setModalId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [template, setTemplate] = useState<string | null>(null);
-  const [orgName, setOrgName] = useState("RadAMS");
+  const [templateStudent, setTemplateStudent] = useState<string | null>(null);
+  const [templateParent, setTemplateParent] = useState<string | null>(null);
+  const [orgName, setOrgName] = useState("ZAD-AMS");
+  const [recipient, setRecipient] = useState<Recipient>("parent");
 
   useEffect(() => {
     listMyOfferings().then((data) => {
       setOfferings(data);
       setOfferingId(data[0]?.id ?? null);
     });
-    Promise.all([getEffectiveTemplate("assignment"), getOrgBrandName()]).then(([tpl, org]) => {
-      setTemplate(tpl);
+    Promise.all([getEffectiveTemplate("assignment_student"), getEffectiveTemplate("assignment_parent"), getOrgBrandName()]).then(([tplS, tplP, org]) => {
+      setTemplateStudent(tplS);
+      setTemplateParent(tplP);
       setOrgName(org);
     });
   }, []);
@@ -158,10 +163,12 @@ export function AssignmentsContent() {
   const pct = total ? Math.round((logged / total) * 100) : 0;
 
   const modalStudent = modalId != null ? roster?.find((s) => s.studentId === modalId) ?? null : null;
+  const activeTemplate = recipient === "student" ? templateStudent : templateParent;
   const modalMessage =
-    modalStudent && currentAssignment && template ? buildMessage(template, orgName, modalStudent, currentAssignment.title) : "";
+    modalStudent && currentAssignment && activeTemplate ? buildMessage(activeTemplate, orgName, modalStudent, currentAssignment.title) : "";
+  const modalPhone = recipient === "student" ? modalStudent?.phone : modalStudent?.guardianPhone;
   const modalWaUrl = modalStudent
-    ? `https://wa.me/${(modalStudent.guardianPhone ?? "").replace(/[^\d]/g, "")}?text=${encodeURIComponent(modalMessage)}`
+    ? `https://wa.me/${(modalPhone ?? "").replace(/[^\d]/g, "")}?text=${encodeURIComponent(modalMessage)}`
     : "";
   const modalDef = modalStudent ? statusDef(modalStudent.status) : null;
   const modalToneColors = modalDef ? toneColors(modalDef.tone) : toneColors("neutral");
@@ -439,7 +446,10 @@ export function AssignmentsContent() {
                     className="h-[36px] min-w-0 flex-[1.4] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[11px] text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                   />
                   <button
-                    onClick={() => setModalId(st.studentId)}
+                    onClick={() => {
+                      setRecipient("parent");
+                      setModalId(st.studentId);
+                    }}
                     title="Send update to guardian"
                     className="flex h-[36px] w-[36px] flex-none items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--ok)] hover:border-[var(--ok)] hover:bg-[var(--oks)]"
                   >
@@ -497,7 +507,10 @@ export function AssignmentsContent() {
                     />
                   </div>
                   <button
-                    onClick={() => setModalId(st.studentId)}
+                    onClick={() => {
+                      setRecipient("parent");
+                      setModalId(st.studentId);
+                    }}
                     className="mt-[11px] flex h-[46px] w-full items-center justify-center gap-2 rounded-[10px] border border-[var(--ok)] bg-[var(--oks)] text-[14px] font-semibold text-[var(--ok)]"
                   >
                     <Icon name="send" size={16} />
@@ -564,17 +577,31 @@ export function AssignmentsContent() {
               </button>
             </div>
             <div className="p-[18px]">
+              <div className="mb-[11px] flex gap-[6px] rounded-[9px] border border-[var(--border)] bg-[var(--surface2)] p-[3px]">
+                {(["student", "parent"] as Recipient[]).map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => setRecipient(r)}
+                    className="flex-1 rounded-[7px] py-[7px] text-[12.5px] font-semibold"
+                    style={{
+                      background: recipient === r ? "var(--surface)" : "transparent",
+                      color: recipient === r ? "var(--text)" : "var(--muted)",
+                      boxShadow: recipient === r ? "var(--shadow)" : "none",
+                    }}
+                  >
+                    {r === "student" ? "To student" : "To parent"}
+                  </button>
+                ))}
+              </div>
               <div className="mb-[15px] flex items-center gap-[11px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[11px_13px]">
                 <div className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-[var(--brands)] text-[12px] font-bold text-[var(--brand)]">
                   {modalStudent.initials}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-[13.5px] font-semibold text-[var(--text)]">
-                    {modalStudent.guardianName ?? `${modalStudent.name.split(" ")[0]}'s guardian`}
+                    {recipient === "student" ? modalStudent.name : modalStudent.guardianName ?? `${modalStudent.name.split(" ")[0]}'s guardian`}
                   </div>
-                  <div className="font-mono text-[12px] text-[var(--muted)]">
-                    {modalStudent.guardianPhone ?? "No phone on file"}
-                  </div>
+                  <div className="font-mono text-[12px] text-[var(--muted)]">{modalPhone ?? "No phone on file"}</div>
                 </div>
                 <span
                   className="inline-flex flex-none items-center gap-[5px] rounded-full px-[9px] py-[4px] text-[11.5px] font-semibold"

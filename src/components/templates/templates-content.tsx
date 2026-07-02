@@ -11,9 +11,7 @@ import {
   savePlatformTemplate,
   resetPlatformTemplate,
 } from "@/lib/actions/templates";
-import { TEMPLATE_DEFS, type TemplateKey } from "@/lib/template-defs";
-
-const VARS = ["{student}", "{org}", "{course}", "{assistant_name}", "{assignment}", "{status}", "{grade}", "{session}", "{date}", "{comment}"];
+import { TEMPLATE_CATEGORY_DEFS, TEMPLATE_DEFS, type TemplateKey, type TemplateRecipient } from "@/lib/template-defs";
 
 const SAMPLE: Record<string, string> = {
   student: "Liam Carter",
@@ -26,6 +24,8 @@ const SAMPLE: Record<string, string> = {
   session: "Week 7 — Lecture",
   date: "18 Jun",
   comment: "Strong on kinematics.",
+  student_group_link: "https://chat.whatsapp.com/student-group",
+  parent_group_link: "https://chat.whatsapp.com/parent-group",
 };
 
 function fill(tpl: string) {
@@ -35,7 +35,7 @@ function fill(tpl: string) {
 export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform" }) {
   const isPlatform = scope === "platform";
   const [overrides, setOverrides] = useState<Record<TemplateKey, string | null> | null>(null);
-  const [sel, setSel] = useState<TemplateKey>("assignment");
+  const [sel, setSel] = useState<TemplateKey>("assignment_parent");
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -48,7 +48,7 @@ export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform"
       try {
         const data = await (isPlatform ? getPlatformTemplates() : getOrgTemplates());
         setOverrides(data);
-        setDraft(data.assignment ?? TEMPLATE_DEFS.find((t) => t.key === "assignment")!.def);
+        setDraft(data.assignment_parent ?? TEMPLATE_DEFS.find((t) => t.key === "assignment_parent")!.def);
       } catch {
         setError("Couldn't load templates.");
       } finally {
@@ -110,8 +110,8 @@ export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform"
         <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">WhatsApp message templates</h1>
         <p className="m-0 mt-[3px] max-w-[600px] text-[13px] leading-[1.5] text-[var(--muted)]">
           {isPlatform
-            ? "Set the default WhatsApp messages used by any organization that hasn't written its own."
-            : "Customize the WhatsApp messages your organization sends. Each starts from a built-in default."}
+            ? "Set the default WhatsApp messages used by any organization that hasn't written its own. Each category has a separate message for the student and for the parent."
+            : "Customize the WhatsApp messages your organization sends. Each category has a separate message for the student and for the parent, and each starts from a built-in default."}
         </p>
         <div className="mt-[14px] flex items-start gap-[10px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--infos)] p-[11px_13px]">
           <Icon name="building" size={17} className="mt-[1px] flex-none text-[var(--info)]" />
@@ -138,36 +138,52 @@ export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform"
             {loading ? (
               <div className="flex flex-col gap-2">
                 {Array.from({ length: 4 }, (_, i) => (
-                  <SkeletonRow key={i} className="h-[56px]" />
+                  <SkeletonRow key={i} className="h-[80px]" />
                 ))}
               </div>
             ) : (
-              TEMPLATE_DEFS.map((t) => {
-                const active = t.key === sel;
-                const isCustom = overrides?.[t.key] != null;
-                return (
-                  <div
-                    key={t.key}
-                    onClick={() => selectTemplate(t.key)}
-                    className="flex cursor-pointer items-center gap-[11px] rounded-[10px] p-[11px] hover:bg-[var(--surface2)]"
-                    style={{ background: active ? "var(--brands)" : "transparent" }}
-                  >
-                    <div
-                      className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[9px]"
-                      style={{ background: active ? "var(--brand)" : "var(--surface2)", color: active ? "var(--brandfg)" : "var(--muted)" }}
-                    >
-                      <Icon name={t.icon} size={17} />
+              TEMPLATE_CATEGORY_DEFS.map((c) => (
+                <div key={c.category} className="mb-[6px]">
+                  <div className="flex items-center gap-[10px] p-[9px_11px_5px]">
+                    <div className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-[7px] bg-[var(--surface2)] text-[var(--muted)]">
+                      <Icon name={c.icon} size={14} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-[13px] font-semibold text-[var(--text)]">{t.label}</div>
-                      <div className="text-[11.5px] text-[var(--subtle)]">{t.usage}</div>
+                      <div className="text-[13px] font-semibold text-[var(--text)]">{c.label}</div>
+                      <div className="text-[11px] text-[var(--subtle)]">{c.usage}</div>
                     </div>
-                    {isCustom && (
-                      <span className="flex-none rounded-full bg-[var(--brands)] px-[7px] py-[2px] text-[10px] font-bold text-[var(--brand)]">EDITED</span>
-                    )}
                   </div>
-                );
-              })
+                  <div className="flex gap-[6px] pl-[36px] pr-[6px] pb-[4px]">
+                    {(["student", "parent"] as TemplateRecipient[]).map((r) => {
+                      const key = `${c.category}_${r}` as TemplateKey;
+                      const active = key === sel;
+                      const isCustom = overrides?.[key] != null;
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => selectTemplate(key)}
+                          className="relative flex-1 rounded-[8px] border px-[10px] py-[7px] text-left text-[12px] font-semibold"
+                          style={{
+                            background: active ? "var(--brand)" : "var(--surface2)",
+                            color: active ? "var(--brandfg)" : "var(--text)",
+                            borderColor: active ? "var(--brand)" : "var(--border)",
+                          }}
+                        >
+                          {r === "student" ? "Student" : "Parent"}
+                          {isCustom && (
+                            <span
+                              className="ml-[6px] rounded-full px-[5px] py-[1px] text-[9px] font-bold"
+                              style={{ background: active ? "rgba(255,255,255,0.25)" : "var(--brands)", color: active ? "var(--brandfg)" : "var(--brand)" }}
+                            >
+                              EDITED
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))
             )}
           </div>
         </section>
@@ -176,7 +192,9 @@ export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform"
         <section className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
           <header className="flex flex-wrap items-center justify-between gap-[10px] border-b border-[var(--border2)] p-[14px_18px]">
             <div>
-              <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">{current.label}</h3>
+              <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">
+                {current.label} <span className="font-normal text-[var(--muted)]">— {current.recipient === "student" ? "to student" : "to parent"}</span>
+              </h3>
               <p className="m-0 mt-[2px] text-[12px] text-[var(--subtle)]">{customized ? "Customized for your organization" : "Using built-in default"}</p>
             </div>
             {customized && (
@@ -205,7 +223,7 @@ export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform"
             <div>
               <div className="mb-[7px] text-[11.5px] font-semibold text-[var(--muted)]">Insert a variable</div>
               <div className="flex flex-wrap gap-[6px]">
-                {VARS.map((v) => (
+                {current.vars.map((v) => (
                   <button
                     key={v}
                     onClick={() => setDraft((d) => d + v)}

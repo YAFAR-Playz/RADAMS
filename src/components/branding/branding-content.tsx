@@ -89,7 +89,7 @@ export function BrandingContent() {
   const fontStack = FONTS.find((f) => f.value === draft.font)?.stack ?? FONTS[0].stack;
   const cornerRad = draft.corner === "sharp" ? "4px" : "13px";
   const cornerSm = draft.corner === "sharp" ? "3px" : "9px";
-  const logoLetter = (draft.name.trim()[0] ?? "R").toUpperCase();
+  const logoLetter = (draft.name.trim()[0] ?? "Z").toUpperCase();
 
   return (
     <div className="flex flex-col gap-4">

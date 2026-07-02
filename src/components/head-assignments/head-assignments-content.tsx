@@ -15,6 +15,9 @@ import {
   type AssistantOption,
   type AssignmentProgress,
 } from "@/lib/actions/head-assignments";
+import { TEMPLATE_CATEGORY_DEFS } from "@/lib/template-defs";
+
+const ASSIGNMENT_VARS = TEMPLATE_CATEGORY_DEFS.find((c) => c.category === "assignment")!.vars;
 
 const TEMPLATES: { value: "grade" | "checkbox" | "rubric" | "comment"; label: string; desc: string }[] = [
   { value: "grade", label: "Grade + comment", desc: "Numeric mark and a free-text note" },
@@ -24,7 +27,7 @@ const TEMPLATES: { value: "grade" | "checkbox" | "rubric" | "comment"; label: st
 ];
 
 const DEFAULT_MESSAGE =
-  "Assalamu alaikum, this is RadAMS.\n\nUpdate on {assignment} for {student}:\n{status}{grade}\n\nThank you.";
+  "Assalamu alaikum, this is ZAD-AMS.\n\nUpdate on {assignment} for {student}:\n{status}{grade}\n\nThank you.";
 
 function statusFor(a: AssignmentProgress): { text: string; icon: "check2" | "clock"; tone: Tone } {
   const total = a.assignees.reduce((s, x) => s + x.total, 0);
@@ -312,8 +315,8 @@ export function HeadAssignmentsContent() {
                   <div className="min-w-[160px] flex-1">
                     <div className="text-[14px] font-semibold text-[var(--text)]">{a.title}</div>
                     <div className="text-[12px] text-[var(--subtle)]">
-                      Out of {a.maxMarks}
-                      {a.dueDate ? ` · Logging due ${a.dueDate}` : ""} · {a.assignees.length} assistants
+                      {a.template === "grade" || a.template === "rubric" ? `Out of ${a.maxMarks} · ` : a.template === "checkbox" ? "Complete / Missing · " : "Comment only · "}
+                      {a.dueDate ? `Logging due ${a.dueDate}` : "No due date"} · {a.assignees.length} assistants
                     </div>
                   </div>
                   <div className="flex min-w-[130px] flex-1 flex-col gap-[5px]">
@@ -554,15 +557,23 @@ export function HeadAssignmentsContent() {
               {!editId && (
                 <div>
                   <label className="mb-1 block text-[12.5px] font-semibold text-[var(--text)]">
-                    Parent message template
+                    Message template
                   </label>
                   <p className="mb-[7px] text-[11.5px] leading-[1.45] text-[var(--subtle)]">
-                    Prefilled and editable. Assistants send this on WhatsApp —{" "}
-                    <span className="font-mono text-[var(--muted)]">{"{student}"}</span>,{" "}
-                    <span className="font-mono text-[var(--muted)]">{"{assignment}"}</span>,{" "}
-                    <span className="font-mono text-[var(--muted)]">{"{grade}"}</span>,{" "}
-                    <span className="font-mono text-[var(--muted)]">{"{status}"}</span> auto-fill.
+                    Prefilled and editable. Assistants send this on WhatsApp — these auto-fill:
                   </p>
+                  <div className="mb-[8px] flex flex-wrap gap-[6px]">
+                    {ASSIGNMENT_VARS.map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => setForm((f) => ({ ...f, message: f.message + v }))}
+                        className="inline-flex items-center gap-[5px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[9px] py-[4px] font-mono text-[11px] font-semibold text-[var(--brand)] hover:bg-[var(--brands)]"
+                      >
+                        {v}
+                      </button>
+                    ))}
+                  </div>
                   <textarea
                     value={form.message}
                     onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))}
