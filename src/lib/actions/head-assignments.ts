@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
+import { logActivity } from "@/lib/actions/activity-log";
 
 export type AssistantOption = { id: string; name: string; initials: string };
 
@@ -153,6 +154,8 @@ export async function createAssignment(input: CreateAssignmentInput): Promise<{ 
       .insert(input.assistantIds.map((assistantId) => ({ assignment_id: data.id, assistant_id: assistantId })));
     if (linkError) throw new Error(linkError.message);
   }
+
+  await logActivity("assignments", `Created assignment "${input.title}"`);
 
   return { id: data.id };
 }

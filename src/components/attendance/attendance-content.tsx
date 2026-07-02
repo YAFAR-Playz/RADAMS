@@ -18,6 +18,7 @@ import {
 } from "@/lib/actions/attendance";
 import { getEffectiveTemplate, getOrgBrandName } from "@/lib/actions/templates";
 import { applyTemplateVars } from "@/lib/message-vars";
+import { downloadCsv } from "@/lib/csv-export";
 
 const PAGE_SIZE = 20;
 const STATUS_OPTS: { key: AttendanceStatus; label: string; icon: "check" | "clock" | "x"; tone: Tone }[] = [
@@ -159,6 +160,16 @@ export function AttendanceContent({ role }: { role: Role }) {
     }
   }
 
+  function onExport() {
+    if (!roster) return;
+    const session = sessions?.find((s) => s.id === sessionId);
+    downloadCsv(
+      `attendance-${session?.title ?? "session"}-${session?.date ?? ""}`,
+      ["Student", "Guardian phone", "Status"],
+      roster.map((r) => [r.name, r.guardianPhone ?? "", r.status])
+    );
+  }
+
   async function onCreateSession() {
     if (!offeringId) return;
     setCreating(true);
@@ -217,16 +228,28 @@ export function AttendanceContent({ role }: { role: Role }) {
                   : "Attendance recorded by the Registration team, per session."}
             </p>
           </div>
-          {canEdit && (
-            <button
-              onClick={() => setModalOpen(true)}
-              disabled={!offeringId}
-              className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[15px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
-            >
-              <Icon name="plus" size={16} />
-              New session
-            </button>
-          )}
+          <div className="flex flex-none items-center gap-[8px]">
+            {role !== "assistant" && (
+              <button
+                onClick={onExport}
+                disabled={!roster || roster.length === 0}
+                className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-[14px] py-[10px] text-[13px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
+              >
+                <Icon name="file-up" size={16} />
+                Export CSV
+              </button>
+            )}
+            {canEdit && (
+              <button
+                onClick={() => setModalOpen(true)}
+                disabled={!offeringId}
+                className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[15px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+              >
+                <Icon name="plus" size={16} />
+                New session
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="mt-[15px] flex flex-wrap items-center gap-2">

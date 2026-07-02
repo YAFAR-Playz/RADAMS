@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/current-profile";
+import { logActivity } from "@/lib/actions/activity-log";
 
 const ALLOWED_RECEIPT_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/webp"];
 const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
@@ -127,6 +128,9 @@ export async function setPayeeStatus(payeeId: string, period: string, status: "p
     .eq("payee_id", payeeId)
     .eq("period", period);
   if (error) throw new Error(error.message);
+
+  const { data: payee } = await supabase.from("profiles").select("full_name").eq("id", payeeId).single();
+  await logActivity("payments", `Marked ${payee?.full_name ?? "a payee"} as ${status} for ${period}`);
 }
 
 // Optional proof-of-payment attached when marking a payee paid. Storage lives

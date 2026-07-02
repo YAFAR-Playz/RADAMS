@@ -33,6 +33,97 @@ export type OversightComment = {
   sent: boolean;
 };
 
+export type FullExportRow = {
+  studentCode: string;
+  studentName: string;
+  assistantName: string;
+  enrolledAt: string;
+  leftAt: string | null;
+  assignmentsChecked: number;
+  assignmentsTotal: number;
+  attendancePct: number;
+};
+
+export async function getFullExport(offeringId: string): Promise<FullExportRow[]> {
+  const profile = await getCurrentProfile();
+  if (!profile || profile.role !== "head") return [];
+  const supabase = await createClient();
+
+  const { data: enrollments } = await supabase
+    .from("enrollments")
+    .select("student_id, created_at, students(student_code, name, left_at), profiles(full_name)")
+    .eq("offering_id", offeringId);
+  if (!enrollments || enrollments.length === 0) return [];
+
+  const studentIds = enrollments.map((e) => e.student_id);
+
+  const { data: assignments } = await supabase.from("assignments").select("id").eq("offering_id", offeringId);
+  const assignmentIds = (assignments ?? []).map((a) => a.id);
+  const { data: logs } = assignmentIds.length
+    ? await supabase.from("assignment_logs").select("student_id, status").in("assignment_id", assignmentIds).in("student_id", studentIds)
+    : { data: [] as { student_id: string; status: string | null }[] };
+  const checkedByStudent = new Map<string, number>();
+  for (const l of logs ?? []) {
+    if (l.status === "checked") checkedByStudent.set(l.student_id, (checkedByStudent.get(l.student_id) ?? 0) + 1);
+  }
+
+  const { data: sessions } = await supabase.from("attendance_sessions").select("id").eq("offering_id", offeringId);
+  const sessionIds = (sessions ?? []).map((s) => s.id);
+  const { data: attendance } = sessionIds.length
+    ? await supabase.from("attendance_records").select("student_id, status").in("session_id", sessionIds).in("student_id", studentIds)
+    : { data: [] as { student_id: string; status: string }[] };
+  const attendanceTotal = new Map<string, number>();
+  const attendancePresent = new Map<string, number>();
+  for (const a of attendance ?? []) {
+    attendanceTotal.set(a.student_id, (attendanceTotal.get(a.student_id) ?? 0) + 1);
+    if (a.status === "present" || a.status === "late") attendancePresent.set(a.student_id, (attendancePresent.get(a.student_id) ?? 0) + 1);
+  }
+
+  return enrollments
+    .map((e) => {
+      const student = Array.isArray(e.students) ? e.students[0] : e.students;
+      const assistant = Array.isArray(e.profiles) ? e.profiles[0] : e.profiles;
+      if (!student) return null;
+      const total = attendanceTotal.get(e.student_id) ?? 0;
+      const present = attendancePresent.get(e.student_id) ?? 0;
+      return {
+        studentCode: student.student_code,
+        studentName: student.name,
+        assistantName: assistant?.full_name ?? "—",
+        enrolledAt: e.created_at,
+        leftAt: student.left_at,
+        assignmentsChecked: checkedByStudent.get(e.student_id) ?? 0,
+        assignmentsTotal: assignmentIds.length,
+        attendancePct: total ? Math.round((present / total) * 100) : 0,
+      };
+    })
+    .filter((x): x is FullExportRow => !!x)
+    .sort((a, b) => a.studentName.localeCompare(b.studentName));
+}
+
+export type GradeBand = { label: string; min: number };
+export type GradeScaleSetting = { scale: "percentage" | "letter"; bands: GradeBand[] };
+
+export async function getGradeScale(offeringId: string): Promise<GradeScaleSetting> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("course_offerings").select("grade_scale, grade_bands").eq("id", offeringId).single();
+  return {
+    scale: (data?.grade_scale as GradeScaleSetting["scale"]) ?? "percentage",
+    bands: (data?.grade_bands as GradeBand[] | null) ?? [],
+  };
+}
+
+export async function setGradeScale(offeringId: string, setting: GradeScaleSetting) {
+  const profile = await getCurrentProfile();
+  if (!profile || profile.role !== "head") throw new Error("Not authorized");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("course_offerings")
+    .update({ grade_scale: setting.scale, grade_bands: setting.scale === "letter" ? setting.bands : null })
+    .eq("id", offeringId);
+  if (error) throw new Error(error.message);
+}
+
 export async function listHeadOfferings(): Promise<OfferingOption[]> {
   const profile = await getCurrentProfile();
   if (!profile || profile.role !== "head") return [];
