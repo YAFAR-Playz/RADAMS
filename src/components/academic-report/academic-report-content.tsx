@@ -12,6 +12,9 @@ import {
   type StudentAcademicReport,
 } from "@/lib/actions/academic-report";
 import { downloadCsv } from "@/lib/csv-export";
+import { pickerOnlyDateProps } from "@/lib/date-input";
+
+const PAGE_SIZE = 10;
 
 function currentPeriod() {
   return new Date().toISOString().slice(0, 7);
@@ -29,6 +32,7 @@ export function AcademicReportContent() {
   const [assignments, setAssignments] = useState<ReportAssignmentOption[] | null>(null);
   const [report, setReport] = useState<StudentAcademicReport[] | null>(null);
   const [toggling, setToggling] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     listMyOfferings().then((data) => {
@@ -41,6 +45,7 @@ export function AcademicReportContent() {
     if (!offeringId) return;
     setAssignments(null);
     setReport(null);
+    setPage(0);
     getReportAssignments(offeringId, period).then(setAssignments);
     getAcademicMonthlyReport(offeringId, period).then(setReport);
   }
@@ -49,6 +54,11 @@ export function AcademicReportContent() {
     (() => reload())();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offeringId, period]);
+
+  const pageCount = Math.max(1, Math.ceil((report?.length ?? 0) / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageStart = safePage * PAGE_SIZE;
+  const pageReport = (report ?? []).slice(pageStart, pageStart + PAGE_SIZE);
 
   async function onToggleAssignment(a: ReportAssignmentOption) {
     setToggling(a.id);
@@ -115,7 +125,8 @@ export function AcademicReportContent() {
               type="month"
               value={period}
               onChange={(e) => setPeriod(e.target.value)}
-              className="h-10 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13px] text-[var(--text)] outline-none"
+              {...pickerOnlyDateProps}
+              className="h-10 cursor-pointer rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13px] text-[var(--text)] outline-none"
             />
             <button
               onClick={onExport}
@@ -174,7 +185,15 @@ export function AcademicReportContent() {
                 No students enrolled in this course.
               </div>
             ) : (
-              report.map((s) => (
+              <>
+              {report.length > PAGE_SIZE && (
+                <div className="flex items-center justify-between gap-[10px] text-[12px] text-[var(--subtle)]">
+                  <span>
+                    {pageStart + 1}–{Math.min(pageStart + PAGE_SIZE, report.length)} of {report.length} students
+                  </span>
+                </div>
+              )}
+              {pageReport.map((s) => (
                 <div key={s.studentId} className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
                   <div className="border-b border-[var(--border)] p-[14px_18px]">
                     <div className="text-[14px] font-semibold text-[var(--text)]">{s.studentName}</div>
@@ -228,7 +247,31 @@ export function AcademicReportContent() {
                     </div>
                   </div>
                 </div>
-              ))
+              ))}
+              {pageCount > 1 && (
+                <div className="flex flex-wrap items-center gap-[5px]">
+                  {Array.from({ length: pageCount }, (_, i) => i)
+                    .filter((i) => i >= safePage - 2 && i <= safePage + 2)
+                    .map((i) => {
+                      const active = i === safePage;
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => setPage(i)}
+                          className="h-7 min-w-7 rounded-[7px] border px-[7px] text-[12px] font-semibold"
+                          style={
+                            active
+                              ? { borderColor: "var(--brand)", background: "var(--brand)", color: "var(--brandfg)" }
+                              : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
+                          }
+                        >
+                          {i + 1}
+                        </button>
+                      );
+                    })}
+                </div>
+              )}
+              </>
             )}
           </div>
         </>

@@ -15,9 +15,7 @@ import {
   type AssistantOption,
   type AssignmentProgress,
 } from "@/lib/actions/head-assignments";
-import { TEMPLATE_CATEGORY_DEFS } from "@/lib/template-defs";
-
-const ASSIGNMENT_VARS = TEMPLATE_CATEGORY_DEFS.find((c) => c.category === "assignment")!.vars;
+import { pickerOnlyDateProps } from "@/lib/date-input";
 
 const TEMPLATES: { value: "grade" | "checkbox" | "rubric" | "comment"; label: string; desc: string }[] = [
   { value: "grade", label: "Grade + comment", desc: "Numeric mark and a free-text note" },
@@ -25,9 +23,6 @@ const TEMPLATES: { value: "grade" | "checkbox" | "rubric" | "comment"; label: st
   { value: "rubric", label: "Rubric (criteria)", desc: "Score against named criteria" },
   { value: "comment", label: "Comment only", desc: "Qualitative feedback, no mark" },
 ];
-
-const DEFAULT_MESSAGE =
-  "Assalamu alaikum, this is ZAD-AMS.\n\nUpdate on {assignment} for {student}:\n{status}{grade}\n\nThank you.";
 
 function statusFor(a: AssignmentProgress): { text: string; icon: "check2" | "clock"; tone: Tone } {
   const total = a.assignees.reduce((s, x) => s + x.total, 0);
@@ -47,7 +42,6 @@ type FormState = {
   template: "grade" | "checkbox" | "rubric" | "comment";
   gradeScheme: "numeric" | "letter";
   countsSalary: boolean;
-  message: string;
   assistantIds: string[];
 };
 
@@ -59,7 +53,6 @@ function emptyForm(assistantIds: string[]): FormState {
     template: "grade",
     gradeScheme: "numeric",
     countsSalary: true,
-    message: DEFAULT_MESSAGE,
     assistantIds,
   };
 }
@@ -133,7 +126,6 @@ export function HeadAssignmentsContent() {
       template: a.template,
       gradeScheme: a.gradeScheme,
       countsSalary: a.countsSalary,
-      message: a.messageTemplate ?? DEFAULT_MESSAGE,
       assistantIds: a.assignees.map((x) => x.assistantId),
     });
     setModalOpen(true);
@@ -175,7 +167,6 @@ export function HeadAssignmentsContent() {
           template: form.template,
           gradeScheme: form.gradeScheme,
           countsSalary: form.countsSalary,
-          messageTemplate: form.message,
           assistantIds: form.assistantIds,
         });
       }
@@ -452,7 +443,8 @@ export function HeadAssignmentsContent() {
                   type="date"
                   value={form.due}
                   onChange={(e) => setForm((f) => ({ ...f, due: e.target.value }))}
-                  className="h-11 w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[13px] text-[13.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                  {...pickerOnlyDateProps}
+                  className="h-11 w-full cursor-pointer rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[13px] text-[13.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                 />
               </div>
 
@@ -554,33 +546,13 @@ export function HeadAssignmentsContent() {
                 </button>
               </div>
 
-              {!editId && (
-                <div>
-                  <label className="mb-1 block text-[12.5px] font-semibold text-[var(--text)]">
-                    Message template
-                  </label>
-                  <p className="mb-[7px] text-[11.5px] leading-[1.45] text-[var(--subtle)]">
-                    Prefilled and editable. Assistants send this on WhatsApp — these auto-fill:
-                  </p>
-                  <div className="mb-[8px] flex flex-wrap gap-[6px]">
-                    {ASSIGNMENT_VARS.map((v) => (
-                      <button
-                        key={v}
-                        type="button"
-                        onClick={() => setForm((f) => ({ ...f, message: f.message + v }))}
-                        className="inline-flex items-center gap-[5px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[9px] py-[4px] font-mono text-[11px] font-semibold text-[var(--brand)] hover:bg-[var(--brands)]"
-                      >
-                        {v}
-                      </button>
-                    ))}
-                  </div>
-                  <textarea
-                    value={form.message}
-                    onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))}
-                    className="h-[104px] w-full resize-y rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[11px_12px] text-[13px] leading-[1.5] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
-                  />
-                </div>
-              )}
+              <div className="flex items-start gap-[9px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[11px_13px]">
+                <Icon name="message" size={15} className="mt-[1px] flex-none text-[var(--subtle)]" />
+                <p className="m-0 text-[12px] leading-[1.5] text-[var(--muted)]">
+                  Status updates for this assignment are sent using the Assignment update message set up in{" "}
+                  <span className="font-semibold text-[var(--text)]">Admin → Templates</span> — edit the wording there, not per assignment.
+                </p>
+              </div>
 
               <div className="rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[11px_13px]">
                 <div className="mb-2 flex items-center gap-2">

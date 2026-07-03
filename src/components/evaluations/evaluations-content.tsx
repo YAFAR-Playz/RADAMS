@@ -146,6 +146,8 @@ export function EvaluationsContent() {
 
   const extraCats = useMemo(() => resolveCategoryDefs(payCategories, "extra"), [payCategories]);
   const dedCats = useMemo(() => resolveCategoryDefs(payCategories, "deduction"), [payCategories]);
+  const extraIsFallback = !payCategories.some((c) => c.kind === "extra");
+  const dedIsFallback = !payCategories.some((c) => c.kind === "deduction");
 
   useEffect(() => {
     (async () => {
@@ -342,6 +344,15 @@ export function EvaluationsContent() {
                       <Icon name="trend" size={16} />
                     </div>
                     <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Extra work &amp; bonuses</h3>
+                    {extraIsFallback && (
+                      <span
+                        title="Finance hasn't added any Extra work categories yet — showing built-in defaults."
+                        className="inline-flex items-center gap-[4px] rounded-full bg-[var(--surface2)] px-[8px] py-[2px] text-[10.5px] font-semibold text-[var(--subtle)]"
+                      >
+                        <Icon name="shield" size={10} />
+                        Default categories
+                      </span>
+                    )}
                   </div>
                   <button
                     onClick={() => addLine("extra")}
@@ -376,6 +387,15 @@ export function EvaluationsContent() {
                       <Icon name="minus" size={16} />
                     </div>
                     <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Deductions</h3>
+                    {dedIsFallback && (
+                      <span
+                        title="Finance hasn't added any Deduction categories yet — showing built-in defaults."
+                        className="inline-flex items-center gap-[4px] rounded-full bg-[var(--surface2)] px-[8px] py-[2px] text-[10.5px] font-semibold text-[var(--subtle)]"
+                      >
+                        <Icon name="shield" size={10} />
+                        Default categories
+                      </span>
+                    )}
                   </div>
                   <button
                     onClick={() => addLine("deduction")}

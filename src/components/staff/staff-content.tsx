@@ -20,6 +20,7 @@ import { listAllStaffingRequests, type StaffingRequestDetail } from "@/lib/actio
 import { listAllOfferingsForOrg, type OfferingChoice } from "@/lib/actions/students";
 import { downloadCsv } from "@/lib/csv-export";
 import { consumeSearchHandoff } from "@/lib/search-handoff";
+import { pickerOnlyDateProps } from "@/lib/date-input";
 
 const ADMIN_ROLE_OPTIONS: Role[] = ["admin", "hr", "head", "assistant", "registration", "finance"];
 const HR_ROLE_OPTIONS: Role[] = ["hr", "head", "assistant", "registration", "finance"];
@@ -289,7 +290,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
           <div className="p-[7px_8px]">
             {pendingRequests.map((r) => {
               const title = r.kind === "add" ? "New assistant requested" : r.kind === "remove" ? "Removal requested" : "Replacement requested";
-              const who = r.candidateName ?? r.targetName ?? "—";
+              const who = r.kind === "replace" ? `${r.targetName ?? "—"} → ${r.candidateName ?? "TBD"}` : r.candidateName ?? r.targetName ?? "—";
               return (
                 <div key={r.id} className="flex flex-wrap items-center gap-3 rounded-[10px] p-[10px_11px] hover:bg-[var(--surface2)]">
                   <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] bg-[var(--surface2)] text-[var(--text)]">
@@ -647,7 +648,8 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
                   type="date"
                   value={removeLeaveDate}
                   onChange={(e) => setRemoveLeaveDate(e.target.value)}
-                  className="h-10 w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                  {...pickerOnlyDateProps}
+                  className="h-10 w-full cursor-pointer rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                 />
               </div>
               <label className="flex cursor-pointer items-center gap-[9px] text-[13px] font-medium text-[var(--text)]">
@@ -696,40 +698,60 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
                 <div className="text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Course</div>
                 <div className="text-[13.5px] text-[var(--text)]">{viewingRequest.offeringLabel}</div>
               </div>
-              <div>
-                <div className="text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">{viewingRequest.kind === "add" ? "Candidate" : "Staff member"}</div>
-                <div className="text-[13.5px] text-[var(--text)]">{viewingRequest.candidateName ?? viewingRequest.targetName ?? "—"}</div>
-              </div>
-              {viewingRequest.candidatePhone && (
-                <div>
-                  <div className="text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Phone</div>
-                  <div className="font-mono text-[13.5px] text-[var(--text)]">{viewingRequest.candidatePhone}</div>
-                </div>
-              )}
-              {viewingRequest.candidateEmail && (
-                <div>
-                  <div className="text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Email</div>
-                  <div className="text-[13.5px] text-[var(--text)]">{viewingRequest.candidateEmail}</div>
-                </div>
-              )}
-              {viewingRequest.kind === "replace" && viewingRequest.leaveDate && (
-                <div>
-                  <div className="text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Leave date (outgoing)</div>
-                  <div className="text-[13.5px] text-[var(--text)]">{new Date(viewingRequest.leaveDate).toLocaleDateString()}</div>
-                </div>
-              )}
-              {viewingRequest.proposedDate && (
-                <div>
-                  <div className="text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">
-                    {viewingRequest.kind === "remove" ? "Leave date" : viewingRequest.kind === "replace" ? "Proposed start (incoming)" : "Proposed start"}
+              {(viewingRequest.kind === "remove" || viewingRequest.kind === "replace") && (
+                <div className="rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[11px_13px]">
+                  <div className="mb-[9px] text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">
+                    {viewingRequest.kind === "replace" ? "Outgoing" : "Staff member"}
                   </div>
-                  <div className="text-[13.5px] text-[var(--text)]">{new Date(viewingRequest.proposedDate).toLocaleDateString()}</div>
+                  <div className="flex flex-col gap-[9px]">
+                    <div className="text-[13.5px] font-semibold text-[var(--text)]">{viewingRequest.targetName ?? "—"}</div>
+                    <div className="grid grid-cols-2 gap-[9px]">
+                      {(viewingRequest.kind === "remove" ? viewingRequest.proposedDate : viewingRequest.leaveDate) && (
+                        <div>
+                          <div className="text-[10px] font-bold uppercase text-[var(--subtle)]">Leave date</div>
+                          <div className="text-[13px] text-[var(--text)]">
+                            {new Date((viewingRequest.kind === "remove" ? viewingRequest.proposedDate : viewingRequest.leaveDate) as string).toLocaleDateString()}
+                          </div>
+                        </div>
+                      )}
+                      {viewingRequest.gaveNotice !== null && (
+                        <div>
+                          <div className="text-[10px] font-bold uppercase text-[var(--subtle)]">Gave notice</div>
+                          <div className="text-[13px] text-[var(--text)]">{viewingRequest.gaveNotice ? "Yes" : "No"}</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
-              {(viewingRequest.kind === "remove" || viewingRequest.kind === "replace") && viewingRequest.gaveNotice !== null && (
-                <div>
-                  <div className="text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Gave two weeks&apos; notice</div>
-                  <div className="text-[13.5px] text-[var(--text)]">{viewingRequest.gaveNotice ? "Yes" : "No"}</div>
+              {(viewingRequest.kind === "add" || viewingRequest.kind === "replace") && (
+                <div className="rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[11px_13px]">
+                  <div className="mb-[9px] text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">
+                    {viewingRequest.kind === "replace" ? "Incoming candidate" : "Candidate"}
+                  </div>
+                  <div className="flex flex-col gap-[9px]">
+                    <div className="text-[13.5px] font-semibold text-[var(--text)]">{viewingRequest.candidateName ?? "Not provided yet"}</div>
+                    <div className="grid grid-cols-2 gap-[9px]">
+                      {viewingRequest.candidatePhone && (
+                        <div>
+                          <div className="text-[10px] font-bold uppercase text-[var(--subtle)]">Phone</div>
+                          <div className="font-mono text-[13px] text-[var(--text)]">{viewingRequest.candidatePhone}</div>
+                        </div>
+                      )}
+                      {viewingRequest.candidateEmail && (
+                        <div>
+                          <div className="text-[10px] font-bold uppercase text-[var(--subtle)]">Email</div>
+                          <div className="text-[13px] text-[var(--text)]">{viewingRequest.candidateEmail}</div>
+                        </div>
+                      )}
+                      {viewingRequest.proposedDate && (
+                        <div>
+                          <div className="text-[10px] font-bold uppercase text-[var(--subtle)]">Proposed start</div>
+                          <div className="text-[13px] text-[var(--text)]">{new Date(viewingRequest.proposedDate).toLocaleDateString()}</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
               {viewingRequest.reason && (

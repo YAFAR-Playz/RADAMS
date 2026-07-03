@@ -53,7 +53,13 @@ export async function globalSearch(rawQuery: string): Promise<SearchResult[]> {
   if (profile.role === "admin" || profile.role === "hr") {
     const staffNav = findNavItem(profile.role, "staff");
     if (staffNav) {
-      let query = supabase.from("profiles").select("id, full_name, role, email").eq("org_id", orgId).or(`full_name.ilike.${like},email.ilike.${like}`).limit(6);
+      let query = supabase
+        .from("profiles")
+        .select("id, full_name, role, email")
+        .eq("org_id", orgId)
+        .is("left_at", null)
+        .or(`full_name.ilike.${like},email.ilike.${like}`)
+        .limit(6);
       if (profile.role === "hr") query = query.not("role", "in", '("admin","owner")');
       const { data: staff } = await query;
       for (const s of staff ?? []) {

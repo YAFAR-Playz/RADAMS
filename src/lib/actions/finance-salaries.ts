@@ -184,15 +184,21 @@ export async function getSalaryReceiptUrl(payeeId: string, period: string): Prom
 }
 
 // "Papers checked" for an assistant on an offering, within a period, is the
-// number of that assistant's assigned students (via enrollments.assistant_id
-// for that offering) whose assignment_log status is "checked" on an
-// assignment due — or if undated, created — within that calendar month.
+// number of assignment_logs that assistant personally marked "checked"
+// (logged_by) on a salary-counting assignment due — or if undated, created —
+// within that calendar month. Attributing by logged_by rather than the
+// student's current assistant keeps this correct across mid-term
+// reassignment (a paper checked before a handoff still counts for whoever
+// actually checked it, not the student's new or previous assistant) and
+// excludes a head's own correction/override from counting toward pay.
+type CheckedPapersCount = { papers: number; assignments: number };
+
 async function countCheckedPapers(
   supabase: Awaited<ReturnType<typeof createClient>>,
   offeringId: string,
   assistantId: string,
   period: string
-): Promise<number> {
+): Promise<CheckedPapersCount> {
   const [y, m] = period.split("-").map(Number);
   const monthStart = `${period}-01`;
   const monthEnd = new Date(y, m, 1).toISOString().slice(0, 10);
@@ -200,42 +206,117 @@ async function countCheckedPapers(
   const { data: assignments } = await supabase
     .from("assignments")
     .select("id, due_date, created_at")
-    .eq("offering_id", offeringId);
+    .eq("offering_id", offeringId)
+    .eq("counts_salary", true);
   const assignmentIds = (assignments ?? [])
     .filter((a) => {
       const d = a.due_date ?? a.created_at.slice(0, 10);
       return d >= monthStart && d < monthEnd;
     })
     .map((a) => a.id);
-  if (!assignmentIds.length) return 0;
+  if (!assignmentIds.length) return { papers: 0, assignments: 0 };
 
-  const { data: studentRows } = await supabase.from("enrollments").select("student_id").eq("offering_id", offeringId).eq("assistant_id", assistantId);
-  const studentIds = (studentRows ?? []).map((s) => s.student_id);
-  if (!studentIds.length) return 0;
-
-  const { count } = await supabase
+  const { data: logs } = await supabase
     .from("assignment_logs")
-    .select("id", { count: "exact", head: true })
+    .select("id, assignment_id")
     .in("assignment_id", assignmentIds)
-    .in("student_id", studentIds)
+    .eq("logged_by", assistantId)
     .eq("status", "checked");
-  return count ?? 0;
+  return { papers: logs?.length ?? 0, assignments: new Set((logs ?? []).map((l) => l.assignment_id)).size };
+}
+
+function formatBasis(method: "per_paper" | "bracket", count: CheckedPapersCount, prorationNote: string | null): string {
+  if (count.papers === 0) return "No checked papers this period";
+  const base =
+    method === "bracket"
+      ? `${count.papers} paper${count.papers === 1 ? "" : "s"} checked across ${count.assignments} assignment${count.assignments === 1 ? "" : "s"}`
+      : `${count.papers} papers checked`;
+  return prorationNote ? `${base} · ${prorationNote}` : base;
+}
+
+function daysInMonth(year: number, month1to12: number): number {
+  return new Date(Date.UTC(year, month1to12, 0)).getUTCDate();
+}
+
+// Fraction of `period` (YYYY-MM) an assistant was actually active on this
+// offering, given when they joined it and when they left the org (if ever).
+// A leave date is inclusive of that day (they worked through it); a join
+// date is exclusive (counting starts the day after). E.g. in a 31-day
+// month: leaving on the 10th pays 10/31, joining on the 10th pays 21/31.
+function prorationFraction(period: string, joinedAt: string | null, leftAt: string | null): number {
+  const [y, m] = period.split("-").map(Number);
+  const n = daysInMonth(y, m);
+  const periodStart = Date.UTC(y, m - 1, 1);
+  const periodEnd = Date.UTC(y, m - 1, n);
+
+  let startDay = 1;
+  if (joinedAt) {
+    const j = new Date(joinedAt);
+    const jTime = Date.UTC(j.getUTCFullYear(), j.getUTCMonth(), j.getUTCDate());
+    if (jTime > periodEnd) return 0;
+    if (j.getUTCFullYear() === y && j.getUTCMonth() + 1 === m) startDay = j.getUTCDate() + 1;
+  }
+
+  let endDay = n;
+  if (leftAt) {
+    const l = new Date(leftAt);
+    const lTime = Date.UTC(l.getUTCFullYear(), l.getUTCMonth(), l.getUTCDate());
+    if (lTime < periodStart) return 0;
+    if (l.getUTCFullYear() === y && l.getUTCMonth() + 1 === m) endDay = l.getUTCDate();
+  }
+
+  return Math.max(0, endDay - startDay + 1) / n;
+}
+
+function formatProrationNote(period: string, joinedAt: string | null, leftAt: string | null, fraction: number): string {
+  const [y, m] = period.split("-").map(Number);
+  const n = daysInMonth(y, m);
+  const activeDays = Math.round(fraction * n);
+  const notes: string[] = [];
+  if (leftAt) {
+    const l = new Date(leftAt);
+    if (l.getUTCFullYear() === y && l.getUTCMonth() + 1 === m) notes.push(`left ${leftAt}`);
+  }
+  if (joinedAt) {
+    const j = new Date(joinedAt);
+    if (j.getUTCFullYear() === y && j.getUTCMonth() + 1 === m) notes.push(`joined ${j.toISOString().slice(0, 10)}`);
+  }
+  return `prorated ${activeDays}/${n}${notes.length ? ` — ${notes.join(", ")}` : ""}`;
+}
+
+async function getActivityWindow(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  offeringId: string,
+  assistantId: string
+): Promise<{ joinedAt: string | null; leftAt: string | null }> {
+  const [{ data: oa }, { data: p }] = await Promise.all([
+    supabase.from("offering_assistants").select("joined_at").eq("offering_id", offeringId).eq("assistant_id", assistantId).maybeSingle(),
+    supabase.from("profiles").select("left_at").eq("id", assistantId).maybeSingle(),
+  ]);
+  return { joinedAt: oa?.joined_at ?? null, leftAt: p?.left_at ?? null };
 }
 
 async function computeBaseForMethod(
   supabase: Awaited<ReturnType<typeof createClient>>,
   offeringId: string,
+  assistantId: string,
+  period: string,
   method: "per_paper" | "bracket",
   checkedCount: number
-): Promise<{ base: number; methodLabel: string }> {
+): Promise<{ base: number; methodLabel: string; prorationNote: string | null }> {
   if (method === "bracket") {
     const { data: brackets } = await supabase.from("pay_brackets").select("lo, hi, pay").eq("offering_id", offeringId);
     const match = (brackets ?? []).find((b) => checkedCount >= b.lo && checkedCount <= b.hi);
-    return { base: match ? Number(match.pay) : 0, methodLabel: "Bracket" };
+    const fullPay = match ? Number(match.pay) : 0;
+
+    const { joinedAt, leftAt } = await getActivityWindow(supabase, offeringId, assistantId);
+    const fraction = prorationFraction(period, joinedAt, leftAt);
+    const prorationNote = fraction < 1 ? formatProrationNote(period, joinedAt, leftAt, fraction) : null;
+    return { base: Math.round(fullPay * fraction), methodLabel: "Bracket", prorationNote };
   }
   const { data: rateRow } = await supabase.from("per_paper_rates").select("rate").eq("offering_id", offeringId).maybeSingle();
   const rate = rateRow ? Number(rateRow.rate) : 8;
-  return { base: checkedCount * rate, methodLabel: "Per paper" };
+  return { base: checkedCount * rate, methodLabel: "Per paper", prorationNote: null };
 }
 
 async function defaultMethodForOffering(supabase: Awaited<ReturnType<typeof createClient>>, offeringId: string): Promise<"per_paper" | "bracket"> {
@@ -244,7 +325,10 @@ async function defaultMethodForOffering(supabase: Awaited<ReturnType<typeof crea
 }
 
 // Generates one salary_line per (assistant, offering) that has at least one
-// checked paper in this period. Existing lines for that exact
+// checked paper in this period, OR an evaluation with a nonzero extra/
+// deduction logged by their head for this period — a head's bonus or
+// deduction still needs somewhere for Finance to see and pay it even when
+// the assistant had nothing due this month. Existing lines for that exact
 // (org, payee, offering, period) combination are left completely untouched
 // — this only fills in gaps, so it's safe to re-run without clobbering
 // anything Finance has already reviewed or hand-edited.
@@ -259,15 +343,43 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
 
   for (const offering of offerings ?? []) {
     const { data: enrollments } = await supabase.from("enrollments").select("assistant_id").eq("offering_id", offering.id).not("assistant_id", "is", null);
-    const assistantIds = Array.from(new Set((enrollments ?? []).map((e) => e.assistant_id as string)));
+    const enrolledAssistantIds = new Set((enrollments ?? []).map((e) => e.assistant_id as string));
+
+    const { data: evalRows } = await supabase
+      .from("evaluations")
+      .select("assistant_id, evaluation_lines(kind, amount)")
+      .eq("org_id", orgId)
+      .eq("offering_id", offering.id)
+      .eq("period", period);
+    const evalByAssistant = new Map<string, { extra: number; deduction: number }>();
+    for (const ev of evalRows ?? []) {
+      const evLines = Array.isArray(ev.evaluation_lines) ? ev.evaluation_lines : [];
+      const extra = evLines.filter((l) => l.kind === "extra").reduce((sum, l) => sum + Number(l.amount), 0);
+      const deduction = evLines.filter((l) => l.kind === "deduction").reduce((sum, l) => sum + Number(l.amount), 0);
+      if (extra > 0 || deduction > 0) evalByAssistant.set(ev.assistant_id, { extra, deduction });
+    }
+
+    const assistantIds = Array.from(new Set([...enrolledAssistantIds, ...evalByAssistant.keys()]));
     if (!assistantIds.length) continue;
 
     const method = await defaultMethodForOffering(supabase, offering.id);
 
     for (const assistantId of assistantIds) {
       const checkedCount = await countCheckedPapers(supabase, offering.id, assistantId, period);
-      if (checkedCount <= 0) continue;
-      const { base, methodLabel } = await computeBaseForMethod(supabase, offering.id, method, checkedCount);
+      const evalAmounts = evalByAssistant.get(assistantId);
+      if (checkedCount.papers <= 0 && !evalAmounts) continue;
+
+      let base = 0;
+      let methodLabel = "Manual";
+      let calcMethod: "per_paper" | "bracket" | "manual" = "manual";
+      let basis = "No checked papers this period";
+      if (checkedCount.papers > 0) {
+        const computed = await computeBaseForMethod(supabase, offering.id, assistantId, period, method, checkedCount.papers);
+        base = computed.base;
+        methodLabel = computed.methodLabel;
+        calcMethod = method;
+        basis = formatBasis(method, checkedCount, computed.prorationNote);
+      }
 
       const { error } = await supabase
         .from("salary_lines")
@@ -278,9 +390,13 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
             offering_id: offering.id,
             period,
             method: methodLabel,
-            calc_method: method,
-            basis: `${checkedCount} papers checked`,
+            calc_method: calcMethod,
+            basis,
             base,
+            bonus: evalAmounts?.extra ?? 0,
+            deduction: evalAmounts?.deduction ?? 0,
+            bonus_reason: evalAmounts?.extra ? "From head evaluation" : null,
+            deduction_reason: evalAmounts?.deduction ? "From head evaluation" : null,
           },
           { onConflict: "org_id,payee_id,offering_id,period", ignoreDuplicates: true }
         );
@@ -309,10 +425,10 @@ export async function setLineCalcMethod(lineId: string, method: "per_paper" | "b
   }
 
   const checkedCount = await countCheckedPapers(supabase, line.offering_id, line.payee_id, line.period);
-  const { base, methodLabel } = await computeBaseForMethod(supabase, line.offering_id, method, checkedCount);
+  const { base, methodLabel, prorationNote } = await computeBaseForMethod(supabase, line.offering_id, line.payee_id, line.period, method, checkedCount.papers);
   const { error } = await supabase
     .from("salary_lines")
-    .update({ calc_method: method, method: methodLabel, basis: `${checkedCount} papers checked`, base, updated_at: new Date().toISOString() })
+    .update({ calc_method: method, method: methodLabel, basis: formatBasis(method, checkedCount, prorationNote), base, updated_at: new Date().toISOString() })
     .eq("id", lineId);
   if (error) throw new Error(error.message);
 }
@@ -404,7 +520,7 @@ export async function getAssistantDetailedExport(): Promise<{ detail: AssistantD
     const course = offering ? (Array.isArray(offering.courses) ? offering.courses[0] : offering.courses) : null;
     const offeringLabel2 = offering ? [course?.name, offering.session, offering.unit].filter(Boolean).join(" · ") : "—";
 
-    const papersChecked = l.offering_id ? await countCheckedPapers(supabase, l.offering_id, l.payee_id, l.period) : 0;
+    const papersChecked = l.offering_id ? (await countCheckedPapers(supabase, l.offering_id, l.payee_id, l.period)).papers : 0;
     const ev = evalByKey.get(evalKey(l.payee_id, l.offering_id, l.period));
     const base = Number(l.base);
     const bonus = Number(l.bonus);

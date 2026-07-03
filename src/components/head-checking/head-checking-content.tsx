@@ -24,14 +24,14 @@ const PAGE_SIZE = 10;
 
 type Recipient = "student" | "parent";
 
-function buildMessage(template: string, orgName: string, student: RosterStudent, assignmentTitle: string) {
+function buildMessage(template: string, orgName: string, student: RosterStudent, assignmentTitle: string, maxMarks: number) {
   const def = statusDef(student.status);
   return applyTemplateVars(template, {
     org: orgName,
     student: student.name,
     assignment: assignmentTitle,
     status: def ? def.label : "Not yet logged",
-    grade: student.grade ? ` (${student.grade}/100)` : "",
+    grade: student.grade ? ` (${student.grade}/${maxMarks})` : "",
     comment: student.comment ?? "",
   });
 }
@@ -102,6 +102,17 @@ export function HeadCheckingContent() {
     });
   }, []);
 
+  // Refetch on every modal open (not just page mount) — an admin editing
+  // Templates while a head already has this page open shouldn't leave them
+  // sending a stale message.
+  useEffect(() => {
+    if (!modalId) return;
+    Promise.all([getEffectiveTemplate("assignment_student"), getEffectiveTemplate("assignment_parent")]).then(([tplS, tplP]) => {
+      setTemplateStudent(tplS);
+      setTemplateParent(tplP);
+    });
+  }, [modalId]);
+
   useEffect(() => {
     (async () => {
       if (!offeringId) {
@@ -165,7 +176,9 @@ export function HeadCheckingContent() {
   const modalStudent = modalId != null ? roster?.find((s) => s.studentId === modalId) ?? null : null;
   const activeTemplate = recipient === "student" ? templateStudent : templateParent;
   const modalMessage =
-    modalStudent && currentAssignment && activeTemplate ? buildMessage(activeTemplate, orgName, modalStudent, currentAssignment.title) : "";
+    modalStudent && currentAssignment && activeTemplate
+      ? buildMessage(activeTemplate, orgName, modalStudent, currentAssignment.title, currentAssignment.maxMarks)
+      : "";
   const modalPhone = recipient === "student" ? modalStudent?.phone : modalStudent?.guardianPhone;
   const modalWaUrl = modalStudent
     ? `https://wa.me/${(modalPhone ?? "").replace(/[^\d]/g, "")}?text=${encodeURIComponent(modalMessage)}`
@@ -190,8 +203,16 @@ export function HeadCheckingContent() {
     }
   }
 
-  async function onGradeBlur(studentId: string, value: string) {
+  async function onGradeBlur(studentId: string, value: string, inputEl: HTMLInputElement) {
     if (!assignmentId) return;
+    if (value.trim() && currentAssignment && !currentAssignment.lettered) {
+      const numeric = Number(value);
+      if (Number.isFinite(numeric) && numeric > currentAssignment.maxMarks) {
+        setError(`Grade can't exceed ${currentAssignment.maxMarks} for this assignment.`);
+        inputEl.value = roster?.find((s) => s.studentId === studentId)?.grade ?? "";
+        return;
+      }
+    }
     setSavingId(studentId);
     try {
       await setGrade(assignmentId, studentId, value);
@@ -422,13 +443,15 @@ export function HeadCheckingContent() {
                 </div>
                 {showGrade && (
                   <input
+                    key={`grade-${st.studentId}-${assignmentId}`}
                     defaultValue={st.grade ?? ""}
-                    onBlur={(e) => onGradeBlur(st.studentId, e.target.value)}
+                    onBlur={(e) => onGradeBlur(st.studentId, e.target.value, e.target)}
                     placeholder="—"
                     className="h-[36px] w-[60px] flex-none rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-center text-[13px] font-semibold text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                   />
                 )}
                 <input
+                  key={`comment-${st.studentId}-${assignmentId}`}
                   defaultValue={st.comment ?? ""}
                   onBlur={(e) => onCommentBlur(st.studentId, e.target.value)}
                   placeholder="Add comment…"
@@ -478,13 +501,15 @@ export function HeadCheckingContent() {
                   <div className="flex flex-wrap gap-[10px]">
                     {showGrade && (
                       <input
+                        key={`grade-${st.studentId}-${assignmentId}`}
                         defaultValue={st.grade ?? ""}
-                        onBlur={(e) => onGradeBlur(st.studentId, e.target.value)}
+                        onBlur={(e) => onGradeBlur(st.studentId, e.target.value, e.target)}
                         placeholder="Grade"
                         className="h-[44px] w-[84px] flex-none rounded-[9px] border border-[var(--border)] bg-[var(--surface2)] text-center text-[14px] font-semibold text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                       />
                     )}
                     <input
+                      key={`comment-${st.studentId}-${assignmentId}`}
                       defaultValue={st.comment ?? ""}
                       onBlur={(e) => onCommentBlur(st.studentId, e.target.value)}
                       placeholder="Add comment…"

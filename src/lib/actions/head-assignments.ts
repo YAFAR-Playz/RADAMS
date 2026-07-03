@@ -23,7 +23,6 @@ export type AssignmentProgress = {
   countsSalary: boolean;
   dueDate: string | null;
   closedAt: string | null;
-  messageTemplate: string | null;
   assignees: AssigneeProgress[];
 };
 
@@ -35,7 +34,6 @@ export type CreateAssignmentInput = {
   template: "grade" | "checkbox" | "rubric" | "comment";
   gradeScheme: "numeric" | "letter";
   countsSalary: boolean;
-  messageTemplate: string;
   assistantIds: string[];
 };
 
@@ -43,8 +41,9 @@ export async function listOfferingAssistants(offeringId: string): Promise<Assist
   const supabase = await createClient();
   const { data } = await supabase
     .from("offering_assistants")
-    .select("profiles(id, full_name, initials)")
-    .eq("offering_id", offeringId);
+    .select("profiles!inner(id, full_name, initials)")
+    .eq("offering_id", offeringId)
+    .is("profiles.left_at", null);
   return (data ?? [])
     .map((row) => {
       const p = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
@@ -59,7 +58,7 @@ export async function listAssignmentsWithProgress(offeringId: string): Promise<A
 
   const { data: assignments } = await supabase
     .from("assignments")
-    .select("id, title, max_marks, grade_scheme, template, counts_salary, due_date, closed_at, message_template")
+    .select("id, title, max_marks, grade_scheme, template, counts_salary, due_date, closed_at")
     .eq("offering_id", offeringId)
     .order("created_at", { ascending: false });
   if (!assignments || assignments.length === 0) return [];
@@ -119,7 +118,6 @@ export async function listAssignmentsWithProgress(offeringId: string): Promise<A
       countsSalary: a.counts_salary,
       dueDate: a.due_date,
       closedAt: a.closed_at,
-      messageTemplate: a.message_template,
       assignees,
     };
   });
@@ -141,7 +139,6 @@ export async function createAssignment(input: CreateAssignmentInput): Promise<{ 
       grade_scheme: input.gradeScheme,
       lettered: input.gradeScheme === "letter",
       counts_salary: input.countsSalary,
-      message_template: input.messageTemplate,
       created_by: profile.id,
     })
     .select("id")

@@ -70,7 +70,7 @@ export async function getHrDashboard(): Promise<HrDashboard> {
   if (!profile || !profile.org) return { kpis: [], pendingRequests: [], staffByRole: [] };
   const supabase = await createClient();
 
-  const { data: profiles } = await supabase.from("profiles").select("role").eq("org_id", profile.org.id);
+  const { data: profiles } = await supabase.from("profiles").select("role").eq("org_id", profile.org.id).is("left_at", null);
   const counts = new Map<string, number>();
   for (const p of profiles ?? []) {
     if (p.role === "owner") continue;

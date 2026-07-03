@@ -51,6 +51,7 @@ function AssistantRow({
   const [comments, setComments] = useState<OversightComment[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(0);
+  const [assignmentFilter, setAssignmentFilter] = useState("all");
 
   useEffect(() => {
     (async () => {
@@ -64,10 +65,21 @@ function AssistantRow({
     })();
   }, [expanded, comments, offeringId, assistant.id]);
 
-  const pageCount = Math.max(1, Math.ceil((comments?.length ?? 0) / COMMENTS_PAGE_SIZE));
+  const assignmentOptions = useMemo(() => Array.from(new Set((comments ?? []).map((c) => c.assignment))).sort(), [comments]);
+  const filteredComments = useMemo(
+    () => (assignmentFilter === "all" ? (comments ?? []) : (comments ?? []).filter((c) => c.assignment === assignmentFilter)),
+    [comments, assignmentFilter]
+  );
+
+  function onAssignmentFilterChange(value: string) {
+    setAssignmentFilter(value);
+    setPage(0);
+  }
+
+  const pageCount = Math.max(1, Math.ceil(filteredComments.length / COMMENTS_PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
   const pageStart = safePage * COMMENTS_PAGE_SIZE;
-  const pageComments = (comments ?? []).slice(pageStart, pageStart + COMMENTS_PAGE_SIZE);
+  const pageComments = filteredComments.slice(pageStart, pageStart + COMMENTS_PAGE_SIZE);
 
   return (
     <div className="border-b border-[var(--border2)]">
@@ -108,12 +120,31 @@ function AssistantRow({
         </span>
         <button className="flex flex-none items-center gap-[6px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 py-[7px] text-[12.5px] font-semibold text-[var(--brand)] hover:bg-[var(--brands)]">
           <Icon name="chevron-down" size={14} style={{ transform: expanded ? "rotate(180deg)" : "none" }} />
-          {expanded ? "Hide" : "Comments"}
+          {expanded ? "Hide" : "More Details"}
         </button>
       </div>
 
       {expanded && (
         <div className="border-t border-[var(--border2)] bg-[var(--surface2)] py-[6px]">
+          {!loading && assignmentOptions.length > 1 && (
+            <div className="flex items-center gap-[8px] border-t border-[var(--border2)] p-[9px_18px]">
+              <span className="flex-none text-[11.5px] font-semibold text-[var(--muted)]">Filter by assignment</span>
+              <div className="flex h-8 items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[9px]">
+                <select
+                  value={assignmentFilter}
+                  onChange={(e) => onAssignmentFilterChange(e.target.value)}
+                  className="cursor-pointer appearance-none border-none bg-transparent text-[12px] font-semibold text-[var(--text)] outline-none"
+                >
+                  <option value="all">All assignments</option>
+                  {assignmentOptions.map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
           {loading ? (
             <div className="flex flex-col gap-2 p-[11px_18px]">
               {Array.from({ length: 3 }, (_, i) => (
@@ -123,7 +154,7 @@ function AssistantRow({
           ) : pageComments.length === 0 ? (
             <div className="flex items-center justify-center gap-2 p-[18px] text-[12.5px] text-[var(--subtle)]">
               <Icon name="check2" size={14} />
-              No logged comments yet for this assistant.
+              {assignmentFilter === "all" ? "No logged comments yet for this assistant." : "No logged comments for this assignment yet."}
             </div>
           ) : (
             pageComments.map((c) => {
@@ -169,10 +200,10 @@ function AssistantRow({
               );
             })
           )}
-          {!loading && (comments?.length ?? 0) > COMMENTS_PAGE_SIZE && (
+          {!loading && filteredComments.length > COMMENTS_PAGE_SIZE && (
             <div className="flex items-center justify-between gap-[10px] border-t border-[var(--border2)] p-[9px_18px]">
               <span className="text-[11.5px] text-[var(--subtle)]">
-                {pageStart + 1}–{Math.min(pageStart + COMMENTS_PAGE_SIZE, comments!.length)} of {comments!.length}
+                {pageStart + 1}–{Math.min(pageStart + COMMENTS_PAGE_SIZE, filteredComments.length)} of {filteredComments.length}
               </span>
               <div className="flex gap-[5px]">
                 {Array.from({ length: pageCount }, (_, i) => i).map((i) => {

@@ -34,6 +34,7 @@ export async function listStaff(): Promise<StaffMember[]> {
     .from("profiles")
     .select("id, full_name, initials, email, phone, role, created_at, is_main_admin")
     .eq("org_id", orgId)
+    .is("left_at", null)
     .order("full_name", { ascending: true });
   // HR manages non-admin staff only — keep admin/owner rows (and their PII)
   // out of the response entirely rather than just hiding them client-side.
@@ -150,6 +151,13 @@ export async function updateStaffMember(id: string, patch: { name: string; phone
   await logActivity("staff", `Updated ${patch.name.trim()}'s profile`);
 }
 
+// Deactivates rather than deletes: salary_lines, evaluations, and
+// assignment_logs attribution all cascade/null out on a real auth-user
+// delete, which would destroy a departing assistant's payroll history right
+// when it matters most (their final, possibly prorated, paycheck). Banning
+// the auth user blocks login while leaving every historical record intact;
+// left_at/gave_notice are what salary proration and "active staff" listings
+// key off going forward.
 export async function removeStaffMember(id: string, leaveDate?: string, gaveNotice?: boolean) {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org) throw new Error("Not authenticated");
@@ -159,20 +167,26 @@ export async function removeStaffMember(id: string, leaveDate?: string, gaveNoti
   if (!target || target.org_id !== profile.org.id) throw new Error("User not found in your organization");
   if (target.is_main_admin) throw new Error("This is the organization's main admin and can't be removed.");
 
-  const { error } = await admin.auth.admin.deleteUser(id);
+  const resolvedLeaveDate = leaveDate || new Date().toISOString().slice(0, 10);
+
+  const { error: banError } = await admin.auth.admin.updateUserById(id, { ban_duration: "876000h" });
+  if (banError) throw new Error(banError.message);
+
+  const { error } = await admin
+    .from("profiles")
+    .update({ left_at: resolvedLeaveDate, gave_notice: gaveNotice ?? null })
+    .eq("id", id);
   if (error) throw new Error(error.message);
 
-  if (target) {
-    await admin.from("staffing_log").insert({
-      org_id: target.org_id,
-      kind: "remove",
-      target_name: target.full_name,
-      target_role: target.role,
-      leave_date: leaveDate || new Date().toISOString().slice(0, 10),
-      gave_notice: gaveNotice ?? null,
-    });
-    await logActivity("staff", `Removed ${target.full_name} (${target.role})${gaveNotice ? " — gave notice" : ""}`);
-  }
+  await admin.from("staffing_log").insert({
+    org_id: target.org_id,
+    kind: "remove",
+    target_name: target.full_name,
+    target_role: target.role,
+    leave_date: resolvedLeaveDate,
+    gave_notice: gaveNotice ?? null,
+  });
+  await logActivity("staff", `Removed ${target.full_name} (${target.role})${gaveNotice ? " — gave notice" : ""}`);
 }
 
 export async function getLoginAsLink(targetProfileId: string, redirectTo: string): Promise<{ url: string }> {
@@ -183,10 +197,16 @@ export async function getLoginAsLink(targetProfileId: string, redirectTo: string
   const { data: target } = await admin.from("profiles").select("email, org_id").eq("id", targetProfileId).single();
   if (!target || target.org_id !== profile.org.id) throw new Error("User not found in your organization");
 
+  // Carries the target org through to the auth callback page so its
+  // "Signing you in…" loading screen can show that org's branding instead
+  // of a generic default — there's no session yet at that point to look it
+  // up any other way.
+  const brandedRedirect = `${redirectTo}${redirectTo.includes("?") ? "&" : "?"}org=${target.org_id}`;
+
   const { data, error } = await admin.auth.admin.generateLink({
     type: "magiclink",
     email: target.email,
-    options: { redirectTo },
+    options: { redirectTo: brandedRedirect },
   });
   if (error || !data) {
     console.error("getLoginAsLink: generateLink failed", { targetProfileId, email: target.email, redirectTo, error });
@@ -196,12 +216,46 @@ export async function getLoginAsLink(targetProfileId: string, redirectTo: string
   return { url: data.properties.action_link };
 }
 
+// Approving a request used to only flip its status — the add/remove/replace
+// it described never actually happened, so an approved "replace" would
+// leave the outgoing assistant fully active and no incoming one ever
+// created. This now performs the real staffing change before recording the
+// approval, so the request and reality can't drift apart.
 export async function resolveStaffingRequest(id: string, status: "approved" | "declined") {
+  const profile = await getCurrentProfile();
+  if (!profile || (profile.role !== "admin" && profile.role !== "hr")) throw new Error("Not authorized");
   const supabase = await createClient();
-  const { data: request } = await supabase.from("staffing_requests").select("kind, candidate_name").eq("id", id).single();
+
+  const { data: request } = await supabase
+    .from("staffing_requests")
+    .select("kind, status, candidate_name, candidate_email, candidate_phone, target_assistant_id, offering_id, leave_date, gave_notice, proposed_date")
+    .eq("id", id)
+    .single();
+  if (!request) throw new Error("Request not found");
+  if (request.status !== "pending") throw new Error("This request has already been resolved");
+
+  if (status === "approved") {
+    if ((request.kind === "remove" || request.kind === "replace") && request.target_assistant_id) {
+      await removeStaffMember(request.target_assistant_id, request.leave_date ?? undefined, request.gave_notice ?? undefined);
+    }
+    if (request.kind === "add" || request.kind === "replace") {
+      if (!request.candidate_name?.trim() || !request.candidate_email?.trim()) {
+        throw new Error("This request is missing the candidate's name or email — can't add them yet.");
+      }
+      const { id: newId } = await createStaffMember({
+        name: request.candidate_name,
+        email: request.candidate_email,
+        phone: request.candidate_phone ?? "",
+        role: "assistant",
+        hireDate: request.proposed_date ?? undefined,
+      });
+      if (request.offering_id) await assignStaffToCourses(newId, "assistant", [request.offering_id]);
+    }
+  }
+
   const { error } = await supabase.from("staffing_requests").update({ status }).eq("id", id);
   if (error) throw new Error(error.message);
-  if (request) await logActivity("requests", `${status === "approved" ? "Approved" : "Declined"} ${request.kind} request for ${request.candidate_name ?? "a staff change"}`);
+  await logActivity("requests", `${status === "approved" ? "Approved" : "Declined"} ${request.kind} request for ${request.candidate_name ?? "a staff change"}`);
 }
 
 export async function assignStaffToCourses(profileId: string, role: "head" | "assistant", offeringIds: string[]) {
@@ -209,7 +263,10 @@ export async function assignStaffToCourses(profileId: string, role: "head" | "as
   const supabase = await createClient();
   const table = role === "head" ? "offering_heads" : "offering_assistants";
   const column = role === "head" ? "head_id" : "assistant_id";
-  const { error } = await supabase.from(table).insert(offeringIds.map((offeringId) => ({ offering_id: offeringId, [column]: profileId })));
+  // joined_at feeds bracket-salary proration for assistants added mid-period
+  // — offering_heads has no such column, so only stamp it for assistants.
+  const extra = role === "assistant" ? { joined_at: new Date().toISOString() } : {};
+  const { error } = await supabase.from(table).insert(offeringIds.map((offeringId) => ({ offering_id: offeringId, [column]: profileId, ...extra })));
   if (error) throw new Error(error.message);
 }
 
@@ -221,13 +278,28 @@ export async function getAssignedOfferingIds(profileId: string, role: "head" | "
   return (data ?? []).map((r) => r.offering_id);
 }
 
+// Diffs against the existing assignment rather than wiping and reinserting
+// everything — a straight delete-then-reinsert would stamp joined_at fresh
+// on every edit, even for courses the assistant has been on for months,
+// which would wreck bracket-salary proration the next time their courses
+// are touched for an unrelated reason.
 export async function setStaffCourses(profileId: string, role: "head" | "assistant", offeringIds: string[]) {
   const supabase = await createClient();
   const table = role === "head" ? "offering_heads" : "offering_assistants";
   const column = role === "head" ? "head_id" : "assistant_id";
-  await supabase.from(table).delete().eq(column, profileId);
-  if (offeringIds.length) {
-    const { error } = await supabase.from(table).insert(offeringIds.map((offeringId) => ({ offering_id: offeringId, [column]: profileId })));
+
+  const { data: existing } = await supabase.from(table).select("offering_id").eq(column, profileId);
+  const existingIds = new Set((existing ?? []).map((r) => r.offering_id));
+  const toRemove = Array.from(existingIds).filter((id) => !offeringIds.includes(id));
+  const toAdd = offeringIds.filter((id) => !existingIds.has(id));
+
+  if (toRemove.length) {
+    const { error } = await supabase.from(table).delete().eq(column, profileId).in("offering_id", toRemove);
+    if (error) throw new Error(error.message);
+  }
+  if (toAdd.length) {
+    const extra = role === "assistant" ? { joined_at: new Date().toISOString() } : {};
+    const { error } = await supabase.from(table).insert(toAdd.map((offeringId) => ({ offering_id: offeringId, [column]: profileId, ...extra })));
     if (error) throw new Error(error.message);
   }
 }

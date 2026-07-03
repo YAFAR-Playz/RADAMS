@@ -22,6 +22,39 @@ function monthRange(period: string) {
   return { startIso: start.toISOString(), endIso: end.toISOString(), startDate: start.toISOString().slice(0, 10), endDate: end.toISOString().slice(0, 10) };
 }
 
+export type OfferingGradeScale = {
+  offeringId: string;
+  label: string;
+  scale: "percentage" | "letter";
+  bands: { label: string; min: number }[];
+};
+
+export async function listGradeScalesForOrg(): Promise<OfferingGradeScale[]> {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org || (profile.role !== "admin" && profile.role !== "head")) return [];
+  const orgId = profile.org.id;
+  const supabase = await createClient();
+
+  let query = supabase.from("course_offerings").select("id, session, unit, grade_scale, grade_bands, courses(name)").eq("org_id", orgId);
+  if (profile.role === "head") {
+    const { data: heads } = await supabase.from("offering_heads").select("offering_id").eq("head_id", profile.id);
+    const offeringIds = (heads ?? []).map((h) => h.offering_id);
+    if (!offeringIds.length) return [];
+    query = query.in("id", offeringIds);
+  }
+  const { data } = await query;
+
+  return (data ?? []).map((o) => {
+    const course = Array.isArray(o.courses) ? o.courses[0] : o.courses;
+    return {
+      offeringId: o.id,
+      label: [course?.name, o.session, o.unit].filter(Boolean).join(" · "),
+      scale: (o.grade_scale as "percentage" | "letter" | null) ?? "percentage",
+      bands: (o.grade_bands as { label: string; min: number }[] | null) ?? [],
+    };
+  });
+}
+
 export async function getMonthlyReport(period: string): Promise<MonthlyReport | null> {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org || (profile.role !== "admin" && profile.role !== "head")) return null;
@@ -70,13 +103,17 @@ export async function getMonthlyReport(period: string): Promise<MonthlyReport | 
 
   let assignmentCompletionPct = 0;
   if (offeringIds.length) {
-    const { data: assignments } = await supabase
-      .from("assignments")
-      .select("id")
-      .in("offering_id", offeringIds)
-      .gte("created_at", startIso)
-      .lt("created_at", endIso);
-    const assignmentIds = (assignments ?? []).map((a) => a.id);
+    // An assignment belongs to the month it's due in — or, if undated, the
+    // month it was created — matching the convention used everywhere else
+    // (Finance salary calc, Academic report) so this stat agrees with them
+    // instead of silently using a different rule.
+    const { data: allAssignments } = await supabase.from("assignments").select("id, due_date, created_at").in("offering_id", offeringIds);
+    const assignmentIds = (allAssignments ?? [])
+      .filter((a) => {
+        const d = a.due_date ?? a.created_at.slice(0, 10);
+        return d >= startDate && d < endDate;
+      })
+      .map((a) => a.id);
     if (assignmentIds.length) {
       const { data: logs } = await supabase.from("assignment_logs").select("status").in("assignment_id", assignmentIds);
       const total = logs?.length ?? 0;

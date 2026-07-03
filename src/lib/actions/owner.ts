@@ -189,10 +189,16 @@ export async function deleteOrganization(orgId: string) {
 export async function getOwnerLoginAsLink(targetProfileId: string, redirectTo: string): Promise<{ url: string }> {
   await requireOwner();
   const admin = createAdminClient();
-  const { data: target } = await admin.from("profiles").select("email").eq("id", targetProfileId).single();
+  const { data: target } = await admin.from("profiles").select("email, org_id").eq("id", targetProfileId).single();
   if (!target) throw new Error("User not found");
 
-  const { data, error } = await admin.auth.admin.generateLink({ type: "magiclink", email: target.email, options: { redirectTo } });
+  // Carries the target org through to the auth callback page so its
+  // "Signing you in…" loading screen can show that org's branding instead
+  // of a generic default — there's no session yet at that point to look it
+  // up any other way.
+  const brandedRedirect = target.org_id ? `${redirectTo}${redirectTo.includes("?") ? "&" : "?"}org=${target.org_id}` : redirectTo;
+
+  const { data, error } = await admin.auth.admin.generateLink({ type: "magiclink", email: target.email, options: { redirectTo: brandedRedirect } });
   if (error || !data) throw new Error(error?.message ?? "Couldn't create a login link");
   return { url: data.properties.action_link };
 }

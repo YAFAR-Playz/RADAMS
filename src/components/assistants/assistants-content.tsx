@@ -18,6 +18,7 @@ import {
   type UnassignedStudent,
   type StaffingRequest,
 } from "@/lib/actions/assistant-groups";
+import { pickerOnlyDateProps } from "@/lib/date-input";
 
 type Kind = "add" | "remove" | "replace";
 
@@ -332,20 +333,31 @@ export function AssistantsContent() {
                     {r.kind === "add" ? "New assistant requested" : r.kind === "remove" ? "Removal requested" : "Replacement requested"}
                   </div>
                   <div className="text-[12px] text-[var(--subtle)]">
-                    {r.targetName ?? r.candidateName ?? "—"} · {r.offeringLabel}
+                    {r.kind === "replace" ? `${r.targetName ?? "—"} → ${r.candidateName ?? "TBD"}` : r.targetName ?? r.candidateName ?? "—"} · {r.offeringLabel}
                   </div>
                 </div>
-                <span className="inline-flex flex-none items-center gap-[5px] rounded-full bg-[var(--warns)] px-[9px] py-[3px] text-[11px] font-semibold text-[var(--warn)]">
-                  <Icon name="clock" size={12} />
-                  Pending HR
-                </span>
-                <button
-                  onClick={() => onCancelRequest(r.id)}
-                  title="Withdraw request"
-                  className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-[7px] border border-[var(--border)] bg-[var(--surface)] text-[var(--subtle)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] hover:text-[var(--danger)]"
+                <span
+                  className="inline-flex flex-none items-center gap-[5px] rounded-full px-[9px] py-[3px] text-[11px] font-semibold"
+                  style={
+                    r.status === "approved"
+                      ? { background: "var(--oks)", color: "var(--ok)" }
+                      : r.status === "declined"
+                        ? { background: "var(--dangers)", color: "var(--danger)" }
+                        : { background: "var(--warns)", color: "var(--warn)" }
+                  }
                 >
-                  <Icon name="x" size={14} />
-                </button>
+                  <Icon name={r.status === "approved" ? "check" : r.status === "declined" ? "x" : "clock"} size={12} />
+                  {r.status === "approved" ? "Approved" : r.status === "declined" ? "Declined" : "Pending HR"}
+                </span>
+                {r.status === "pending" && (
+                  <button
+                    onClick={() => onCancelRequest(r.id)}
+                    title="Withdraw request"
+                    className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-[7px] border border-[var(--border)] bg-[var(--surface)] text-[var(--subtle)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] hover:text-[var(--danger)]"
+                  >
+                    <Icon name="x" size={14} />
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -563,7 +575,8 @@ export function AssistantsContent() {
                       type="date"
                       value={leaveDate}
                       onChange={(e) => setLeaveDate(e.target.value)}
-                      className="h-10 w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                      {...pickerOnlyDateProps}
+                      className="h-10 w-full cursor-pointer rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                     />
                   </div>
                   <div>
@@ -572,7 +585,8 @@ export function AssistantsContent() {
                       type="date"
                       value={proposedDate}
                       onChange={(e) => setProposedDate(e.target.value)}
-                      className="h-10 w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                      {...pickerOnlyDateProps}
+                      className="h-10 w-full cursor-pointer rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                     />
                   </div>
                 </div>
@@ -585,7 +599,8 @@ export function AssistantsContent() {
                     type="date"
                     value={proposedDate}
                     onChange={(e) => setProposedDate(e.target.value)}
-                    className="h-10 w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                    {...pickerOnlyDateProps}
+                    className="h-10 w-full cursor-pointer rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                   />
                 </div>
               )}
