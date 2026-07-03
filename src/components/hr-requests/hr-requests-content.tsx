@@ -18,6 +18,62 @@ function statusBadge(status: string) {
   return { text: "Pending", icon: "clock" as const, bg: "var(--warns)", fg: "var(--warn)" };
 }
 
+function PersonCard({
+  label,
+  name,
+  phone,
+  email,
+  dateLabel,
+  dateValue,
+  gaveNotice,
+}: {
+  label: string;
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+  dateLabel?: string;
+  dateValue?: string | null;
+  gaveNotice?: boolean | null;
+}) {
+  return (
+    <div className="min-w-0 flex-1">
+      <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">{label}</div>
+      <div className="flex items-center gap-[11px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] p-[11px_13px]">
+        <div className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-[var(--brands)] text-[13px] font-bold text-[var(--brand)]">
+          {name.split(" ").filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?"}
+        </div>
+        <div className="grid min-w-0 flex-1 grid-cols-2 gap-[6px_14px]">
+          <div className="col-span-2 truncate text-[14px] font-semibold text-[var(--text)]">{name}</div>
+          {phone && (
+            <div>
+              <div className="text-[10px] font-bold uppercase text-[var(--subtle)]">Phone</div>
+              <div className="font-mono text-[12.5px] text-[var(--text)]">{phone}</div>
+            </div>
+          )}
+          {email && (
+            <div>
+              <div className="text-[10px] font-bold uppercase text-[var(--subtle)]">Email</div>
+              <div className="truncate text-[12.5px] text-[var(--text)]">{email}</div>
+            </div>
+          )}
+          {dateValue && (
+            <div>
+              <div className="text-[10px] font-bold uppercase text-[var(--subtle)]">{dateLabel}</div>
+              <div className="text-[12.5px] text-[var(--text)]">{new Date(dateValue).toLocaleDateString()}</div>
+            </div>
+          )}
+          {gaveNotice !== null && gaveNotice !== undefined && (
+            <div>
+              <div className="text-[10px] font-bold uppercase text-[var(--subtle)]">Gave notice</div>
+              <div className="text-[12.5px] text-[var(--text)]">{gaveNotice ? "Yes" : "No"}</div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function HrRequestsContent() {
   const [requests, setRequests] = useState<StaffingRequestDetail[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -101,7 +157,6 @@ export function HrRequestsContent() {
             const meta = KIND_META[r.kind];
             const badge = statusBadge(r.status);
             const expanded = !!open[r.id];
-            const personName = r.candidateName ?? r.targetName ?? "—";
             return (
               <div key={r.id} className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
                 <div className="flex flex-wrap items-center gap-3 p-[14px_16px]">
@@ -130,53 +185,29 @@ export function HrRequestsContent() {
                 </div>
                 {expanded && (
                   <div className="flex flex-col gap-[13px] border-t border-[var(--border2)] bg-[var(--surface2)] p-[14px_16px]">
-                    <div>
-                      <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">
-                        {r.kind === "add" ? "Candidate" : "Staff member"}
-                      </div>
-                      <div className="flex items-center gap-[11px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] p-[11px_13px]">
-                        <div className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-[var(--brands)] text-[13px] font-bold text-[var(--brand)]">
-                          {personName.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase()}
-                        </div>
-                        <div className="grid min-w-0 flex-1 grid-cols-2 gap-[6px_14px]">
-                          <div className="col-span-2">
-                            <div className="text-[14px] font-semibold text-[var(--text)]">{personName}</div>
-                            <div className="text-[11.5px] text-[var(--subtle)]">{r.offeringLabel}</div>
-                          </div>
-                          {r.candidatePhone && (
-                            <div>
-                              <div className="text-[10px] font-bold uppercase text-[var(--subtle)]">Phone</div>
-                              <div className="font-mono text-[12.5px] text-[var(--text)]">{r.candidatePhone}</div>
-                            </div>
-                          )}
-                          {r.candidateEmail && (
-                            <div>
-                              <div className="text-[10px] font-bold uppercase text-[var(--subtle)]">Email</div>
-                              <div className="truncate text-[12.5px] text-[var(--text)]">{r.candidateEmail}</div>
-                            </div>
-                          )}
-                          {r.kind === "replace" && r.leaveDate && (
-                            <div>
-                              <div className="text-[10px] font-bold uppercase text-[var(--subtle)]">Leave date (outgoing)</div>
-                              <div className="text-[12.5px] text-[var(--text)]">{new Date(r.leaveDate).toLocaleDateString()}</div>
-                            </div>
-                          )}
-                          {r.proposedDate && (
-                            <div>
-                              <div className="text-[10px] font-bold uppercase text-[var(--subtle)]">
-                                {r.kind === "remove" ? "Leave date" : r.kind === "replace" ? "Proposed start (incoming)" : "Proposed start"}
-                              </div>
-                              <div className="text-[12.5px] text-[var(--text)]">{new Date(r.proposedDate).toLocaleDateString()}</div>
-                            </div>
-                          )}
-                          {(r.kind === "remove" || r.kind === "replace") && r.gaveNotice !== null && (
-                            <div>
-                              <div className="text-[10px] font-bold uppercase text-[var(--subtle)]">Gave notice</div>
-                              <div className="text-[12.5px] text-[var(--text)]">{r.gaveNotice ? "Yes" : "No"}</div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                    <div className="text-[12px] text-[var(--subtle)]">
+                      Course: <span className="font-semibold text-[var(--text)]">{r.offeringLabel}</span>
+                    </div>
+                    <div className="flex flex-col gap-[13px] sm:flex-row">
+                      {(r.kind === "remove" || r.kind === "replace") && (
+                        <PersonCard
+                          label={r.kind === "replace" ? "Outgoing" : "Staff member"}
+                          name={r.targetName ?? "—"}
+                          dateLabel="Leave date"
+                          dateValue={r.kind === "remove" ? r.proposedDate : r.leaveDate}
+                          gaveNotice={r.gaveNotice}
+                        />
+                      )}
+                      {(r.kind === "add" || r.kind === "replace") && (
+                        <PersonCard
+                          label={r.kind === "replace" ? "Incoming candidate" : "Candidate"}
+                          name={r.candidateName ?? "Not provided yet"}
+                          phone={r.candidatePhone}
+                          email={r.candidateEmail}
+                          dateLabel="Proposed start"
+                          dateValue={r.proposedDate}
+                        />
+                      )}
                     </div>
                     {r.reason && (
                       <div>

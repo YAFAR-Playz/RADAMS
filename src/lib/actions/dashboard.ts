@@ -54,7 +54,7 @@ export async function getAdminDashboard(): Promise<AdminDashboard> {
 
   const [{ count: studentsCount }, { data: staff }, { data: offeringRows }] = await Promise.all([
     supabase.from("students").select("id", { count: "exact", head: true }).eq("org_id", orgId),
-    supabase.from("profiles").select("role").eq("org_id", orgId),
+    supabase.from("profiles").select("role").eq("org_id", orgId).is("left_at", null),
     supabase.from("course_offerings").select("id, session, unit, courses(name)").eq("org_id", orgId),
   ]);
 

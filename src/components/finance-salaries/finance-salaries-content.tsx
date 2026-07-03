@@ -18,6 +18,7 @@ import {
 } from "@/lib/actions/finance-salaries";
 import { downloadCsv } from "@/lib/csv-export";
 import { consumeSearchHandoff } from "@/lib/search-handoff";
+import { pickerOnlyDateProps } from "@/lib/date-input";
 
 const CURRENCY_SYMBOL: Record<string, string> = { GBP: "£", USD: "$", EUR: "€", EGP: "E£", AED: "د.إ" };
 
@@ -302,7 +303,8 @@ export function FinanceSalariesContent() {
                 type="month"
                 value={newPeriod}
                 onChange={(e) => setNewPeriod(e.target.value)}
-                className="border-none bg-transparent text-[13px] text-[var(--text)] outline-none"
+                {...pickerOnlyDateProps}
+                className="cursor-pointer border-none bg-transparent text-[13px] text-[var(--text)] outline-none"
               />
               <button
                 onClick={onGenerate}

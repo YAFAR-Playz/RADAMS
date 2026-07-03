@@ -41,14 +41,16 @@ export async function listHeadsForOrg(): Promise<HeadOption[]> {
   const orgId = profile?.org?.id;
   if (!orgId) return [];
   const supabase = await createClient();
-  const { data } = await supabase.from("profiles").select("id, full_name").eq("org_id", orgId).eq("role", "head");
+  const { data } = await supabase.from("profiles").select("id, full_name").eq("org_id", orgId).eq("role", "head").is("left_at", null);
   return (data ?? []).map((p) => ({ id: p.id, name: p.full_name }));
 }
 
-export async function listCourses(): Promise<CourseOffering[]> {
+export type CoursesOverview = { offerings: CourseOffering[]; totalEnrolledStudents: number };
+
+export async function listCourses(): Promise<CoursesOverview> {
   const profile = await getCurrentProfile();
   const orgId = profile?.org?.id;
-  if (!orgId) return [];
+  if (!orgId) return { offerings: [], totalEnrolledStudents: 0 };
   const supabase = await createClient();
 
   const { data: offerings } = await supabase
@@ -57,14 +59,24 @@ export async function listCourses(): Promise<CourseOffering[]> {
       "id, session, unit, start_date, end_date, active, fee_full, fee_installment_total, installment_count, courses(name)"
     )
     .eq("org_id", orgId);
-  if (!offerings || offerings.length === 0) return [];
+  if (!offerings || offerings.length === 0) return { offerings: [], totalEnrolledStudents: 0 };
 
   const offeringIds = offerings.map((o) => o.id);
   const { data: headLinks } = await supabase
     .from("offering_heads")
     .select("offering_id, profiles(full_name)")
     .in("offering_id", offeringIds);
-  const { data: enrollments } = await supabase.from("enrollments").select("offering_id").in("offering_id", offeringIds);
+  // A student who left still keeps their enrollment row, and one enrolled
+  // in several offerings shows up once per offering — neither should count
+  // toward "currently enrolled" totals.
+  const { data: enrollments } = await supabase
+    .from("enrollments")
+    .select("offering_id, student_id, students(left_at)")
+    .in("offering_id", offeringIds);
+  const activeEnrollments = (enrollments ?? []).filter((e) => {
+    const student = Array.isArray(e.students) ? e.students[0] : e.students;
+    return !student?.left_at;
+  });
 
   const headsByOffering = new Map<string, string[]>();
   for (const row of headLinks ?? []) {
@@ -75,11 +87,12 @@ export async function listCourses(): Promise<CourseOffering[]> {
     headsByOffering.set(row.offering_id, list);
   }
   const studentsByOffering = new Map<string, number>();
-  for (const e of enrollments ?? []) {
+  for (const e of activeEnrollments) {
     studentsByOffering.set(e.offering_id, (studentsByOffering.get(e.offering_id) ?? 0) + 1);
   }
+  const totalEnrolledStudents = new Set(activeEnrollments.map((e) => e.student_id)).size;
 
-  return offerings.map((o) => {
+  const offeringRows = offerings.map((o) => {
     const course = Array.isArray(o.courses) ? o.courses[0] : o.courses;
     return {
       id: o.id,
@@ -94,6 +107,8 @@ export async function listCourses(): Promise<CourseOffering[]> {
       installmentCount: o.installment_count,
     };
   });
+
+  return { offerings: offeringRows, totalEnrolledStudents };
 }
 
 export async function saveCourse(input: CourseInput): Promise<{ id: string }> {

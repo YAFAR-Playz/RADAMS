@@ -20,6 +20,7 @@ import {
 import { getEffectiveTemplate, getOrgBrandName } from "@/lib/actions/templates";
 import { applyTemplateVars } from "@/lib/message-vars";
 import { downloadCsv } from "@/lib/csv-export";
+import { pickerOnlyDateProps } from "@/lib/date-input";
 
 const PAGE_SIZE = 20;
 const SESSION_PAGE_SIZE = 10;
@@ -667,7 +668,8 @@ export function AttendanceContent({ role }: { role: Role }) {
                     type="date"
                     value={newDate}
                     onChange={(e) => setNewDate(e.target.value)}
-                    className="h-11 w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[13px] text-[13.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                    {...pickerOnlyDateProps}
+                    className="h-11 w-full cursor-pointer rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[13px] text-[13.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                   />
                 </div>
                 <div>

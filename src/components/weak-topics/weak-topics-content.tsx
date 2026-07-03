@@ -22,6 +22,7 @@ import {
   type StudentTopicSubmission,
 } from "@/lib/actions/weak-topics";
 import { getMyStudentMonthlyComments, setStudentMonthlyComment } from "@/lib/actions/academic-report";
+import { pickerOnlyDateProps } from "@/lib/date-input";
 
 function currentPeriod() {
   return new Date().toISOString().slice(0, 7);
@@ -139,7 +140,8 @@ export function WeakTopicsContent({ role }: { role: Role }) {
                 type="month"
                 value={period}
                 onChange={(e) => setPeriod(e.target.value)}
-                className="h-10 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13px] text-[var(--text)] outline-none"
+                {...pickerOnlyDateProps}
+                className="h-10 cursor-pointer rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13px] text-[var(--text)] outline-none"
               />
             )}
           </div>

@@ -20,6 +20,7 @@ import { applyOfferingFeeChangeToPlans } from "@/lib/actions/payments";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
 import { currencySymbol } from "@/lib/currency";
 import { consumeSearchHandoff } from "@/lib/search-handoff";
+import { pickerOnlyDateProps } from "@/lib/date-input";
 
 type ScheduleDraftRow = { seq: number; amount: string; dueDate: string };
 
@@ -57,6 +58,7 @@ const emptyForm: CourseInput = {
 
 export function CoursesContent() {
   const [courses, setCourses] = useState<CourseOffering[] | null>(null);
+  const [totalEnrolledStudents, setTotalEnrolledStudents] = useState(0);
   const [heads, setHeads] = useState<HeadOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -111,7 +113,8 @@ export function CoursesContent() {
     setLoading(true);
     try {
       const [c, h] = await Promise.all([listCourses(), listHeadsForOrg()]);
-      setCourses(c);
+      setCourses(c.offerings);
+      setTotalEnrolledStudents(c.totalEnrolledStudents);
       setHeads(h);
     } catch {
       setError("Couldn't load courses — try again.");
@@ -146,7 +149,7 @@ export function CoursesContent() {
     ? [
         { value: String(courses.filter((c) => c.active).length), label: "Active offerings", color: "var(--ok)" },
         { value: String(courses.filter((c) => !c.active).length), label: "Inactive", color: "var(--muted)" },
-        { value: String(courses.reduce((s, c) => s + c.students, 0)), label: "Enrolled students", color: "var(--brand)" },
+        { value: String(totalEnrolledStudents), label: "Enrolled students", color: "var(--brand)" },
       ]
     : [];
 
@@ -410,14 +413,16 @@ export function CoursesContent() {
                       type="date"
                       defaultValue={c.start ?? ""}
                       onBlur={(e) => onDateChange(c, "start", e.target.value)}
-                      className="h-[34px] min-w-0 flex-1 rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-2 text-[11.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+                      {...pickerOnlyDateProps}
+                      className="h-[34px] min-w-0 flex-1 cursor-pointer rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-2 text-[11.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
                     />
                     <span className="text-[11px] text-[var(--subtle)]">→</span>
                     <input
                       type="date"
                       defaultValue={c.end ?? ""}
                       onBlur={(e) => onDateChange(c, "end", e.target.value)}
-                      className="h-[34px] min-w-0 flex-1 rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-2 text-[11.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+                      {...pickerOnlyDateProps}
+                      className="h-[34px] min-w-0 flex-1 cursor-pointer rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-2 text-[11.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
                     />
                     {savingDatesId === c.id && <Spinner size={13} className="flex-none text-[var(--subtle)]" />}
                   </div>
@@ -597,7 +602,8 @@ export function CoursesContent() {
                     type="date"
                     value={form.start}
                     onChange={(e) => setForm((f) => ({ ...f, start: e.target.value }))}
-                    className="h-10 w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[11px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                    {...pickerOnlyDateProps}
+                    className="h-10 w-full cursor-pointer rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[11px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                   />
                 </div>
                 <div>
@@ -606,7 +612,8 @@ export function CoursesContent() {
                     type="date"
                     value={form.end}
                     onChange={(e) => setForm((f) => ({ ...f, end: e.target.value }))}
-                    className="h-10 w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[11px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                    {...pickerOnlyDateProps}
+                    className="h-10 w-full cursor-pointer rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[11px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                   />
                 </div>
               </div>
@@ -685,7 +692,8 @@ export function CoursesContent() {
                             const v = e.target.value;
                             updateScheduleRow(row.seq, { dueDate: v });
                           }}
-                          className="h-[34px] min-w-[120px] flex-1 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[9px] text-[12px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+                          {...pickerOnlyDateProps}
+                          className="h-[34px] min-w-[120px] flex-1 cursor-pointer rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[9px] text-[12px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
                         />
                       </div>
                     ))

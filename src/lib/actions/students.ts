@@ -81,7 +81,13 @@ export async function getStudentsForOffering(offeringId: string): Promise<Studen
         const log = studentLogs.find((l) => l.assignment_id === a.id);
         return { assignmentTitle: a.title, status: log?.status ?? null };
       });
-      const numericGrades = studentLogs.map((l) => Number(l.grade)).filter((n) => !Number.isNaN(n));
+      // Number(null) is 0, not NaN — filter out ungraded logs before
+      // converting, or a comment-only/checkbox log with no grade entered
+      // silently counts as a zero and drags the average down.
+      const numericGrades = studentLogs
+        .filter((l) => l.grade != null && l.grade.trim() !== "")
+        .map((l) => Number(l.grade))
+        .filter((n) => !Number.isNaN(n));
       const avgGrade = numericGrades.length ? Math.round(numericGrades.reduce((s, n) => s + n, 0) / numericGrades.length) : null;
       return {
         enrollmentId: e.id,

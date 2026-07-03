@@ -7,6 +7,7 @@ import type { Role } from "@/lib/roles";
 import { listRecentStaffJoins, type StaffingLogRow } from "@/lib/actions/hr";
 import { listStaff, createStaffMember, removeStaffMember, assignStaffToCourses, type StaffMember } from "@/lib/actions/staff";
 import { listAllOfferingsForOrg, type OfferingChoice } from "@/lib/actions/students";
+import { pickerOnlyDateProps } from "@/lib/date-input";
 
 const ROLE_OPTIONS: Role[] = ["hr", "head", "assistant", "registration", "finance"];
 const ROLE_LABEL: Record<Role, string> = {
@@ -227,7 +228,8 @@ export function HiringContent() {
                       type="date"
                       value={form.hireDate}
                       onChange={(e) => setForm((f) => ({ ...f, hireDate: e.target.value }))}
-                      className="h-[42px] w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                      {...pickerOnlyDateProps}
+                      className="h-[42px] w-full cursor-pointer rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                     />
                   </div>
                   {showCourses && (
@@ -281,7 +283,8 @@ export function HiringContent() {
                       type="date"
                       value={form.leaveDate}
                       onChange={(e) => setForm((f) => ({ ...f, leaveDate: e.target.value }))}
-                      className="h-[42px] w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                      {...pickerOnlyDateProps}
+                      className="h-[42px] w-full cursor-pointer rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                     />
                   </div>
                 </>
