@@ -34,13 +34,13 @@ const STATUS_TONE: Record<string, string> = {
   rejected: "bg-[var(--dangers)] text-[var(--danger)]",
 };
 
-function MaterialLinks({ materials }: { materials: { id: string; kind: "video" | "drive"; link: string; duration: string | null }[] }) {
+function MaterialLinks({ materials }: { materials: { id: string; kind: "video" | "drive"; label: string | null; link: string; duration: string | null }[] }) {
   if (materials.length === 0) return null;
   return (
     <>
       {materials.map((m) => (
         <a key={m.id} href={m.link} target="_blank" rel="noreferrer" className="text-[var(--brand)] hover:underline">
-          {m.kind === "video" ? "Video" : "Drive"}
+          {m.label?.trim() || (m.kind === "video" ? "Video" : "Document")}
           {m.duration ? ` (${m.duration})` : ""}
         </a>
       ))}
@@ -53,7 +53,7 @@ function MaterialsEditor({ materials, onChange }: { materials: MaterialInput[]; 
     onChange(materials.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
   }
   function add() {
-    onChange([...materials, { kind: "video", link: "", duration: "" }]);
+    onChange([...materials, { kind: "video", label: "", link: "", duration: "" }]);
   }
   function remove(i: number) {
     onChange(materials.filter((_, idx) => idx !== i));
@@ -69,20 +69,28 @@ function MaterialsEditor({ materials, onChange }: { materials: MaterialInput[]; 
             className="h-9 flex-none rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[8px] text-[12.5px] text-[var(--text)] outline-none"
           >
             <option value="video">Video</option>
-            <option value="drive">Drive</option>
+            <option value="drive">Document</option>
           </select>
+          <input
+            value={m.label}
+            onChange={(e) => update(i, { label: e.target.value })}
+            placeholder="Name"
+            className="h-9 w-[110px] flex-none rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+          />
           <input
             value={m.link}
             onChange={(e) => update(i, { link: e.target.value })}
             placeholder="Link"
             className="h-9 min-w-0 flex-1 rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
           />
-          <input
-            value={m.duration}
-            onChange={(e) => update(i, { duration: e.target.value })}
-            placeholder="Duration"
-            className="h-9 w-[90px] flex-none rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
-          />
+          {m.kind === "video" && (
+            <input
+              value={m.duration}
+              onChange={(e) => update(i, { duration: e.target.value })}
+              placeholder="Duration"
+              className="h-9 w-[90px] flex-none rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+            />
+          )}
           <button onClick={() => remove(i)} className="flex h-9 w-9 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]">
             <Icon name="x" size={14} />
           </button>
@@ -90,7 +98,7 @@ function MaterialsEditor({ materials, onChange }: { materials: MaterialInput[]; 
       ))}
       <button onClick={add} className="flex h-8 w-fit items-center gap-[5px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px] text-[12px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)]">
         <Icon name="plus" size={12} />
-        Add link
+        Add item
       </button>
     </div>
   );
@@ -332,7 +340,9 @@ function EditTopicRow({
   onCancel: () => void;
 }) {
   const [label, setLabel] = useState(topic.label);
-  const [materials, setMaterials] = useState<MaterialInput[]>(topic.materials.map((m) => ({ kind: m.kind, link: m.link, duration: m.duration ?? "" })));
+  const [materials, setMaterials] = useState<MaterialInput[]>(
+    topic.materials.map((m) => ({ kind: m.kind, label: m.label ?? "", link: m.link, duration: m.duration ?? "" }))
+  );
 
   return (
     <div className="flex w-full flex-col gap-[8px]">

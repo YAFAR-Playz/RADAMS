@@ -225,6 +225,74 @@ export async function updateStudent(
   await logActivity("students", `Updated ${patch.name}${patch.left ? " — marked as left" : ""}`);
 }
 
+export type StudentDetailAssignment = {
+  title: string;
+  dueDate: string | null;
+  status: string | null;
+  grade: string | null;
+};
+
+export type StudentDetailPanel = {
+  avgGrade: number | null;
+  recentAssignments: StudentDetailAssignment[];
+};
+
+// A focused summary for the "View more" panel — the full grade average
+// across every assignment the student has ever been logged for (not just
+// the handful shown in the roster's progress cells), plus the 5 most
+// recent assignments for a quick glance.
+export async function getStudentDetailPanel(studentId: string, offeringId: string): Promise<StudentDetailPanel> {
+  const supabase = await createClient();
+
+  const { data: assignmentRows } = await supabase
+    .from("assignments")
+    .select("id, title, due_date, created_at")
+    .eq("offering_id", offeringId)
+    .order("created_at", { ascending: false });
+  const assignments = assignmentRows ?? [];
+  const assignmentIds = assignments.map((a) => a.id);
+
+  const { data: logs } = assignmentIds.length
+    ? await supabase
+        .from("assignment_logs")
+        .select("assignment_id, status, grade")
+        .in("assignment_id", assignmentIds)
+        .eq("student_id", studentId)
+    : { data: [] as { assignment_id: string; status: string | null; grade: string | null }[] };
+  const logByAssignment = new Map((logs ?? []).map((l) => [l.assignment_id, l]));
+
+  const numericGrades = (logs ?? [])
+    .filter((l) => l.grade != null && l.grade.trim() !== "")
+    .map((l) => Number(l.grade))
+    .filter((n) => !Number.isNaN(n));
+  const avgGrade = numericGrades.length ? Math.round(numericGrades.reduce((s, n) => s + n, 0) / numericGrades.length) : null;
+
+  const recentAssignments: StudentDetailAssignment[] = assignments.slice(0, 5).map((a) => {
+    const log = logByAssignment.get(a.id);
+    return { title: a.title, dueDate: a.due_date, status: log?.status ?? null, grade: log?.grade ?? null };
+  });
+
+  return { avgGrade, recentAssignments };
+}
+
+// Drive folder link for a student's reports — set/sent by whichever
+// assistant needs to hand it to the student/parent, independent of report
+// generation, so it can be shared at any time rather than only after a
+// monthly report run.
+export async function getStudentDriveFolderLink(studentId: string): Promise<string | null> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("students").select("drive_folder_link").eq("id", studentId).maybeSingle();
+  return data?.drive_folder_link ?? null;
+}
+
+export async function setStudentDriveFolderLink(studentId: string, link: string) {
+  const profile = await getCurrentProfile();
+  if (!profile || (profile.role !== "assistant" && profile.role !== "head" && profile.role !== "admin")) throw new Error("Not authorized");
+  const supabase = await createClient();
+  const { error } = await supabase.from("students").update({ drive_folder_link: link.trim() || null }).eq("id", studentId);
+  if (error) throw new Error(error.message);
+}
+
 export type StudentAssignmentDetailRow = {
   studentCode: string;
   studentName: string;

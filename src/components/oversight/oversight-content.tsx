@@ -10,15 +10,11 @@ import {
   listHeadOfferings,
   getOversightSummary,
   getAssistantComments,
-  getGradeScale,
-  setGradeScale,
   getFullExport,
   type OfferingOption,
   type AssistantSummary,
   type OversightStats,
   type OversightComment,
-  type GradeBand,
-  type GradeScaleSetting,
 } from "@/lib/actions/oversight";
 import { downloadCsv } from "@/lib/csv-export";
 
@@ -239,9 +235,6 @@ export function OversightContent() {
   const [assistants, setAssistants] = useState<AssistantSummary[] | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({});
-  const [scaleModalOpen, setScaleModalOpen] = useState(false);
-  const [scaleDraft, setScaleDraft] = useState<GradeScaleSetting>({ scale: "percentage", bands: [] });
-  const [scaleSaving, setScaleSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
@@ -285,25 +278,6 @@ export function OversightContent() {
     setOpen((prev) => ({ ...prev, [id]: !prev[id] }));
   }
 
-  function openGradeScale() {
-    if (!offeringId) return;
-    setScaleDraft({ scale: "percentage", bands: [] });
-    setScaleModalOpen(true);
-    getGradeScale(offeringId).then((s) => setScaleDraft(s.bands.length ? s : { ...s, bands: s.bands }));
-  }
-
-  function addBand() {
-    setScaleDraft((d) => ({ ...d, bands: [...d.bands, { label: "", min: 0 }] }));
-  }
-
-  function updateBand(i: number, patch: Partial<GradeBand>) {
-    setScaleDraft((d) => ({ ...d, bands: d.bands.map((b, idx) => (idx === i ? { ...b, ...patch } : b)) }));
-  }
-
-  function removeBand(i: number) {
-    setScaleDraft((d) => ({ ...d, bands: d.bands.filter((_, idx) => idx !== i) }));
-  }
-
   async function onFullExport() {
     if (!offeringId) return;
     setExporting(true);
@@ -316,18 +290,6 @@ export function OversightContent() {
       );
     } finally {
       setExporting(false);
-    }
-  }
-
-  async function onSaveGradeScale() {
-    if (!offeringId) return;
-    setScaleSaving(true);
-    try {
-      const bands = [...scaleDraft.bands].sort((a, b) => b.min - a.min);
-      await setGradeScale(offeringId, { ...scaleDraft, bands });
-      setScaleModalOpen(false);
-    } finally {
-      setScaleSaving(false);
     }
   }
 
@@ -355,13 +317,6 @@ export function OversightContent() {
               >
                 {exporting ? <Spinner size={13} /> : <Icon name="file-up" size={13} />}
                 Export all data
-              </button>
-              <button
-                onClick={openGradeScale}
-                className="flex flex-none items-center gap-[6px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 py-[7px] text-[12px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)]"
-              >
-                <Icon name="chart" size={13} />
-                Grade scale
               </button>
             </div>
           )}
@@ -449,82 +404,6 @@ export function OversightContent() {
           )
         )}
       </section>
-
-      {scaleModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(8,12,22,0.5)] p-5">
-          <div className="flex max-h-[85vh] w-full max-w-[440px] flex-col overflow-hidden rounded-[var(--rad)] bg-[var(--surface)] shadow-[var(--shadow-lg)]">
-            <div className="flex items-center gap-3 border-b border-[var(--border2)] p-[16px_18px]">
-              <div className="min-w-0 flex-1">
-                <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Grade scale · {current?.label}</h3>
-                <div className="text-[12px] text-[var(--muted)]">How student performance is displayed</div>
-              </div>
-              <button onClick={() => setScaleModalOpen(false)} className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]">
-                <Icon name="x" size={18} />
-              </button>
-            </div>
-            <div className="flex min-h-0 flex-col gap-[14px] overflow-y-auto p-[16px_18px]">
-              <div className="flex gap-[6px] rounded-[10px] border border-[var(--border)] bg-[var(--surface2)] p-[3px]">
-                {(["percentage", "letter"] as const).map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setScaleDraft((d) => ({ ...d, scale: s }))}
-                    className="h-9 flex-1 rounded-[8px] text-[12.5px] font-semibold capitalize"
-                    style={scaleDraft.scale === s ? { background: "var(--surface)", color: "var(--text)", boxShadow: "var(--shadow)" } : { color: "var(--muted)" }}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-
-              {scaleDraft.scale === "letter" && (
-                <div className="flex flex-col gap-[8px]">
-                  <label className="text-[12.5px] font-semibold text-[var(--text)]">Bands (label + minimum %)</label>
-                  {scaleDraft.bands.map((b, i) => (
-                    <div key={i} className="flex items-center gap-[8px]">
-                      <input
-                        value={b.label}
-                        onChange={(e) => updateBand(i, { label: e.target.value })}
-                        placeholder="A"
-                        className="h-9 w-[70px] flex-none rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
-                      />
-                      <input
-                        type="number"
-                        value={b.min}
-                        onChange={(e) => updateBand(i, { min: Number(e.target.value) || 0 })}
-                        placeholder="90"
-                        className="h-9 flex-1 rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
-                      />
-                      <button onClick={() => removeBand(i)} className="flex h-9 w-9 flex-none items-center justify-center rounded-[7px] border border-[var(--border)] bg-[var(--surface)] text-[var(--subtle)] hover:border-[var(--danger)] hover:text-[var(--danger)]">
-                        <Icon name="x" size={13} />
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    onClick={addBand}
-                    className="flex h-9 items-center justify-center gap-[6px] rounded-[8px] border border-dashed border-[var(--border)] text-[12.5px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)]"
-                  >
-                    <Icon name="plus" size={13} />
-                    Add band
-                  </button>
-                </div>
-              )}
-            </div>
-            <div className="flex gap-[10px] border-t border-[var(--border2)] p-[14px_18px]">
-              <button onClick={() => setScaleModalOpen(false)} className="h-11 flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]">
-                Cancel
-              </button>
-              <button
-                onClick={onSaveGradeScale}
-                disabled={scaleSaving}
-                className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
-              >
-                {scaleSaving ? <Spinner size={15} /> : <Icon name="check" size={15} />}
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

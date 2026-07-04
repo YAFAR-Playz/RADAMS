@@ -186,7 +186,7 @@ export function MonthlyReportContent() {
                 <div className="flex items-center gap-[12px] text-[12px]">
                   {t.materials.map((m, j) => (
                     <a key={j} href={m.link} target="_blank" rel="noreferrer" className="text-[var(--brand)] hover:underline">
-                      {m.kind === "video" ? "Video" : "Drive"}
+                      {m.label?.trim() || (m.kind === "video" ? "Video" : "Document")}
                       {m.duration ? ` (${m.duration})` : ""}
                     </a>
                   ))}

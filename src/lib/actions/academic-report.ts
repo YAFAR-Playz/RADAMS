@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
+import { getGradeScale, type GradeScaleSetting } from "@/lib/actions/oversight";
 
 export type ReportAssignmentOption = {
   id: string;
@@ -90,7 +91,7 @@ export async function setStudentMonthlyComment(studentId: string, offeringId: st
 }
 
 export type ReportAssignmentDetail = { title: string; status: string | null; grade: string | null; comment: string | null };
-export type ReportWeakTopicMaterial = { kind: "video" | "drive"; link: string; duration: string | null };
+export type ReportWeakTopicMaterial = { kind: "video" | "drive"; label: string | null; link: string; duration: string | null };
 export type ReportWeakTopic = { label: string; materials: ReportWeakTopicMaterial[] };
 
 export type StudentAcademicReport = {
@@ -124,7 +125,7 @@ export async function getAcademicMonthlyReport(offeringId: string, period: strin
 
   const { data: topics } = await supabase
     .from("student_topic_submissions")
-    .select("student_id, topic_catalog(label, topic_materials(kind, link, duration, sort_order))")
+    .select("student_id, topic_catalog(label, topic_materials(kind, label, link, duration, sort_order))")
     .eq("offering_id", offeringId)
     .eq("period", period)
     .eq("status", "approved")
@@ -155,7 +156,7 @@ export async function getAcademicMonthlyReport(offeringId: string, period: strin
           const materials = (topic ? (Array.isArray(topic.topic_materials) ? topic.topic_materials : []) : []).slice().sort((a, b) => a.sort_order - b.sort_order);
           return {
             label: topic?.label ?? "",
-            materials: materials.map((m) => ({ kind: m.kind as "video" | "drive", link: m.link, duration: m.duration })),
+            materials: materials.map((m) => ({ kind: m.kind as "video" | "drive", label: m.label, link: m.link, duration: m.duration })),
           };
         });
 
@@ -170,4 +171,229 @@ export async function getAcademicMonthlyReport(offeringId: string, period: strin
     })
     .filter((x): x is StudentAcademicReport => !!x)
     .sort((a, b) => a.studentName.localeCompare(b.studentName));
+}
+
+// ---------------------------------------------------------------------------
+// Monthly report generation — freezes a point-in-time snapshot per
+// (offering, period) so the overview table doesn't shift under a head as
+// assistants keep logging grades/comments after the fact, and so past
+// months stay browsable exactly as they were generated.
+
+export type AssignmentReportMode = "grade" | "status_only";
+export type AssignmentSelectionInput = { assignmentId: string; mode: AssignmentReportMode };
+
+export type GeneratedReportMeta = {
+  id: string;
+  period: string;
+  createdAt: string;
+  createdByName: string | null;
+  studentCount: number;
+  gradeScale: GradeScaleSetting;
+};
+
+export type GeneratedStudentReport = {
+  studentId: string;
+  studentName: string;
+  studentCode: string;
+  avgGrade: number | null;
+  assignments: ReportAssignmentDetail[];
+  weakTopics: ReportWeakTopic[];
+  assistantComment: string;
+};
+
+function requireHeadOrAdminForReports(role: string | undefined) {
+  if (role !== "head" && role !== "admin") throw new Error("Not authorized");
+}
+
+export async function listReportGenerations(offeringId: string): Promise<{ period: string; createdAt: string }[]> {
+  const profile = await getCurrentProfile();
+  if (!profile) return [];
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("monthly_report_generations")
+    .select("period, created_at")
+    .eq("offering_id", offeringId)
+    .order("period", { ascending: false });
+  return (data ?? []).map((r) => ({ period: r.period, createdAt: r.created_at }));
+}
+
+export async function generateMonthlyAcademicReport(
+  offeringId: string,
+  period: string,
+  selection: AssignmentSelectionInput[]
+): Promise<{ id: string }> {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org) throw new Error("Not authenticated");
+  requireHeadOrAdminForReports(profile.role);
+  const supabase = await createClient();
+
+  const gradeScale = await getGradeScale(offeringId);
+
+  const { data: enrollments } = await supabase
+    .from("enrollments")
+    .select("student_id, students(id, name, student_code)")
+    .eq("offering_id", offeringId);
+  if (!enrollments || enrollments.length === 0) throw new Error("No students enrolled in this course.");
+
+  const studentIds = enrollments.map((e) => e.student_id);
+  const assignmentIds = selection.map((s) => s.assignmentId);
+  const modeByAssignment = new Map(selection.map((s) => [s.assignmentId, s.mode]));
+
+  const { data: assignmentRows } = assignmentIds.length
+    ? await supabase.from("assignments").select("id, title").in("id", assignmentIds)
+    : { data: [] as { id: string; title: string }[] };
+  const titleByAssignment = new Map((assignmentRows ?? []).map((a) => [a.id, a.title]));
+
+  const { data: logs } = assignmentIds.length
+    ? await supabase
+        .from("assignment_logs")
+        .select("assignment_id, student_id, status, grade, comment")
+        .in("assignment_id", assignmentIds)
+        .in("student_id", studentIds)
+    : { data: [] as { assignment_id: string; student_id: string; status: string | null; grade: string | null; comment: string | null }[] };
+
+  const { data: topics } = await supabase
+    .from("student_topic_submissions")
+    .select("student_id, topic_catalog(label, topic_materials(kind, label, link, duration, sort_order))")
+    .eq("offering_id", offeringId)
+    .eq("period", period)
+    .eq("status", "approved")
+    .in("student_id", studentIds);
+
+  const { data: notes } = await supabase
+    .from("student_monthly_notes")
+    .select("student_id, comment")
+    .eq("offering_id", offeringId)
+    .eq("period", period)
+    .in("student_id", studentIds);
+  const noteByStudent = new Map((notes ?? []).map((n) => [n.student_id, n.comment]));
+
+  const { data: existingGen } = await supabase
+    .from("monthly_report_generations")
+    .select("id")
+    .eq("offering_id", offeringId)
+    .eq("period", period)
+    .maybeSingle();
+
+  const payload = {
+    org_id: profile.org.id,
+    offering_id: offeringId,
+    period,
+    created_by: profile.id,
+    created_at: new Date().toISOString(),
+    assignment_selection: selection,
+    grade_scale: gradeScale,
+  };
+
+  let generationId: string;
+  if (existingGen) {
+    const { error } = await supabase.from("monthly_report_generations").update(payload).eq("id", existingGen.id);
+    if (error) throw new Error(error.message);
+    generationId = existingGen.id;
+    await supabase.from("monthly_report_students").delete().eq("generation_id", generationId);
+  } else {
+    const { data, error } = await supabase.from("monthly_report_generations").insert(payload).select("id").single();
+    if (error || !data) throw new Error(error?.message ?? "Failed to create report");
+    generationId = data.id;
+  }
+
+  const rows = enrollments.map((e) => {
+    const studentLogs = (logs ?? []).filter((l) => l.student_id === e.student_id);
+
+    const assignments: ReportAssignmentDetail[] = selection.map((s) => {
+      const log = studentLogs.find((l) => l.assignment_id === s.assignmentId);
+      const mode = modeByAssignment.get(s.assignmentId) ?? "grade";
+      return {
+        title: titleByAssignment.get(s.assignmentId) ?? "",
+        status: log?.status ?? null,
+        grade: mode === "grade" ? log?.grade ?? null : null,
+        comment: log?.comment ?? null,
+      };
+    });
+
+    // Number(null) is 0, not NaN — filter out ungraded/status-only entries
+    // before converting, so they don't silently drag the average down.
+    const numericGrades = assignments
+      .filter((a) => a.grade != null && a.grade.trim() !== "")
+      .map((a) => Number(a.grade))
+      .filter((n) => !Number.isNaN(n));
+    const avgGrade = numericGrades.length ? Math.round(numericGrades.reduce((s, n) => s + n, 0) / numericGrades.length) : null;
+
+    const weakTopics: ReportWeakTopic[] = (topics ?? [])
+      .filter((t) => t.student_id === e.student_id)
+      .map((t) => {
+        const topic = Array.isArray(t.topic_catalog) ? t.topic_catalog[0] : t.topic_catalog;
+        const materials = (topic ? (Array.isArray(topic.topic_materials) ? topic.topic_materials : []) : []).slice().sort((a, b) => a.sort_order - b.sort_order);
+        return {
+          label: topic?.label ?? "",
+          materials: materials.map((m) => ({ kind: m.kind as "video" | "drive", label: m.label, link: m.link, duration: m.duration })),
+        };
+      });
+
+    return {
+      generation_id: generationId,
+      student_id: e.student_id,
+      avg_grade: avgGrade,
+      assignments,
+      weak_topics: weakTopics,
+      assistant_comment: noteByStudent.get(e.student_id) ?? null,
+    };
+  });
+
+  if (rows.length) {
+    const { error } = await supabase.from("monthly_report_students").insert(rows);
+    if (error) throw new Error(error.message);
+  }
+
+  return { id: generationId };
+}
+
+export async function getGeneratedReport(offeringId: string, period: string): Promise<{ meta: GeneratedReportMeta | null; students: GeneratedStudentReport[] }> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { meta: null, students: [] };
+  const supabase = await createClient();
+
+  const { data: gen } = await supabase
+    .from("monthly_report_generations")
+    .select("id, period, created_at, grade_scale, profiles(full_name)")
+    .eq("offering_id", offeringId)
+    .eq("period", period)
+    .maybeSingle();
+  if (!gen) return { meta: null, students: [] };
+
+  const { data: rows } = await supabase
+    .from("monthly_report_students")
+    .select("student_id, avg_grade, assignments, weak_topics, assistant_comment, students(name, student_code)")
+    .eq("generation_id", gen.id);
+
+  const creator = Array.isArray(gen.profiles) ? gen.profiles[0] : gen.profiles;
+
+  const students: GeneratedStudentReport[] = (rows ?? [])
+    .map((r) => {
+      const student = Array.isArray(r.students) ? r.students[0] : r.students;
+      if (!student) return null;
+      return {
+        studentId: r.student_id,
+        studentName: student.name,
+        studentCode: student.student_code,
+        avgGrade: r.avg_grade == null ? null : Number(r.avg_grade),
+        assignments: (r.assignments as ReportAssignmentDetail[]) ?? [],
+        weakTopics: (r.weak_topics as ReportWeakTopic[]) ?? [],
+        assistantComment: r.assistant_comment ?? "",
+      };
+    })
+    .filter((x): x is GeneratedStudentReport => !!x)
+    .sort((a, b) => a.studentName.localeCompare(b.studentName));
+
+  return {
+    meta: {
+      id: gen.id,
+      period: gen.period,
+      createdAt: gen.created_at,
+      createdByName: creator?.full_name ?? null,
+      studentCount: students.length,
+      gradeScale: (gen.grade_scale as GradeScaleSetting) ?? { scale: "percentage", bands: [] },
+    },
+    students,
+  };
 }

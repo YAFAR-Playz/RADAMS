@@ -14,13 +14,175 @@ import {
   uploadSalaryReceipt,
   getSalaryReceiptUrl,
   getAssistantDetailedExport,
+  setAssistantOfficeHours,
   type AssistantSalary,
 } from "@/lib/actions/finance-salaries";
+import {
+  getEvaluationForFinance,
+  addFinanceEvaluationLine,
+  updateFinanceEvaluationLine,
+  deleteFinanceEvaluationLine,
+  type FinanceEvaluation,
+} from "@/lib/actions/evaluations";
+import { listPayCategories, type PayCategory } from "@/lib/actions/pay-categories";
+import { resolveCategoryDefs } from "@/lib/evaluation-categories";
 import { downloadCsv } from "@/lib/csv-export";
 import { consumeSearchHandoff } from "@/lib/search-handoff";
 import { pickerOnlyDateProps } from "@/lib/date-input";
 
 const CURRENCY_SYMBOL: Record<string, string> = { GBP: "£", USD: "$", EUR: "€", EGP: "E£", AED: "د.إ" };
+
+// Shows the actual evaluation_lines a head picked for this assistant/course/
+// period — Finance previously only ever saw the aggregated totals — and
+// lets Finance edit or add to them directly.
+function EvaluationPanel({ payeeId, offeringId, period, sym }: { payeeId: string; offeringId: string; period: string; sym: string }) {
+  const [evalData, setEvalData] = useState<FinanceEvaluation | null>(null);
+  const [payCats, setPayCats] = useState<PayCategory[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  async function reload() {
+    setEvalData(await getEvaluationForFinance(payeeId, offeringId, period));
+  }
+
+  useEffect(() => {
+    getEvaluationForFinance(payeeId, offeringId, period).then(setEvalData);
+    listPayCategories().then(setPayCats);
+  }, [payeeId, offeringId, period]);
+
+  async function onAdd(kind: "extra" | "deduction") {
+    setBusy(true);
+    try {
+      await addFinanceEvaluationLine(payeeId, offeringId, period, kind);
+      await reload();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onUpdate(lineId: string, patch: Parameters<typeof updateFinanceEvaluationLine>[1]) {
+    setBusy(true);
+    try {
+      await updateFinanceEvaluationLine(lineId, patch);
+      await reload();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onDelete(lineId: string) {
+    setBusy(true);
+    try {
+      await deleteFinanceEvaluationLine(lineId);
+      await reload();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const extraCats = resolveCategoryDefs(payCats, "extra");
+  const dedCats = resolveCategoryDefs(payCats, "deduction");
+
+  if (evalData === null) {
+    return (
+      <div className="mt-2">
+        <SkeletonRow className="h-[34px]" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 rounded-[8px] border border-[var(--border)] bg-[var(--surface)] p-[10px_12px]">
+      <div className="mb-[8px] flex items-center justify-between">
+        <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">
+          Evaluation{evalData.headName ? ` by ${evalData.headName}` : ""}
+        </span>
+        {busy && <Spinner size={12} />}
+      </div>
+      {evalData.lines.length === 0 ? (
+        <div className="mb-[8px] text-[12px] text-[var(--subtle)]">No evaluation lines yet.</div>
+      ) : (
+        <div className="mb-[8px] flex flex-col gap-[6px]">
+          {evalData.lines.map((l) => {
+            const cats = l.kind === "extra" ? extraCats : dedCats;
+            const cfg = cats.find((c) => c.label === l.category) ?? cats[0];
+            return (
+              <div key={l.id} className="flex flex-wrap items-center gap-[8px] rounded-[6px] bg-[var(--surface2)] p-[6px_8px]">
+                <span
+                  className="flex-none rounded-full px-[7px] py-[2px] text-[10.5px] font-bold"
+                  style={l.kind === "extra" ? { background: "var(--oks)", color: "var(--ok)" } : { background: "var(--dangers)", color: "var(--danger)" }}
+                >
+                  {l.kind === "extra" ? "Extra" : "Deduction"}
+                </span>
+                <select
+                  value={l.category}
+                  onChange={(e) => onUpdate(l.id, { category: e.target.value })}
+                  className="h-7 min-w-[130px] flex-1 cursor-pointer appearance-none rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-2 text-[12px] font-medium text-[var(--text)] outline-none"
+                >
+                  {cats.map((c) => (
+                    <option key={c.label} value={c.label}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+                {cfg.mode === "number" && (
+                  <input
+                    key={`qty-${l.id}-${l.qty}`}
+                    defaultValue={l.qty}
+                    onBlur={(e) => onUpdate(l.id, { qty: e.target.value.replace(/[^0-9]/g, "") })}
+                    placeholder="0"
+                    className="h-7 w-[50px] flex-none rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-2 text-center font-mono text-[12px] text-[var(--text)] outline-none"
+                  />
+                )}
+                {cfg.mode === "dropdown" && (
+                  <select
+                    value={l.sub}
+                    onChange={(e) => onUpdate(l.id, { sub: e.target.value })}
+                    className="h-7 flex-none cursor-pointer appearance-none rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-2 text-[12px] font-semibold text-[var(--text)] outline-none"
+                  >
+                    {(cfg.subs ?? []).map((s) => (
+                      <option key={s[0]} value={s[0]}>
+                        {s[0]}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {cfg.mode === "locked" && <span className="flex-none text-[11px] font-semibold text-[var(--subtle)]">Fixed</span>}
+                <span className="ml-auto flex-none font-mono text-[12.5px] font-bold text-[var(--text)]">
+                  {sym}
+                  {Math.round(l.amount).toLocaleString()}
+                </span>
+                <button
+                  onClick={() => onDelete(l.id)}
+                  className="flex h-6 w-6 flex-none items-center justify-center rounded-[5px] text-[var(--subtle)] hover:text-[var(--danger)]"
+                >
+                  <Icon name="x" size={12} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <div className="flex gap-[7px]">
+        <button
+          onClick={() => onAdd("extra")}
+          disabled={busy}
+          className="flex items-center gap-[5px] rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-[9px] py-[5px] text-[11.5px] font-semibold text-[var(--ok)] hover:bg-[var(--oks)] disabled:opacity-60"
+        >
+          <Icon name="plus" size={11} />
+          Extra
+        </button>
+        <button
+          onClick={() => onAdd("deduction")}
+          disabled={busy}
+          className="flex items-center gap-[5px] rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-[9px] py-[5px] text-[11.5px] font-semibold text-[var(--danger)] hover:bg-[var(--dangers)] disabled:opacity-60"
+        >
+          <Icon name="plus" size={11} />
+          Deduction
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function periodLabel(period: string) {
   const [y, m] = period.split("-").map(Number);
@@ -35,6 +197,7 @@ export function FinanceSalariesContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [openEval, setOpenEval] = useState<Record<string, boolean>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [newPeriod, setNewPeriod] = useState(() => new Date().toISOString().slice(0, 7));
   const [generating, setGenerating] = useState(false);
@@ -83,6 +246,7 @@ export function FinanceSalariesContent() {
   const fmt = (n: number) => `${n < 0 ? "−" : ""}${sym}${Math.abs(Math.round(n)).toLocaleString("en-US")}`;
   const subtotal = (l: { base: number; bonus: number; deduction: number }) => l.base + l.bonus - l.deduction;
   const total = (a: AssistantSalary) => a.lines.reduce((sum, l) => sum + subtotal(l), 0);
+  const officeHoursOf = (a: AssistantSalary) => a.lines.find((l) => l.method === "Office hours")?.officeHours ?? null;
 
   async function onEditLine(id: string, patch: Parameters<typeof updateSalaryLine>[1]) {
     setBusyId(id);
@@ -91,6 +255,19 @@ export function FinanceSalariesContent() {
       if (period) await reload(period);
     } catch {
       setError("Couldn't save this change — try again.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function onSetOfficeHours(payeeId: string, hours: number) {
+    if (!period) return;
+    setBusyId(payeeId);
+    try {
+      await setAssistantOfficeHours(payeeId, period, hours);
+      await reload(period);
+    } catch {
+      setError("Couldn't save office hours — try again.");
     } finally {
       setBusyId(null);
     }
@@ -534,8 +711,39 @@ export function FinanceSalariesContent() {
                             className="h-[34px] min-w-[200px] flex-1 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[10px] text-[12px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
                           />
                         </div>
+                        {l.offeringId && (
+                          <>
+                            <button
+                              onClick={() => setOpenEval((prev) => ({ ...prev, [l.id]: !prev[l.id] }))}
+                              className="mt-2 flex items-center gap-[5px] text-[11.5px] font-semibold text-[var(--brand)] hover:underline"
+                            >
+                              <Icon name="chevron-down" size={12} style={{ transform: openEval[l.id] ? "rotate(180deg)" : "none" }} />
+                              {openEval[l.id] ? "Hide evaluation" : "Evaluation choices"}
+                            </button>
+                            {openEval[l.id] && <EvaluationPanel payeeId={a.payeeId} offeringId={l.offeringId} period={period ?? ""} sym={sym} />}
+                          </>
+                        )}
                       </div>
                     ))}
+                    <div className="flex flex-wrap items-center justify-between gap-[10px] border-b border-[var(--border2)] p-[10px_18px]">
+                      <div className="flex items-center gap-[8px]">
+                        <Icon name="clock" size={14} className="flex-none text-[var(--subtle)]" />
+                        <span className="text-[12.5px] font-medium text-[var(--muted)]">Fixed office hours this month</span>
+                      </div>
+                      <div className="flex h-8 items-center gap-[6px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[9px]">
+                        <input
+                          key={`office-hours-${a.payeeId}-${officeHoursOf(a) ?? 0}`}
+                          type="number"
+                          min={0}
+                          defaultValue={officeHoursOf(a) ?? 0}
+                          onBlur={(e) => onSetOfficeHours(a.payeeId, Math.max(0, Number(e.target.value) || 0))}
+                          disabled={busyId === a.payeeId}
+                          className="w-[54px] border-none bg-transparent text-right font-mono text-[12px] font-semibold text-[var(--text)] outline-none"
+                        />
+                        <span className="text-[11px] font-semibold text-[var(--subtle)]">hrs</span>
+                      </div>
+                      {busyId === a.payeeId && <Spinner size={13} className="text-[var(--subtle)]" />}
+                    </div>
                     <div className="flex flex-wrap items-center justify-between gap-[10px] p-[12px_18px]">
                       <span className="text-[12.5px] font-medium text-[var(--muted)]">Paid via {a.payMethod} · edits save to this period&apos;s payroll</span>
                       <div className="flex items-center gap-[10px]">

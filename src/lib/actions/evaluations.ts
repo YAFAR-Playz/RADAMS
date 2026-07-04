@@ -164,3 +164,141 @@ export async function saveEvaluation(input: {
 
   return { id: evalId };
 }
+
+export type FinanceEvalLine = EvalLine & { amount: number };
+export type FinanceEvaluation = {
+  id: string | null;
+  headName: string | null;
+  status: "draft" | "submitted";
+  rating: EvalRating | null;
+  notes: string;
+  lines: FinanceEvalLine[];
+};
+
+function requireFinanceOrAdmin(role: string | undefined) {
+  if (role !== "finance" && role !== "admin") throw new Error("Not authorized");
+}
+
+// Finance previously only ever saw the aggregated extra/deduction totals a
+// head's evaluation produced — not which categories were actually picked.
+// This surfaces the real evaluation_lines (and lets Finance edit or add to
+// them) without disturbing head_id, which getOrCreateEvaluation/saveEvaluation
+// use to scope a head to their own evaluations — Finance isn't a head, so it
+// can't go through those.
+export async function getEvaluationForFinance(assistantId: string, offeringId: string, period: string): Promise<FinanceEvaluation> {
+  const profile = await getCurrentProfile();
+  requireFinanceOrAdmin(profile?.role);
+  const supabase = await createClient();
+
+  const { data: existing } = await supabase
+    .from("evaluations")
+    .select("id, head_id, notes, rating, status")
+    .eq("assistant_id", assistantId)
+    .eq("offering_id", offeringId)
+    .eq("period", period)
+    .maybeSingle();
+
+  if (!existing) return { id: null, headName: null, status: "draft", rating: null, notes: "", lines: [] };
+
+  const [{ data: lines }, { data: head }] = await Promise.all([
+    supabase.from("evaluation_lines").select("id, kind, category, note, qty, sub, amount").eq("evaluation_id", existing.id),
+    supabase.from("profiles").select("full_name").eq("id", existing.head_id).maybeSingle(),
+  ]);
+
+  return {
+    id: existing.id,
+    headName: head?.full_name ?? null,
+    status: existing.status as "draft" | "submitted",
+    rating: existing.rating as EvalRating | null,
+    notes: existing.notes ?? "",
+    lines: (lines ?? []).map((l) => ({
+      id: l.id,
+      kind: l.kind as "extra" | "deduction",
+      category: l.category,
+      note: l.note ?? "",
+      qty: l.qty ?? "",
+      sub: l.sub ?? "",
+      amount: Number(l.amount),
+    })),
+  };
+}
+
+async function ensureEvaluationForFinance(assistantId: string, offeringId: string, period: string): Promise<string> {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org) throw new Error("Not authenticated");
+  const supabase = await createClient();
+
+  const { data: existing } = await supabase
+    .from("evaluations")
+    .select("id")
+    .eq("assistant_id", assistantId)
+    .eq("offering_id", offeringId)
+    .eq("period", period)
+    .maybeSingle();
+  if (existing) return existing.id;
+
+  // evaluations.head_id is required even when Finance is the one creating
+  // the row — attribute it to the course's actual head rather than Finance
+  // itself so authorship stays meaningful.
+  const { data: headLink } = await supabase.from("offering_heads").select("head_id").eq("offering_id", offeringId).limit(1).maybeSingle();
+  const headId = headLink?.head_id ?? profile.id;
+
+  const { data, error } = await supabase
+    .from("evaluations")
+    .insert({ org_id: profile.org.id, head_id: headId, assistant_id: assistantId, offering_id: offeringId, period, base_amount: 0, status: "submitted" })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Failed to create evaluation");
+  return data.id;
+}
+
+export async function addFinanceEvaluationLine(assistantId: string, offeringId: string, period: string, kind: "extra" | "deduction"): Promise<{ id: string }> {
+  const profile = await getCurrentProfile();
+  requireFinanceOrAdmin(profile?.role);
+  const supabase = await createClient();
+  const evalId = await ensureEvaluationForFinance(assistantId, offeringId, period);
+
+  const payCategories = await listPayCategories();
+  const cfg = resolveCategoryDefs(payCategories, kind)[0];
+  const sub = cfg.subs?.[0]?.[0] ?? "";
+  const { data, error } = await supabase
+    .from("evaluation_lines")
+    .insert({ evaluation_id: evalId, kind, category: cfg.label, note: null, qty: "", sub, amount: categoryAmount(cfg, "", sub) })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Failed to add line");
+  return { id: data.id };
+}
+
+export async function updateFinanceEvaluationLine(
+  lineId: string,
+  patch: { category?: string; qty?: string; sub?: string; note?: string; kind?: "extra" | "deduction" }
+) {
+  const profile = await getCurrentProfile();
+  requireFinanceOrAdmin(profile?.role);
+  const supabase = await createClient();
+
+  const { data: line } = await supabase.from("evaluation_lines").select("kind, category, qty, sub, note").eq("id", lineId).single();
+  if (!line) throw new Error("Line not found");
+
+  const kind = patch.kind ?? (line.kind as "extra" | "deduction");
+  const category = patch.category ?? line.category;
+  const qty = patch.qty ?? line.qty ?? "";
+  const sub = patch.sub ?? line.sub ?? "";
+  const note = patch.note ?? line.note;
+
+  const payCategories = await listPayCategories();
+  const cfg = resolveCategoryDefs(payCategories, kind).find((c) => c.label === category) ?? resolveCategoryDefs(payCategories, kind)[0];
+  const amount = categoryAmount(cfg, qty, sub);
+
+  const { error } = await supabase.from("evaluation_lines").update({ kind, category: cfg.label, qty, sub, note: note || null, amount }).eq("id", lineId);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteFinanceEvaluationLine(lineId: string) {
+  const profile = await getCurrentProfile();
+  requireFinanceOrAdmin(profile?.role);
+  const supabase = await createClient();
+  const { error } = await supabase.from("evaluation_lines").delete().eq("id", lineId);
+  if (error) throw new Error(error.message);
+}

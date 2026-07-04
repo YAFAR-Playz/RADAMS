@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/icons";
 
-type Status = "checking" | "landing" | "exchanging" | "ready" | "invalid";
+type Status = "checking" | "landing" | "exchanging" | "ready" | "done" | "invalid";
 
 function InvalidLinkPanel() {
   return (
@@ -31,7 +31,6 @@ function InvalidLinkPanel() {
 }
 
 export function ResetPasswordForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
 
@@ -110,13 +109,17 @@ export function ResetPasswordForm() {
     setSaving(true);
     setError(null);
     const { error: updateError } = await supabase.auth.updateUser({ password: newPw });
-    setSaving(false);
     if (updateError) {
+      setSaving(false);
       setError(updateError.message || "Something went wrong. Please try again.");
       return;
     }
-    router.push("/dashboard");
-    router.refresh();
+    // The recovery link leaves the browser holding a live session — sign it
+    // out immediately so the user lands back at a normal sign-in screen
+    // rather than being silently logged in as themselves.
+    await supabase.auth.signOut();
+    setSaving(false);
+    setStatus("done");
   }
 
   if (status === "checking") {
@@ -152,6 +155,28 @@ export function ResetPasswordForm() {
 
   if (status === "invalid") {
     return <InvalidLinkPanel />;
+  }
+
+  if (status === "done") {
+    return (
+      <>
+        <div className="mb-[18px] flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[var(--oks)] text-[var(--ok)]">
+          <Icon name="check" size={24} />
+        </div>
+        <h1 className="m-0 mb-[7px] text-[27px] font-semibold text-[var(--text)] tracking-[-0.02em]">
+          Password updated
+        </h1>
+        <p className="m-0 mb-6 text-[14.5px] text-[var(--muted)] leading-relaxed">
+          Your password has been changed. Head back to the sign-in page and log in with your new password.
+        </p>
+        <Link
+          href="/login"
+          className="flex h-[50px] w-full items-center justify-center rounded-[var(--rad-sm)] bg-[var(--brand)] text-[15px] font-semibold text-[var(--brandfg)]"
+        >
+          Back to sign in
+        </Link>
+      </>
+    );
   }
 
   return (

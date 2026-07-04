@@ -18,9 +18,13 @@ import {
   addStudentEnrollment,
   removeStudentEnrollment,
   getStudentDetailedExport,
+  getStudentDetailPanel,
+  getStudentDriveFolderLink,
+  setStudentDriveFolderLink,
   type StudentRow,
   type EnrollmentDetail,
   type OfferingChoice,
+  type StudentDetailPanel,
 } from "@/lib/actions/students";
 import { getGradeScale, type GradeScaleSetting } from "@/lib/actions/oversight";
 import { getStudentAttendance, type StudentAttendanceSummary } from "@/lib/actions/attendance";
@@ -29,7 +33,7 @@ import { getEffectiveTemplate, getOrgBrandName } from "@/lib/actions/templates";
 import { getOfferingParentWhatsappLink } from "@/lib/actions/assistant-groups";
 import { applyTemplateVars } from "@/lib/message-vars";
 import { consumeSearchHandoff } from "@/lib/search-handoff";
-import { autoAssignUnassigned } from "@/lib/actions/assistant-groups";
+import { AutoAssignModal } from "@/components/shared/auto-assign-modal";
 import { getPaymentStatusForOffering, type PaymentStatusSummary } from "@/lib/actions/payments";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
 import { currencySymbol } from "@/lib/currency";
@@ -74,7 +78,7 @@ export function StudentsContent({ role }: { role: Role }) {
   const [welcomeTemplateParent, setWelcomeTemplateParent] = useState<string | null>(null);
   const [orgName, setOrgName] = useState("ZAD-AMS");
   const [parentWhatsappLink, setParentWhatsappLink] = useState<string | null>(null);
-  const [autoAssigning, setAutoAssigning] = useState(false);
+  const [autoOpen, setAutoOpen] = useState(false);
   const [paymentByStudent, setPaymentByStudent] = useState<Record<string, PaymentStatusSummary>>({});
   const [courseLabelsByStudent, setCourseLabelsByStudent] = useState<Record<string, string[]>>({});
   const [editEnrollments, setEditEnrollments] = useState<EnrollmentDetail[] | null>(null);
@@ -85,7 +89,14 @@ export function StudentsContent({ role }: { role: Role }) {
   const [exporting, setExporting] = useState(false);
   const isRegistration = role === "registration";
   const canEditCourses = role === "admin" || role === "registration";
+  const canViewMore = role === "head" || role === "assistant";
   const [sym, setSym] = useState("£");
+  const [viewMoreStudent, setViewMoreStudent] = useState<StudentRow | null>(null);
+  const [viewMoreAttendance, setViewMoreAttendance] = useState<StudentAttendanceSummary | null>(null);
+  const [viewMoreDetail, setViewMoreDetail] = useState<StudentDetailPanel | null>(null);
+  const [folderLink, setFolderLink] = useState<string | null>(null);
+  const [folderLinkDraft, setFolderLinkDraft] = useState("");
+  const [savingFolderLink, setSavingFolderLink] = useState(false);
 
   useEffect(() => {
     (() => {
@@ -155,7 +166,7 @@ export function StudentsContent({ role }: { role: Role }) {
 
   function formatGrade(avgGrade: number | null): string {
     if (avgGrade == null) return "—";
-    if (gradeScale.scale === "letter" && gradeScale.bands.length) {
+    if (gradeScale.scale !== "percentage" && gradeScale.bands.length) {
       const band = gradeScale.bands.find((b) => avgGrade >= b.min);
       if (band) return band.label;
     }
@@ -212,19 +223,6 @@ export function StudentsContent({ role }: { role: Role }) {
 
   const canReassignAssistants = role === "admin" || role === "head";
   const unassignedCount = students?.filter((s) => !s.assistantId).length ?? 0;
-
-  async function onAutoAssign() {
-    if (!offeringId) return;
-    setAutoAssigning(true);
-    try {
-      await autoAssignUnassigned(offeringId, "equal");
-      await reload(offeringId);
-    } catch {
-      setError("Couldn't auto-assign students — try again.");
-    } finally {
-      setAutoAssigning(false);
-    }
-  }
 
   async function onExport() {
     if (!offeringId) return;
@@ -297,6 +295,32 @@ export function StudentsContent({ role }: { role: Role }) {
     }
     setStudentAttendance(null);
     getStudentAttendance(s.studentId).then(setStudentAttendance);
+  }
+
+  function openViewMore(s: StudentRow) {
+    setViewMoreStudent(s);
+    setViewMoreAttendance(null);
+    setViewMoreDetail(null);
+    setFolderLink(null);
+    getStudentAttendance(s.studentId).then(setViewMoreAttendance);
+    if (offeringId) getStudentDetailPanel(s.studentId, offeringId).then(setViewMoreDetail);
+    getStudentDriveFolderLink(s.studentId).then((link) => {
+      setFolderLink(link);
+      setFolderLinkDraft(link ?? "");
+    });
+  }
+
+  async function onSaveFolderLink() {
+    if (!viewMoreStudent) return;
+    setSavingFolderLink(true);
+    try {
+      await setStudentDriveFolderLink(viewMoreStudent.studentId, folderLinkDraft);
+      setFolderLink(folderLinkDraft.trim() || null);
+    } catch {
+      setError("Couldn't save that folder link — try again.");
+    } finally {
+      setSavingFolderLink(false);
+    }
   }
 
   async function onAddEnrollment(studentId: string) {
@@ -405,12 +429,12 @@ export function StudentsContent({ role }: { role: Role }) {
           </div>
           {canReassignAssistants && (
             <button
-              onClick={onAutoAssign}
-              disabled={unassignedCount === 0 || autoAssigning || !offeringId}
+              onClick={() => setAutoOpen(true)}
+              disabled={unassignedCount === 0 || !offeringId}
               title={unassignedCount === 0 ? "No unassigned students on this course" : "Auto-assign unassigned students"}
               className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--brand)] bg-[var(--surface)] px-[14px] py-[10px] text-[13px] font-semibold text-[var(--brand)] hover:bg-[var(--brands)] disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:text-[var(--subtle)] disabled:hover:bg-[var(--surface)]"
             >
-              {autoAssigning ? <Spinner size={15} /> : <Icon name="users" size={16} />}
+              <Icon name="users" size={16} />
               Auto-assign
               <span
                 className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-[5px] text-[11px] font-bold"
@@ -709,6 +733,15 @@ export function StudentsContent({ role }: { role: Role }) {
                     </>
                   )}
                   <div className="flex w-[74px] flex-none justify-end gap-[6px]">
+                    {canViewMore && (
+                      <button
+                        onClick={() => openViewMore(st)}
+                        title="View more"
+                        className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]"
+                      >
+                        <Icon name="eye" size={16} />
+                      </button>
+                    )}
                     {isAssistant && (
                       <button
                         onClick={() => {
@@ -1024,6 +1057,156 @@ export function StudentsContent({ role }: { role: Role }) {
                 {savingEdit ? <Spinner size={15} /> : <Icon name="check" size={15} />}
                 Save changes
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AUTO-ASSIGN MODAL */}
+      {autoOpen && offeringId && (
+        <AutoAssignModal
+          offeringId={offeringId}
+          unassignedCount={unassignedCount}
+          onClose={() => setAutoOpen(false)}
+          onDone={async () => {
+            setAutoOpen(false);
+            await reload(offeringId);
+          }}
+        />
+      )}
+
+      {/* VIEW MORE MODAL */}
+      {viewMoreStudent && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(8,12,22,0.5)] p-5">
+          <div className="flex max-h-[88vh] w-full max-w-[440px] flex-col overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(8,12,22,.34)]">
+            <div className="flex items-center gap-[11px] border-b border-[var(--border2)] p-[16px_18px]">
+              <div className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-full bg-[var(--brands)] text-[13px] font-bold text-[var(--brand)]">
+                {viewMoreStudent.initials}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">{viewMoreStudent.name}</h3>
+                <div className="text-[11.5px] text-[var(--subtle)]">#{viewMoreStudent.studentCode}</div>
+              </div>
+              <button
+                onClick={() => setViewMoreStudent(null)}
+                className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]"
+              >
+                <Icon name="x" size={18} />
+              </button>
+            </div>
+            <div className="flex min-h-0 flex-col gap-[16px] overflow-y-auto p-[16px_18px]">
+              <div>
+                <div className="mb-[7px] flex items-center justify-between text-[12.5px] font-semibold text-[var(--text)]">
+                  Attendance
+                </div>
+                {viewMoreAttendance === null ? (
+                  <SkeletonRow className="h-[40px]" />
+                ) : viewMoreAttendance.records.length === 0 ? (
+                  <div className="text-[12.5px] text-[var(--subtle)]">No attendance recorded yet.</div>
+                ) : (
+                  <div className="flex flex-col gap-[8px]">
+                    <div className="flex items-center gap-[10px] rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] p-[10px_12px]">
+                      <span
+                        className="font-mono text-[16px] font-bold"
+                        style={{ color: viewMoreAttendance.presentPct >= 80 ? "var(--ok)" : viewMoreAttendance.presentPct >= 60 ? "var(--warn)" : "var(--danger)" }}
+                      >
+                        {viewMoreAttendance.presentPct}%
+                      </span>
+                      <span className="text-[12px] text-[var(--muted)]">
+                        present across {viewMoreAttendance.records.length} session{viewMoreAttendance.records.length === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-[4px]">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[var(--subtle)]">Last 3 sessions</div>
+                      {viewMoreAttendance.records.slice(0, 3).map((r) => {
+                        const tone = r.status === "present" ? "var(--ok)" : r.status === "late" ? "var(--warn)" : "var(--danger)";
+                        return (
+                          <div key={r.sessionId} className="flex items-center justify-between rounded-[7px] bg-[var(--surface2)] px-[10px] py-[6px] text-[12px]">
+                            <span className="text-[var(--text)]">
+                              {r.title} <span className="text-[var(--subtle)]">· {new Date(r.date).toLocaleDateString()}</span>
+                            </span>
+                            <span className="font-semibold capitalize" style={{ color: tone }}>
+                              {r.status}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div className="mb-[7px] flex items-center justify-between text-[12.5px] font-semibold text-[var(--text)]">
+                  Assignments
+                  {viewMoreDetail && (
+                    <span className="font-mono text-[13px] font-bold text-[var(--text)]">
+                      Avg {formatGrade(viewMoreDetail.avgGrade)}
+                    </span>
+                  )}
+                </div>
+                {viewMoreDetail === null ? (
+                  <SkeletonRow className="h-[40px]" />
+                ) : viewMoreDetail.recentAssignments.length === 0 ? (
+                  <div className="text-[12.5px] text-[var(--subtle)]">No assignments logged yet.</div>
+                ) : (
+                  <div className="flex flex-col gap-[4px]">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[var(--subtle)]">Latest 5</div>
+                    {viewMoreDetail.recentAssignments.map((a, i) => {
+                      const def = a.status ? statusDef(a.status as never) : null;
+                      const { bg, fg } = def ? toneColors(def.tone) : { bg: "var(--surface2)", fg: "var(--subtle)" };
+                      return (
+                        <div key={i} className="flex items-center justify-between gap-[8px] rounded-[7px] bg-[var(--surface2)] px-[10px] py-[6px] text-[12px]">
+                          <span className="min-w-0 flex-1 truncate text-[var(--text)]">{a.title}</span>
+                          <span className="flex-none font-mono font-semibold text-[var(--text)]">{a.grade || "—"}</span>
+                          <span
+                            className="flex h-[20px] w-[20px] flex-none items-center justify-center rounded-[5px]"
+                            style={{ background: bg, color: fg }}
+                          >
+                            <Icon name={def?.icon ?? "clock"} size={11} />
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div className="mb-[7px] text-[12.5px] font-semibold text-[var(--text)]">Report folder link</div>
+                <p className="m-0 mb-[8px] text-[11.5px] text-[var(--subtle)]">
+                  Paste the Google Drive folder link for this student&apos;s reports, then send it to their guardian on WhatsApp anytime.
+                </p>
+                <div className="flex items-center gap-[7px]">
+                  <input
+                    value={folderLinkDraft}
+                    onChange={(e) => setFolderLinkDraft(e.target.value)}
+                    placeholder="https://drive.google.com/..."
+                    className="h-9 min-w-0 flex-1 rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+                  />
+                  <button
+                    onClick={onSaveFolderLink}
+                    disabled={folderLinkDraft === (folderLink ?? "") || savingFolderLink}
+                    className="flex h-9 flex-none items-center gap-[5px] rounded-[8px] bg-[var(--brand)] px-[11px] text-[12px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+                  >
+                    {savingFolderLink ? <Spinner size={12} /> : <Icon name="check" size={12} />}
+                    Save
+                  </button>
+                </div>
+                {folderLink && (
+                  <a
+                    href={`https://wa.me/${(viewMoreStudent.guardianPhone ?? "").replace(/[^\d]/g, "")}?text=${encodeURIComponent(
+                      `Hi! Here's the link to ${viewMoreStudent.name}'s reports folder: ${folderLink}`
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-[8px] flex h-9 w-fit items-center gap-[6px] rounded-[8px] border border-[#25D366] bg-[var(--surface)] px-[12px] text-[12px] font-semibold text-[#1ea952] hover:bg-[rgba(37,211,102,0.1)]"
+                  >
+                    <Icon name="send" size={13} />
+                    Send to guardian
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         </div>

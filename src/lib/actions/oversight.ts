@@ -102,7 +102,7 @@ export async function getFullExport(offeringId: string): Promise<FullExportRow[]
 }
 
 export type GradeBand = { label: string; min: number };
-export type GradeScaleSetting = { scale: "percentage" | "letter"; bands: GradeBand[] };
+export type GradeScaleSetting = { scale: "percentage" | "letter" | "numeric"; bands: GradeBand[] };
 
 export async function getGradeScale(offeringId: string): Promise<GradeScaleSetting> {
   const supabase = await createClient();
@@ -115,11 +115,11 @@ export async function getGradeScale(offeringId: string): Promise<GradeScaleSetti
 
 export async function setGradeScale(offeringId: string, setting: GradeScaleSetting) {
   const profile = await getCurrentProfile();
-  if (!profile || profile.role !== "head") throw new Error("Not authorized");
+  if (!profile || (profile.role !== "head" && profile.role !== "admin")) throw new Error("Not authorized");
   const supabase = await createClient();
   const { error } = await supabase
     .from("course_offerings")
-    .update({ grade_scale: setting.scale, grade_bands: setting.scale === "letter" ? setting.bands : null })
+    .update({ grade_scale: setting.scale, grade_bands: setting.scale !== "percentage" ? setting.bands : null })
     .eq("id", offeringId);
   if (error) throw new Error(error.message);
 }
