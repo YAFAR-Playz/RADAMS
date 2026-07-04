@@ -151,7 +151,8 @@ export function HeadCheckingContent() {
   }, [assignmentId]);
 
   const currentAssignment = assignments?.find((a) => a.id === assignmentId) ?? null;
-  const showGrade = currentAssignment ? currentAssignment.template === "grade" || currentAssignment.template === "rubric" : true;
+  const showGrade = currentAssignment ? currentAssignment.hasGrade : true;
+  const showComment = currentAssignment ? currentAssignment.hasComment : true;
   const currentOffering = offerings?.find((o) => o.id === offeringId) ?? null;
 
   const filtered = useMemo(() => {
@@ -420,7 +421,7 @@ export function HeadCheckingContent() {
               <span className="min-w-0 flex-[1_1_110px]">Assistant</span>
               <span className="min-w-0 flex-[1.3_1_140px]">Status</span>
               {showGrade && <span className="w-[60px] flex-none">Grade</span>}
-              <span className="min-w-0 flex-[1.4_1_140px]">Comment</span>
+              {showComment && <span className="min-w-0 flex-[1.4_1_140px]">Comment</span>}
               <span className="w-[36px] flex-none" />
             </div>
             {pageStudents.map((st) => (
@@ -450,13 +451,15 @@ export function HeadCheckingContent() {
                     className="h-[36px] w-[60px] flex-none rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-center text-[13px] font-semibold text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                   />
                 )}
-                <input
-                  key={`comment-${st.studentId}-${assignmentId}`}
-                  defaultValue={st.comment ?? ""}
-                  onBlur={(e) => onCommentBlur(st.studentId, e.target.value)}
-                  placeholder="Add comment…"
-                  className="h-[36px] min-w-0 flex-[1.4_1_140px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[11px] text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
-                />
+                {showComment && (
+                  <input
+                    key={`comment-${st.studentId}-${assignmentId}`}
+                    defaultValue={st.comment ?? ""}
+                    onBlur={(e) => onCommentBlur(st.studentId, e.target.value)}
+                    placeholder="Add comment…"
+                    className="h-[36px] min-w-0 flex-[1.4_1_140px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[11px] text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                  />
+                )}
                 <button
                   onClick={() => {
                     setRecipient("parent");
@@ -508,13 +511,15 @@ export function HeadCheckingContent() {
                         className="h-[44px] w-[84px] flex-none rounded-[9px] border border-[var(--border)] bg-[var(--surface2)] text-center text-[14px] font-semibold text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                       />
                     )}
-                    <input
-                      key={`comment-${st.studentId}-${assignmentId}`}
-                      defaultValue={st.comment ?? ""}
-                      onBlur={(e) => onCommentBlur(st.studentId, e.target.value)}
-                      placeholder="Add comment…"
-                      className="h-[44px] min-w-0 flex-1 rounded-[9px] border border-[var(--border)] bg-[var(--surface2)] px-[13px] text-[14px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
-                    />
+                    {showComment && (
+                      <input
+                        key={`comment-${st.studentId}-${assignmentId}`}
+                        defaultValue={st.comment ?? ""}
+                        onBlur={(e) => onCommentBlur(st.studentId, e.target.value)}
+                        placeholder="Add comment…"
+                        className="h-[44px] min-w-0 flex-1 rounded-[9px] border border-[var(--border)] bg-[var(--surface2)] px-[13px] text-[14px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                      />
+                    )}
                   </div>
                   <button
                     onClick={() => {

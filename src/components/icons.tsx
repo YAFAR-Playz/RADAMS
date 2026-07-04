@@ -46,6 +46,7 @@ import {
   Eye,
   EyeOff,
   Target,
+  Trash2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -96,6 +97,7 @@ export const ICONS = {
   eye: Eye,
   "eye-off": EyeOff,
   target: Target,
+  trash: Trash2,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;

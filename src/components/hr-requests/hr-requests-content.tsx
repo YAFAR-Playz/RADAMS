@@ -99,8 +99,8 @@ export function HrRequestsContent() {
     try {
       await resolveStaffingRequest(id, status);
       setRequests((prev) => (prev ? prev.map((r) => (r.id === id ? { ...r, status } : r)) : prev));
-    } catch {
-      setError("Couldn't update this request — try again.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't update this request — try again.");
     } finally {
       setResolvingId(null);
     }

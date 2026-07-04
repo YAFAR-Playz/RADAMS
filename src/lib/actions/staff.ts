@@ -258,7 +258,7 @@ export async function getLoginAsLink(targetProfileId: string, redirectTo: string
 // approval, so the request and reality can't drift apart.
 export async function resolveStaffingRequest(id: string, status: "approved" | "declined") {
   const profile = await getCurrentProfile();
-  if (!profile || (profile.role !== "admin" && profile.role !== "hr")) throw new Error("Not authorized");
+  if (!profile || !profile.org || (profile.role !== "admin" && profile.role !== "hr")) throw new Error("Not authorized");
   const supabase = await createClient();
 
   const { data: request } = await supabase
@@ -275,14 +275,28 @@ export async function resolveStaffingRequest(id: string, status: "approved" | "d
       if (!request.candidate_name?.trim() || !request.candidate_email?.trim()) {
         throw new Error("This request is missing the candidate's name or email — can't add them yet.");
       }
-      const created = await createStaffMember({
-        name: request.candidate_name,
-        email: request.candidate_email,
-        phone: request.candidate_phone ?? "",
-        role: "assistant",
-        hireDate: request.proposed_date ?? undefined,
-      });
-      newAssistantId = created.id;
+      // If an earlier approval attempt got partway through (e.g. created the
+      // account but failed on a later step) before this request was marked
+      // resolved, re-running it must reuse that account rather than trying
+      // to create a second one with the same email and crashing.
+      const { data: existingCandidate } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("org_id", profile.org.id)
+        .ilike("email", request.candidate_email.trim())
+        .maybeSingle();
+
+      newAssistantId = existingCandidate?.id;
+      if (!newAssistantId) {
+        const created = await createStaffMember({
+          name: request.candidate_name,
+          email: request.candidate_email,
+          phone: request.candidate_phone ?? "",
+          role: "assistant",
+          hireDate: request.proposed_date ?? undefined,
+        });
+        newAssistantId = created.id;
+      }
       if (request.offering_id) await assignStaffToCourses(newAssistantId, "assistant", [request.offering_id]);
     }
     if ((request.kind === "remove" || request.kind === "replace") && request.target_assistant_id) {
@@ -310,10 +324,20 @@ export async function assignStaffToCourses(profileId: string, role: "head" | "as
   const supabase = await createClient();
   const table = role === "head" ? "offering_heads" : "offering_assistants";
   const column = role === "head" ? "head_id" : "assistant_id";
+
+  // Skip offerings this profile is already linked to — this runs again
+  // whenever a staffing request is retried after a partial earlier failure,
+  // and a plain insert would hit the (offering_id, profileId) unique
+  // constraint for anything that already went through.
+  const { data: existing } = await supabase.from(table).select("offering_id").eq(column, profileId).in("offering_id", offeringIds);
+  const existingIds = new Set((existing ?? []).map((r) => r.offering_id));
+  const toAdd = offeringIds.filter((id) => !existingIds.has(id));
+  if (!toAdd.length) return;
+
   // joined_at feeds bracket-salary proration for assistants added mid-period
   // — offering_heads has no such column, so only stamp it for assistants.
   const extra = role === "assistant" ? { joined_at: new Date().toISOString() } : {};
-  const { error } = await supabase.from(table).insert(offeringIds.map((offeringId) => ({ offering_id: offeringId, [column]: profileId, ...extra })));
+  const { error } = await supabase.from(table).insert(toAdd.map((offeringId) => ({ offering_id: offeringId, [column]: profileId, ...extra })));
   if (error) throw new Error(error.message);
 }
 
