@@ -25,7 +25,7 @@ function monthRange(period: string) {
 export type OfferingGradeScale = {
   offeringId: string;
   label: string;
-  scale: "percentage" | "letter";
+  scale: "percentage" | "letter" | "numeric";
   bands: { label: string; min: number }[];
 };
 
@@ -49,7 +49,7 @@ export async function listGradeScalesForOrg(): Promise<OfferingGradeScale[]> {
     return {
       offeringId: o.id,
       label: [course?.name, o.session, o.unit].filter(Boolean).join(" · "),
-      scale: (o.grade_scale as "percentage" | "letter" | null) ?? "percentage",
+      scale: (o.grade_scale as "percentage" | "letter" | "numeric" | null) ?? "percentage",
       bands: (o.grade_bands as { label: string; min: number }[] | null) ?? [],
     };
   });

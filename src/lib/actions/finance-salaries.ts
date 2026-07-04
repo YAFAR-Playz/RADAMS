@@ -20,6 +20,7 @@ export type SalaryLineRow = {
   deduction: number;
   bonusReason: string | null;
   deductionReason: string | null;
+  officeHours: number | null;
 };
 
 export type AssistantSalary = {
@@ -55,7 +56,7 @@ export async function listSalariesForPeriod(period: string): Promise<AssistantSa
   const { data: lines } = await supabase
     .from("salary_lines")
     .select(
-      "id, payee_id, offering_id, method, calc_method, basis, base, bonus, deduction, bonus_reason, deduction_reason, status, pay_method, profiles(full_name, initials), course_offerings(session, unit, courses(name))"
+      "id, payee_id, offering_id, method, calc_method, basis, base, bonus, deduction, bonus_reason, deduction_reason, office_hours, status, pay_method, profiles(full_name, initials), course_offerings(session, unit, courses(name))"
     )
     .eq("org_id", orgId)
     .eq("period", period);
@@ -84,7 +85,7 @@ export async function listSalariesForPeriod(period: string): Promise<AssistantSa
           return {
             id: r.id,
             offeringId: r.offering_id,
-            offering: offeringLabel(offering),
+            offering: r.offering_id ? offeringLabel(offering) : r.method,
             method: r.method,
             calcMethod: r.calc_method as SalaryLineRow["calcMethod"],
             basis: r.basis,
@@ -93,6 +94,7 @@ export async function listSalariesForPeriod(period: string): Promise<AssistantSa
             deduction: Number(r.deduction),
             bonusReason: r.bonus_reason,
             deductionReason: r.deduction_reason,
+            officeHours: r.office_hours != null ? Number(r.office_hours) : null,
           };
         }),
       };
@@ -114,6 +116,54 @@ export async function updateSalaryLine(
   if (patch.deductionReason !== undefined) payload.deduction_reason = patch.deductionReason || null;
   const { error } = await supabase.from("salary_lines").update(payload).eq("id", id);
   if (error) throw new Error(error.message);
+}
+
+// A fixed, per-month office-hours line — not tied to any course, so it
+// lives as an offering_id = null row like a manual line. The unique index
+// on (org, payee, offering_id, period) can't be used as an upsert target
+// here since Postgres never treats two NULLs as equal, so this looks the
+// existing row up explicitly instead of relying on ON CONFLICT.
+export async function setAssistantOfficeHours(payeeId: string, period: string, hours: number) {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");
+  const orgId = profile.org.id;
+  const supabase = await createClient();
+
+  const { data: rateRow } = await supabase.from("other_rates").select("rate").eq("org_id", orgId).ilike("label", "%office hour%").maybeSingle();
+  const rate = rateRow ? Number(rateRow.rate) : 15;
+  const base = Math.round(hours * rate);
+  const basis = `${hours} office hour${hours === 1 ? "" : "s"} @ ${rate}/hr`;
+
+  const { data: existing } = await supabase
+    .from("salary_lines")
+    .select("id")
+    .eq("org_id", orgId)
+    .eq("payee_id", payeeId)
+    .eq("period", period)
+    .is("offering_id", null)
+    .eq("method", "Office hours")
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase
+      .from("salary_lines")
+      .update({ office_hours: hours, base, basis, updated_at: new Date().toISOString() })
+      .eq("id", existing.id);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabase.from("salary_lines").insert({
+      org_id: orgId,
+      payee_id: payeeId,
+      offering_id: null,
+      period,
+      method: "Office hours",
+      calc_method: "manual",
+      basis,
+      base,
+      office_hours: hours,
+    });
+    if (error) throw new Error(error.message);
+  }
 }
 
 export async function setPayeeStatus(payeeId: string, period: string, status: "paid" | "pending") {

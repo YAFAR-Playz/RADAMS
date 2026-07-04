@@ -189,6 +189,41 @@ export async function removeStaffMember(id: string, leaveDate?: string, gaveNoti
   await logActivity("staff", `Removed ${target.full_name} (${target.role})${gaveNotice ? " — gave notice" : ""}`);
 }
 
+// A remove/replace request is scoped to one course — it should only take
+// the assistant off that course, not revoke their whole account, unless
+// this was the only course they had. Reassigning enrollments lets a
+// "replace" hand the outgoing assistant's students straight to whoever is
+// taking over, instead of leaving them unassigned.
+export async function removeAssistantFromOffering(
+  assistantId: string,
+  offeringId: string,
+  opts?: { leaveDate?: string; gaveNotice?: boolean; reassignEnrollmentsTo?: string }
+) {
+  const supabase = await createClient();
+
+  const { error: enrollError } = await supabase
+    .from("enrollments")
+    .update({ assistant_id: opts?.reassignEnrollmentsTo ?? null })
+    .eq("offering_id", offeringId)
+    .eq("assistant_id", assistantId);
+  if (enrollError) throw new Error(enrollError.message);
+
+  const { error: unlinkError } = await supabase.from("offering_assistants").delete().eq("offering_id", offeringId).eq("assistant_id", assistantId);
+  if (unlinkError) throw new Error(unlinkError.message);
+
+  const { count } = await supabase.from("offering_assistants").select("offering_id", { count: "exact", head: true }).eq("assistant_id", assistantId);
+
+  if (!count) {
+    await removeStaffMember(assistantId, opts?.leaveDate, opts?.gaveNotice);
+  } else {
+    const { data: assistant } = await supabase.from("profiles").select("full_name").eq("id", assistantId).single();
+    await logActivity(
+      "staff",
+      `Removed ${assistant?.full_name ?? "an assistant"} from one course — still active on ${count} other${count === 1 ? "" : "s"}`
+    );
+  }
+}
+
 export async function getLoginAsLink(targetProfileId: string, redirectTo: string): Promise<{ url: string }> {
   const profile = await getCurrentProfile();
   if (!profile || profile.role !== "admin" || !profile.org) throw new Error("Not authorized");
@@ -235,21 +270,33 @@ export async function resolveStaffingRequest(id: string, status: "approved" | "d
   if (request.status !== "pending") throw new Error("This request has already been resolved");
 
   if (status === "approved") {
-    if ((request.kind === "remove" || request.kind === "replace") && request.target_assistant_id) {
-      await removeStaffMember(request.target_assistant_id, request.leave_date ?? undefined, request.gave_notice ?? undefined);
-    }
+    let newAssistantId: string | undefined;
     if (request.kind === "add" || request.kind === "replace") {
       if (!request.candidate_name?.trim() || !request.candidate_email?.trim()) {
         throw new Error("This request is missing the candidate's name or email — can't add them yet.");
       }
-      const { id: newId } = await createStaffMember({
+      const created = await createStaffMember({
         name: request.candidate_name,
         email: request.candidate_email,
         phone: request.candidate_phone ?? "",
         role: "assistant",
         hireDate: request.proposed_date ?? undefined,
       });
-      if (request.offering_id) await assignStaffToCourses(newId, "assistant", [request.offering_id]);
+      newAssistantId = created.id;
+      if (request.offering_id) await assignStaffToCourses(newAssistantId, "assistant", [request.offering_id]);
+    }
+    if ((request.kind === "remove" || request.kind === "replace") && request.target_assistant_id) {
+      if (request.offering_id) {
+        await removeAssistantFromOffering(request.target_assistant_id, request.offering_id, {
+          leaveDate: request.leave_date ?? undefined,
+          gaveNotice: request.gave_notice ?? undefined,
+          reassignEnrollmentsTo: request.kind === "replace" ? newAssistantId : undefined,
+        });
+      } else {
+        // No specific course on record — fall back to a full deactivation
+        // since there's nothing to scope the removal to.
+        await removeStaffMember(request.target_assistant_id, request.leave_date ?? undefined, request.gave_notice ?? undefined);
+      }
     }
   }
 

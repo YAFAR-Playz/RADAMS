@@ -98,26 +98,98 @@ export async function setOfferingParentWhatsappLink(offeringId: string, link: st
   if (error) throw new Error(error.message);
 }
 
-export async function autoAssignUnassigned(offeringId: string, strategy: "equal" | "alpha") {
+export type AssistantWorkload = { id: string; name: string; initials: string; currentCount: number; maxStudents: number | null };
+
+// currentCount is students already assigned to this assistant on this
+// offering — heads use it alongside maxStudents to judge remaining capacity
+// before picking who to include in an auto-assign run.
+export async function getAssistantWorkloads(offeringId: string): Promise<AssistantWorkload[]> {
+  const supabase = await createClient();
+  const { data: links } = await supabase
+    .from("offering_assistants")
+    .select("max_students, profiles(id, full_name, initials)")
+    .eq("offering_id", offeringId);
+
+  const { data: enrollments } = await supabase.from("enrollments").select("assistant_id").eq("offering_id", offeringId);
+  const counts = new Map<string, number>();
+  for (const e of enrollments ?? []) {
+    if (!e.assistant_id) continue;
+    counts.set(e.assistant_id, (counts.get(e.assistant_id) ?? 0) + 1);
+  }
+
+  return (links ?? [])
+    .map((row) => {
+      const p = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+      if (!p) return null;
+      return { id: p.id, name: p.full_name, initials: p.initials, currentCount: counts.get(p.id) ?? 0, maxStudents: row.max_students };
+    })
+    .filter((x): x is AssistantWorkload => !!x)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function setAssistantMaxStudents(offeringId: string, assistantId: string, maxStudents: number | null) {
+  const profile = await getCurrentProfile();
+  if (!profile || (profile.role !== "head" && profile.role !== "admin")) throw new Error("Not authorized");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("offering_assistants")
+    .update({ max_students: maxStudents })
+    .eq("offering_id", offeringId)
+    .eq("assistant_id", assistantId);
+  if (error) throw new Error(error.message);
+}
+
+export async function autoAssignUnassigned(offeringId: string, strategy: "equal" | "alpha", includeAssistantIds?: string[]) {
   const supabase = await createClient();
   const { groups, unassigned } = await getAssistantGroups(offeringId);
+  const workloads = await getAssistantWorkloads(offeringId);
   if (!groups.length || !unassigned.length) return;
 
-  let pool = unassigned.slice();
-  if (strategy === "alpha") pool = pool.slice().sort((a, b) => a.name.localeCompare(b.name));
+  const eligible = includeAssistantIds ? groups.filter((g) => includeAssistantIds.includes(g.id)) : groups;
+  if (!eligible.length) return;
+
+  const maxByAssistant = new Map(workloads.map((w) => [w.id, w.maxStudents]));
+  const capacities = new Map<string, number>(
+    eligible.map((g) => {
+      const max = maxByAssistant.get(g.id) ?? null;
+      const remaining = max == null ? Number.POSITIVE_INFINITY : Math.max(0, max - g.students.length);
+      return [g.id, remaining];
+    })
+  );
 
   const updates: { id: string; assistant_id: string }[] = [];
+
   if (strategy === "alpha") {
-    const per = Math.ceil(pool.length / groups.length);
-    pool.forEach((st, idx) => {
-      const g = groups[Math.min(groups.length - 1, Math.floor(idx / per))];
-      updates.push({ id: st.enrollmentId, assistant_id: g.id });
-    });
+    const pool = unassigned.slice().sort((a, b) => a.name.localeCompare(b.name));
+    let idx = 0;
+    const capacitated = eligible.filter((g) => (capacities.get(g.id) ?? 0) > 0);
+    for (let gi = 0; gi < capacitated.length && idx < pool.length; gi++) {
+      const g = capacitated[gi];
+      const cap = capacities.get(g.id) ?? 0;
+      const groupsLeft = capacitated.length - gi;
+      const share = Math.min(cap, Math.ceil((pool.length - idx) / groupsLeft));
+      for (let k = 0; k < share && idx < pool.length; k++) {
+        updates.push({ id: pool[idx].enrollmentId, assistant_id: g.id });
+        idx++;
+      }
+    }
   } else {
-    pool.forEach((st, idx) => {
-      const g = groups[idx % groups.length];
-      updates.push({ id: st.enrollmentId, assistant_id: g.id });
-    });
+    const pool = unassigned.slice();
+    let gi = 0;
+    let idx = 0;
+    while (idx < pool.length) {
+      let attempts = 0;
+      while (attempts < eligible.length && (capacities.get(eligible[gi].id) ?? 0) <= 0) {
+        gi = (gi + 1) % eligible.length;
+        attempts++;
+      }
+      const cap = capacities.get(eligible[gi].id) ?? 0;
+      if (cap <= 0) break;
+      updates.push({ id: pool[idx].enrollmentId, assistant_id: eligible[gi].id });
+      capacities.set(eligible[gi].id, cap - 1);
+      idx++;
+      gi = (gi + 1) % eligible.length;
+    }
   }
 
   for (const u of updates) {

@@ -7,7 +7,6 @@ import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments"
 import {
   getAssistantGroups,
   reassignToGroup,
-  autoAssignUnassigned,
   listStaffingRequests,
   createStaffingRequest,
   cancelStaffingRequest,
@@ -19,6 +18,7 @@ import {
   type StaffingRequest,
 } from "@/lib/actions/assistant-groups";
 import { pickerOnlyDateProps } from "@/lib/date-input";
+import { AutoAssignModal } from "@/components/shared/auto-assign-modal";
 
 type Kind = "add" | "remove" | "replace";
 
@@ -48,8 +48,6 @@ export function AssistantsContent() {
   const [savingParentLink, setSavingParentLink] = useState(false);
 
   const [autoOpen, setAutoOpen] = useState(false);
-  const [autoStrategy, setAutoStrategy] = useState<"equal" | "alpha">("equal");
-  const [autoRunning, setAutoRunning] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [kind, setKind] = useState<Kind>("add");
@@ -140,20 +138,6 @@ export function AssistantsContent() {
       setError("Couldn't save this WhatsApp link — try again.");
     } finally {
       setSavingLink(null);
-    }
-  }
-
-  async function onRunAuto() {
-    if (!offeringId) return;
-    setAutoRunning(true);
-    try {
-      await autoAssignUnassigned(offeringId, autoStrategy);
-      setAutoOpen(false);
-      await reload(offeringId);
-    } catch {
-      setError("Couldn't auto-assign students — try again.");
-    } finally {
-      setAutoRunning(false);
     }
   }
 
@@ -647,63 +631,16 @@ export function AssistantsContent() {
       )}
 
       {/* AUTO-ASSIGN MODAL */}
-      {autoOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(8,12,22,0.5)] p-5">
-          <div className="w-full max-w-[440px] overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(8,12,22,.34)]">
-            <div className="flex items-center gap-[11px] border-b border-[var(--border2)] p-[16px_18px]">
-              <div className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-[10px] bg-[var(--brands)] text-[var(--brand)]">
-                <Icon name="users" size={19} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Auto-assign students</h3>
-                <div className="text-[12px] text-[var(--muted)]">{unassigned.length} students not yet assigned to an assistant</div>
-              </div>
-              <button onClick={() => setAutoOpen(false)} className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]">
-                <Icon name="x" size={18} />
-              </button>
-            </div>
-            <div className="flex flex-col gap-[10px] p-[16px_18px]">
-              <div className="text-[12.5px] font-semibold text-[var(--text)]">Choose a distribution method</div>
-              {(
-                [
-                  { key: "equal" as const, icon: "chart" as const, title: "Equal distribution", desc: "Spread students evenly across all assistants (round-robin) to balance load." },
-                  { key: "alpha" as const, icon: "clipboard-list" as const, title: "Alphabetical blocks", desc: "Sort A→Z and assign in contiguous blocks, so each assistant gets a name range." },
-                ]
-              ).map((s) => {
-                const active = autoStrategy === s.key;
-                return (
-                  <button
-                    key={s.key}
-                    onClick={() => setAutoStrategy(s.key)}
-                    className="flex items-start gap-[11px] rounded-[var(--rad-sm)] border-[1.5px] p-[13px] text-left"
-                    style={{ borderColor: active ? "var(--brand)" : "var(--border)", background: active ? "var(--brands)" : "var(--surface)" }}
-                  >
-                    <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--brand)]">
-                      <Icon name={s.icon} size={16} />
-                    </div>
-                    <div>
-                      <div className="text-[13.5px] font-semibold text-[var(--text)]">{s.title}</div>
-                      <div className="text-[12px] leading-[1.45] text-[var(--muted)]">{s.desc}</div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex gap-[10px] p-[0_18px_16px]">
-              <button onClick={() => setAutoOpen(false)} className="h-11 flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]">
-                Cancel
-              </button>
-              <button
-                onClick={onRunAuto}
-                disabled={autoRunning}
-                className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
-              >
-                {autoRunning ? <Spinner size={15} /> : <Icon name="check" size={15} />}
-                Assign {unassigned.length} students
-              </button>
-            </div>
-          </div>
-        </div>
+      {autoOpen && offeringId && (
+        <AutoAssignModal
+          offeringId={offeringId}
+          unassignedCount={unassigned.length}
+          onClose={() => setAutoOpen(false)}
+          onDone={async () => {
+            setAutoOpen(false);
+            await reload(offeringId);
+          }}
+        />
       )}
     </div>
   );
