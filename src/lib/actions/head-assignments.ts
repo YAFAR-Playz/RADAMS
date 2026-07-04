@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { logActivity } from "@/lib/actions/activity-log";
+import { resolveTemplateFlags } from "@/lib/assignment-template-fallback";
 
 export type AssistantOption = { id: string; name: string; initials: string };
 
@@ -19,7 +20,9 @@ export type AssignmentProgress = {
   title: string;
   maxMarks: number;
   gradeScheme: "numeric" | "letter";
-  template: "grade" | "checkbox" | "rubric" | "comment";
+  templateLabel: string;
+  hasGrade: boolean;
+  hasComment: boolean;
   countsSalary: boolean;
   dueDate: string | null;
   closedAt: string | null;
@@ -31,7 +34,7 @@ export type CreateAssignmentInput = {
   title: string;
   maxMarks: number;
   dueDate: string | null;
-  template: "grade" | "checkbox" | "rubric" | "comment";
+  templateId: string;
   gradeScheme: "numeric" | "letter";
   countsSalary: boolean;
   assistantIds: string[];
@@ -58,7 +61,7 @@ export async function listAssignmentsWithProgress(offeringId: string): Promise<A
 
   const { data: assignments } = await supabase
     .from("assignments")
-    .select("id, title, max_marks, grade_scheme, template, counts_salary, due_date, closed_at")
+    .select("id, title, max_marks, grade_scheme, template, counts_salary, due_date, closed_at, assignment_templates(label, has_grade, has_comment)")
     .eq("offering_id", offeringId)
     .order("created_at", { ascending: false });
   if (!assignments || assignments.length === 0) return [];
@@ -109,12 +112,17 @@ export async function listAssignmentsWithProgress(offeringId: string): Promise<A
       })
       .filter((x): x is AssigneeProgress => !!x);
 
+    const joinedTemplate = Array.isArray(a.assignment_templates) ? a.assignment_templates[0] : a.assignment_templates;
+    const { hasGrade, hasComment } = resolveTemplateFlags(a.template, joinedTemplate);
+
     return {
       id: a.id,
       title: a.title,
       maxMarks: a.max_marks,
       gradeScheme: a.grade_scheme as "numeric" | "letter",
-      template: a.template as AssignmentProgress["template"],
+      templateLabel: joinedTemplate?.label ?? a.template ?? "Grade + comment",
+      hasGrade,
+      hasComment,
       countsSalary: a.counts_salary,
       dueDate: a.due_date,
       closedAt: a.closed_at,
@@ -128,6 +136,8 @@ export async function createAssignment(input: CreateAssignmentInput): Promise<{ 
   if (!profile) throw new Error("Not authenticated");
   const supabase = await createClient();
 
+  const { data: template } = await supabase.from("assignment_templates").select("label").eq("id", input.templateId).maybeSingle();
+
   const { data, error } = await supabase
     .from("assignments")
     .insert({
@@ -135,7 +145,8 @@ export async function createAssignment(input: CreateAssignmentInput): Promise<{ 
       title: input.title,
       max_marks: input.maxMarks,
       due_date: input.dueDate,
-      template: input.template,
+      template_id: input.templateId,
+      template: template?.label ?? "Grade + comment",
       grade_scheme: input.gradeScheme,
       lettered: input.gradeScheme === "letter",
       counts_salary: input.countsSalary,
@@ -176,4 +187,20 @@ export async function toggleAssignmentClosed(id: string, closed: boolean) {
     .update({ closed_at: closed ? new Date().toISOString() : null })
     .eq("id", id);
   if (error) throw new Error(error.message);
+}
+
+// assignment_logs (every student's status/grade/comment/message-tracking
+// "sent_at") and assignment_assistants (the assistant assignment) both
+// cascade-delete off assignments, so removing the assignment row is enough
+// to wipe every related record in one shot.
+export async function deleteAssignment(id: string) {
+  const profile = await getCurrentProfile();
+  if (!profile || (profile.role !== "head" && profile.role !== "admin")) throw new Error("Not authorized");
+  const supabase = await createClient();
+
+  const { data: assignment } = await supabase.from("assignments").select("title").eq("id", id).maybeSingle();
+  const { error } = await supabase.from("assignments").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+
+  await logActivity("assignments", `Deleted assignment "${assignment?.title ?? "Untitled"}" and all its logged records`);
 }

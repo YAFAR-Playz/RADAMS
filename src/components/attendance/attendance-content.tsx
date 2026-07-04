@@ -129,7 +129,7 @@ export function AttendanceContent({ role }: { role: Role }) {
   const filtered = useMemo(() => {
     if (!roster) return [];
     const q = search.trim().toLowerCase();
-    return q ? roster.filter((r) => r.name.toLowerCase().includes(q)) : roster;
+    return q ? roster.filter((r) => r.name.toLowerCase().includes(q) || r.studentCode.toLowerCase().includes(q)) : roster;
   }, [roster, search]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -442,7 +442,7 @@ export function AttendanceContent({ role }: { role: Role }) {
                   setSearch(e.target.value);
                   setPage(0);
                 }}
-                placeholder="Find a student…"
+                placeholder="Find a student by name or ID…"
                 className="h-full w-full border-none bg-transparent text-[13px] text-[var(--text)] outline-none"
               />
             </div>

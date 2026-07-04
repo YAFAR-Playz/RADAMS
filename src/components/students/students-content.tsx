@@ -380,6 +380,7 @@ export function StudentsContent({ role }: { role: Role }) {
       ? applyTemplateVars(welcomeActiveTemplate, {
           org: orgName,
           student: welcomeStudent.name,
+          id: welcomeStudent.studentCode,
           course: current?.label ?? "this course",
           assistant_name: welcomeStudent.assistantName ?? "your assistant",
           student_group_link: welcomeStudent.assistantWhatsappLink ?? "(not set yet — ask your head)",

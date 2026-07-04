@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
 import type { AssignmentStatus } from "@/lib/assignments-data";
+import { resolveTemplateFlags } from "@/lib/assignment-template-fallback";
 
 export type OfferingOption = { id: string; label: string };
 export type AssignmentOption = {
@@ -11,7 +12,8 @@ export type AssignmentOption = {
   maxMarks: number;
   lettered: boolean;
   dueDate: string | null;
-  template: "grade" | "checkbox" | "rubric" | "comment";
+  hasGrade: boolean;
+  hasComment: boolean;
 };
 
 export type RosterStudent = {
@@ -84,18 +86,23 @@ export async function listAssignmentsForOffering(offeringId: string): Promise<As
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("assignments")
-    .select("id, title, max_marks, lettered, due_date, template")
+    .select("id, title, max_marks, lettered, due_date, template, assignment_templates(has_grade, has_comment)")
     .eq("offering_id", offeringId)
     .order("created_at", { ascending: true });
   if (error || !data) return [];
-  return data.map((a) => ({
-    id: a.id,
-    title: a.title,
-    maxMarks: a.max_marks,
-    lettered: a.lettered,
-    dueDate: a.due_date,
-    template: (a.template ?? "grade") as AssignmentOption["template"],
-  }));
+  return data.map((a) => {
+    const joined = Array.isArray(a.assignment_templates) ? a.assignment_templates[0] : a.assignment_templates;
+    const { hasGrade, hasComment } = resolveTemplateFlags(a.template, joined);
+    return {
+      id: a.id,
+      title: a.title,
+      maxMarks: a.max_marks,
+      lettered: a.lettered,
+      dueDate: a.due_date,
+      hasGrade,
+      hasComment,
+    };
+  });
 }
 
 export async function getRoster(assignmentId: string): Promise<RosterStudent[]> {

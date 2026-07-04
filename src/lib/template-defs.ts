@@ -60,7 +60,7 @@ export const TEMPLATE_CATEGORY_DEFS: TemplateCategoryDef[] = [
     label: "Welcome message",
     usage: "Sent by assistant on enrollment",
     icon: "user-plus",
-    vars: ["{student}", "{org}", "{course}", "{assistant_name}", "{student_group_link}", "{parent_group_link}"],
+    vars: ["{student}", "{id}", "{org}", "{course}", "{assistant_name}", "{student_group_link}", "{parent_group_link}"],
     student: {
       def: "Assalamu alaikum {student}! I'm {assistant_name}, your teaching assistant for {course} at {org}. Looking forward to working with you this term!\n\nJoin your student group: {student_group_link}",
     },

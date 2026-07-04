@@ -12,9 +12,11 @@ import {
   resetPlatformTemplate,
 } from "@/lib/actions/templates";
 import { TEMPLATE_CATEGORY_DEFS, TEMPLATE_DEFS, type TemplateKey, type TemplateRecipient } from "@/lib/template-defs";
+import { AssignmentTypesPanel } from "@/components/templates/assignment-types-panel";
 
 const SAMPLE: Record<string, string> = {
   student: "Liam Carter",
+  id: "STU-4821",
   org: "Cambridge Prep Center",
   course: "Physics · June · U1",
   assistant_name: "Aisha Rahman",
@@ -34,6 +36,7 @@ function fill(tpl: string) {
 
 export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform" }) {
   const isPlatform = scope === "platform";
+  const [tab, setTab] = useState<"messages" | "assignment-types">("messages");
   const [overrides, setOverrides] = useState<Record<TemplateKey, string | null> | null>(null);
   const [sel, setSel] = useState<TemplateKey>("assignment_parent");
   const [draft, setDraft] = useState("");
@@ -103,6 +106,25 @@ export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform"
         </div>
       )}
 
+      {!isPlatform && (
+        <div className="flex gap-[6px] rounded-[10px] border border-[var(--border)] bg-[var(--surface2)] p-[3px]">
+          {(["messages", "assignment-types"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className="h-9 flex-1 rounded-[8px] text-[12.5px] font-semibold"
+              style={tab === t ? { background: "var(--surface)", color: "var(--text)", boxShadow: "var(--shadow)" } : { color: "var(--muted)" }}
+            >
+              {t === "messages" ? "Message templates" : "Assignment types"}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {tab === "assignment-types" && !isPlatform ? (
+        <AssignmentTypesPanel />
+      ) : (
+      <>
       <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
         <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">
           {isPlatform ? "Owner · Platform default templates" : "Admin · Organization templates"}
@@ -257,6 +279,8 @@ export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform"
           </div>
         </section>
       </div>
+      </>
+      )}
     </div>
   );
 }

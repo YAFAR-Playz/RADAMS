@@ -12,17 +12,12 @@ import {
   createAssignment,
   updateAssignment,
   toggleAssignmentClosed,
+  deleteAssignment,
   type AssistantOption,
   type AssignmentProgress,
 } from "@/lib/actions/head-assignments";
+import { listAssignmentTemplates, type AssignmentTemplate } from "@/lib/actions/assignment-templates";
 import { pickerOnlyDateProps } from "@/lib/date-input";
-
-const TEMPLATES: { value: "grade" | "checkbox" | "rubric" | "comment"; label: string; desc: string }[] = [
-  { value: "grade", label: "Grade + comment", desc: "Numeric mark and a free-text note" },
-  { value: "checkbox", label: "Complete / Missing", desc: "Assistant just ticks done or not — no grade" },
-  { value: "rubric", label: "Rubric (criteria)", desc: "Score against named criteria" },
-  { value: "comment", label: "Comment only", desc: "Qualitative feedback, no mark" },
-];
 
 function statusFor(a: AssignmentProgress): { text: string; icon: "check2" | "clock"; tone: Tone } {
   const total = a.assignees.reduce((s, x) => s + x.total, 0);
@@ -39,18 +34,18 @@ type FormState = {
   title: string;
   marks: string;
   due: string;
-  template: "grade" | "checkbox" | "rubric" | "comment";
+  templateId: string;
   gradeScheme: "numeric" | "letter";
   countsSalary: boolean;
   assistantIds: string[];
 };
 
-function emptyForm(assistantIds: string[]): FormState {
+function emptyForm(assistantIds: string[], templateId: string): FormState {
   return {
     title: "",
     marks: "100",
     due: "",
-    template: "grade",
+    templateId,
     gradeScheme: "numeric",
     countsSalary: true,
     assistantIds,
@@ -66,10 +61,13 @@ export function HeadAssignmentsContent() {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [closingId, setClosingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AssignmentProgress | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [templates, setTemplates] = useState<AssignmentTemplate[] | null>(null);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState<FormState>(emptyForm([]));
+  const [form, setForm] = useState<FormState>(emptyForm([], ""));
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -77,6 +75,7 @@ export function HeadAssignmentsContent() {
       setOfferings(data);
       setOfferingId(data[0]?.id ?? null);
     });
+    listAssignmentTemplates().then(setTemplates);
   }, []);
 
   async function reload(id: string) {
@@ -113,7 +112,7 @@ export function HeadAssignmentsContent() {
 
   function openNewModal() {
     setEditId(null);
-    setForm(emptyForm((assistants ?? []).map((a) => a.id)));
+    setForm(emptyForm((assistants ?? []).map((a) => a.id), templates?.[0]?.id ?? ""));
     setModalOpen(true);
   }
 
@@ -123,7 +122,7 @@ export function HeadAssignmentsContent() {
       title: a.title,
       marks: String(a.maxMarks),
       due: a.dueDate ?? "",
-      template: a.template,
+      templateId: "",
       gradeScheme: a.gradeScheme,
       countsSalary: a.countsSalary,
       assistantIds: a.assignees.map((x) => x.assistantId),
@@ -144,8 +143,9 @@ export function HeadAssignmentsContent() {
     setForm((f) => ({ ...f, assistantIds: isAll ? [] : all }));
   }
 
-  const canSave = form.title.trim().length > 0 && form.assistantIds.length > 0;
-  const showGradeScheme = form.template === "grade" || form.template === "rubric";
+  const canSave = form.title.trim().length > 0 && form.assistantIds.length > 0 && (editId || !!form.templateId);
+  const selectedTemplate = templates?.find((t) => t.id === form.templateId) ?? null;
+  const showGradeScheme = selectedTemplate ? selectedTemplate.hasGrade : true;
 
   async function onSave() {
     if (!canSave || !offeringId) return;
@@ -164,7 +164,7 @@ export function HeadAssignmentsContent() {
           title: form.title.trim(),
           maxMarks: Number(form.marks) || 100,
           dueDate: form.due || null,
-          template: form.template,
+          templateId: form.templateId,
           gradeScheme: form.gradeScheme,
           countsSalary: form.countsSalary,
           assistantIds: form.assistantIds,
@@ -189,6 +189,20 @@ export function HeadAssignmentsContent() {
       setError("Couldn't update this assignment — try again.");
     } finally {
       setClosingId(null);
+    }
+  }
+
+  async function onConfirmDelete() {
+    if (!deleteTarget || !offeringId) return;
+    setDeleting(true);
+    try {
+      await deleteAssignment(deleteTarget.id);
+      setDeleteTarget(null);
+      await reload(offeringId);
+    } catch {
+      setError("Couldn't delete this assignment — try again.");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -306,8 +320,8 @@ export function HeadAssignmentsContent() {
                   <div className="min-w-[160px] flex-1">
                     <div className="text-[14px] font-semibold text-[var(--text)]">{a.title}</div>
                     <div className="text-[12px] text-[var(--subtle)]">
-                      {a.template === "grade" || a.template === "rubric" ? `Out of ${a.maxMarks} · ` : a.template === "checkbox" ? "Complete / Missing · " : "Comment only · "}
-                      {a.dueDate ? `Logging due ${a.dueDate}` : "No due date"} · {a.assignees.length} assistants
+                      {a.templateLabel}
+                      {a.hasGrade ? ` · Out of ${a.maxMarks}` : ""} · {a.dueDate ? `Logging due ${a.dueDate}` : "No due date"} · {a.assignees.length} assistants
                     </div>
                   </div>
                   <div className="flex min-w-[130px] flex-1 flex-col gap-[5px]">
@@ -337,6 +351,16 @@ export function HeadAssignmentsContent() {
                     className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]"
                   >
                     <Icon name="settings" size={15} />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteTarget(a);
+                    }}
+                    title="Delete assignment"
+                    className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] hover:text-[var(--danger)]"
+                  >
+                    <Icon name="trash" size={15} />
                   </button>
                   <Icon
                     name="chevron-down"
@@ -451,32 +475,45 @@ export function HeadAssignmentsContent() {
               {!editId && (
                 <div>
                   <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">
-                    Comment template
+                    Assignment type
                   </label>
-                  <div className="flex flex-col gap-[7px]">
-                    {TEMPLATES.map((t) => {
-                      const active = form.template === t.value;
-                      return (
-                        <button
-                          key={t.value}
-                          onClick={() => setForm((f) => ({ ...f, template: t.value }))}
-                          className="flex items-center gap-[10px] rounded-[var(--rad-sm)] border-[1.5px] p-[11px_13px] text-left"
-                          style={{ borderColor: active ? "var(--brand)" : "var(--border)", background: active ? "var(--brands)" : "var(--surface)" }}
-                        >
-                          <div
-                            className="flex h-[18px] w-[18px] flex-none items-center justify-center rounded-full border-[1.5px]"
-                            style={{ borderColor: active ? "var(--brand)" : "var(--border)", background: active ? "var(--brand)" : "transparent" }}
+                  {templates === null ? (
+                    <SkeletonRow className="h-[60px]" />
+                  ) : templates.length === 0 ? (
+                    <div className="text-[12.5px] text-[var(--subtle)]">No assignment types set up yet — ask your admin to add one under Admin → Assignment types.</div>
+                  ) : (
+                    <div className="flex flex-col gap-[7px]">
+                      {templates.map((t) => {
+                        const active = form.templateId === t.id;
+                        const desc = t.hasGrade && t.hasComment
+                          ? "Status, grade, and a comment"
+                          : t.hasGrade
+                            ? "Status and a grade — no comment"
+                            : t.hasComment
+                              ? "Status and a comment — no grade"
+                              : "Status only";
+                        return (
+                          <button
+                            key={t.id}
+                            onClick={() => setForm((f) => ({ ...f, templateId: t.id }))}
+                            className="flex items-center gap-[10px] rounded-[var(--rad-sm)] border-[1.5px] p-[11px_13px] text-left"
+                            style={{ borderColor: active ? "var(--brand)" : "var(--border)", background: active ? "var(--brands)" : "var(--surface)" }}
                           >
-                            {active && <div className="h-2 w-2 rounded-full bg-[var(--brandfg)]" />}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="text-[13px] font-semibold text-[var(--text)]">{t.label}</div>
-                            <div className="text-[11.5px] text-[var(--subtle)]">{t.desc}</div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+                            <div
+                              className="flex h-[18px] w-[18px] flex-none items-center justify-center rounded-full border-[1.5px]"
+                              style={{ borderColor: active ? "var(--brand)" : "var(--border)", background: active ? "var(--brand)" : "transparent" }}
+                            >
+                              {active && <div className="h-2 w-2 rounded-full bg-[var(--brandfg)]" />}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-[13px] font-semibold text-[var(--text)]">{t.label}</div>
+                              <div className="text-[11.5px] text-[var(--subtle)]">{desc}</div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -607,6 +644,64 @@ export function HeadAssignmentsContent() {
               >
                 {saving ? <Spinner size={15} /> : <Icon name="check" size={15} />}
                 {editId ? "Save changes" : "Create & assign"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(8,12,22,0.5)] p-5">
+          <div className="w-full max-w-[420px] overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(8,12,22,.34)]">
+            <div className="flex items-center gap-[11px] border-b border-[var(--border2)] p-[16px_18px]">
+              <div className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-[10px] bg-[var(--dangers)] text-[var(--danger)]">
+                <Icon name="trash" size={19} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Delete assignment?</h3>
+                <div className="text-[12px] text-[var(--muted)]">This can&apos;t be undone</div>
+              </div>
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]"
+              >
+                <Icon name="x" size={18} />
+              </button>
+            </div>
+            <div className="p-[18px]">
+              <p className="m-0 text-[13.5px] leading-[1.55] text-[var(--text)]">
+                Deleting <span className="font-semibold">&quot;{deleteTarget.title}&quot;</span> will permanently remove it along with:
+              </p>
+              <ul className="m-0 mt-[10px] flex list-none flex-col gap-[6px] p-0 text-[13px] text-[var(--muted)]">
+                <li className="flex items-center gap-[8px]">
+                  <Icon name="x" size={12} className="flex-none text-[var(--danger)]" />
+                  Every student&apos;s logged status, grade and comment for it
+                </li>
+                <li className="flex items-center gap-[8px]">
+                  <Icon name="x" size={12} className="flex-none text-[var(--danger)]" />
+                  Its message-tracking history (sent/pending updates)
+                </li>
+                <li className="flex items-center gap-[8px]">
+                  <Icon name="x" size={12} className="flex-none text-[var(--danger)]" />
+                  Its assistant assignments
+                </li>
+              </ul>
+            </div>
+            <div className="flex gap-[10px] border-t border-[var(--border2)] p-[14px_18px]">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="h-11 flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onConfirmDelete}
+                disabled={deleting}
+                className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--danger)] text-[13.5px] font-semibold text-white disabled:opacity-60"
+              >
+                {deleting ? <Spinner size={15} /> : <Icon name="trash" size={15} />}
+                Delete permanently
               </button>
             </div>
           </div>

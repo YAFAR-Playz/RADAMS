@@ -18,6 +18,7 @@ export type SessionSummary = {
 export type AttendanceRosterRow = {
   studentId: string;
   name: string;
+  studentCode: string;
   initials: string;
   phone: string | null;
   guardianPhone: string | null;
@@ -68,7 +69,7 @@ export async function getSessionRoster(sessionId: string): Promise<AttendanceRos
 
   let enrollmentQuery = supabase
     .from("enrollments")
-    .select("student_id, assistant_id, students(id, name, initials, phone, guardian_phone)")
+    .select("student_id, assistant_id, students(id, name, student_code, initials, phone, guardian_phone)")
     .eq("offering_id", session.offering_id);
   if (profile.role === "assistant") {
     enrollmentQuery = enrollmentQuery.eq("assistant_id", profile.id);
@@ -89,6 +90,7 @@ export async function getSessionRoster(sessionId: string): Promise<AttendanceRos
       return {
         studentId: e.student_id,
         name: student.name,
+        studentCode: student.student_code,
         initials: student.initials,
         phone: student.phone,
         guardianPhone: student.guardian_phone,
