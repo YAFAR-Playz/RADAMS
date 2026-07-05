@@ -7,6 +7,7 @@ import { listPaymentPlans, markInstallmentPaid, setPlanDiscount, setPlanType, ty
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
 import { currencySymbol } from "@/lib/currency";
+import { matchesStudentQuery } from "@/lib/student-search";
 
 type StatusFilter = "all" | "paid" | "pending" | "installments" | "full";
 
@@ -46,9 +47,8 @@ export function InstallmentsContent() {
 
   const filtered = useMemo(() => {
     if (!plans) return [];
-    const q = search.trim().toLowerCase();
     return plans.filter((p) => {
-      if (q && !p.studentName.toLowerCase().includes(q)) return false;
+      if (!matchesStudentQuery(search, p.studentName, p.studentCode)) return false;
       if (offeringFilter !== "all" && p.offeringId !== offeringFilter) return false;
       const outstanding = p.totalAmount - p.paidAmount;
       if (statusFilter === "paid" && outstanding > 0) return false;
@@ -148,7 +148,7 @@ export function InstallmentsContent() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search students…"
+            placeholder="Search students by name or ID…"
             className="h-full w-full border-none bg-transparent text-[13.5px] text-[var(--text)] outline-none"
           />
         </div>

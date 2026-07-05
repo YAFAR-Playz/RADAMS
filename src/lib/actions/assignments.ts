@@ -20,6 +20,7 @@ export type RosterStudent = {
   enrollmentId: string;
   studentId: string;
   name: string;
+  studentCode: string;
   initials: string;
   phone: string | null;
   guardianName: string | null;
@@ -119,7 +120,7 @@ export async function getRoster(assignmentId: string): Promise<RosterStudent[]> 
 
   let enrollmentQuery = supabase
     .from("enrollments")
-    .select("id, student_id, assistant_id, students(id, name, initials, phone, guardian_name, guardian_phone), profiles(full_name)")
+    .select("id, student_id, assistant_id, students(id, name, student_code, initials, phone, guardian_name, guardian_phone), profiles(full_name)")
     .eq("offering_id", assignment.offering_id);
 
   if (profile.role === "assistant") {
@@ -148,6 +149,7 @@ export async function getRoster(assignmentId: string): Promise<RosterStudent[]> 
         enrollmentId: e.id,
         studentId: e.student_id,
         name: student.name,
+        studentCode: student.student_code,
         initials: student.initials,
         phone: student.phone,
         guardianName: student.guardian_name,

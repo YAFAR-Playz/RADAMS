@@ -18,7 +18,10 @@ export async function globalSearch(rawQuery: string): Promise<SearchResult[]> {
   if (!profile || !profile.org) return [];
   const orgId = profile.org.id;
   const supabase = await createClient();
-  const like = `%${q.replace(/[%_]/g, "")}%`;
+  // Student IDs are plain digits in the database but shown with a leading
+  // "#" in the UI — strip it so searching "#1042" still matches student_code
+  // "1042", on top of the usual name/phone match.
+  const like = `%${q.replace(/[%_#]/g, "")}%`;
   const results: SearchResult[] = [];
 
   const studentsNav = findNavItem(profile.role, "students");

@@ -8,6 +8,7 @@ import { registerStudent, listRegistrations, type RegistrationRow } from "@/lib/
 import { getOfferingFees, type OfferingFees, type PlanType } from "@/lib/actions/payments";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
 import { currencySymbol } from "@/lib/currency";
+import { matchesStudentQuery } from "@/lib/student-search";
 
 const PAGE_SIZE = 15;
 
@@ -93,8 +94,7 @@ export function RegistrationsContent() {
 
   const filtered = useMemo(() => {
     if (!registrations) return [];
-    const q = search.trim().toLowerCase();
-    return q ? registrations.filter((r) => r.name.toLowerCase().includes(q)) : registrations;
+    return registrations.filter((r) => matchesStudentQuery(search, r.name, r.studentCode));
   }, [registrations, search]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -261,7 +261,7 @@ export function RegistrationsContent() {
                   setSearch(e.target.value);
                   setPage(0);
                 }}
-                placeholder="Search…"
+                placeholder="Search by name or ID…"
                 className="h-full w-full border-none bg-transparent text-[12.5px] text-[var(--text)] outline-none"
               />
             </div>

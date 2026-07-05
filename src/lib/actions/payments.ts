@@ -23,6 +23,7 @@ export type StudentPaymentRow = {
   planId: string;
   studentId: string;
   studentName: string;
+  studentCode: string;
   initials: string;
   offering: string;
   offeringId: string;
@@ -112,7 +113,7 @@ export async function listPaymentPlans(): Promise<StudentPaymentRow[]> {
   const { data: plans } = await supabase
     .from("payment_plans")
     .select(
-      "id, student_id, offering_id, plan_type, total_amount, discount_pct, students(name, initials), course_offerings(session, unit, courses(name))"
+      "id, student_id, offering_id, plan_type, total_amount, discount_pct, students(name, student_code, initials), course_offerings(session, unit, courses(name))"
     )
     .order("created_at", { ascending: false });
   if (!plans || plans.length === 0) return [];
@@ -141,6 +142,7 @@ export async function listPaymentPlans(): Promise<StudentPaymentRow[]> {
       planId: p.id,
       studentId: p.student_id,
       studentName: student.name,
+      studentCode: student.student_code,
       initials: student.initials,
       offering: offeringLabel(offering),
       offeringId: p.offering_id,

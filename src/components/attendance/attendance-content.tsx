@@ -21,6 +21,7 @@ import { getEffectiveTemplate, getOrgBrandName } from "@/lib/actions/templates";
 import { applyTemplateVars } from "@/lib/message-vars";
 import { downloadCsv } from "@/lib/csv-export";
 import { pickerOnlyDateProps } from "@/lib/date-input";
+import { matchesStudentQuery } from "@/lib/student-search";
 
 const PAGE_SIZE = 20;
 const SESSION_PAGE_SIZE = 10;
@@ -128,8 +129,7 @@ export function AttendanceContent({ role }: { role: Role }) {
 
   const filtered = useMemo(() => {
     if (!roster) return [];
-    const q = search.trim().toLowerCase();
-    return q ? roster.filter((r) => r.name.toLowerCase().includes(q) || r.studentCode.toLowerCase().includes(q)) : roster;
+    return roster.filter((r) => matchesStudentQuery(search, r.name, r.studentCode));
   }, [roster, search]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));

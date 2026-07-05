@@ -19,6 +19,7 @@ import {
 } from "@/lib/actions/assignments";
 import { getEffectiveTemplate, getOrgBrandName } from "@/lib/actions/templates";
 import { applyTemplateVars } from "@/lib/message-vars";
+import { matchesStudentQuery } from "@/lib/student-search";
 
 const PAGE_SIZE = 10;
 
@@ -157,9 +158,9 @@ export function HeadCheckingContent() {
 
   const filtered = useMemo(() => {
     if (!roster) return [];
-    const q = search.trim().toLowerCase();
     return roster.filter((s) => {
-      if (q && !s.name.toLowerCase().includes(q) && !(s.assistantName ?? "").toLowerCase().includes(q)) return false;
+      const matchesAssistant = search.trim() !== "" && (s.assistantName ?? "").toLowerCase().includes(search.trim().toLowerCase());
+      if (!matchesStudentQuery(search, s.name, s.studentCode) && !matchesAssistant) return false;
       if (statusFilter && s.status !== statusFilter) return false;
       return true;
     });
@@ -368,7 +369,7 @@ export function HeadCheckingContent() {
               setSearch(e.target.value);
               setPage(0);
             }}
-            placeholder="Search students or assistants…"
+            placeholder="Search students by name/ID or assistants…"
             className="h-full w-full border-none bg-transparent text-[13.5px] text-[var(--text)] outline-none"
           />
         </div>
