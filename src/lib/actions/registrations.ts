@@ -18,6 +18,7 @@ export type RegistrationRow = {
   enrollmentId: string;
   studentId: string;
   name: string;
+  studentCode: string;
   initials: string;
   phone: string | null;
   guardianPhone: string | null;
@@ -81,7 +82,7 @@ export async function listRegistrations(): Promise<RegistrationRow[]> {
 
   const { data: enrollments } = await supabase
     .from("enrollments")
-    .select("id, student_id, created_at, students(id, name, initials, phone, guardian_phone), course_offerings(session, unit, courses(name))")
+    .select("id, student_id, created_at, students(id, name, student_code, initials, phone, guardian_phone), course_offerings(session, unit, courses(name))")
     .in("offering_id", offeringIds)
     .order("created_at", { ascending: false })
     .limit(200);
@@ -95,6 +96,7 @@ export async function listRegistrations(): Promise<RegistrationRow[]> {
         enrollmentId: e.id,
         studentId: s.id,
         name: s.name,
+        studentCode: s.student_code,
         initials: s.initials,
         phone: s.phone,
         guardianPhone: s.guardian_phone,

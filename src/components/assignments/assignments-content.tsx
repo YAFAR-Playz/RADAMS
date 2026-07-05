@@ -19,6 +19,7 @@ import {
 } from "@/lib/actions/assignments";
 import { getEffectiveTemplate, getOrgBrandName } from "@/lib/actions/templates";
 import { applyTemplateVars } from "@/lib/message-vars";
+import { matchesStudentQuery } from "@/lib/student-search";
 
 const PAGE_SIZE = 10;
 
@@ -157,9 +158,8 @@ export function AssignmentsContent() {
 
   const filtered = useMemo(() => {
     if (!roster) return [];
-    const q = search.trim().toLowerCase();
     return roster.filter((s) => {
-      if (q && !s.name.toLowerCase().includes(q)) return false;
+      if (!matchesStudentQuery(search, s.name, s.studentCode)) return false;
       if (statusFilter && s.status !== statusFilter) return false;
       return true;
     });
@@ -377,7 +377,7 @@ export function AssignmentsContent() {
               setSearch(e.target.value);
               setPage(0);
             }}
-            placeholder="Search students…"
+            placeholder="Search students by name or ID…"
             className="h-full w-full border-none bg-transparent text-[13.5px] text-[var(--text)] outline-none"
           />
         </div>

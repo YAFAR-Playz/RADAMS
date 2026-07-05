@@ -37,6 +37,7 @@ import { AutoAssignModal } from "@/components/shared/auto-assign-modal";
 import { getPaymentStatusForOffering, type PaymentStatusSummary } from "@/lib/actions/payments";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
 import { currencySymbol } from "@/lib/currency";
+import { matchesStudentQuery } from "@/lib/student-search";
 
 const PAGE_SIZE = 20;
 
@@ -178,9 +179,8 @@ export function StudentsContent({ role }: { role: Role }) {
 
   const filtered = useMemo(() => {
     if (!students) return [];
-    const q = search.trim().toLowerCase();
     const rows = students.filter((s) => {
-      if (q && !s.name.toLowerCase().includes(q) && !s.studentCode.includes(q)) return false;
+      if (!matchesStudentQuery(search, s.name, s.studentCode)) return false;
       if (isRegistration && paymentFilter !== "all") {
         const payment = paymentByStudent[s.studentId];
         if (paymentFilter === "paid" && payment?.status !== "paid") return false;
@@ -517,7 +517,7 @@ export function StudentsContent({ role }: { role: Role }) {
               setSearch(e.target.value);
               setPage(0);
             }}
-            placeholder="Search students…"
+            placeholder="Search students by name or ID…"
             className="h-full w-full border-none bg-transparent text-[13.5px] text-[var(--text)] outline-none"
           />
         </div>

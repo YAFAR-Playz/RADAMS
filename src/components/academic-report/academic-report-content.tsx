@@ -18,6 +18,7 @@ import { getGradeScale, setGradeScale, type GradeBand, type GradeScaleSetting } 
 import { formatGradeByScale } from "@/lib/grade-scale";
 import { downloadCsv } from "@/lib/csv-export";
 import { pickerOnlyDateProps } from "@/lib/date-input";
+import { matchesStudentQuery } from "@/lib/student-search";
 
 const PAGE_SIZE = 10;
 
@@ -87,9 +88,7 @@ export function AcademicReportContent() {
 
   const filtered = useMemo(() => {
     if (!students) return [];
-    const q = search.trim().toLowerCase();
-    if (!q) return students;
-    return students.filter((s) => s.studentName.toLowerCase().includes(q) || s.studentCode.toLowerCase().includes(q));
+    return students.filter((s) => matchesStudentQuery(search, s.studentName, s.studentCode));
   }, [students, search]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -302,7 +301,7 @@ export function AcademicReportContent() {
                   setSearch(e.target.value);
                   setPage(0);
                 }}
-                placeholder="Search students…"
+                placeholder="Search students by name or ID…"
                 className="h-full w-full border-none bg-transparent text-[13.5px] text-[var(--text)] outline-none"
               />
             </div>
