@@ -152,13 +152,31 @@ export async function createSession(input: { offeringId: string; title: string; 
   if (enrollments && enrollments.length) {
     const { error: recError } = await supabase
       .from("attendance_records")
-      .insert(enrollments.map((e) => ({ session_id: session.id, student_id: e.student_id, status: "present" as const })));
+      .insert(enrollments.map((e) => ({ session_id: session.id, student_id: e.student_id, status: "absent" as const })));
     if (recError) throw new Error(recError.message);
   }
 
   await logActivity("attendance", `Created session "${input.title || "New session"}" on ${input.date}`);
 
   return { id: session.id };
+}
+
+export async function updateSession(id: string, input: { title: string; date: string; time: string }) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("attendance_sessions")
+    .update({ title: input.title || "New session", session_date: input.date, session_time: input.time })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  await logActivity("attendance", `Updated session "${input.title || "New session"}"`);
+}
+
+export async function deleteSession(id: string) {
+  const supabase = await createClient();
+  const { data: session } = await supabase.from("attendance_sessions").select("title").eq("id", id).maybeSingle();
+  const { error } = await supabase.from("attendance_sessions").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+  await logActivity("attendance", `Deleted session "${session?.title ?? "Untitled"}" and its attendance records`);
 }
 
 export async function markAttendance(sessionId: string, studentId: string, status: AttendanceStatus) {

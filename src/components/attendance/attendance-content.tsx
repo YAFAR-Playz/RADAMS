@@ -10,6 +10,8 @@ import {
   listSessions,
   getSessionRoster,
   createSession,
+  updateSession,
+  deleteSession,
   markAttendance,
   markAllPresent,
   getFullAttendanceExport,
@@ -62,6 +64,13 @@ export function AttendanceContent({ role }: { role: Role }) {
   const [newDate, setNewDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [newTime, setNewTime] = useState("16:00");
   const [creating, setCreating] = useState(false);
+  const [editTarget, setEditTarget] = useState<SessionSummary | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDate, setEditDate] = useState("");
+  const [editTime, setEditTime] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<SessionSummary | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [templateStudent, setTemplateStudent] = useState<string | null>(null);
   const [templateParent, setTemplateParent] = useState<string | null>(null);
   const [orgName, setOrgName] = useState("ZAD-AMS");
@@ -203,6 +212,41 @@ export function AttendanceContent({ role }: { role: Role }) {
       setError("Couldn't create this session — try again.");
     } finally {
       setCreating(false);
+    }
+  }
+
+  function openEditSession(s: SessionSummary) {
+    setEditTarget(s);
+    setEditTitle(s.title);
+    setEditDate(s.date);
+    setEditTime(s.time ?? "16:00");
+  }
+
+  async function onSaveEditSession() {
+    if (!editTarget || !offeringId) return;
+    setSavingEdit(true);
+    try {
+      await updateSession(editTarget.id, { title: editTitle.trim(), date: editDate, time: editTime });
+      setEditTarget(null);
+      await reloadSessions(offeringId, sessionId ?? undefined);
+    } catch {
+      setError("Couldn't update this session — try again.");
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  async function onConfirmDeleteSession() {
+    if (!deleteTarget || !offeringId) return;
+    setDeleting(true);
+    try {
+      await deleteSession(deleteTarget.id);
+      setDeleteTarget(null);
+      await reloadSessions(offeringId);
+    } catch {
+      setError("Couldn't delete this session — try again.");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -370,6 +414,30 @@ export function AttendanceContent({ role }: { role: Role }) {
                         {s.present}/{s.total} present{s.time ? ` · ${s.time}` : ""}
                       </div>
                     </div>
+                    {canEdit && (
+                      <div className="flex flex-none items-center gap-[4px]">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditSession(s);
+                          }}
+                          title="Edit session"
+                          className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]"
+                        >
+                          <Icon name="settings" size={14} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteTarget(s);
+                          }}
+                          title="Delete session"
+                          className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--dangers)] hover:text-[var(--danger)]"
+                        >
+                          <Icon name="trash" size={14} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })
@@ -482,6 +550,9 @@ export function AttendanceContent({ role }: { role: Role }) {
                     <div className="min-w-[130px] flex-[1_1_140px]">
                       <div className="text-[13.5px] font-semibold text-[var(--text)]">
                         {r.name}
+                        <span className="ml-[6px] rounded-[4px] bg-[var(--surface2)] px-[5px] py-[1px] font-mono text-[10.5px] font-semibold text-[var(--subtle)]">
+                          #{r.studentCode}
+                        </span>
                         {savingId === r.studentId && <Spinner size={12} className="ml-2 inline text-[var(--subtle)]" />}
                       </div>
                     </div>
@@ -700,6 +771,109 @@ export function AttendanceContent({ role }: { role: Role }) {
               >
                 {creating ? <Spinner size={15} /> : <Icon name="plus" size={15} />}
                 Create &amp; take attendance
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT SESSION MODAL */}
+      {editTarget && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(8,12,22,0.5)] p-5">
+          <div className="w-full max-w-[430px] overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(8,12,22,.34)]">
+            <div className="flex items-center gap-[11px] border-b border-[var(--border2)] p-[16px_18px]">
+              <div className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-[10px] bg-[var(--brands)] text-[var(--brand)]">
+                <Icon name="cal-check" size={19} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Edit attendance session</h3>
+                <div className="text-[12px] text-[var(--muted)]">{current?.label}</div>
+              </div>
+              <button onClick={() => setEditTarget(null)} className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]">
+                <Icon name="x" size={18} />
+              </button>
+            </div>
+            <div className="flex flex-col gap-[14px] p-[18px]">
+              <div>
+                <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Session title</label>
+                <input
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder="e.g. Week 7 — Lecture"
+                  className="h-11 w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[13px] text-[13.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-[12px]">
+                <div>
+                  <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Date</label>
+                  <input
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    {...pickerOnlyDateProps}
+                    className="h-11 w-full cursor-pointer rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[13px] text-[13.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                  />
+                </div>
+                <div>
+                  <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Time</label>
+                  <input
+                    type="time"
+                    value={editTime}
+                    onChange={(e) => setEditTime(e.target.value)}
+                    className="h-11 w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[13px] text-[13.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-[10px] p-[0_18px_16px]">
+              <button onClick={() => setEditTarget(null)} className="h-11 flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]">
+                Cancel
+              </button>
+              <button
+                onClick={onSaveEditSession}
+                disabled={savingEdit}
+                className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+              >
+                {savingEdit ? <Spinner size={15} /> : <Icon name="check" size={15} />}
+                Save changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE SESSION CONFIRMATION */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(8,12,22,0.5)] p-5">
+          <div className="w-full max-w-[420px] overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(8,12,22,.34)]">
+            <div className="flex items-center gap-[11px] border-b border-[var(--border2)] p-[16px_18px]">
+              <div className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-[10px] bg-[var(--dangers)] text-[var(--danger)]">
+                <Icon name="trash" size={19} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Delete session?</h3>
+                <div className="text-[12px] text-[var(--muted)]">This can&apos;t be undone</div>
+              </div>
+              <button onClick={() => setDeleteTarget(null)} className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]">
+                <Icon name="x" size={18} />
+              </button>
+            </div>
+            <div className="p-[18px]">
+              <p className="m-0 text-[13.5px] leading-[1.55] text-[var(--text)]">
+                Deleting <span className="font-semibold">&quot;{deleteTarget.title}&quot;</span> will permanently remove it along with every student&apos;s attendance record for that session.
+              </p>
+            </div>
+            <div className="flex gap-[10px] border-t border-[var(--border2)] p-[14px_18px]">
+              <button onClick={() => setDeleteTarget(null)} className="h-11 flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]">
+                Cancel
+              </button>
+              <button
+                onClick={onConfirmDeleteSession}
+                disabled={deleting}
+                className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--danger)] text-[13.5px] font-semibold text-white disabled:opacity-60"
+              >
+                {deleting ? <Spinner size={15} /> : <Icon name="trash" size={15} />}
+                Delete permanently
               </button>
             </div>
           </div>
