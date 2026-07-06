@@ -130,13 +130,13 @@ export async function listHeadOfferings(): Promise<OfferingOption[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("offering_heads")
-    .select("course_offerings(id, session, unit, courses(name))")
+    .select("course_offerings(id, session, unit, active, courses(name))")
     .eq("head_id", profile.id);
 
   return (data ?? [])
     .map((row) => {
       const o = Array.isArray(row.course_offerings) ? row.course_offerings[0] : row.course_offerings;
-      if (!o) return null;
+      if (!o || !o.active) return null;
       const course = Array.isArray(o.courses) ? o.courses[0] : o.courses;
       return { id: o.id, label: [course?.name, o.session, o.unit].filter(Boolean).join(" · ") };
     })

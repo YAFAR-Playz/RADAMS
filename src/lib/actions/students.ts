@@ -163,6 +163,9 @@ export async function getStudentEnrollments(studentId: string): Promise<Enrollme
 
 export type OfferingChoice = { id: string; label: string };
 
+// Only active offerings — a deactivated course shouldn't be selectable for
+// new enrollments or staffing requests, even though existing enrollments
+// tied to it keep working fine.
 export async function listAllOfferingsForOrg(): Promise<OfferingChoice[]> {
   const profile = await getCurrentProfile();
   const orgId = profile?.org?.id;
@@ -171,7 +174,8 @@ export async function listAllOfferingsForOrg(): Promise<OfferingChoice[]> {
   const { data } = await supabase
     .from("course_offerings")
     .select("id, session, unit, courses(name)")
-    .eq("org_id", orgId);
+    .eq("org_id", orgId)
+    .eq("active", true);
   return (data ?? []).map((o) => ({ id: o.id, label: offeringLabel(o) }));
 }
 

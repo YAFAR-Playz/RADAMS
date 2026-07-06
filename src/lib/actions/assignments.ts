@@ -37,15 +37,18 @@ export async function listMyOfferings(): Promise<OfferingOption[]> {
   if (!profile) return [];
   const supabase = await createClient();
 
+  // A deactivated course-offering must disappear from every role's picker —
+  // it's still fully queryable by id for historical records (reports, salary
+  // lines, etc.), it just stops being something anyone can newly select.
   if (profile.role === "head") {
     const { data } = await supabase
       .from("offering_heads")
-      .select("course_offerings(id, session, unit, courses(name))")
+      .select("course_offerings(id, session, unit, active, courses(name))")
       .eq("head_id", profile.id);
     return (data ?? [])
       .map((row) => {
         const o = Array.isArray(row.course_offerings) ? row.course_offerings[0] : row.course_offerings;
-        if (!o) return null;
+        if (!o || !o.active) return null;
         const course = Array.isArray(o.courses) ? o.courses[0] : o.courses;
         return { id: o.id, label: [course?.name, o.session, o.unit].filter(Boolean).join(" · ") };
       })
@@ -55,12 +58,12 @@ export async function listMyOfferings(): Promise<OfferingOption[]> {
   if (profile.role === "assistant") {
     const { data } = await supabase
       .from("offering_assistants")
-      .select("course_offerings(id, session, unit, courses(name))")
+      .select("course_offerings(id, session, unit, active, courses(name))")
       .eq("assistant_id", profile.id);
     return (data ?? [])
       .map((row) => {
         const o = Array.isArray(row.course_offerings) ? row.course_offerings[0] : row.course_offerings;
-        if (!o) return null;
+        if (!o || !o.active) return null;
         const course = Array.isArray(o.courses) ? o.courses[0] : o.courses;
         return { id: o.id, label: [course?.name, o.session, o.unit].filter(Boolean).join(" · ") };
       })
@@ -71,7 +74,8 @@ export async function listMyOfferings(): Promise<OfferingOption[]> {
     const { data } = await supabase
       .from("course_offerings")
       .select("id, session, unit, courses(name)")
-      .eq("org_id", profile.org.id);
+      .eq("org_id", profile.org.id)
+      .eq("active", true);
     return (data ?? [])
       .map((o) => {
         const course = Array.isArray(o.courses) ? o.courses[0] : o.courses;
