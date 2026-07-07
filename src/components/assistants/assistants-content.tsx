@@ -22,6 +22,8 @@ import { AutoAssignModal } from "@/components/shared/auto-assign-modal";
 
 type Kind = "add" | "remove" | "replace";
 
+const REQUESTS_PAGE_SIZE = 10;
+
 const KIND_META: Record<Kind, { title: string; icon: "user-plus" | "x" | "users" }> = {
   add: { title: "Request a new assistant", icon: "user-plus" },
   remove: { title: "Request to remove an assistant", icon: "x" },
@@ -39,6 +41,8 @@ export function AssistantsContent() {
   const [error, setError] = useState<string | null>(null);
 
   const [requests, setRequests] = useState<StaffingRequest[] | null>(null);
+  const [requestsOpen, setRequestsOpen] = useState(false);
+  const [requestsPage, setRequestsPage] = useState(0);
 
   const [linkDrafts, setLinkDrafts] = useState<Record<string, string>>({});
   const [savingLink, setSavingLink] = useState<string | null>(null);
@@ -193,6 +197,11 @@ export function AssistantsContent() {
   const needsTarget = kind !== "add";
   const meta = KIND_META[kind];
 
+  const requestsPageCount = Math.max(1, Math.ceil((requests?.length ?? 0) / REQUESTS_PAGE_SIZE));
+  const safeRequestsPage = Math.min(requestsPage, requestsPageCount - 1);
+  const requestsPageStart = safeRequestsPage * REQUESTS_PAGE_SIZE;
+  const pagedRequests = (requests ?? []).slice(requestsPageStart, requestsPageStart + REQUESTS_PAGE_SIZE);
+
   return (
     <div className="flex flex-col gap-4">
       {error && (
@@ -301,50 +310,90 @@ export function AssistantsContent() {
       {/* PENDING REQUESTS */}
       {requests && requests.length > 0 && (
         <section className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
-          <header className="border-b border-[var(--border2)] p-[14px_18px]">
+          <button
+            onClick={() => setRequestsOpen((v) => !v)}
+            className="flex w-full items-center justify-between gap-3 border-b border-[var(--border2)] p-[14px_18px] text-left"
+          >
             <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">
-              My staffing requests <span className="font-normal text-[var(--subtle)]">· sent to HR</span>
+              My staffing requests <span className="font-normal text-[var(--subtle)]">· sent to HR ({requests.length})</span>
             </h3>
-          </header>
-          <div className="p-[7px_8px]">
-            {requests.map((r) => (
-              <div key={r.id} className="flex items-center gap-3 rounded-[10px] p-[10px_11px] hover:bg-[var(--surface2)]">
-                <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] bg-[var(--brands)] text-[var(--brand)]">
-                  <Icon name={r.kind === "add" ? "user-plus" : r.kind === "remove" ? "x" : "users"} size={16} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[13px] font-semibold text-[var(--text)]">
-                    {r.kind === "add" ? "New assistant requested" : r.kind === "remove" ? "Removal requested" : "Replacement requested"}
+            <Icon
+              name="chevron-down"
+              size={16}
+              style={{ transform: requestsOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}
+            />
+          </button>
+          {requestsOpen && (
+            <>
+              <div className="p-[7px_8px]">
+                {pagedRequests.map((r) => (
+                  <div key={r.id} className="flex items-center gap-3 rounded-[10px] p-[10px_11px] hover:bg-[var(--surface2)]">
+                    <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] bg-[var(--brands)] text-[var(--brand)]">
+                      <Icon name={r.kind === "add" ? "user-plus" : r.kind === "remove" ? "x" : "users"} size={16} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[13px] font-semibold text-[var(--text)]">
+                        {r.kind === "add" ? "New assistant requested" : r.kind === "remove" ? "Removal requested" : "Replacement requested"}
+                      </div>
+                      <div className="text-[12px] text-[var(--subtle)]">
+                        {r.kind === "replace" ? `${r.targetName ?? "—"} → ${r.candidateName ?? "TBD"}` : r.targetName ?? r.candidateName ?? "—"} · {r.offeringLabel}
+                      </div>
+                    </div>
+                    <span
+                      className="inline-flex flex-none items-center gap-[5px] rounded-full px-[9px] py-[3px] text-[11px] font-semibold"
+                      style={
+                        r.status === "approved"
+                          ? { background: "var(--oks)", color: "var(--ok)" }
+                          : r.status === "declined"
+                            ? { background: "var(--dangers)", color: "var(--danger)" }
+                            : { background: "var(--warns)", color: "var(--warn)" }
+                      }
+                    >
+                      <Icon name={r.status === "approved" ? "check" : r.status === "declined" ? "x" : "clock"} size={12} />
+                      {r.status === "approved" ? "Approved" : r.status === "declined" ? "Declined" : "Pending HR"}
+                    </span>
+                    {r.status === "pending" && (
+                      <button
+                        onClick={() => onCancelRequest(r.id)}
+                        title="Withdraw request"
+                        className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-[7px] border border-[var(--border)] bg-[var(--surface)] text-[var(--subtle)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] hover:text-[var(--danger)]"
+                      >
+                        <Icon name="x" size={14} />
+                      </button>
+                    )}
                   </div>
-                  <div className="text-[12px] text-[var(--subtle)]">
-                    {r.kind === "replace" ? `${r.targetName ?? "—"} → ${r.candidateName ?? "TBD"}` : r.targetName ?? r.candidateName ?? "—"} · {r.offeringLabel}
-                  </div>
-                </div>
-                <span
-                  className="inline-flex flex-none items-center gap-[5px] rounded-full px-[9px] py-[3px] text-[11px] font-semibold"
-                  style={
-                    r.status === "approved"
-                      ? { background: "var(--oks)", color: "var(--ok)" }
-                      : r.status === "declined"
-                        ? { background: "var(--dangers)", color: "var(--danger)" }
-                        : { background: "var(--warns)", color: "var(--warn)" }
-                  }
-                >
-                  <Icon name={r.status === "approved" ? "check" : r.status === "declined" ? "x" : "clock"} size={12} />
-                  {r.status === "approved" ? "Approved" : r.status === "declined" ? "Declined" : "Pending HR"}
-                </span>
-                {r.status === "pending" && (
-                  <button
-                    onClick={() => onCancelRequest(r.id)}
-                    title="Withdraw request"
-                    className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-[7px] border border-[var(--border)] bg-[var(--surface)] text-[var(--subtle)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] hover:text-[var(--danger)]"
-                  >
-                    <Icon name="x" size={14} />
-                  </button>
-                )}
+                ))}
               </div>
-            ))}
-          </div>
+              {requestsPageCount > 1 && (
+                <div className="flex flex-wrap items-center justify-between gap-[10px] border-t border-[var(--border2)] p-[11px_14px]">
+                  <span className="text-[12px] text-[var(--subtle)]">
+                    Showing {requestsPageStart + 1}–{Math.min(requestsPageStart + REQUESTS_PAGE_SIZE, requests.length)} of {requests.length} requests
+                  </span>
+                  <div className="flex items-center gap-[5px]">
+                    {Array.from({ length: requestsPageCount }, (_, i) => i)
+                      .filter((i) => i >= safeRequestsPage - 2 && i <= safeRequestsPage + 2)
+                      .map((i) => {
+                        const active = i === safeRequestsPage;
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => setRequestsPage(i)}
+                            className="h-8 min-w-8 rounded-[7px] border px-2 text-[12.5px] font-semibold"
+                            style={
+                              active
+                                ? { borderColor: "var(--brand)", background: "var(--brand)", color: "var(--brandfg)" }
+                                : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
+                            }
+                          >
+                            {i + 1}
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </section>
       )}
 
