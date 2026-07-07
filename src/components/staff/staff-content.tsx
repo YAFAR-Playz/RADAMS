@@ -53,6 +53,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
   const [viewingRequest, setViewingRequest] = useState<StaffingRequestDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Role | "all">("all");
@@ -160,13 +161,14 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
         await updateStaffMember(editId, { name: form.name, phone: form.phone, role: form.role });
         if (showCourses) await setStaffCourses(editId, form.role as "head" | "assistant", form.courseIds);
       } else {
-        const { id } = await createStaffMember(form);
+        const { id, merged } = await createStaffMember(form);
         if (showCourses && form.courseIds.length) await assignStaffToCourses(id, form.role as "head" | "assistant", form.courseIds);
+        if (merged) setNotice(`${form.name.trim()} already has an account — added them to the selected course(s) instead of creating a new one.`);
       }
       setModalOpen(false);
       await reload();
-    } catch {
-      setError(editId ? "Couldn't save changes — try again." : "Couldn't create this user — try again.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : editId ? "Couldn't save changes — try again." : "Couldn't create this user — try again.");
     } finally {
       setSaving(false);
     }
@@ -231,6 +233,15 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
         <div className="flex items-center justify-between gap-3 rounded-[var(--rad-sm)] border border-[var(--danger)] bg-[var(--dangers)] px-4 py-3 text-[13px] font-medium text-[var(--danger)]">
           {error}
           <button onClick={() => setError(null)} className="flex-none">
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+      )}
+
+      {notice && (
+        <div className="flex items-center justify-between gap-3 rounded-[var(--rad-sm)] border border-[var(--ok)] bg-[var(--oks)] px-4 py-3 text-[13px] font-medium text-[var(--ok)]">
+          {notice}
+          <button onClick={() => setNotice(null)} className="flex-none">
             <Icon name="x" size={16} />
           </button>
         </div>
