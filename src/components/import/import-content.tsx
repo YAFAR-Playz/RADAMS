@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
-import { importStudents } from "@/lib/actions/import";
+import { importStudents, previewExistingMatches, type MatchInfo } from "@/lib/actions/import";
 
 type FieldKey = "name" | "phone" | "email" | "guardianName" | "guardianPhone" | "ignore";
 
@@ -47,8 +47,10 @@ export function ImportContent() {
   const [mapping, setMapping] = useState<Record<string, FieldKey>>({});
   const [onlyErrors, setOnlyErrors] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState<{ imported: number; errors: number } | null>(null);
+  const [result, setResult] = useState<{ imported: number; merged: number; errors: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [matches, setMatches] = useState<Record<number, MatchInfo>>({});
+  const [confirmedMerges, setConfirmedMerges] = useState<Set<number>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -81,6 +83,8 @@ export function ImportContent() {
     setHeaders([]);
     setRawRows([]);
     setMapping({});
+    setMatches({});
+    setConfirmedMerges(new Set());
   }
 
   const mappedRows = useMemo(() => {
@@ -89,6 +93,7 @@ export function ImportContent() {
       const field = mapping[h];
       if (field && field !== "ignore") idxByField[field] = i;
     });
+    let readyCounter = 0;
     return rawRows.map((row, i) => {
       const name = idxByField.name != null ? row[idxByField.name] ?? "" : "";
       const phone = idxByField.phone != null ? row[idxByField.phone] ?? "" : "";
@@ -96,13 +101,30 @@ export function ImportContent() {
       const guardianName = idxByField.guardianName != null ? row[idxByField.guardianName] ?? "" : "";
       const guardianPhone = idxByField.guardianPhone != null ? row[idxByField.guardianPhone] ?? "" : "";
       const errorReason = !name.trim() ? "Missing student name" : !guardianPhone.trim() ? "Missing guardian phone" : null;
-      return { n: i + 1, name, phone, email, guardianName, guardianPhone, error: errorReason };
+      // readyIndex mirrors the position this row will have in `readyRows`, which is
+      // the exact index `importStudents` uses internally — this keeps match lookups
+      // and confirmed-merge selections aligned with what actually gets imported.
+      const readyIndex = errorReason ? null : readyCounter++;
+      return { n: i + 1, name, phone, email, guardianName, guardianPhone, error: errorReason, readyIndex };
     });
   }, [headers, rawRows, mapping]);
 
-  const readyRows = mappedRows.filter((r) => !r.error);
-  const errorRows = mappedRows.filter((r) => r.error);
+  const readyRows = useMemo(() => mappedRows.filter((r) => !r.error), [mappedRows]);
+  const errorRows = useMemo(() => mappedRows.filter((r) => r.error), [mappedRows]);
   const visibleRows = onlyErrors ? errorRows : mappedRows;
+
+  useEffect(() => {
+    if (step !== 2 || !readyRows.length) return;
+    let cancelled = false;
+    previewExistingMatches(readyRows.map((r) => ({ name: r.name, phone: r.phone, email: r.email, guardianName: r.guardianName, guardianPhone: r.guardianPhone }))).then(
+      (found) => {
+        if (!cancelled) setMatches(found);
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [step, readyRows]);
 
   const STEPS = ["Upload", "Map columns", "Preview", "Done"];
   const hasFile = !!fileName;
@@ -113,11 +135,12 @@ export function ImportContent() {
       if (!offeringId) return;
       setImporting(true);
       try {
-        const { imported } = await importStudents(
+        const { imported, merged } = await importStudents(
           offeringId,
-          readyRows.map((r) => ({ name: r.name, phone: r.phone, email: r.email, guardianName: r.guardianName, guardianPhone: r.guardianPhone }))
+          readyRows.map((r) => ({ name: r.name, phone: r.phone, email: r.email, guardianName: r.guardianName, guardianPhone: r.guardianPhone })),
+          Array.from(confirmedMerges)
         );
-        setResult({ imported, errors: errorRows.length });
+        setResult({ imported, merged, errors: errorRows.length });
         setStep(3);
       } catch {
         setError("Couldn't import students — try again.");
@@ -137,6 +160,15 @@ export function ImportContent() {
     setStep(0);
     removeFile();
     setResult(null);
+  }
+
+  function toggleConfirmMerge(readyIndex: number) {
+    setConfirmedMerges((prev) => {
+      const next = new Set(prev);
+      if (next.has(readyIndex)) next.delete(readyIndex);
+      else next.add(readyIndex);
+      return next;
+    });
   }
 
   function downloadErrorReport() {
@@ -310,10 +342,11 @@ export function ImportContent() {
       {/* STEP 2: PREVIEW */}
       {step === 2 && (
         <>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             {[
               { value: String(mappedRows.length), label: "Total rows", icon: "users" as const, bg: "var(--brands)", fg: "var(--brand)" },
               { value: String(readyRows.length), label: "Ready to import", icon: "check" as const, bg: "var(--oks)", fg: "var(--ok)" },
+              { value: String(Object.keys(matches).length), label: "Match existing students", icon: "user-check" as const, bg: "var(--brands)", fg: "var(--brand)" },
               { value: String(errorRows.length), label: "Rows with errors", icon: "alert" as const, bg: "var(--dangers)", fg: "var(--danger)" },
             ].map((s) => (
               <div key={s.label} className="flex items-center gap-3 rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[14px_16px] shadow-[var(--shadow)]">
@@ -349,27 +382,59 @@ export function ImportContent() {
                 <span className="min-w-0 flex-[1.4_1_140px]">Student</span>
                 <span className="min-w-0 flex-[1_1_110px]">Phone</span>
                 <span className="min-w-0 flex-[1_1_130px]">Guardian phone</span>
-                <span className="min-w-0 flex-[1_1_120px]">Status</span>
+                <span className="min-w-0 flex-[1.3_1_160px]">Status</span>
               </div>
-              {visibleRows.map((r) => (
-                <div
-                  key={r.n}
-                  className="flex flex-wrap items-center gap-[8px_14px] border-b border-[var(--border2)] p-[11px_18px]"
-                  style={{ background: r.error ? "var(--dangers)" : "transparent" }}
-                >
-                  <span className="w-[26px] flex-none font-mono text-[12.5px] text-[var(--subtle)]">{r.n}</span>
-                  <span className="min-w-0 flex-[1.4_1_140px] truncate text-[13.5px] font-semibold text-[var(--text)]">{r.name || "—"}</span>
-                  <span className="min-w-0 flex-[1_1_110px] font-mono text-[13px] text-[var(--muted)]">{r.phone || "—"}</span>
-                  <span className="min-w-0 flex-[1_1_130px] font-mono text-[13px] text-[var(--muted)]">{r.guardianPhone || "—"}</span>
-                  <span
-                    className="flex min-w-0 flex-[1_1_120px] items-center gap-[6px] text-[12.5px] font-semibold"
-                    style={{ color: r.error ? "var(--danger)" : "var(--ok)" }}
+              {visibleRows.map((r) => {
+                const match = r.readyIndex != null ? matches[r.readyIndex] : undefined;
+                const isConfirmed = r.readyIndex != null && confirmedMerges.has(r.readyIndex);
+                return (
+                  <div
+                    key={r.n}
+                    className="flex flex-wrap items-center gap-[8px_14px] border-b border-[var(--border2)] p-[11px_18px]"
+                    style={{ background: r.error ? "var(--dangers)" : "transparent" }}
                   >
-                    <Icon name={r.error ? "alert" : "check"} size={14} />
-                    {r.error ?? "Valid"}
-                  </span>
-                </div>
-              ))}
+                    <span className="w-[26px] flex-none font-mono text-[12.5px] text-[var(--subtle)]">{r.n}</span>
+                    <span className="min-w-0 flex-[1.4_1_140px] truncate text-[13.5px] font-semibold text-[var(--text)]">{r.name || "—"}</span>
+                    <span className="min-w-0 flex-[1_1_110px] font-mono text-[13px] text-[var(--muted)]">{r.phone || "—"}</span>
+                    <span className="min-w-0 flex-[1_1_130px] font-mono text-[13px] text-[var(--muted)]">{r.guardianPhone || "—"}</span>
+                    {r.error ? (
+                      <span className="flex min-w-0 flex-[1.3_1_160px] items-center gap-[6px] truncate text-[12.5px] font-semibold" style={{ color: "var(--danger)" }}>
+                        <Icon name="alert" size={14} />
+                        {r.error}
+                      </span>
+                    ) : match && match.confidence === "strong" ? (
+                      <span
+                        className="flex min-w-0 flex-[1.3_1_160px] items-center gap-[6px] truncate text-[12.5px] font-semibold"
+                        style={{ color: "var(--brand)" }}
+                        title={`Matches existing student: ${match.name}`}
+                      >
+                        <Icon name="user-check" size={14} />
+                        Matches: {match.name}
+                      </span>
+                    ) : match ? (
+                      <div className="flex min-w-0 flex-[1.3_1_160px] flex-col gap-[3px]">
+                        <span className="flex items-center gap-[6px] truncate text-[12.5px] font-semibold" style={{ color: "var(--warn)" }}>
+                          <Icon name="alert" size={14} />
+                          Possibly: {match.name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => toggleConfirmMerge(r.readyIndex as number)}
+                          className="w-fit text-[11.5px] font-semibold underline"
+                          style={{ color: isConfirmed ? "var(--ok)" : "var(--muted)" }}
+                        >
+                          {isConfirmed ? "Merging ✓ (click to keep separate)" : "Same person? Click to merge"}
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="flex min-w-0 flex-[1.3_1_160px] items-center gap-[6px] truncate text-[12.5px] font-semibold" style={{ color: "var(--ok)" }}>
+                        <Icon name="check" size={14} />
+                        Valid
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </>
@@ -382,9 +447,14 @@ export function ImportContent() {
             <Icon name="check" size={30} />
           </div>
           <div>
-            <h2 className="m-0 mb-[6px] text-[21px] font-semibold tracking-[-0.01em] text-[var(--text)]">{result.imported} students imported</h2>
+            <h2 className="m-0 mb-[6px] text-[21px] font-semibold tracking-[-0.01em] text-[var(--text)]">
+              {result.imported} student{result.imported === 1 ? "" : "s"} imported
+            </h2>
             <p className="m-0 max-w-[380px] text-[14px] leading-[1.5] text-[var(--muted)]">
               Enrolled into <span className="font-semibold text-[var(--text)]">{current?.label}</span>.
+              {result.merged > 0
+                ? ` ${result.merged} row${result.merged === 1 ? "" : "s"} matched an existing student and were added to this course instead of creating a duplicate.`
+                : ""}
               {result.errors > 0 ? ` ${result.errors} rows were skipped due to errors.` : ""}
             </p>
           </div>

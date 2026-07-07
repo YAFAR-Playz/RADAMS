@@ -85,10 +85,32 @@ export async function listStaff(): Promise<StaffMember[]> {
   }));
 }
 
-export async function createStaffMember(input: { name: string; email: string; phone: string; role: Role; hireDate?: string }): Promise<{ id: string }> {
+// Detects "this person already has an account" before ever touching Auth,
+// so adding the same assistant/head to a second course reuses their
+// existing profile instead of throwing a raw "already registered" error
+// (or, worse, silently creating a second disconnected account).
+export async function createStaffMember(input: { name: string; email: string; phone: string; role: Role; hireDate?: string }): Promise<{ id: string; merged: boolean }> {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org) throw new Error("Not authenticated");
   if (!input.name.trim() || !input.email.trim()) throw new Error("Name and email are required");
+
+  const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("profiles")
+    .select("id, role, left_at")
+    .eq("org_id", profile.org.id)
+    .ilike("email", input.email.trim())
+    .maybeSingle();
+
+  if (existing) {
+    if (existing.left_at) {
+      throw new Error("This email belongs to a former staff member who's left — reactivate them instead of creating a new account.");
+    }
+    if (existing.role !== input.role) {
+      throw new Error(`This email already belongs to a ${existing.role} in your organization — can't also add them as ${input.role}.`);
+    }
+    return { id: existing.id, merged: true };
+  }
 
   const admin = createAdminClient();
   const { data: created, error: createError } = await admin.auth.admin.createUser({
@@ -131,7 +153,7 @@ export async function createStaffMember(input: { name: string; email: string; ph
   });
   await logActivity("staff", `Added ${input.name.trim()} as ${input.role}`);
 
-  return { id: created.user.id };
+  return { id: created.user.id, merged: false };
 }
 
 export async function updateStaffMember(id: string, patch: { name: string; phone: string; role: Role }) {
