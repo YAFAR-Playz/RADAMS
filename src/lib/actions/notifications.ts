@@ -363,6 +363,44 @@ async function getRegistrationNotifications(orgId: string): Promise<Notification
   return items;
 }
 
+// Unread chat messages surface in the same bell dropdown as everything else
+// — nobody should have to separately remember to check the Chat tab.
+async function getChatNotifications(profileId: string): Promise<NotificationItem[]> {
+  const supabase = await createClient();
+  const { data: memberships } = await supabase.from("chat_conversation_members").select("conversation_id, last_read_at").eq("profile_id", profileId);
+  if (!memberships?.length) return [];
+
+  const convIds = memberships.map((m) => m.conversation_id);
+  const readByConv = new Map(memberships.map((m) => [m.conversation_id, m.last_read_at as string | null]));
+
+  const { data: messages } = await supabase
+    .from("chat_messages")
+    .select("conversation_id, body, created_at, sender_id, profiles(full_name)")
+    .in("conversation_id", convIds)
+    .neq("sender_id", profileId)
+    .order("created_at", { ascending: false });
+
+  const seenConv = new Set<string>();
+  const items: NotificationItem[] = [];
+  for (const m of messages ?? []) {
+    const lastRead = readByConv.get(m.conversation_id);
+    if (lastRead && m.created_at <= lastRead) continue;
+    if (seenConv.has(m.conversation_id)) continue;
+    seenConv.add(m.conversation_id);
+    const sender = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
+    items.push({
+      id: `chat-${m.conversation_id}`,
+      icon: "message",
+      tone: "brand",
+      title: `New message from ${sender?.full_name ?? "a colleague"}`,
+      detail: m.body.length > 80 ? `${m.body.slice(0, 80)}…` : m.body,
+      href: "/chat",
+      createdAt: m.created_at,
+    });
+  }
+  return items;
+}
+
 export async function getNotifications(): Promise<NotificationItem[]> {
   const profile = await getCurrentProfile();
   if (!profile) return [];
@@ -388,11 +426,13 @@ export async function getNotifications(): Promise<NotificationItem[]> {
   const orgId = profile.org?.id;
   if (!orgId) return [];
 
-  if (profile.role === "assistant") return getAssistantNotifications(orgId, profile.id);
-  if (profile.role === "head") return getHeadNotifications(orgId, profile.id);
-  if (profile.role === "hr") return getHrNotifications(orgId);
-  if (profile.role === "finance") return getFinanceNotifications(orgId);
-  if (profile.role === "registration") return getRegistrationNotifications(orgId);
+  const chat = await getChatNotifications(profile.id);
+
+  if (profile.role === "assistant") return [...(await getAssistantNotifications(orgId, profile.id)), ...chat];
+  if (profile.role === "head") return [...(await getHeadNotifications(orgId, profile.id)), ...chat];
+  if (profile.role === "hr") return [...(await getHrNotifications(orgId)), ...chat];
+  if (profile.role === "finance") return [...(await getFinanceNotifications(orgId)), ...chat];
+  if (profile.role === "registration") return [...(await getRegistrationNotifications(orgId)), ...chat];
 
   if (profile.role === "admin") {
     const supabase = await createClient();
@@ -401,7 +441,7 @@ export async function getNotifications(): Promise<NotificationItem[]> {
       getFinanceNotifications(orgId),
       getRegistrationNotifications(orgId),
     ]);
-    const items = [...hr, ...finance, ...registration];
+    const items = [...hr, ...finance, ...registration, ...chat];
 
     const { count: unassigned } = await supabase
       .from("enrollments")

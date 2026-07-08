@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/current-profile";
+import { sendEmail, renderBrandedEmail } from "@/lib/email";
 
 export type GroupStudent = { id: string; enrollmentId: string; name: string; initials: string };
 export type AssistantGroup = { id: string; name: string; initials: string; whatsappLink: string | null; students: GroupStudent[] };
@@ -255,6 +256,53 @@ export async function createStaffingRequest(input: {
     gave_notice: input.kind === "add" ? null : input.gaveNotice ?? null,
   });
   if (error) throw new Error(error.message);
+
+  await notifyHrAndAdminOfPendingRequest(supabase, profile.org.id, profile.fullName, input);
+}
+
+// HR/admin only see pending requests in-app when they happen to check the
+// bell — email closes the gap for anyone not actively watching the app.
+// Best-effort: a failed email must never surface as a failure to submit
+// the request itself, so errors are swallowed inside sendEmail already.
+async function notifyHrAndAdminOfPendingRequest(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  orgId: string,
+  requesterName: string,
+  input: { offeringId: string; kind: "add" | "remove" | "replace"; candidateName: string; reason: string }
+) {
+  const [{ data: recipients }, { data: offering }, { data: org }] = await Promise.all([
+    supabase.from("profiles").select("email").eq("org_id", orgId).in("role", ["hr", "admin"]).is("left_at", null),
+    supabase.from("course_offerings").select("session, unit, courses(name)").eq("id", input.offeringId).maybeSingle(),
+    supabase.from("organizations").select("brand_name, primary_color").eq("id", orgId).maybeSingle(),
+  ]);
+  const emails = (recipients ?? []).map((r) => r.email).filter((e): e is string => !!e);
+  if (!emails.length) return;
+
+  const course = offering ? (Array.isArray(offering.courses) ? offering.courses[0] : offering.courses) : null;
+  const offeringLabel = offering ? [course?.name, offering.session, offering.unit].filter(Boolean).join(" · ") : "a course";
+  const kindLabel = input.kind === "add" ? "New assistant request" : input.kind === "remove" ? "Removal request" : "Replacement request";
+  const brandName = org?.brand_name || "RadAMS";
+  const primaryColor = org?.primary_color || "#2563eb";
+
+  await sendEmail({
+    to: emails,
+    subject: `${kindLabel} pending approval — ${offeringLabel}`,
+    fromName: brandName,
+    html: renderBrandedEmail({
+      brandName,
+      primaryColor,
+      bodyHtml: `
+        <p><strong>${requesterName}</strong> submitted a staffing request that needs your approval.</p>
+        <ul>
+          <li><strong>Type:</strong> ${kindLabel}</li>
+          <li><strong>Course:</strong> ${offeringLabel}</li>
+          ${input.candidateName ? `<li><strong>Candidate:</strong> ${input.candidateName}</li>` : ""}
+          ${input.reason ? `<li><strong>Reason:</strong> ${input.reason}</li>` : ""}
+        </ul>
+        <p>Review it in the ${brandName} Staffing Requests tab.</p>
+      `,
+    }),
+  });
 }
 
 export async function cancelStaffingRequest(id: string) {
