@@ -34,6 +34,7 @@ import { HistoryContent } from "@/components/history/history-content";
 import { MonthlyReportContent } from "@/components/monthly-report/monthly-report-content";
 import { AcademicReportContent } from "@/components/academic-report/academic-report-content";
 import { WeakTopicsContent } from "@/components/weak-topics/weak-topics-content";
+import { ChatContent } from "@/components/chat/chat-content";
 
 export default async function AppPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
@@ -171,6 +172,10 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
 
   if (key === "categories" && profile.role === "finance") {
     return <PayCategoriesContent />;
+  }
+
+  if (key === "chat" && profile.role !== "owner") {
+    return <ChatContent role={profile.role} />;
   }
 
   const item = findNavItem(profile.role, key);
