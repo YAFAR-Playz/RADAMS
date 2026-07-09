@@ -106,3 +106,65 @@ export async function updatePaySettings(
   const { error } = await supabase.from("staff_pay_settings").upsert(payload, { onConflict: "profile_id" });
   if (error) throw new Error(error.message);
 }
+
+// Every head/assistant in the org — for the "set a default calc method for
+// any staff member" picker in Payroll Settings. Lighter than listStaffPayments
+// (no payment history join), since this only needs to populate a dropdown.
+export async function listStaffForCalcMethod(): Promise<{ id: string; name: string; role: "head" | "assistant"; calcMethod: CalcMethod }[]> {
+  const profile = await getCurrentProfile();
+  const orgId = profile?.org?.id;
+  if (!orgId) return [];
+  const supabase = await createClient();
+
+  const { data: staff } = await supabase
+    .from("profiles")
+    .select("id, full_name, role")
+    .eq("org_id", orgId)
+    .is("left_at", null)
+    .in("role", ["head", "assistant"])
+    .order("full_name", { ascending: true });
+  if (!staff?.length) return [];
+
+  const { data: settings } = await supabase
+    .from("staff_pay_settings")
+    .select("profile_id, calc_method")
+    .in(
+      "profile_id",
+      staff.map((s) => s.id)
+    );
+  const methodByProfile = new Map((settings ?? []).map((s) => [s.profile_id, s.calc_method as CalcMethod]));
+
+  return staff.map((s) => ({
+    id: s.id,
+    name: s.full_name,
+    role: s.role as "head" | "assistant",
+    calcMethod: methodByProfile.get(s.id) ?? "paper",
+  }));
+}
+
+// Bulk-apply one calc method to every assistant currently assigned to a
+// course offering — the one-at-a-time picker (here and on the Staff payments
+// page) is fine for occasional exceptions, but reassigning a whole course's
+// worth of assistants to a new default (e.g. after switching that course to
+// bracket-based pay) shouldn't take N separate clicks.
+export async function bulkSetCalcMethodForOffering(offeringId: string, calcMethod: CalcMethod): Promise<{ updated: number }> {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");
+  const supabase = await createClient();
+
+  const { data: offering } = await supabase.from("course_offerings").select("org_id").eq("id", offeringId).maybeSingle();
+  if (!offering || offering.org_id !== profile.org.id) throw new Error("Course not found");
+
+  const { data: assistants } = await supabase.from("offering_assistants").select("assistant_id").eq("offering_id", offeringId);
+  const assistantIds = (assistants ?? []).map((a) => a.assistant_id);
+  if (!assistantIds.length) return { updated: 0 };
+
+  const now = new Date().toISOString();
+  const { error } = await supabase.from("staff_pay_settings").upsert(
+    assistantIds.map((profile_id) => ({ profile_id, org_id: profile.org!.id, calc_method: calcMethod, updated_at: now })),
+    { onConflict: "profile_id", ignoreDuplicates: false }
+  );
+  if (error) throw new Error(error.message);
+
+  return { updated: assistantIds.length };
+}

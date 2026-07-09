@@ -108,7 +108,8 @@ export async function listCourseRates(): Promise<CourseRate[]> {
   const { data: offerings } = await supabase
     .from("course_offerings")
     .select("id, session, unit, courses(name)")
-    .eq("org_id", orgId);
+    .eq("org_id", orgId)
+    .eq("active", true);
   if (!offerings) return [];
 
   const offeringIds = offerings.map((o) => o.id);
