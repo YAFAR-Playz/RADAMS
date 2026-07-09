@@ -6,6 +6,19 @@ import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import type { Tone } from "@/lib/roles";
 import { toneColors } from "@/lib/tone";
 import { getPayrollSettings, setPayrollFlag, setCurrency, type PayrollFlags, type PayrollSettings } from "@/lib/actions/payroll-settings";
+import {
+  listStaffForCalcMethod,
+  updatePaySettings,
+  bulkSetCalcMethodForOffering,
+  type CalcMethod,
+} from "@/lib/actions/staff-payments";
+import { listAllOfferingsForOrg, type OfferingChoice } from "@/lib/actions/students";
+
+const CALC_METHOD_OPTS: { value: CalcMethod; label: string }[] = [
+  { value: "paper", label: "Per paper" },
+  { value: "category", label: "Avg-paper category" },
+  { value: "fixed", label: "Fixed salary" },
+];
 
 const TOGGLE_DEFS: { key: keyof PayrollFlags; label: string; desc: string; icon: IconName; tone: Tone }[] = [
   {
@@ -51,6 +64,18 @@ export function PayrollSettingsContent() {
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const [staffList, setStaffList] = useState<{ id: string; name: string; role: "head" | "assistant"; calcMethod: CalcMethod }[] | null>(null);
+  const [offerings, setOfferings] = useState<OfferingChoice[] | null>(null);
+
+  const [staffPickId, setStaffPickId] = useState("");
+  const [staffPickMethod, setStaffPickMethod] = useState<CalcMethod>("paper");
+  const [savingStaffDefault, setSavingStaffDefault] = useState(false);
+
+  const [coursePickId, setCoursePickId] = useState("");
+  const [coursePickMethod, setCoursePickMethod] = useState<CalcMethod>("paper");
+  const [applyingToCourse, setApplyingToCourse] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -63,7 +88,60 @@ export function PayrollSettingsContent() {
         setLoading(false);
       }
     })();
+    listStaffForCalcMethod().then((data) => {
+      setStaffList(data);
+      if (data.length) {
+        setStaffPickId(data[0].id);
+        setStaffPickMethod(data[0].calcMethod);
+      }
+    });
+    listAllOfferingsForOrg().then((data) => {
+      setOfferings(data);
+      if (data.length) setCoursePickId(data[0].id);
+    });
   }, []);
+
+  function onPickStaff(id: string) {
+    setStaffPickId(id);
+    const found = staffList?.find((s) => s.id === id);
+    if (found) setStaffPickMethod(found.calcMethod);
+  }
+
+  async function onSaveStaffDefault() {
+    if (!staffPickId) return;
+    setSavingStaffDefault(true);
+    setError(null);
+    try {
+      await updatePaySettings(staffPickId, { calcMethod: staffPickMethod });
+      setStaffList((prev) => (prev ? prev.map((s) => (s.id === staffPickId ? { ...s, calcMethod: staffPickMethod } : s)) : prev));
+      const name = staffList?.find((s) => s.id === staffPickId)?.name;
+      setNotice(`Default calc method saved for ${name ?? "this staff member"}.`);
+    } catch {
+      setError("Couldn't save this default — try again.");
+    } finally {
+      setSavingStaffDefault(false);
+    }
+  }
+
+  async function onApplyToCourse() {
+    if (!coursePickId) return;
+    setApplyingToCourse(true);
+    setError(null);
+    try {
+      const { updated } = await bulkSetCalcMethodForOffering(coursePickId, coursePickMethod);
+      const courseName = offerings?.find((o) => o.id === coursePickId)?.label;
+      setNotice(
+        updated
+          ? `Applied to ${updated} assistant${updated === 1 ? "" : "s"} on ${courseName ?? "this course"}.`
+          : `No assistants are currently assigned to ${courseName ?? "this course"}.`
+      );
+      if (updated) listStaffForCalcMethod().then(setStaffList); // keep the per-staff picker's cached defaults in sync
+    } catch {
+      setError("Couldn't apply this default — try again.");
+    } finally {
+      setApplyingToCourse(false);
+    }
+  }
 
   async function onToggle(key: keyof PayrollFlags) {
     if (!settings) return;
@@ -189,6 +267,125 @@ export function PayrollSettingsContent() {
                 })}
               </div>
             )}
+          </section>
+
+          <section className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
+            <h3 className="m-0 mb-1 text-[14px] font-semibold text-[var(--text)]">Default calc method</h3>
+            <p className="m-0 mb-[13px] text-[12px] text-[var(--subtle)]">
+              How an assistant&apos;s pay is worked out when nothing&apos;s been set on their salary line yet. A per-line override in
+              Salaries always wins over this.
+            </p>
+
+            {notice && (
+              <div className="mb-[13px] flex items-center justify-between gap-3 rounded-[var(--rad-sm)] border border-[var(--ok)] bg-[var(--oks)] px-[13px] py-[9px] text-[12.5px] font-medium text-[var(--ok)]">
+                {notice}
+                <button onClick={() => setNotice(null)} className="flex-none">
+                  <Icon name="x" size={14} />
+                </button>
+              </div>
+            )}
+
+            {/* PER STAFF MEMBER */}
+            <div className="mb-4 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[13px]">
+              <div className="mb-[9px] text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">For one staff member</div>
+              {staffList === null ? (
+                <SkeletonRow className="h-[70px]" />
+              ) : staffList.length === 0 ? (
+                <p className="m-0 text-[12.5px] text-[var(--muted)]">No heads or assistants yet.</p>
+              ) : (
+                <div className="flex flex-col gap-[9px]">
+                  <div className="flex flex-wrap gap-[9px]">
+                    <div className="flex h-9 min-w-[160px] flex-1 items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px]">
+                      <select
+                        value={staffPickId}
+                        onChange={(e) => onPickStaff(e.target.value)}
+                        className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[12.5px] font-semibold text-[var(--text)] outline-none"
+                      >
+                        {staffList.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name} ({s.role === "head" ? "Head" : "Assistant"})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex h-9 min-w-[150px] flex-1 items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px]">
+                      <select
+                        value={staffPickMethod}
+                        onChange={(e) => setStaffPickMethod(e.target.value as CalcMethod)}
+                        className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[12.5px] font-semibold text-[var(--text)] outline-none"
+                      >
+                        {CALC_METHOD_OPTS.map((m) => (
+                          <option key={m.value} value={m.value}>
+                            {m.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <button
+                    onClick={onSaveStaffDefault}
+                    disabled={savingStaffDefault || !staffPickId}
+                    className="flex h-9 items-center justify-center gap-[7px] rounded-[8px] bg-[var(--brand)] text-[12.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+                  >
+                    {savingStaffDefault && <Spinner size={13} />}
+                    Save default
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* BULK PER COURSE */}
+            <div className="rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[13px]">
+              <div className="mb-[9px] text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Apply to a whole course</div>
+              {offerings === null ? (
+                <SkeletonRow className="h-[70px]" />
+              ) : offerings.length === 0 ? (
+                <p className="m-0 text-[12.5px] text-[var(--muted)]">No active courses yet.</p>
+              ) : (
+                <div className="flex flex-col gap-[9px]">
+                  <div className="flex flex-wrap gap-[9px]">
+                    <div className="flex h-9 min-w-[160px] flex-1 items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px]">
+                      <select
+                        value={coursePickId}
+                        onChange={(e) => setCoursePickId(e.target.value)}
+                        className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[12.5px] font-semibold text-[var(--text)] outline-none"
+                      >
+                        {offerings.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex h-9 min-w-[150px] flex-1 items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px]">
+                      <select
+                        value={coursePickMethod}
+                        onChange={(e) => setCoursePickMethod(e.target.value as CalcMethod)}
+                        className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[12.5px] font-semibold text-[var(--text)] outline-none"
+                      >
+                        {CALC_METHOD_OPTS.map((m) => (
+                          <option key={m.value} value={m.value}>
+                            {m.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <button
+                    onClick={onApplyToCourse}
+                    disabled={applyingToCourse || !coursePickId}
+                    className="flex h-9 items-center justify-center gap-[7px] rounded-[8px] bg-[var(--brand)] text-[12.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+                  >
+                    {applyingToCourse && <Spinner size={13} />}
+                    Apply to all assistants on this course
+                  </button>
+                  <p className="m-0 text-[11px] leading-[1.4] text-[var(--subtle)]">
+                    Sets the default for every assistant currently assigned to this course. Doesn&apos;t change salary lines already
+                    generated — edit those individually in Salaries.
+                  </p>
+                </div>
+              )}
+            </div>
           </section>
         </div>
 

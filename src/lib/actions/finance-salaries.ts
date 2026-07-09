@@ -374,6 +374,25 @@ async function defaultMethodForOffering(supabase: Awaited<ReturnType<typeof crea
   return count && count > 0 ? "bracket" : "per_paper";
 }
 
+// A staff member's own default (set in Payroll Settings, or bulk-applied to
+// a whole course) takes priority over the offering's bracket-presence-based
+// default — that offering-level default only exists as a fallback for staff
+// who've never had a personal preference set. "fixed" isn't wired into this
+// paper-counting engine at all (a flat recurring salary isn't a function of
+// papers checked), so it's treated the same as no preference set: fall
+// through and let the assistant's line stay "manual" unless they have
+// checked papers, exactly like today's behavior for anyone with no default.
+async function resolveMethodForAssistant(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  offeringId: string,
+  assistantId: string,
+  staffDefault: "paper" | "category" | "fixed" | undefined
+): Promise<"per_paper" | "bracket"> {
+  if (staffDefault === "paper") return "per_paper";
+  if (staffDefault === "category") return "bracket";
+  return defaultMethodForOffering(supabase, offeringId);
+}
+
 // Generates one salary_line per (assistant, offering) that has at least one
 // checked paper in this period, OR an evaluation with a nonzero extra/
 // deduction logged by their head for this period — a head's bonus or
@@ -412,7 +431,8 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
     const assistantIds = Array.from(new Set([...enrolledAssistantIds, ...evalByAssistant.keys()]));
     if (!assistantIds.length) continue;
 
-    const method = await defaultMethodForOffering(supabase, offering.id);
+    const { data: staffSettings } = await supabase.from("staff_pay_settings").select("profile_id, calc_method").in("profile_id", assistantIds);
+    const staffDefaultByAssistant = new Map((staffSettings ?? []).map((s) => [s.profile_id, s.calc_method as "paper" | "category" | "fixed"]));
 
     for (const assistantId of assistantIds) {
       const checkedCount = await countCheckedPapers(supabase, offering.id, assistantId, period);
@@ -424,6 +444,7 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
       let calcMethod: "per_paper" | "bracket" | "manual" = "manual";
       let basis = "No checked papers this period";
       if (checkedCount.papers > 0) {
+        const method = await resolveMethodForAssistant(supabase, offering.id, assistantId, staffDefaultByAssistant.get(assistantId));
         const computed = await computeBaseForMethod(supabase, offering.id, assistantId, period, method, checkedCount.papers);
         base = computed.base;
         methodLabel = computed.methodLabel;
