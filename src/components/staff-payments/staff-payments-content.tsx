@@ -13,7 +13,7 @@ const METHOD_OPTS: { value: CalcMethod; label: string }[] = [
   { value: "category", label: "Avg-paper category" },
   { value: "fixed", label: "Fixed salary" },
 ];
-const PAY_OPTS = ["Bank transfer", "Mobile wallet", "Cash"];
+const PAY_OPTS = ["Bank transfer", "Mobile wallet", "InstaPay"];
 
 function tenureLabel(months: number) {
   const y = Math.floor(months / 12);
