@@ -187,19 +187,65 @@ export async function addStudentEnrollment(studentId: string, offeringId: string
     .select("id")
     .single();
   if (error || !data) throw new Error(error?.message ?? "Failed to enroll student");
+
+  const [{ data: student }, { data: offering }] = await Promise.all([
+    supabase.from("students").select("name").eq("id", studentId).maybeSingle(),
+    supabase.from("course_offerings").select("session, unit, courses(name)").eq("id", offeringId).maybeSingle(),
+  ]);
+  await logActivity("students", `Enrolled ${student?.name ?? "a student"} into ${offeringLabel(offering ?? null)}`);
+
   return { enrollmentId: data.id };
 }
 
+// Enrollments have no soft-delete/history of their own — once this row is
+// gone, nothing else records that this student was ever on this course, or
+// who took them off it. Logging it here is the only trace that survives.
 export async function removeStudentEnrollment(enrollmentId: string) {
   const supabase = await createClient();
+  const { data: before } = await supabase
+    .from("enrollments")
+    .select("students(name), course_offerings(session, unit, courses(name))")
+    .eq("id", enrollmentId)
+    .maybeSingle();
+
   const { error } = await supabase.from("enrollments").delete().eq("id", enrollmentId);
   if (error) throw new Error(error.message);
+
+  const student = before ? (Array.isArray(before.students) ? before.students[0] : before.students) : null;
+  const offering = before ? (Array.isArray(before.course_offerings) ? before.course_offerings[0] : before.course_offerings) : null;
+  await logActivity("students", `Removed ${student?.name ?? "a student"} from ${offeringLabel(offering ?? null)}`);
 }
 
 export async function reassignStudentAssistant(enrollmentId: string, assistantId: string | null) {
   const supabase = await createClient();
+  const { data: before } = await supabase
+    .from("enrollments")
+    .select("assistant_id, students(name), course_offerings(session, unit, courses(name))")
+    .eq("id", enrollmentId)
+    .maybeSingle();
+
   const { error } = await supabase.from("enrollments").update({ assistant_id: assistantId }).eq("id", enrollmentId);
   if (error) throw new Error(error.message);
+
+  const student = before ? (Array.isArray(before.students) ? before.students[0] : before.students) : null;
+  const offering = before ? (Array.isArray(before.course_offerings) ? before.course_offerings[0] : before.course_offerings) : null;
+  const [{ data: oldAssistant }, { data: newAssistant }] = await Promise.all([
+    before?.assistant_id ? supabase.from("profiles").select("full_name").eq("id", before.assistant_id).maybeSingle() : Promise.resolve({ data: null }),
+    assistantId ? supabase.from("profiles").select("full_name").eq("id", assistantId).maybeSingle() : Promise.resolve({ data: null }),
+  ]);
+  await logActivity(
+    "students",
+    `Reassigned ${student?.name ?? "a student"} in ${offeringLabel(offering ?? null)} — ${oldAssistant?.full_name ?? "Unassigned"} → ${newAssistant?.full_name ?? "Unassigned"}`
+  );
+}
+
+function fieldChange(label: string, before: string | null, after: string): string | null {
+  const b = before ?? "";
+  const a = after || "";
+  if (b === a) return null;
+  if (!b) return `${label} set to "${a}"`;
+  if (!a) return `${label} cleared`;
+  return `${label} "${b}" → "${a}"`;
 }
 
 function fieldChange(label: string, before: string | null, after: string): string | null {
