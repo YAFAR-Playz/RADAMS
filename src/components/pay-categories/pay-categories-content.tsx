@@ -19,11 +19,15 @@ import {
   deleteBracketSlot,
   listOtherRates,
   updateOtherRate,
+  listOfficeHourRatesByOffering,
+  setOfficeHourRateForOffering,
+  clearOfficeHourRateOverride,
   type PayCategory,
   type CategoryMode,
   type CourseRate,
   type BracketSlot,
   type OtherRate,
+  type OfficeHourCourseRate,
 } from "@/lib/actions/pay-categories";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
 
@@ -207,6 +211,7 @@ export function PayCategoriesContent() {
   const [bracketSlots, setBracketSlots] = useState<BracketSlot[] | null>(null);
   const [bracketsLoading, setBracketsLoading] = useState(false);
   const [otherRates, setOtherRates] = useState<OtherRate[] | null>(null);
+  const [officeHourRates, setOfficeHourRates] = useState<OfficeHourCourseRate[] | null>(null);
   const [currency, setCurrency] = useState("GBP");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -222,17 +227,20 @@ export function PayCategoriesContent() {
   const [courseRateDrafts, setCourseRateDrafts] = useState<Record<string, string>>({});
   const [bracketDrafts, setBracketDrafts] = useState<Record<string, BracketDraft>>({});
   const [otherRateDrafts, setOtherRateDrafts] = useState<Record<string, string>>({});
+  const [officeHourRateDrafts, setOfficeHourRateDrafts] = useState<Record<string, string>>({});
 
   async function refetchLists() {
-    const [cats, rates, others, settings] = await Promise.all([
+    const [cats, rates, others, officeHours, settings] = await Promise.all([
       listPayCategories(),
       listCourseRates(),
       listOtherRates(),
+      listOfficeHourRatesByOffering(),
       getPayrollSettings(),
     ]);
     setCategories(cats);
     setCourseRates(rates);
     setOtherRates(others);
+    setOfficeHourRates(officeHours);
     if (settings) setCurrency(settings.currency);
   }
 
@@ -260,6 +268,7 @@ export function PayCategoriesContent() {
       setCourseRateDrafts({});
       setBracketDrafts({});
       setOtherRateDrafts({});
+      setOfficeHourRateDrafts({});
     } catch {
       setError("Couldn't load pay categories.");
     } finally {
@@ -377,6 +386,26 @@ export function PayCategoriesContent() {
   function draftOtherRate(id: string, value: string) {
     setOtherRateDrafts((prev) => ({ ...prev, [id]: value }));
   }
+  function draftOfficeHourRate(offeringId: string, value: string) {
+    setOfficeHourRateDrafts((prev) => ({ ...prev, [offeringId]: value }));
+  }
+
+  async function onClearOfficeHourOverride(offeringId: string) {
+    setBusyId(offeringId);
+    try {
+      await clearOfficeHourRateOverride(offeringId);
+      setOfficeHourRateDrafts((prev) => {
+        const next = { ...prev };
+        delete next[offeringId];
+        return next;
+      });
+      await refetchLists();
+    } catch {
+      setError("Couldn't clear this override — try again.");
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   async function onSaveAll() {
     setSaving(true);
@@ -395,6 +424,7 @@ export function PayCategoriesContent() {
           return saveBracketSlot(courseScope, name, patch);
         }),
         ...Object.entries(otherRateDrafts).map(([id, v]) => updateOtherRate(id, Number(v) || 0)),
+        ...Object.entries(officeHourRateDrafts).map(([offeringId, v]) => setOfficeHourRateForOffering(offeringId, Number(v) || 0)),
       ]);
       await reload();
       await refetchBrackets(courseScope);
@@ -413,6 +443,7 @@ export function PayCategoriesContent() {
   }
 
   const visibleCourseRates = courseScope.length ? (courseRates ?? []).filter((c) => courseScope.includes(c.offeringId)) : [];
+  const visibleOfficeHourRates = courseScope.length ? (officeHourRates ?? []).filter((c) => courseScope.includes(c.offeringId)) : [];
   const scopeLabel =
     courseScope.length === 0
       ? "Select course(s)…"
@@ -553,6 +584,48 @@ export function PayCategoriesContent() {
                         className="w-full border-none bg-transparent font-mono text-[13px] font-bold text-[var(--ok)] outline-none"
                       />
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* OFFICE HOUR RATE BY COURSE — each course's own rate if Finance
+              has set one, else the org-wide default from Other rates. */}
+          <section className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+            <header className="border-b border-[var(--border2)] p-[14px_16px]">
+              <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Office hour rate by course</h3>
+            </header>
+            {courseScope.length === 0 ? (
+              <div className="p-[30px] text-center text-[13px] text-[var(--muted)]">Select one or more courses above to set their office-hour rate.</div>
+            ) : (
+              <div className="grid grid-cols-1 gap-[10px] p-[10px] sm:grid-cols-2">
+                {visibleOfficeHourRates.map((c) => (
+                  <div key={c.offeringId} className="flex items-center gap-[10px] rounded-[9px] border border-[var(--border2)] p-[10px_12px]">
+                    <div className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-semibold text-[var(--text)]">{c.label}</span>
+                      {!c.isOverride && <span className="text-[10.5px] text-[var(--subtle)]">Using org default</span>}
+                    </div>
+                    <span className="text-[11.5px] text-[var(--subtle)]">per hour</span>
+                    <div className="flex h-[34px] w-[88px] flex-none items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[9px]">
+                      <span className="text-[12.5px] font-semibold text-[var(--subtle)]">{sym}</span>
+                      <input
+                        value={officeHourRateDrafts[c.offeringId] ?? String(c.rate)}
+                        onChange={(e) => draftOfficeHourRate(c.offeringId, e.target.value.replace(/[^0-9]/g, ""))}
+                        inputMode="numeric"
+                        className="w-full border-none bg-transparent font-mono text-[13px] font-bold text-[var(--ok)] outline-none"
+                      />
+                    </div>
+                    {c.isOverride && (
+                      <button
+                        onClick={() => onClearOfficeHourOverride(c.offeringId)}
+                        disabled={busyId === c.offeringId}
+                        title="Clear override — use org default instead"
+                        className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-[7px] border border-[var(--border)] bg-[var(--surface)] text-[var(--subtle)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] hover:text-[var(--danger)] disabled:opacity-60"
+                      >
+                        {busyId === c.offeringId ? <Spinner size={12} /> : <Icon name="x" size={13} />}
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

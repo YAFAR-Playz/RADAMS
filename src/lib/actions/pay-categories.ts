@@ -218,7 +218,14 @@ export async function listOtherRates(): Promise<OtherRate[]> {
   const orgId = profile?.org?.id;
   if (!orgId) return [];
   const supabase = await createClient();
-  const { data } = await supabase.from("other_rates").select("id, label, unit, rate").eq("org_id", orgId).order("sort_order", { ascending: true });
+  // Org-wide reference rows only — per-course office-hour overrides
+  // (offering_id set) live in listOfficeHourRatesByOffering instead.
+  const { data } = await supabase
+    .from("other_rates")
+    .select("id, label, unit, rate")
+    .eq("org_id", orgId)
+    .is("offering_id", null)
+    .order("sort_order", { ascending: true });
   if (data && data.length) return data.map((r) => ({ id: r.id, label: r.label, unit: r.unit, rate: Number(r.rate) }));
 
   // Seed sensible defaults the first time Finance opens this org's rates.
@@ -236,5 +243,73 @@ export async function listOtherRates(): Promise<OtherRate[]> {
 export async function updateOtherRate(id: string, rate: number) {
   const supabase = await createClient();
   const { error } = await supabase.from("other_rates").update({ rate }).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export type OfficeHourCourseRate = { offeringId: string; label: string; rate: number; isOverride: boolean };
+
+// One row per active course: its own office-hour rate if Finance has set an
+// override for it, otherwise the org-wide default — mirrors how per-paper
+// rates already work, since different courses can reasonably pay assistants
+// different amounts per office hour.
+export async function listOfficeHourRatesByOffering(): Promise<OfficeHourCourseRate[]> {
+  const profile = await getCurrentProfile();
+  const orgId = profile?.org?.id;
+  if (!orgId) return [];
+  const supabase = await createClient();
+
+  const [{ data: offerings }, { data: defaultRow }, { data: overrides }] = await Promise.all([
+    supabase.from("course_offerings").select("id, session, unit, courses(name)").eq("org_id", orgId).eq("active", true),
+    supabase.from("other_rates").select("rate").eq("org_id", orgId).eq("label", "Office hour").is("offering_id", null).maybeSingle(),
+    supabase.from("other_rates").select("offering_id, rate").eq("org_id", orgId).eq("label", "Office hour").not("offering_id", "is", null),
+  ]);
+  if (!offerings) return [];
+
+  const defaultRate = defaultRow ? Number(defaultRow.rate) : 15;
+  const overrideByOffering = new Map((overrides ?? []).map((r) => [r.offering_id as string, Number(r.rate)]));
+
+  return offerings.map((o) => ({
+    offeringId: o.id,
+    label: offeringLabel(o),
+    rate: overrideByOffering.get(o.id) ?? defaultRate,
+    isOverride: overrideByOffering.has(o.id),
+  }));
+}
+
+export async function setOfficeHourRateForOffering(offeringId: string, rate: number) {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org) throw new Error("Not authenticated");
+  const supabase = await createClient();
+
+  const { data: existing } = await supabase
+    .from("other_rates")
+    .select("id")
+    .eq("org_id", profile.org.id)
+    .eq("label", "Office hour")
+    .eq("offering_id", offeringId)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase.from("other_rates").update({ rate }).eq("id", existing.id);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabase
+      .from("other_rates")
+      .insert({ org_id: profile.org.id, offering_id: offeringId, label: "Office hour", unit: "per hour", rate });
+    if (error) throw new Error(error.message);
+  }
+}
+
+// Removes a course's override so it falls back to the org-wide default rate.
+export async function clearOfficeHourRateOverride(offeringId: string) {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org) throw new Error("Not authenticated");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("other_rates")
+    .delete()
+    .eq("org_id", profile.org.id)
+    .eq("label", "Office hour")
+    .eq("offering_id", offeringId);
   if (error) throw new Error(error.message);
 }

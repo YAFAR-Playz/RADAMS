@@ -37,6 +37,7 @@ type FormState = {
   templateId: string;
   gradeScheme: "numeric" | "letter";
   countsSalary: boolean;
+  defaultComment: string;
   assistantIds: string[];
 };
 
@@ -48,6 +49,7 @@ function emptyForm(assistantIds: string[], templateId: string): FormState {
     templateId,
     gradeScheme: "numeric",
     countsSalary: true,
+    defaultComment: "",
     assistantIds,
   };
 }
@@ -125,6 +127,7 @@ export function HeadAssignmentsContent() {
       templateId: "",
       gradeScheme: a.gradeScheme,
       countsSalary: a.countsSalary,
+      defaultComment: a.defaultComment ?? "",
       assistantIds: a.assignees.map((x) => x.assistantId),
     });
     setModalOpen(true);
@@ -146,6 +149,8 @@ export function HeadAssignmentsContent() {
   const canSave = form.title.trim().length > 0 && form.assistantIds.length > 0 && (editId || !!form.templateId);
   const selectedTemplate = templates?.find((t) => t.id === form.templateId) ?? null;
   const showGradeScheme = selectedTemplate ? selectedTemplate.hasGrade : true;
+  const editingAssignment = editId ? assignments?.find((a) => a.id === editId) ?? null : null;
+  const showDefaultComment = editId ? (editingAssignment?.hasComment ?? true) : selectedTemplate ? selectedTemplate.hasComment : true;
 
   async function onSave() {
     if (!canSave || !offeringId) return;
@@ -157,6 +162,7 @@ export function HeadAssignmentsContent() {
           maxMarks: Number(form.marks) || 100,
           dueDate: form.due || null,
           countsSalary: form.countsSalary,
+          defaultComment: form.defaultComment,
         });
       } else {
         await createAssignment({
@@ -167,6 +173,7 @@ export function HeadAssignmentsContent() {
           templateId: form.templateId,
           gradeScheme: form.gradeScheme,
           countsSalary: form.countsSalary,
+          defaultComment: form.defaultComment,
           assistantIds: form.assistantIds,
         });
       }
@@ -559,6 +566,19 @@ export function HeadAssignmentsContent() {
                       </span>
                     </div>
                   )}
+                </div>
+              )}
+
+              {showDefaultComment && (
+                <div>
+                  <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Default comment for assistants</label>
+                  <textarea
+                    value={form.defaultComment}
+                    onChange={(e) => setForm((f) => ({ ...f, defaultComment: e.target.value }))}
+                    placeholder="Pre-fills each student's comment field — assistants can still edit it per student."
+                    rows={2}
+                    className="w-full resize-none rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[10px_12px] text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+                  />
                 </div>
               )}
 

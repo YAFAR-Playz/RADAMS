@@ -14,6 +14,7 @@ export type AssignmentOption = {
   dueDate: string | null;
   hasGrade: boolean;
   hasComment: boolean;
+  defaultComment: string | null;
 };
 
 export type RosterStudent = {
@@ -91,7 +92,7 @@ export async function listAssignmentsForOffering(offeringId: string): Promise<As
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("assignments")
-    .select("id, title, max_marks, lettered, due_date, template, assignment_templates(has_grade, has_comment)")
+    .select("id, title, max_marks, lettered, due_date, template, default_comment, assignment_templates(has_grade, has_comment)")
     .eq("offering_id", offeringId)
     .order("created_at", { ascending: true });
   if (error || !data) return [];
@@ -106,6 +107,7 @@ export async function listAssignmentsForOffering(offeringId: string): Promise<As
       dueDate: a.due_date,
       hasGrade,
       hasComment,
+      defaultComment: a.default_comment,
     };
   });
 }

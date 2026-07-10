@@ -11,6 +11,7 @@ const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
 export type SalaryLineRow = {
   id: string;
   offeringId: string | null;
+  officeHoursOfferingId: string | null;
   offering: string;
   method: string;
   calcMethod: "per_paper" | "bracket" | "manual" | null;
@@ -56,7 +57,7 @@ export async function listSalariesForPeriod(period: string): Promise<AssistantSa
   const { data: lines } = await supabase
     .from("salary_lines")
     .select(
-      "id, payee_id, offering_id, method, calc_method, basis, base, bonus, deduction, bonus_reason, deduction_reason, office_hours, status, pay_method, profiles(full_name, initials), course_offerings(session, unit, courses(name))"
+      "id, payee_id, offering_id, office_hours_offering_id, method, calc_method, basis, base, bonus, deduction, bonus_reason, deduction_reason, office_hours, status, pay_method, profiles(full_name, initials), course_offerings!salary_lines_offering_id_fkey(session, unit, courses(name)), office_hours_course:course_offerings!salary_lines_office_hours_offering_id_fkey(session, unit, courses(name))"
     )
     .eq("org_id", orgId)
     .eq("period", period);
@@ -82,10 +83,17 @@ export async function listSalariesForPeriod(period: string): Promise<AssistantSa
         status: allPaid ? ("paid" as const) : ("pending" as const),
         lines: rows.map((r) => {
           const offering = Array.isArray(r.course_offerings) ? r.course_offerings[0] : r.course_offerings;
+          const officeHoursCourse = Array.isArray(r.office_hours_course) ? r.office_hours_course[0] : r.office_hours_course;
+          const label = r.offering_id
+            ? offeringLabel(offering)
+            : r.office_hours_offering_id
+              ? `${r.method} · ${offeringLabel(officeHoursCourse)}`
+              : r.method;
           return {
             id: r.id,
             offeringId: r.offering_id,
-            offering: r.offering_id ? offeringLabel(offering) : r.method,
+            officeHoursOfferingId: r.office_hours_offering_id,
+            offering: label,
             method: r.method,
             calcMethod: r.calc_method as SalaryLineRow["calcMethod"],
             basis: r.basis,
@@ -118,19 +126,24 @@ export async function updateSalaryLine(
   if (error) throw new Error(error.message);
 }
 
-// A fixed, per-month office-hours line — not tied to any course, so it
-// lives as an offering_id = null row like a manual line. The unique index
-// on (org, payee, offering_id, period) can't be used as an upsert target
-// here since Postgres never treats two NULLs as equal, so this looks the
-// existing row up explicitly instead of relying on ON CONFLICT.
-export async function setAssistantOfficeHours(payeeId: string, period: string, hours: number) {
+// A fixed, per-month office-hours line for one specific course. The row
+// itself still keeps offering_id = null (like a manual line) — a real
+// offering_id would collide with the (org, payee, offering_id, period)
+// unique constraint that course's own per-paper/bracket line already
+// occupies for this same assistant+period. office_hours_offering_id instead
+// tracks which course's rate applied, without touching that constraint, so
+// an assistant can have a separate office-hours entry per course.
+export async function setAssistantOfficeHours(payeeId: string, period: string, hours: number, offeringId: string) {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");
   const orgId = profile.org.id;
   const supabase = await createClient();
 
-  const { data: rateRow } = await supabase.from("other_rates").select("rate").eq("org_id", orgId).ilike("label", "%office hour%").maybeSingle();
-  const rate = rateRow ? Number(rateRow.rate) : 15;
+  const [{ data: overrideRow }, { data: defaultRow }] = await Promise.all([
+    supabase.from("other_rates").select("rate").eq("org_id", orgId).eq("label", "Office hour").eq("offering_id", offeringId).maybeSingle(),
+    supabase.from("other_rates").select("rate").eq("org_id", orgId).eq("label", "Office hour").is("offering_id", null).maybeSingle(),
+  ]);
+  const rate = overrideRow ? Number(overrideRow.rate) : defaultRow ? Number(defaultRow.rate) : 15;
   const base = Math.round(hours * rate);
   const basis = `${hours} office hour${hours === 1 ? "" : "s"} @ ${rate}/hr`;
 
@@ -142,6 +155,7 @@ export async function setAssistantOfficeHours(payeeId: string, period: string, h
     .eq("period", period)
     .is("offering_id", null)
     .eq("method", "Office hours")
+    .eq("office_hours_offering_id", offeringId)
     .maybeSingle();
 
   if (existing) {
@@ -155,6 +169,7 @@ export async function setAssistantOfficeHours(payeeId: string, period: string, h
       org_id: orgId,
       payee_id: payeeId,
       offering_id: null,
+      office_hours_offering_id: offeringId,
       period,
       method: "Office hours",
       calc_method: "manual",

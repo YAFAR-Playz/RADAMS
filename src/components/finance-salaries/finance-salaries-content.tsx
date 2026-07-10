@@ -207,6 +207,7 @@ export function FinanceSalariesContent() {
   const [viewingReceiptId, setViewingReceiptId] = useState<string | null>(null);
   const [exportingFull, setExportingFull] = useState(false);
   const [search, setSearch] = useState("");
+  const [officeHoursCourseByPayee, setOfficeHoursCourseByPayee] = useState<Record<string, string>>({});
 
   useEffect(() => {
     (() => {
@@ -246,7 +247,18 @@ export function FinanceSalariesContent() {
   const fmt = (n: number) => `${n < 0 ? "−" : ""}${sym}${Math.abs(Math.round(n)).toLocaleString("en-US")}`;
   const subtotal = (l: { base: number; bonus: number; deduction: number }) => l.base + l.bonus - l.deduction;
   const total = (a: AssistantSalary) => a.lines.reduce((sum, l) => sum + subtotal(l), 0);
-  const officeHoursOf = (a: AssistantSalary) => a.lines.find((l) => l.method === "Office hours")?.officeHours ?? null;
+  // Distinct courses this assistant has a real (offeringId-bearing) line for
+  // this period — office hours get billed against one of those courses,
+  // since the rate can now vary by course.
+  const assistantCourses = (a: AssistantSalary) => {
+    const seen = new Map<string, string>();
+    for (const l of a.lines) {
+      if (l.offeringId && !seen.has(l.offeringId)) seen.set(l.offeringId, l.offering);
+    }
+    return Array.from(seen.entries()).map(([offeringId, label]) => ({ offeringId, label }));
+  };
+  const officeHoursOf = (a: AssistantSalary, offeringId: string) =>
+    a.lines.find((l) => l.method === "Office hours" && l.officeHoursOfferingId === offeringId)?.officeHours ?? null;
 
   async function onEditLine(id: string, patch: Parameters<typeof updateSalaryLine>[1]) {
     setBusyId(id);
@@ -260,11 +272,11 @@ export function FinanceSalariesContent() {
     }
   }
 
-  async function onSetOfficeHours(payeeId: string, hours: number) {
+  async function onSetOfficeHours(payeeId: string, offeringId: string, hours: number) {
     if (!period) return;
     setBusyId(payeeId);
     try {
-      await setAssistantOfficeHours(payeeId, period, hours);
+      await setAssistantOfficeHours(payeeId, period, hours, offeringId);
       await reload(period);
     } catch {
       setError("Couldn't save office hours — try again.");
@@ -725,25 +737,45 @@ export function FinanceSalariesContent() {
                         )}
                       </div>
                     ))}
-                    <div className="flex flex-wrap items-center justify-between gap-[10px] border-b border-[var(--border2)] p-[10px_18px]">
-                      <div className="flex items-center gap-[8px]">
-                        <Icon name="clock" size={14} className="flex-none text-[var(--subtle)]" />
-                        <span className="text-[12.5px] font-medium text-[var(--muted)]">Fixed office hours this month</span>
-                      </div>
-                      <div className="flex h-8 items-center gap-[6px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[9px]">
-                        <input
-                          key={`office-hours-${a.payeeId}-${officeHoursOf(a) ?? 0}`}
-                          type="number"
-                          min={0}
-                          defaultValue={officeHoursOf(a) ?? 0}
-                          onBlur={(e) => onSetOfficeHours(a.payeeId, Math.max(0, Number(e.target.value) || 0))}
-                          disabled={busyId === a.payeeId}
-                          className="w-[54px] border-none bg-transparent text-right font-mono text-[12px] font-semibold text-[var(--text)] outline-none"
-                        />
-                        <span className="text-[11px] font-semibold text-[var(--subtle)]">hrs</span>
-                      </div>
-                      {busyId === a.payeeId && <Spinner size={13} className="text-[var(--subtle)]" />}
-                    </div>
+                    {(() => {
+                      const courses = assistantCourses(a);
+                      if (!courses.length) return null;
+                      const selectedOfferingId = officeHoursCourseByPayee[a.payeeId] ?? courses[0].offeringId;
+                      return (
+                        <div className="flex flex-wrap items-center justify-between gap-[10px] border-b border-[var(--border2)] p-[10px_18px]">
+                          <div className="flex min-w-0 items-center gap-[8px]">
+                            <Icon name="clock" size={14} className="flex-none text-[var(--subtle)]" />
+                            <span className="flex-none text-[12.5px] font-medium text-[var(--muted)]">Fixed office hours this month</span>
+                            {courses.length > 1 && (
+                              <select
+                                value={selectedOfferingId}
+                                onChange={(e) => setOfficeHoursCourseByPayee((prev) => ({ ...prev, [a.payeeId]: e.target.value }))}
+                                className="min-w-0 max-w-[160px] cursor-pointer appearance-none truncate rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-[8px] py-[3px] text-[11.5px] font-semibold text-[var(--text)] outline-none"
+                              >
+                                {courses.map((c) => (
+                                  <option key={c.offeringId} value={c.offeringId}>
+                                    {c.label}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+                          <div className="flex h-8 items-center gap-[6px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[9px]">
+                            <input
+                              key={`office-hours-${a.payeeId}-${selectedOfferingId}-${officeHoursOf(a, selectedOfferingId) ?? 0}`}
+                              type="number"
+                              min={0}
+                              defaultValue={officeHoursOf(a, selectedOfferingId) ?? 0}
+                              onBlur={(e) => onSetOfficeHours(a.payeeId, selectedOfferingId, Math.max(0, Number(e.target.value) || 0))}
+                              disabled={busyId === a.payeeId}
+                              className="w-[54px] border-none bg-transparent text-right font-mono text-[12px] font-semibold text-[var(--text)] outline-none"
+                            />
+                            <span className="text-[11px] font-semibold text-[var(--subtle)]">hrs</span>
+                          </div>
+                          {busyId === a.payeeId && <Spinner size={13} className="text-[var(--subtle)]" />}
+                        </div>
+                      );
+                    })()}
                     <div className="flex flex-wrap items-center justify-between gap-[10px] p-[12px_18px]">
                       <span className="text-[12.5px] font-medium text-[var(--muted)]">Paid via {a.payMethod} · edits save to this period&apos;s payroll</span>
                       <div className="flex items-center gap-[10px]">

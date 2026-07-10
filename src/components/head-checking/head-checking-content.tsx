@@ -25,7 +25,14 @@ const PAGE_SIZE = 10;
 
 type Recipient = "student" | "parent";
 
-function buildMessage(template: string, orgName: string, student: RosterStudent, assignmentTitle: string, maxMarks: number) {
+function buildMessage(
+  template: string,
+  orgName: string,
+  student: RosterStudent,
+  assignmentTitle: string,
+  maxMarks: number,
+  defaultComment: string | null
+) {
   const def = statusDef(student.status);
   return applyTemplateVars(template, {
     org: orgName,
@@ -33,7 +40,7 @@ function buildMessage(template: string, orgName: string, student: RosterStudent,
     assignment: assignmentTitle,
     status: def ? def.label : "Not yet logged",
     grade: student.grade ? ` (${student.grade}/${maxMarks})` : "",
-    comment: student.comment ?? "",
+    comment: student.comment ?? defaultComment ?? "",
   });
 }
 
@@ -179,7 +186,7 @@ export function HeadCheckingContent() {
   const activeTemplate = recipient === "student" ? templateStudent : templateParent;
   const modalMessage =
     modalStudent && currentAssignment && activeTemplate
-      ? buildMessage(activeTemplate, orgName, modalStudent, currentAssignment.title, currentAssignment.maxMarks)
+      ? buildMessage(activeTemplate, orgName, modalStudent, currentAssignment.title, currentAssignment.maxMarks, currentAssignment.defaultComment)
       : "";
   const modalPhone = recipient === "student" ? modalStudent?.phone : modalStudent?.guardianPhone;
   const modalWaUrl = modalStudent
@@ -455,7 +462,7 @@ export function HeadCheckingContent() {
                 {showComment && (
                   <input
                     key={`comment-${st.studentId}-${assignmentId}`}
-                    defaultValue={st.comment ?? ""}
+                    defaultValue={st.comment ?? currentAssignment?.defaultComment ?? ""}
                     onBlur={(e) => onCommentBlur(st.studentId, e.target.value)}
                     placeholder="Add comment…"
                     className="h-[36px] min-w-0 flex-[1.4_1_140px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[11px] text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
@@ -515,7 +522,7 @@ export function HeadCheckingContent() {
                     {showComment && (
                       <input
                         key={`comment-${st.studentId}-${assignmentId}`}
-                        defaultValue={st.comment ?? ""}
+                        defaultValue={st.comment ?? currentAssignment?.defaultComment ?? ""}
                         onBlur={(e) => onCommentBlur(st.studentId, e.target.value)}
                         placeholder="Add comment…"
                         className="h-[44px] min-w-0 flex-1 rounded-[9px] border border-[var(--border)] bg-[var(--surface2)] px-[13px] text-[14px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"

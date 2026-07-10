@@ -23,6 +23,7 @@ export type AssignmentProgress = {
   templateLabel: string;
   hasGrade: boolean;
   hasComment: boolean;
+  defaultComment: string | null;
   countsSalary: boolean;
   dueDate: string | null;
   closedAt: string | null;
@@ -37,6 +38,7 @@ export type CreateAssignmentInput = {
   templateId: string;
   gradeScheme: "numeric" | "letter";
   countsSalary: boolean;
+  defaultComment?: string;
   assistantIds: string[];
 };
 
@@ -61,7 +63,7 @@ export async function listAssignmentsWithProgress(offeringId: string): Promise<A
 
   const { data: assignments } = await supabase
     .from("assignments")
-    .select("id, title, max_marks, grade_scheme, template, counts_salary, due_date, closed_at, assignment_templates(label, has_grade, has_comment)")
+    .select("id, title, max_marks, grade_scheme, template, counts_salary, due_date, closed_at, default_comment, assignment_templates(label, has_grade, has_comment)")
     .eq("offering_id", offeringId)
     .order("created_at", { ascending: false });
   if (!assignments || assignments.length === 0) return [];
@@ -123,6 +125,7 @@ export async function listAssignmentsWithProgress(offeringId: string): Promise<A
       templateLabel: joinedTemplate?.label ?? a.template ?? "Grade + comment",
       hasGrade,
       hasComment,
+      defaultComment: a.default_comment,
       countsSalary: a.counts_salary,
       dueDate: a.due_date,
       closedAt: a.closed_at,
@@ -150,6 +153,7 @@ export async function createAssignment(input: CreateAssignmentInput): Promise<{ 
       grade_scheme: input.gradeScheme,
       lettered: input.gradeScheme === "letter",
       counts_salary: input.countsSalary,
+      default_comment: input.defaultComment?.trim() || null,
       created_by: profile.id,
     })
     .select("id")
@@ -170,12 +174,18 @@ export async function createAssignment(input: CreateAssignmentInput): Promise<{ 
 
 export async function updateAssignment(
   id: string,
-  patch: { title: string; maxMarks: number; dueDate: string | null; countsSalary: boolean }
+  patch: { title: string; maxMarks: number; dueDate: string | null; countsSalary: boolean; defaultComment?: string }
 ) {
   const supabase = await createClient();
   const { error } = await supabase
     .from("assignments")
-    .update({ title: patch.title, max_marks: patch.maxMarks, due_date: patch.dueDate, counts_salary: patch.countsSalary })
+    .update({
+      title: patch.title,
+      max_marks: patch.maxMarks,
+      due_date: patch.dueDate,
+      counts_salary: patch.countsSalary,
+      default_comment: patch.defaultComment?.trim() || null,
+    })
     .eq("id", id);
   if (error) throw new Error(error.message);
 }
