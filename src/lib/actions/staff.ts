@@ -158,6 +158,8 @@ export async function createStaffMember(input: { name: string; email: string; ph
 
 export async function updateStaffMember(id: string, patch: { name: string; phone: string; role: Role }) {
   const admin = createAdminClient();
+  const { data: before } = await admin.from("profiles").select("full_name, phone, role").eq("id", id).maybeSingle();
+
   const initials = patch.name
     .trim()
     .split(/\s+/)
@@ -170,7 +172,21 @@ export async function updateStaffMember(id: string, patch: { name: string; phone
     .update({ full_name: patch.name.trim(), initials, phone: patch.phone || null, role: patch.role })
     .eq("id", id);
   if (error) throw new Error(error.message);
-  await logActivity("staff", `Updated ${patch.name.trim()}'s profile`);
+
+  const changes = before
+    ? [
+        before.full_name !== patch.name.trim() ? `name "${before.full_name}" → "${patch.name.trim()}"` : null,
+        (before.phone ?? "") !== (patch.phone || "")
+          ? before.phone
+            ? patch.phone
+              ? `phone "${before.phone}" → "${patch.phone}"`
+              : "phone cleared"
+            : `phone set to "${patch.phone}"`
+          : null,
+        before.role !== patch.role ? `role "${before.role}" → "${patch.role}"` : null,
+      ].filter((x): x is string => !!x)
+    : [];
+  await logActivity("staff", `Updated ${patch.name.trim()}'s profile${changes.length ? ` — ${changes.join(", ")}` : ""}`);
 }
 
 // Deactivates rather than deletes: salary_lines, evaluations, and

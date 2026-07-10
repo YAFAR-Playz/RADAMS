@@ -202,6 +202,15 @@ export async function reassignStudentAssistant(enrollmentId: string, assistantId
   if (error) throw new Error(error.message);
 }
 
+function fieldChange(label: string, before: string | null, after: string): string | null {
+  const b = before ?? "";
+  const a = after || "";
+  if (b === a) return null;
+  if (!b) return `${label} set to "${a}"`;
+  if (!a) return `${label} cleared`;
+  return `${label} "${b}" → "${a}"`;
+}
+
 export async function updateStudent(
   studentId: string,
   patch: {
@@ -214,6 +223,12 @@ export async function updateStudent(
   }
 ) {
   const supabase = await createClient();
+  const { data: before } = await supabase
+    .from("students")
+    .select("name, email, phone, guardian_name, guardian_phone, left_at")
+    .eq("id", studentId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from("students")
     .update({
@@ -226,7 +241,18 @@ export async function updateStudent(
     })
     .eq("id", studentId);
   if (error) throw new Error(error.message);
-  await logActivity("students", `Updated ${patch.name}${patch.left ? " — marked as left" : ""}`);
+
+  const changes = before
+    ? [
+        before.name !== patch.name ? `name "${before.name}" → "${patch.name}"` : null,
+        fieldChange("email", before.email, patch.email),
+        fieldChange("phone", before.phone, patch.phone),
+        fieldChange("guardian name", before.guardian_name, patch.guardianName),
+        fieldChange("guardian phone", before.guardian_phone, patch.guardianPhone),
+        !!before.left_at !== patch.left ? (patch.left ? "marked as left" : "restored (no longer marked as left)") : null,
+      ].filter((x): x is string => !!x)
+    : [];
+  await logActivity("students", `Updated ${patch.name}${changes.length ? ` — ${changes.join(", ")}` : ""}`);
 }
 
 export type StudentDetailAssignment = {
