@@ -141,8 +141,13 @@ export function EvaluationsContent() {
         setCurrency(s.currency);
       }
     });
-    listPayCategories().then(setPayCategories);
   }, []);
+
+  // Refetches whenever the selected course changes so a course-specific
+  // rate override (set by Finance in Pay categories) applies here too.
+  useEffect(() => {
+    listPayCategories(offeringId).then(setPayCategories);
+  }, [offeringId]);
 
   const extraCats = useMemo(() => resolveCategoryDefs(payCategories, "extra"), [payCategories]);
   const dedCats = useMemo(() => resolveCategoryDefs(payCategories, "deduction"), [payCategories]);

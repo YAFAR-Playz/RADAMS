@@ -143,7 +143,7 @@ export async function saveEvaluation(input: {
   }
 
   if (input.lines.length) {
-    const payCategories = await listPayCategories();
+    const payCategories = await listPayCategories(input.offeringId);
     const cats = (kind: "extra" | "deduction") => resolveCategoryDefs(payCategories, kind);
     const { error } = await supabase.from("evaluation_lines").insert(
       input.lines.map((l) => {
@@ -258,7 +258,7 @@ export async function addFinanceEvaluationLine(assistantId: string, offeringId: 
   const supabase = await createClient();
   const evalId = await ensureEvaluationForFinance(assistantId, offeringId, period);
 
-  const payCategories = await listPayCategories();
+  const payCategories = await listPayCategories(offeringId);
   const cfg = resolveCategoryDefs(payCategories, kind)[0];
   const sub = cfg.subs?.[0]?.[0] ?? "";
   const { data, error } = await supabase
@@ -272,6 +272,7 @@ export async function addFinanceEvaluationLine(assistantId: string, offeringId: 
 
 export async function updateFinanceEvaluationLine(
   lineId: string,
+  offeringId: string,
   patch: { category?: string; qty?: string; sub?: string; note?: string; kind?: "extra" | "deduction" }
 ) {
   const profile = await getCurrentProfile();
@@ -287,7 +288,7 @@ export async function updateFinanceEvaluationLine(
   const sub = patch.sub ?? line.sub ?? "";
   const note = patch.note ?? line.note;
 
-  const payCategories = await listPayCategories();
+  const payCategories = await listPayCategories(offeringId);
   const cfg = resolveCategoryDefs(payCategories, kind).find((c) => c.label === category) ?? resolveCategoryDefs(payCategories, kind)[0];
   const amount = categoryAmount(cfg, qty, sub);
 

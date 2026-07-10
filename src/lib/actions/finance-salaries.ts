@@ -126,6 +126,14 @@ export async function updateSalaryLine(
   if (error) throw new Error(error.message);
 }
 
+async function resolveOfficeHourRate(supabase: Awaited<ReturnType<typeof createClient>>, orgId: string, offeringId: string): Promise<number> {
+  const [{ data: overrideRow }, { data: defaultRow }] = await Promise.all([
+    supabase.from("other_rates").select("rate").eq("org_id", orgId).eq("label", "Office hour").eq("offering_id", offeringId).maybeSingle(),
+    supabase.from("other_rates").select("rate").eq("org_id", orgId).eq("label", "Office hour").is("offering_id", null).maybeSingle(),
+  ]);
+  return overrideRow ? Number(overrideRow.rate) : defaultRow ? Number(defaultRow.rate) : 15;
+}
+
 // A fixed, per-month office-hours line for one specific course. The row
 // itself still keeps offering_id = null (like a manual line) — a real
 // offering_id would collide with the (org, payee, offering_id, period)
@@ -133,17 +141,15 @@ export async function updateSalaryLine(
 // occupies for this same assistant+period. office_hours_offering_id instead
 // tracks which course's rate applied, without touching that constraint, so
 // an assistant can have a separate office-hours entry per course.
-export async function setAssistantOfficeHours(payeeId: string, period: string, hours: number, offeringId: string) {
-  const profile = await getCurrentProfile();
-  if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");
-  const orgId = profile.org.id;
-  const supabase = await createClient();
-
-  const [{ data: overrideRow }, { data: defaultRow }] = await Promise.all([
-    supabase.from("other_rates").select("rate").eq("org_id", orgId).eq("label", "Office hour").eq("offering_id", offeringId).maybeSingle(),
-    supabase.from("other_rates").select("rate").eq("org_id", orgId).eq("label", "Office hour").is("offering_id", null).maybeSingle(),
-  ]);
-  const rate = overrideRow ? Number(overrideRow.rate) : defaultRow ? Number(defaultRow.rate) : 15;
+async function upsertOfficeHoursLine(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  orgId: string,
+  payeeId: string,
+  period: string,
+  offeringId: string,
+  hours: number
+) {
+  const rate = await resolveOfficeHourRate(supabase, orgId, offeringId);
   const base = Math.round(hours * rate);
   const basis = `${hours} office hour${hours === 1 ? "" : "s"} @ ${rate}/hr`;
 
@@ -179,6 +185,38 @@ export async function setAssistantOfficeHours(payeeId: string, period: string, h
     });
     if (error) throw new Error(error.message);
   }
+}
+
+export async function setAssistantOfficeHours(payeeId: string, period: string, hours: number, offeringId: string) {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");
+  await upsertOfficeHoursLine(await createClient(), profile.org.id, payeeId, period, offeringId, hours);
+}
+
+// Only creates the line when one doesn't already exist for this
+// (payee, course, period) — never overwrites hours Finance already entered
+// or hand-edited, matching generateSalariesForPeriod's gap-filling-only
+// behavior for every other line type.
+async function createDefaultOfficeHoursLineIfMissing(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  orgId: string,
+  payeeId: string,
+  period: string,
+  offeringId: string,
+  hours: number
+) {
+  const { data: existing } = await supabase
+    .from("salary_lines")
+    .select("id")
+    .eq("org_id", orgId)
+    .eq("payee_id", payeeId)
+    .eq("period", period)
+    .is("offering_id", null)
+    .eq("method", "Office hours")
+    .eq("office_hours_offering_id", offeringId)
+    .maybeSingle();
+  if (existing) return;
+  await upsertOfficeHoursLine(supabase, orgId, payeeId, period, offeringId, hours);
 }
 
 export async function setPayeeStatus(payeeId: string, period: string, status: "paid" | "pending") {
@@ -412,10 +450,13 @@ async function resolveMethodForAssistant(
 // checked paper in this period, OR an evaluation with a nonzero extra/
 // deduction logged by their head for this period — a head's bonus or
 // deduction still needs somewhere for Finance to see and pay it even when
-// the assistant had nothing due this month. Existing lines for that exact
-// (org, payee, offering, period) combination are left completely untouched
-// — this only fills in gaps, so it's safe to re-run without clobbering
-// anything Finance has already reviewed or hand-edited.
+// the assistant had nothing due this month. Also creates that period's
+// office-hours line for any assistant with a standing default_office_hours
+// set on this course (Pay categories → Fixed office hours per assistant).
+// Existing lines for that exact (org, payee, offering, period) — or
+// (payee, office_hours_offering_id, period) for office hours — are left
+// completely untouched, so it's safe to re-run without clobbering anything
+// Finance has already reviewed or hand-edited.
 export async function generateSalariesForPeriod(period: string): Promise<{ created: number }> {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");
@@ -441,6 +482,15 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
       const extra = evLines.filter((l) => l.kind === "extra").reduce((sum, l) => sum + Number(l.amount), 0);
       const deduction = evLines.filter((l) => l.kind === "deduction").reduce((sum, l) => sum + Number(l.amount), 0);
       if (extra > 0 || deduction > 0) evalByAssistant.set(ev.assistant_id, { extra, deduction });
+    }
+
+    const { data: officeHourDefaults } = await supabase
+      .from("offering_assistants")
+      .select("assistant_id, default_office_hours")
+      .eq("offering_id", offering.id)
+      .not("default_office_hours", "is", null);
+    for (const row of officeHourDefaults ?? []) {
+      await createDefaultOfficeHoursLineIfMissing(supabase, orgId, row.assistant_id, period, offering.id, Number(row.default_office_hours));
     }
 
     const assistantIds = Array.from(new Set([...enrolledAssistantIds, ...evalByAssistant.keys()]));
