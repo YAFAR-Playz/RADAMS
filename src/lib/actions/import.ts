@@ -52,6 +52,37 @@ function findMatch(row: ImportRow, existing: ExistingStudent[]): MatchInfo | nul
   return null;
 }
 
+// A student enrolled only in course(s) that have since been deactivated is
+// effectively archived — their contact info may be stale, and the course
+// they were on is no longer selectable anywhere, so a fresh import for a
+// new/current offering should create a new, visible record for them rather
+// than silently matching into a hidden one. Students with no enrollment yet
+// (freshly added but not yet enrolled anywhere), or with at least one
+// enrollment in a still-active offering, remain eligible to match against.
+async function fetchDedupCandidates(supabase: Awaited<ReturnType<typeof createClient>>, orgId: string): Promise<ExistingStudent[]> {
+  const { data: existingData } = await supabase
+    .from("students")
+    .select("id, name, phone, email, guardian_phone")
+    .eq("org_id", orgId);
+  const existing = existingData ?? [];
+  if (!existing.length) return existing;
+
+  const { data: enrollmentRows } = await supabase
+    .from("enrollments")
+    .select("student_id, course_offerings(active)")
+    .in("student_id", existing.map((s) => s.id));
+
+  const hasAny = new Set<string>();
+  const hasActive = new Set<string>();
+  for (const row of enrollmentRows ?? []) {
+    hasAny.add(row.student_id);
+    const offering = Array.isArray(row.course_offerings) ? row.course_offerings[0] : row.course_offerings;
+    if (offering?.active) hasActive.add(row.student_id);
+  }
+
+  return existing.filter((s) => !hasAny.has(s.id) || hasActive.has(s.id));
+}
+
 // Lets the import preview show potential matches before the user commits.
 // Strong matches will auto-merge; weak (guardian-phone-only) matches need
 // the user to explicitly confirm before they're merged.
@@ -59,11 +90,7 @@ export async function previewExistingMatches(rows: ImportRow[]): Promise<Record<
   const profile = await getCurrentProfile();
   if (!profile || !profile.org) return {};
   const supabase = await createClient();
-  const { data: existingData } = await supabase
-    .from("students")
-    .select("id, name, phone, email, guardian_phone")
-    .eq("org_id", profile.org.id);
-  const existing = existingData ?? [];
+  const existing = await fetchDedupCandidates(supabase, profile.org.id);
 
   const result: Record<number, MatchInfo> = {};
   rows.forEach((r, i) => {
@@ -92,11 +119,7 @@ export async function importStudents(offeringId: string, rows: ImportRow[], conf
 
   const confirmed = new Set(confirmedRowIndices);
 
-  const { data: existingData } = await supabase
-    .from("students")
-    .select("id, name, phone, email, guardian_phone")
-    .eq("org_id", orgId);
-  const existing = existingData ?? [];
+  const existing = await fetchDedupCandidates(supabase, orgId);
 
   const rawMatches = valid.map((r) => findMatch(r, existing));
   const matches = rawMatches.map((m, i) => (m && (m.confidence === "strong" || confirmed.has(i)) ? m : null));
