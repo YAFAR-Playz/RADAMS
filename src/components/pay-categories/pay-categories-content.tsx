@@ -22,12 +22,19 @@ import {
   listOfficeHourRatesByOffering,
   setOfficeHourRateForOffering,
   clearOfficeHourRateOverride,
+  listCategoryRatesByOffering,
+  setCategoryRateForOffering,
+  clearCategoryOverrideForOffering,
+  listAssistantOfficeHoursDefaults,
+  setAssistantOfficeHoursDefault,
   type PayCategory,
   type CategoryMode,
   type CourseRate,
   type BracketSlot,
   type OtherRate,
   type OfficeHourCourseRate,
+  type CategoryOfferingRate,
+  type AssistantOfficeHoursDefault,
 } from "@/lib/actions/pay-categories";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
 
@@ -212,6 +219,8 @@ export function PayCategoriesContent() {
   const [bracketsLoading, setBracketsLoading] = useState(false);
   const [otherRates, setOtherRates] = useState<OtherRate[] | null>(null);
   const [officeHourRates, setOfficeHourRates] = useState<OfficeHourCourseRate[] | null>(null);
+  const [categoryRates, setCategoryRates] = useState<CategoryOfferingRate[] | null>(null);
+  const [officeHoursDefaults, setOfficeHoursDefaults] = useState<Record<string, AssistantOfficeHoursDefault[]>>({});
   const [currency, setCurrency] = useState("GBP");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -228,6 +237,12 @@ export function PayCategoriesContent() {
   const [bracketDrafts, setBracketDrafts] = useState<Record<string, BracketDraft>>({});
   const [otherRateDrafts, setOtherRateDrafts] = useState<Record<string, string>>({});
   const [officeHourRateDrafts, setOfficeHourRateDrafts] = useState<Record<string, string>>({});
+  // Category rate/option keys are `${categoryId}::${offeringId}` and
+  // `${categoryId}::${offeringId}::${optionLabel}` respectively.
+  const [categoryRateDrafts, setCategoryRateDrafts] = useState<Record<string, string>>({});
+  const [categoryOptionDrafts, setCategoryOptionDrafts] = useState<Record<string, string>>({});
+  // Office-hours defaults keys are `${offeringId}::${assistantId}`.
+  const [officeHoursDefaultDrafts, setOfficeHoursDefaultDrafts] = useState<Record<string, string>>({});
 
   async function refetchLists() {
     const [cats, rates, others, officeHours, settings] = await Promise.all([
@@ -255,6 +270,19 @@ export function PayCategoriesContent() {
     }
   }
 
+  async function refetchCategoryRates(scope: string[]) {
+    setCategoryRates(scope.length ? await listCategoryRatesByOffering(scope) : []);
+  }
+
+  async function refetchOfficeHoursDefaults(scope: string[]) {
+    if (!scope.length) {
+      setOfficeHoursDefaults({});
+      return;
+    }
+    const entries = await Promise.all(scope.map(async (id) => [id, await listAssistantOfficeHoursDefaults(id)] as const));
+    setOfficeHoursDefaults(Object.fromEntries(entries));
+  }
+
   // Used for the initial load and after a manual "Save changes" — clears
   // drafts since the server now matches what's on screen. Add/delete
   // actions use refetchLists()/refetchBrackets() directly so they don't
@@ -269,6 +297,9 @@ export function PayCategoriesContent() {
       setBracketDrafts({});
       setOtherRateDrafts({});
       setOfficeHourRateDrafts({});
+      setCategoryRateDrafts({});
+      setCategoryOptionDrafts({});
+      setOfficeHoursDefaultDrafts({});
     } catch {
       setError("Couldn't load pay categories.");
     } finally {
@@ -284,8 +315,11 @@ export function PayCategoriesContent() {
 
   useEffect(() => {
     (async () => {
-      await refetchBrackets(courseScope);
+      await Promise.all([refetchBrackets(courseScope), refetchCategoryRates(courseScope), refetchOfficeHoursDefaults(courseScope)]);
       setBracketDrafts({});
+      setCategoryRateDrafts({});
+      setCategoryOptionDrafts({});
+      setOfficeHoursDefaultDrafts({});
     })();
   }, [courseScope]);
 
@@ -296,7 +330,10 @@ export function PayCategoriesContent() {
     Object.keys(optionDrafts).length > 0 ||
     Object.keys(courseRateDrafts).length > 0 ||
     Object.keys(bracketDrafts).length > 0 ||
-    Object.keys(otherRateDrafts).length > 0;
+    Object.keys(otherRateDrafts).length > 0 ||
+    Object.keys(categoryRateDrafts).length > 0 ||
+    Object.keys(categoryOptionDrafts).length > 0 ||
+    Object.keys(officeHoursDefaultDrafts).length > 0;
 
   async function withBusy(id: string, fn: () => Promise<void>) {
     setBusyId(id);
@@ -407,6 +444,39 @@ export function PayCategoriesContent() {
     }
   }
 
+  function draftCategoryRate(categoryId: string, offeringId: string, value: string) {
+    setCategoryRateDrafts((prev) => ({ ...prev, [`${categoryId}::${offeringId}`]: value }));
+  }
+  function draftCategoryOption(categoryId: string, offeringId: string, optionLabel: string, value: string) {
+    setCategoryOptionDrafts((prev) => ({ ...prev, [`${categoryId}::${offeringId}::${optionLabel}`]: value }));
+  }
+  function draftOfficeHoursDefault(offeringId: string, assistantId: string, value: string) {
+    setOfficeHoursDefaultDrafts((prev) => ({ ...prev, [`${offeringId}::${assistantId}`]: value }));
+  }
+
+  async function onClearCategoryOverride(categoryId: string, offeringId: string, kind: "extra" | "deduction", label: string) {
+    const key = `${categoryId}::${offeringId}`;
+    setBusyId(key);
+    try {
+      await clearCategoryOverrideForOffering(offeringId, kind, label);
+      setCategoryRateDrafts((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      setCategoryOptionDrafts((prev) => {
+        const next = { ...prev };
+        for (const k of Object.keys(next)) if (k.startsWith(`${key}::`)) delete next[k];
+        return next;
+      });
+      await refetchCategoryRates(courseScope);
+    } catch {
+      setError("Couldn't clear this override — try again.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function onSaveAll() {
     setSaving(true);
     try {
@@ -425,9 +495,33 @@ export function PayCategoriesContent() {
         }),
         ...Object.entries(otherRateDrafts).map(([id, v]) => updateOtherRate(id, Number(v) || 0)),
         ...Object.entries(officeHourRateDrafts).map(([offeringId, v]) => setOfficeHourRateForOffering(offeringId, Number(v) || 0)),
+        ...Object.entries(categoryRateDrafts).map(([key, v]) => {
+          const [categoryId, offeringId] = key.split("::");
+          const row = categoryRates?.find((r) => r.categoryId === categoryId && r.offeringId === offeringId);
+          if (!row) return Promise.resolve();
+          return setCategoryRateForOffering(offeringId, row.kind, row.label, row.mode, Number(v) || 0, null);
+        }),
+        ...Array.from(new Set(Object.keys(categoryOptionDrafts).map((k) => k.split("::").slice(0, 2).join("::")))).map((key) => {
+          const [categoryId, offeringId] = key.split("::");
+          const row = categoryRates?.find((r) => r.categoryId === categoryId && r.offeringId === offeringId);
+          if (!row) return Promise.resolve();
+          // Sends the complete option set (defaults + edits) — the override
+          // row's options are fully replaced on save, not merged field-by-field.
+          const options = row.options.map((o) => ({
+            label: o.label,
+            amount: Number(categoryOptionDrafts[`${categoryId}::${offeringId}::${o.label}`] ?? o.amount) || 0,
+          }));
+          return setCategoryRateForOffering(offeringId, row.kind, row.label, row.mode, row.rate, options);
+        }),
+        ...Object.entries(officeHoursDefaultDrafts).map(([key, v]) => {
+          const [offeringId, assistantId] = key.split("::");
+          return setAssistantOfficeHoursDefault(offeringId, assistantId, v === "" ? null : Number(v) || 0);
+        }),
       ]);
       await reload();
       await refetchBrackets(courseScope);
+      await refetchCategoryRates(courseScope);
+      await refetchOfficeHoursDefaults(courseScope);
     } catch {
       setError("Couldn't save your changes — try again.");
     } finally {
@@ -437,6 +531,23 @@ export function PayCategoriesContent() {
 
   const extraCats = categories?.filter((c) => c.kind === "extra") ?? [];
   const dedCats = categories?.filter((c) => c.kind === "deduction") ?? [];
+
+  // Groups the flat (course × category) rate list back into one card per
+  // category, each listing its rows for the currently selected courses.
+  const categoryRateGroups = (() => {
+    const order: { categoryId: string; kind: "extra" | "deduction"; label: string; mode: CategoryMode; rows: CategoryOfferingRate[] }[] = [];
+    const byId = new Map<string, (typeof order)[number]>();
+    for (const r of categoryRates ?? []) {
+      let g = byId.get(r.categoryId);
+      if (!g) {
+        g = { categoryId: r.categoryId, kind: r.kind, label: r.label, mode: r.mode, rows: [] };
+        byId.set(r.categoryId, g);
+        order.push(g);
+      }
+      g.rows.push(r);
+    }
+    return order;
+  })();
 
   function toggleScope(offeringId: string) {
     setCourseScope((prev) => (prev.includes(offeringId) ? prev.filter((x) => x !== offeringId) : [...prev, offeringId]));
@@ -628,6 +739,132 @@ export function PayCategoriesContent() {
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+          </section>
+
+          {/* EXTRA WORK & DEDUCTION RATES BY COURSE — same shadowing pattern
+              as office-hour rate: a course's own rate/options if Finance has
+              set one, else the org-wide default from the cards above. */}
+          <section className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+            <header className="border-b border-[var(--border2)] p-[14px_16px]">
+              <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Extra work &amp; deduction rates by course</h3>
+              <p className="m-0 mt-1 text-[12px] text-[var(--muted)]">Override a category&apos;s rate/amounts for the selected course(s); leave alone to keep the org-wide default.</p>
+            </header>
+            {courseScope.length === 0 ? (
+              <div className="p-[30px] text-center text-[13px] text-[var(--muted)]">Select one or more courses above to set their extra-work/deduction rates.</div>
+            ) : categoryRateGroups.length === 0 ? (
+              <div className="p-3 text-center text-[12.5px] text-[var(--subtle)]">No extra-work or deduction categories yet.</div>
+            ) : (
+              <div className="flex flex-col gap-[10px] p-[10px]">
+                {categoryRateGroups.map((g) => (
+                  <div key={g.categoryId} className="rounded-[9px] border border-[var(--border2)] p-[10px_12px]">
+                    <div className="mb-[7px] flex items-center gap-[8px]">
+                      <span
+                        className="rounded-[5px] px-[7px] py-[2px] text-[10px] font-bold uppercase tracking-[0.04em]"
+                        style={g.kind === "extra" ? { background: "var(--oks)", color: "var(--ok)" } : { background: "var(--dangers)", color: "var(--danger)" }}
+                      >
+                        {g.kind === "extra" ? "Extra" : "Deduction"}
+                      </span>
+                      <span className="text-[13px] font-semibold text-[var(--text)]">{g.label}</span>
+                    </div>
+                    <div className="flex flex-col gap-[8px]">
+                      {g.rows.map((r) => (
+                        <div key={r.offeringId} className="flex flex-wrap items-center gap-[10px] rounded-[8px] bg-[var(--surface2)] p-[8px_10px]">
+                          <div className="min-w-0 flex-1">
+                            <span className="block truncate text-[12.5px] font-semibold text-[var(--text)]">{r.offeringLabel}</span>
+                            {!r.isOverride && <span className="text-[10.5px] text-[var(--subtle)]">Using org default</span>}
+                          </div>
+                          {r.mode === "dropdown" ? (
+                            <div className="flex flex-wrap items-center gap-[8px]">
+                              {r.options.map((o) => (
+                                <div key={o.label} className="flex h-8 items-center gap-[6px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[8px]">
+                                  <span className="text-[11px] text-[var(--subtle)]">{o.label}</span>
+                                  <span className="text-[11px] font-semibold text-[var(--subtle)]">{sym}</span>
+                                  <input
+                                    value={categoryOptionDrafts[`${r.categoryId}::${r.offeringId}::${o.label}`] ?? String(o.amount)}
+                                    onChange={(e) => draftCategoryOption(r.categoryId, r.offeringId, o.label, e.target.value.replace(/[^0-9]/g, ""))}
+                                    inputMode="numeric"
+                                    className="w-14 border-none bg-transparent font-mono text-[12px] font-bold text-[var(--ok)] outline-none"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="flex h-[32px] w-[84px] flex-none items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[9px]">
+                              <span className="text-[12px] font-semibold text-[var(--subtle)]">{sym}</span>
+                              <input
+                                value={categoryRateDrafts[`${r.categoryId}::${r.offeringId}`] ?? String(r.rate ?? 0)}
+                                onChange={(e) => draftCategoryRate(r.categoryId, r.offeringId, e.target.value.replace(/[^0-9]/g, ""))}
+                                inputMode="numeric"
+                                className="w-full border-none bg-transparent font-mono text-[12.5px] font-bold text-[var(--ok)] outline-none"
+                              />
+                            </div>
+                          )}
+                          {r.isOverride && (
+                            <button
+                              onClick={() => onClearCategoryOverride(r.categoryId, r.offeringId, r.kind, r.label)}
+                              disabled={busyId === `${r.categoryId}::${r.offeringId}`}
+                              title="Clear override — use org default instead"
+                              className="flex h-[28px] w-[28px] flex-none items-center justify-center rounded-[7px] border border-[var(--border)] bg-[var(--surface)] text-[var(--subtle)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] hover:text-[var(--danger)] disabled:opacity-60"
+                            >
+                              {busyId === `${r.categoryId}::${r.offeringId}` ? <Spinner size={11} /> : <Icon name="x" size={12} />}
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* FIXED OFFICE HOURS PER ASSISTANT — a standing monthly figure per
+              assistant on the selected course(s); generateSalariesForPeriod
+              auto-creates that month's office-hours line from it, so Finance
+              doesn't need to retype it every period. Blank = no fixed
+              default, entered manually in Salaries as before. */}
+          <section className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+            <header className="border-b border-[var(--border2)] p-[14px_16px]">
+              <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Fixed office hours per assistant</h3>
+              <p className="m-0 mt-1 text-[12px] text-[var(--muted)]">Auto-applied to Salaries each month once set — still editable per period there.</p>
+            </header>
+            {courseScope.length === 0 ? (
+              <div className="p-[30px] text-center text-[13px] text-[var(--muted)]">Select one or more courses above to assign fixed office hours.</div>
+            ) : (
+              <div className="flex flex-col gap-[12px] p-[10px]">
+                {courseScope.map((offeringId) => {
+                  const course = (courseRates ?? []).find((c) => c.offeringId === offeringId);
+                  const assistants = officeHoursDefaults[offeringId] ?? [];
+                  return (
+                    <div key={offeringId}>
+                      <div className="mb-[6px] text-[11.5px] font-semibold text-[var(--muted)]">{course?.label ?? offeringId}</div>
+                      {assistants.length === 0 ? (
+                        <div className="p-3 text-center text-[12.5px] text-[var(--subtle)]">No assistants on this course yet.</div>
+                      ) : (
+                        <div className="grid grid-cols-1 gap-[8px] sm:grid-cols-2">
+                          {assistants.map((a) => {
+                            const key = `${offeringId}::${a.assistantId}`;
+                            return (
+                              <div key={a.assistantId} className="flex items-center gap-[10px] rounded-[9px] border border-[var(--border2)] p-[9px_11px]">
+                                <span className="flex-1 truncate text-[13px] font-semibold text-[var(--text)]">{a.name}</span>
+                                <span className="text-[11.5px] text-[var(--subtle)]">hrs/mo</span>
+                                <input
+                                  value={officeHoursDefaultDrafts[key] ?? (a.hours != null ? String(a.hours) : "")}
+                                  placeholder="—"
+                                  onChange={(e) => draftOfficeHoursDefault(offeringId, a.assistantId, e.target.value.replace(/[^0-9]/g, ""))}
+                                  inputMode="numeric"
+                                  className="h-8 w-16 rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] text-center font-mono text-[12.5px] font-bold text-[var(--text)] outline-none"
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </section>

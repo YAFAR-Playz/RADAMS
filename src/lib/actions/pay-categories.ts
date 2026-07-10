@@ -16,7 +16,12 @@ function offeringLabel(o: { session: string; unit: string | null; courses: { nam
   return [course?.name, o.session, o.unit].filter(Boolean).join(" · ");
 }
 
-export async function listPayCategories(): Promise<PayCategory[]> {
+// offeringId, when passed, scopes the returned rate/options to that course:
+// a per-course override (offering_id set, same org/kind/label) replaces the
+// org-wide row's rate/options — used by the evaluation flow so a head's
+// picks reflect that course's actual rates. Without it, only the org-wide
+// rows (offering_id null) come back — the base definitions Finance manages.
+export async function listPayCategories(offeringId?: string | null): Promise<PayCategory[]> {
   const profile = await getCurrentProfile();
   const orgId = profile?.org?.id;
   if (!orgId) return [];
@@ -26,6 +31,7 @@ export async function listPayCategories(): Promise<PayCategory[]> {
     .from("pay_categories")
     .select("id, kind, label, mode, rate")
     .eq("org_id", orgId)
+    .is("offering_id", null)
     .order("sort_order", { ascending: true });
   if (!cats) return [];
 
@@ -41,7 +47,7 @@ export async function listPayCategories(): Promise<PayCategory[]> {
     optionsByCat.set(o.category_id, list);
   }
 
-  return cats.map((c) => ({
+  const base: PayCategory[] = cats.map((c) => ({
     id: c.id,
     kind: c.kind as "extra" | "deduction",
     label: c.label,
@@ -49,6 +55,30 @@ export async function listPayCategories(): Promise<PayCategory[]> {
     rate: c.rate != null ? Number(c.rate) : null,
     options: optionsByCat.get(c.id) ?? [],
   }));
+  if (!offeringId) return base;
+
+  const { data: overrides } = await supabase.from("pay_categories").select("id, kind, label, rate").eq("org_id", orgId).eq("offering_id", offeringId);
+  if (!overrides || !overrides.length) return base;
+
+  const overrideIds = overrides.map((o) => o.id);
+  const { data: overrideOptions } = await supabase
+    .from("pay_category_options")
+    .select("category_id, label, amount")
+    .in("category_id", overrideIds)
+    .order("sort_order", { ascending: true });
+  const overrideOptionsByCat = new Map<string, CategoryOption[]>();
+  for (const o of overrideOptions ?? []) {
+    const list = overrideOptionsByCat.get(o.category_id) ?? [];
+    list.push({ id: o.category_id, label: o.label, amount: Number(o.amount) });
+    overrideOptionsByCat.set(o.category_id, list);
+  }
+  const overrideByKey = new Map(overrides.map((o) => [`${o.kind}::${o.label}`, o]));
+
+  return base.map((c) => {
+    const ov = overrideByKey.get(`${c.kind}::${c.label}`);
+    if (!ov) return c;
+    return { ...c, rate: ov.rate != null ? Number(ov.rate) : c.rate, options: overrideOptionsByCat.get(ov.id) ?? c.options };
+  });
 }
 
 export async function addPayCategory(kind: "extra" | "deduction", label: string): Promise<{ id: string }> {
@@ -311,5 +341,178 @@ export async function clearOfficeHourRateOverride(offeringId: string) {
     .eq("org_id", profile.org.id)
     .eq("label", "Office hour")
     .eq("offering_id", offeringId);
+  if (error) throw new Error(error.message);
+}
+
+export type CategoryOfferingRate = {
+  offeringId: string;
+  offeringLabel: string;
+  categoryId: string;
+  kind: "extra" | "deduction";
+  label: string;
+  mode: CategoryMode;
+  rate: number | null;
+  options: CategoryOption[];
+  isOverride: boolean;
+};
+
+// One row per (selected course, extra/deduction category): the course's own
+// rate/options if Finance has overridden them, else the org-wide default —
+// same shadowing pattern as listOfficeHourRatesByOffering.
+export async function listCategoryRatesByOffering(offeringIds: string[]): Promise<CategoryOfferingRate[]> {
+  if (!offeringIds.length) return [];
+  const profile = await getCurrentProfile();
+  const orgId = profile?.org?.id;
+  if (!orgId) return [];
+  const supabase = await createClient();
+
+  const base = await listPayCategories();
+  if (!base.length) return [];
+
+  const { data: offerings } = await supabase.from("course_offerings").select("id, session, unit, courses(name)").in("id", offeringIds);
+  if (!offerings) return [];
+  const offeringById = new Map(offerings.map((o) => [o.id, o]));
+
+  const { data: overrides } = await supabase
+    .from("pay_categories")
+    .select("id, kind, label, rate, offering_id")
+    .eq("org_id", orgId)
+    .in("offering_id", offeringIds);
+  const overrideIds = (overrides ?? []).map((o) => o.id);
+  const { data: overrideOptions } = overrideIds.length
+    ? await supabase.from("pay_category_options").select("category_id, label, amount").in("category_id", overrideIds).order("sort_order", { ascending: true })
+    : { data: [] as { category_id: string; label: string; amount: number }[] };
+  const optionsByOverrideId = new Map<string, CategoryOption[]>();
+  for (const o of overrideOptions ?? []) {
+    const list = optionsByOverrideId.get(o.category_id) ?? [];
+    list.push({ id: o.category_id, label: o.label, amount: Number(o.amount) });
+    optionsByOverrideId.set(o.category_id, list);
+  }
+  const overrideByKey = new Map((overrides ?? []).map((o) => [`${o.offering_id}::${o.kind}::${o.label}`, o]));
+
+  const rows: CategoryOfferingRate[] = [];
+  for (const offeringId of offeringIds) {
+    const o = offeringById.get(offeringId);
+    if (!o) continue;
+    for (const c of base) {
+      const ov = overrideByKey.get(`${offeringId}::${c.kind}::${c.label}`);
+      rows.push({
+        offeringId,
+        offeringLabel: offeringLabel(o),
+        categoryId: c.id,
+        kind: c.kind,
+        label: c.label,
+        mode: c.mode,
+        rate: ov ? (ov.rate != null ? Number(ov.rate) : null) : c.rate,
+        options: ov ? optionsByOverrideId.get(ov.id) ?? [] : c.options,
+        isOverride: !!ov,
+      });
+    }
+  }
+  return rows;
+}
+
+// Creates/updates this course's override row for a category (matched by
+// kind+label, since the id passed in belongs to the org-wide row). For
+// dropdown mode, `options` replaces the override row's whole option set —
+// callers must pass the complete set (defaults included), not just the
+// edited option.
+export async function setCategoryRateForOffering(
+  offeringId: string,
+  kind: "extra" | "deduction",
+  label: string,
+  mode: CategoryMode,
+  rate: number | null,
+  options: { label: string; amount: number }[] | null
+) {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org) throw new Error("Not authenticated");
+  const supabase = await createClient();
+
+  const { data: existing } = await supabase
+    .from("pay_categories")
+    .select("id")
+    .eq("org_id", profile.org.id)
+    .eq("kind", kind)
+    .eq("label", label)
+    .eq("offering_id", offeringId)
+    .maybeSingle();
+
+  let categoryId: string;
+  if (existing) {
+    categoryId = existing.id;
+    const { error } = await supabase.from("pay_categories").update({ rate }).eq("id", categoryId);
+    if (error) throw new Error(error.message);
+  } else {
+    const { data, error } = await supabase
+      .from("pay_categories")
+      .insert({ org_id: profile.org.id, offering_id: offeringId, kind, label, mode, rate })
+      .select("id")
+      .single();
+    if (error || !data) throw new Error(error?.message ?? "Failed to save override");
+    categoryId = data.id;
+  }
+
+  if (mode === "dropdown" && options) {
+    await supabase.from("pay_category_options").delete().eq("category_id", categoryId);
+    if (options.length) {
+      const { error } = await supabase
+        .from("pay_category_options")
+        .insert(options.map((o, i) => ({ category_id: categoryId, label: o.label, amount: o.amount, sort_order: i })));
+      if (error) throw new Error(error.message);
+    }
+  }
+}
+
+// Removes a course's override so the category falls back to the org-wide
+// rate/options.
+export async function clearCategoryOverrideForOffering(offeringId: string, kind: "extra" | "deduction", label: string) {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org) throw new Error("Not authenticated");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("pay_categories")
+    .delete()
+    .eq("org_id", profile.org.id)
+    .eq("kind", kind)
+    .eq("label", label)
+    .eq("offering_id", offeringId);
+  if (error) throw new Error(error.message);
+}
+
+export type AssistantOfficeHoursDefault = { assistantId: string; name: string; hours: number | null };
+
+// A standing monthly office-hours figure Finance can assign an assistant for
+// a specific course, so it doesn't need retyping in Salaries every period —
+// generateSalariesForPeriod uses this to auto-create/refresh that line.
+export async function listAssistantOfficeHoursDefaults(offeringId: string): Promise<AssistantOfficeHoursDefault[]> {
+  const profile = await getCurrentProfile();
+  const orgId = profile?.org?.id;
+  if (!orgId) return [];
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("offering_assistants")
+    .select("assistant_id, default_office_hours, profiles(full_name)")
+    .eq("offering_id", offeringId);
+  if (!data) return [];
+  return data
+    .map((r) => {
+      const p = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles;
+      if (!p) return null;
+      return { assistantId: r.assistant_id, name: p.full_name, hours: r.default_office_hours != null ? Number(r.default_office_hours) : null };
+    })
+    .filter((x): x is AssistantOfficeHoursDefault => !!x)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function setAssistantOfficeHoursDefault(offeringId: string, assistantId: string, hours: number | null) {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org) throw new Error("Not authenticated");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("offering_assistants")
+    .update({ default_office_hours: hours })
+    .eq("offering_id", offeringId)
+    .eq("assistant_id", assistantId);
   if (error) throw new Error(error.message);
 }

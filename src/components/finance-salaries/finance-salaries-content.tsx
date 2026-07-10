@@ -46,7 +46,7 @@ function EvaluationPanel({ payeeId, offeringId, period, sym }: { payeeId: string
 
   useEffect(() => {
     getEvaluationForFinance(payeeId, offeringId, period).then(setEvalData);
-    listPayCategories().then(setPayCats);
+    listPayCategories(offeringId).then(setPayCats);
   }, [payeeId, offeringId, period]);
 
   async function onAdd(kind: "extra" | "deduction") {
@@ -59,10 +59,10 @@ function EvaluationPanel({ payeeId, offeringId, period, sym }: { payeeId: string
     }
   }
 
-  async function onUpdate(lineId: string, patch: Parameters<typeof updateFinanceEvaluationLine>[1]) {
+  async function onUpdate(lineId: string, patch: Parameters<typeof updateFinanceEvaluationLine>[2]) {
     setBusy(true);
     try {
-      await updateFinanceEvaluationLine(lineId, patch);
+      await updateFinanceEvaluationLine(lineId, offeringId, patch);
       await reload();
     } finally {
       setBusy(false);
