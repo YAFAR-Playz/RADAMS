@@ -163,12 +163,23 @@ export async function createSession(input: { offeringId: string; title: string; 
 
 export async function updateSession(id: string, input: { title: string; date: string; time: string }) {
   const supabase = await createClient();
+  const { data: before } = await supabase.from("attendance_sessions").select("title, session_date, session_time").eq("id", id).maybeSingle();
+
+  const newTitle = input.title || "New session";
   const { error } = await supabase
     .from("attendance_sessions")
-    .update({ title: input.title || "New session", session_date: input.date, session_time: input.time })
+    .update({ title: newTitle, session_date: input.date, session_time: input.time })
     .eq("id", id);
   if (error) throw new Error(error.message);
-  await logActivity("attendance", `Updated session "${input.title || "New session"}"`);
+
+  const changes = before
+    ? [
+        before.title !== newTitle ? `title "${before.title}" → "${newTitle}"` : null,
+        before.session_date !== input.date ? `date ${before.session_date} → ${input.date}` : null,
+        before.session_time !== input.time ? `time ${before.session_time} → ${input.time}` : null,
+      ].filter((x): x is string => !!x)
+    : [];
+  await logActivity("attendance", `Updated session "${newTitle}"${changes.length ? ` — ${changes.join(", ")}` : ""}`);
 }
 
 export async function deleteSession(id: string) {
