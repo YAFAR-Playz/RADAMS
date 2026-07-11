@@ -27,6 +27,7 @@ import {
   type StudentDetailPanel,
 } from "@/lib/actions/students";
 import { getGradeScale, type GradeScaleSetting } from "@/lib/actions/oversight";
+import { getTrafficLightForOffering, setStudentTargetGrade, type StudentTrafficLight } from "@/lib/actions/traffic-light";
 import { getStudentAttendance, type StudentAttendanceSummary } from "@/lib/actions/attendance";
 import { downloadCsv } from "@/lib/csv-export";
 import { getEffectiveTemplate, getOrgBrandName } from "@/lib/actions/templates";
@@ -98,6 +99,9 @@ export function StudentsContent({ role }: { role: Role }) {
   const [folderLink, setFolderLink] = useState<string | null>(null);
   const [folderLinkDraft, setFolderLinkDraft] = useState("");
   const [savingFolderLink, setSavingFolderLink] = useState(false);
+  const [trafficLight, setTrafficLight] = useState<Record<string, StudentTrafficLight>>({});
+  const [targetGradeDraft, setTargetGradeDraft] = useState("");
+  const [savingTargetGrade, setSavingTargetGrade] = useState(false);
 
   useEffect(() => {
     (() => {
@@ -129,9 +133,10 @@ export function StudentsContent({ role }: { role: Role }) {
   async function reload(id: string) {
     setLoading(true);
     try {
-      const [rows, ast] = await Promise.all([getStudentsForOffering(id), listOfferingAssistants(id)]);
+      const [rows, ast, tl] = await Promise.all([getStudentsForOffering(id), listOfferingAssistants(id), getTrafficLightForOffering(id)]);
       setStudents(rows);
       setAssistants(ast);
+      setTrafficLight(tl);
       if (isRegistration) {
         const [payments, labels] = await Promise.all([
           getPaymentStatusForOffering(id),
@@ -302,12 +307,29 @@ export function StudentsContent({ role }: { role: Role }) {
     setViewMoreAttendance(null);
     setViewMoreDetail(null);
     setFolderLink(null);
+    setTargetGradeDraft(s.targetGrade != null ? String(s.targetGrade) : "");
     getStudentAttendance(s.studentId).then(setViewMoreAttendance);
     if (offeringId) getStudentDetailPanel(s.studentId, offeringId).then(setViewMoreDetail);
     getStudentDriveFolderLink(s.studentId).then((link) => {
       setFolderLink(link);
       setFolderLinkDraft(link ?? "");
     });
+  }
+
+  async function onSaveTargetGrade() {
+    if (!viewMoreStudent) return;
+    setSavingTargetGrade(true);
+    try {
+      const value = targetGradeDraft.trim() === "" ? null : Number(targetGradeDraft);
+      await setStudentTargetGrade(viewMoreStudent.enrollmentId, value);
+      setStudents((prev) => (prev ? prev.map((s) => (s.enrollmentId === viewMoreStudent.enrollmentId ? { ...s, targetGrade: value } : s)) : prev));
+      setViewMoreStudent((prev) => (prev ? { ...prev, targetGrade: value } : prev));
+      if (offeringId) getTrafficLightForOffering(offeringId).then(setTrafficLight);
+    } catch {
+      setError("Couldn't save the target grade — try again.");
+    } finally {
+      setSavingTargetGrade(false);
+    }
   }
 
   async function onSaveFolderLink() {
@@ -728,6 +750,22 @@ export function StudentsContent({ role }: { role: Role }) {
                           </div>
                         </div>
                       )}
+                      {!st.leftAt &&
+                        (() => {
+                          const tl = trafficLight[st.studentId];
+                          if (!tl) return <span className="w-[14px] flex-none" />;
+                          const tone = tl.tier === "green" ? "ok" : tl.tier === "yellow" ? "warn" : "danger";
+                          const { fg } = toneColors(tone);
+                          const title =
+                            tl.reasons.length > 0
+                              ? `${tl.tier === "green" ? "On track" : tl.tier === "yellow" ? "Caution" : "Critical"}: ${tl.reasons.join("; ")}`
+                              : "On track";
+                          return (
+                            <span title={title} className="flex w-[14px] flex-none items-center justify-center">
+                              <span className="block h-[10px] w-[10px] rounded-full" style={{ background: fg }} />
+                            </span>
+                          );
+                        })()}
                       <span className="w-[54px] flex-none text-right font-mono text-[13px] font-bold text-[var(--text)]">
                         {st.leftAt ? "—" : formatGrade(st.avgGrade)}
                       </span>
@@ -1096,6 +1134,86 @@ export function StudentsContent({ role }: { role: Role }) {
               </button>
             </div>
             <div className="flex min-h-0 flex-col gap-[16px] overflow-y-auto p-[16px_18px]">
+              {(() => {
+                const tl = trafficLight[viewMoreStudent.studentId];
+                const tier = tl?.tier ?? "green";
+                const tone = tier === "green" ? "ok" : tier === "yellow" ? "warn" : "danger";
+                const { bg, fg } = toneColors(tone);
+                const tierLabel = tier === "green" ? "On track" : tier === "yellow" ? "Caution" : "Critical";
+                const actions =
+                  tier === "yellow"
+                    ? [
+                        "Parental Communication Flag: send an extra structured notification directly to the parent/guardian.",
+                        "Deviation Briefing: explain the observed drop from this student's expected baseline.",
+                      ]
+                    : tier === "red"
+                      ? [
+                          "Parent Warning Message: contact the parent immediately with a warning detailing the drop and active rectifications.",
+                          "Obligatory Office Hours: place the student on a compulsory attendance roster for live support sessions.",
+                          "Mistake Diary Enforcement: audit that all missed marks are populated and full-mark rewrites are completed.",
+                          "Target Follow-Up Recap Plan: build a structured plan to recap previous weak topics before advancing.",
+                        ]
+                      : [];
+                return (
+                  <div>
+                    <div className="mb-[7px] flex items-center justify-between text-[12.5px] font-semibold text-[var(--text)]">
+                      Traffic light status
+                    </div>
+                    <div className="flex flex-col gap-[8px] rounded-[8px] border border-[var(--border)] p-[10px_12px]" style={{ background: bg }}>
+                      <div className="flex items-center gap-[8px]">
+                        <span className="block h-[10px] w-[10px] flex-none rounded-full" style={{ background: fg }} />
+                        <span className="text-[13px] font-bold" style={{ color: fg }}>
+                          {tierLabel}
+                        </span>
+                      </div>
+                      {tl && tl.reasons.length > 0 && (
+                        <ul className="m-0 flex list-none flex-col gap-[3px] pl-0 text-[12px] leading-[1.4]" style={{ color: fg }}>
+                          {tl.reasons.map((r, i) => (
+                            <li key={i}>• {r}</li>
+                          ))}
+                        </ul>
+                      )}
+                      {actions.length > 0 && (
+                        <div className="mt-[4px] flex flex-col gap-[5px] border-t border-dashed pt-[8px]" style={{ borderColor: fg }}>
+                          <div className="text-[10.5px] font-bold uppercase tracking-[0.04em]" style={{ color: fg }}>
+                            Required actions
+                          </div>
+                          {actions.map((a, i) => (
+                            <label key={i} className="flex items-start gap-[7px] text-[12px] leading-[1.4]" style={{ color: fg }}>
+                              <input type="checkbox" className="mt-[2px] flex-none" />
+                              <span>{a}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {!isRegistration && (
+                      <div className="mt-[9px] flex items-center gap-[8px]">
+                        <span className="text-[11.5px] font-semibold text-[var(--muted)]">Target grade</span>
+                        <div className="flex h-8 w-[80px] flex-none items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[9px]">
+                          <input
+                            value={targetGradeDraft}
+                            onChange={(e) => setTargetGradeDraft(e.target.value.replace(/[^0-9]/g, ""))}
+                            placeholder="—"
+                            inputMode="numeric"
+                            className="w-full border-none bg-transparent font-mono text-[12.5px] font-bold text-[var(--text)] outline-none"
+                          />
+                          <span className="text-[11px] font-semibold text-[var(--subtle)]">%</span>
+                        </div>
+                        <button
+                          onClick={onSaveTargetGrade}
+                          disabled={savingTargetGrade}
+                          className="flex h-8 items-center justify-center gap-[6px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[10px] text-[11.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)] disabled:opacity-60"
+                        >
+                          {savingTargetGrade ? <Spinner size={12} /> : <Icon name="check" size={12} />}
+                          Save
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               <div>
                 <div className="mb-[7px] flex items-center justify-between text-[12.5px] font-semibold text-[var(--text)]">
                   Attendance

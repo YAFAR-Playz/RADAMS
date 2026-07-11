@@ -22,6 +22,7 @@ export type StudentRow = {
   enrolledAt: string;
   leftAt: string | null;
   avgGrade: number | null;
+  targetGrade: number | null;
   cells: ProgressCell[];
 };
 
@@ -35,7 +36,7 @@ export async function getStudentsForOffering(offeringId: string): Promise<Studen
   let query = supabase
     .from("enrollments")
     .select(
-      "id, student_id, assistant_id, created_at, students(id, name, initials, student_code, email, phone, guardian_name, guardian_phone, left_at), profiles(id, full_name, student_whatsapp_link)"
+      "id, student_id, assistant_id, created_at, target_grade, students(id, name, initials, student_code, email, phone, guardian_name, guardian_phone, left_at), profiles(id, full_name, student_whatsapp_link)"
     )
     .eq("offering_id", offeringId);
 
@@ -105,6 +106,7 @@ export async function getStudentsForOffering(offeringId: string): Promise<Studen
         enrolledAt: e.created_at,
         leftAt: student.left_at,
         avgGrade,
+        targetGrade: e.target_grade != null ? Number(e.target_grade) : null,
         cells,
       };
     })
