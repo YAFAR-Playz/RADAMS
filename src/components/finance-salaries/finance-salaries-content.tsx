@@ -199,7 +199,14 @@ export function FinanceSalariesContent() {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [openEval, setOpenEval] = useState<Record<string, boolean>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [newPeriod, setNewPeriod] = useState(() => new Date().toISOString().slice(0, 7));
+  // Payroll runs in arrears — generating on Aug 1 releases July's pay — so
+  // the picker defaults to last month, not the one still in progress. Still
+  // fully editable if Finance genuinely wants a different month.
+  const [newPeriod, setNewPeriod] = useState(() => {
+    const d = new Date();
+    const prev = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+    return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`;
+  });
   const [generating, setGenerating] = useState(false);
   const [receiptTarget, setReceiptTarget] = useState<AssistantSalary | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
