@@ -9,13 +9,19 @@ import { getPayrollSettings } from "@/lib/actions/payroll-settings";
 import { listMyAssistants, getOrCreateEvaluation, saveEvaluation, countCheckedPapers, type EvalLine, type EvalRating } from "@/lib/actions/evaluations";
 import { listPayCategories, type PayCategory } from "@/lib/actions/pay-categories";
 import { resolveCategoryDefs, categoryAmount, type CategoryDef } from "@/lib/evaluation-categories";
+import { toneColors } from "@/lib/tone";
+import type { Tone } from "@/lib/roles";
 
 const CURRENCY_SYMBOL: Record<string, string> = { GBP: "£", USD: "$", EUR: "€", EGP: "E£", AED: "د.إ" };
-const RATINGS: { value: EvalRating; label: string }[] = [
-  { value: "outstanding", label: "Outstanding" },
-  { value: "exceeds", label: "Exceeds" },
-  { value: "meets", label: "Meets" },
-  { value: "below", label: "Below" },
+// Same Green/Yellow/Red language as the student Traffic Light tracker —
+// Outstanding/Exceeds read as on-track, Meets as a caution flag, Below as
+// critical, so a head evaluating an assistant sees the same visual system
+// they use when checking on their own students.
+const RATINGS: { value: EvalRating; label: string; tone: Tone }[] = [
+  { value: "outstanding", label: "Outstanding", tone: "ok" },
+  { value: "exceeds", label: "Exceeds", tone: "ok" },
+  { value: "meets", label: "Meets", tone: "warn" },
+  { value: "below", label: "Below", tone: "danger" },
 ];
 
 // Payroll runs in arrears — releasing pay on, say, Aug 1 pays out July's
@@ -450,17 +456,15 @@ export function EvaluationsContent() {
                   <div className="flex flex-wrap gap-2">
                     {RATINGS.map((r) => {
                       const active = rating === r.value;
+                      const { bg, fg } = toneColors(r.tone);
                       return (
                         <button
                           key={r.value}
                           onClick={() => setRating(r.value)}
-                          className="flex items-center gap-[6px] rounded-full border px-[13px] py-2 text-[12.5px] font-semibold"
-                          style={
-                            active
-                              ? { borderColor: "var(--brand)", background: "var(--brand)", color: "var(--brandfg)" }
-                              : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
-                          }
+                          className="flex items-center gap-[7px] rounded-full border px-[13px] py-2 text-[12.5px] font-semibold"
+                          style={active ? { borderColor: fg, background: bg, color: fg } : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }}
                         >
+                          <span className="block h-[8px] w-[8px] flex-none rounded-full" style={{ background: active ? fg : "var(--border)" }} />
                           {r.label}
                         </button>
                       );
