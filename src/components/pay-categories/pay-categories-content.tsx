@@ -17,8 +17,8 @@ import {
   addBracketSlot,
   saveBracketSlot,
   deleteBracketSlot,
-  listOtherRates,
-  updateOtherRate,
+  getOfficeHourOrgDefault,
+  setOfficeHourOrgDefault,
   listOfficeHourRatesByOffering,
   setOfficeHourRateForOffering,
   clearOfficeHourRateOverride,
@@ -31,7 +31,7 @@ import {
   type CategoryMode,
   type CourseRate,
   type BracketSlot,
-  type OtherRate,
+  type OfficeHourOrgDefault,
   type OfficeHourCourseRate,
   type CategoryOfferingRate,
   type AssistantOfficeHoursDefault,
@@ -217,7 +217,7 @@ export function PayCategoriesContent() {
   const [courseRates, setCourseRates] = useState<CourseRate[] | null>(null);
   const [bracketSlots, setBracketSlots] = useState<BracketSlot[] | null>(null);
   const [bracketsLoading, setBracketsLoading] = useState(false);
-  const [otherRates, setOtherRates] = useState<OtherRate[] | null>(null);
+  const [officeHourOrgDefault, setOfficeHourOrgDefaultState] = useState<OfficeHourOrgDefault | null>(null);
   const [officeHourRates, setOfficeHourRates] = useState<OfficeHourCourseRate[] | null>(null);
   const [categoryRates, setCategoryRates] = useState<CategoryOfferingRate[] | null>(null);
   const [officeHoursDefaults, setOfficeHoursDefaults] = useState<Record<string, AssistantOfficeHoursDefault[]>>({});
@@ -235,7 +235,7 @@ export function PayCategoriesContent() {
   const [optionDrafts, setOptionDrafts] = useState<Record<string, OptionDraft>>({});
   const [courseRateDrafts, setCourseRateDrafts] = useState<Record<string, string>>({});
   const [bracketDrafts, setBracketDrafts] = useState<Record<string, BracketDraft>>({});
-  const [otherRateDrafts, setOtherRateDrafts] = useState<Record<string, string>>({});
+  const [officeHourOrgDefaultDraft, setOfficeHourOrgDefaultDraft] = useState<string | null>(null);
   const [officeHourRateDrafts, setOfficeHourRateDrafts] = useState<Record<string, string>>({});
   // Category rate/option keys are `${categoryId}::${offeringId}` and
   // `${categoryId}::${offeringId}::${optionLabel}` respectively.
@@ -245,16 +245,16 @@ export function PayCategoriesContent() {
   const [officeHoursDefaultDrafts, setOfficeHoursDefaultDrafts] = useState<Record<string, string>>({});
 
   async function refetchLists() {
-    const [cats, rates, others, officeHours, settings] = await Promise.all([
+    const [cats, rates, orgDefault, officeHours, settings] = await Promise.all([
       listPayCategories(),
       listCourseRates(),
-      listOtherRates(),
+      getOfficeHourOrgDefault(),
       listOfficeHourRatesByOffering(),
       getPayrollSettings(),
     ]);
     setCategories(cats);
     setCourseRates(rates);
-    setOtherRates(others);
+    setOfficeHourOrgDefaultState(orgDefault);
     setOfficeHourRates(officeHours);
     if (settings) setCurrency(settings.currency);
   }
@@ -295,7 +295,7 @@ export function PayCategoriesContent() {
       setOptionDrafts({});
       setCourseRateDrafts({});
       setBracketDrafts({});
-      setOtherRateDrafts({});
+      setOfficeHourOrgDefaultDraft(null);
       setOfficeHourRateDrafts({});
       setCategoryRateDrafts({});
       setCategoryOptionDrafts({});
@@ -330,7 +330,8 @@ export function PayCategoriesContent() {
     Object.keys(optionDrafts).length > 0 ||
     Object.keys(courseRateDrafts).length > 0 ||
     Object.keys(bracketDrafts).length > 0 ||
-    Object.keys(otherRateDrafts).length > 0 ||
+    officeHourOrgDefaultDraft !== null ||
+    Object.keys(officeHourRateDrafts).length > 0 ||
     Object.keys(categoryRateDrafts).length > 0 ||
     Object.keys(categoryOptionDrafts).length > 0 ||
     Object.keys(officeHoursDefaultDrafts).length > 0;
@@ -420,11 +421,11 @@ export function PayCategoriesContent() {
   function draftBracket(name: string, patch: Partial<BracketDraft>) {
     setBracketDrafts((prev) => ({ ...prev, [name]: { ...prev[name], ...patch } }));
   }
-  function draftOtherRate(id: string, value: string) {
-    setOtherRateDrafts((prev) => ({ ...prev, [id]: value }));
-  }
   function draftOfficeHourRate(offeringId: string, value: string) {
     setOfficeHourRateDrafts((prev) => ({ ...prev, [offeringId]: value }));
+  }
+  function draftOfficeHourOrgDefault(value: string) {
+    setOfficeHourOrgDefaultDraft(value);
   }
 
   async function onClearOfficeHourOverride(offeringId: string) {
@@ -493,7 +494,9 @@ export function PayCategoriesContent() {
           if (d.pay !== undefined) patch.pay = Number(d.pay) || 0;
           return saveBracketSlot(courseScope, name, patch);
         }),
-        ...Object.entries(otherRateDrafts).map(([id, v]) => updateOtherRate(id, Number(v) || 0)),
+        ...(officeHourOrgDefaultDraft !== null && officeHourOrgDefault
+          ? [setOfficeHourOrgDefault(officeHourOrgDefault.id, Number(officeHourOrgDefaultDraft) || 0)]
+          : []),
         ...Object.entries(officeHourRateDrafts).map(([offeringId, v]) => setOfficeHourRateForOffering(offeringId, Number(v) || 0)),
         ...Object.entries(categoryRateDrafts).map(([key, v]) => {
           const [categoryId, offeringId] = key.split("::");
@@ -702,10 +705,25 @@ export function PayCategoriesContent() {
           </section>
 
           {/* OFFICE HOUR RATE BY COURSE — each course's own rate if Finance
-              has set one, else the org-wide default from Other rates. */}
+              has set one, else the org-wide default edited right here. */}
           <section className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
-            <header className="border-b border-[var(--border2)] p-[14px_16px]">
+            <header className="flex flex-wrap items-center justify-between gap-[10px] border-b border-[var(--border2)] p-[14px_16px]">
               <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Office hour rate by course</h3>
+              {officeHourOrgDefault && (
+                <div className="flex items-center gap-[8px]">
+                  <span className="text-[11.5px] font-semibold text-[var(--muted)]">Org-wide default</span>
+                  <div className="flex h-[30px] w-[80px] flex-none items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[9px]">
+                    <span className="text-[12px] font-semibold text-[var(--subtle)]">{sym}</span>
+                    <input
+                      value={officeHourOrgDefaultDraft ?? String(officeHourOrgDefault.rate)}
+                      onChange={(e) => draftOfficeHourOrgDefault(e.target.value.replace(/[^0-9]/g, ""))}
+                      inputMode="numeric"
+                      className="w-full border-none bg-transparent font-mono text-[12.5px] font-bold text-[var(--text)] outline-none"
+                    />
+                  </div>
+                  <span className="text-[11px] text-[var(--subtle)]">per hour</span>
+                </div>
+              )}
             </header>
             {courseScope.length === 0 ? (
               <div className="p-[30px] text-center text-[13px] text-[var(--muted)]">Select one or more courses above to set their office-hour rate.</div>
@@ -945,30 +963,6 @@ export function PayCategoriesContent() {
                 {(bracketSlots ?? []).length === 0 && <div className="p-3 text-center text-[12.5px] text-[var(--subtle)]">No brackets yet for these courses.</div>}
               </div>
             )}
-          </section>
-
-          {/* OTHER RATES */}
-          <section className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
-            <header className="border-b border-[var(--border2)] p-[14px_16px]">
-              <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Other rates</h3>
-            </header>
-            <div className="grid grid-cols-1 gap-[10px] p-[10px] sm:grid-cols-2">
-              {(otherRates ?? []).map((o) => (
-                <div key={o.id} className="flex items-center gap-[10px] rounded-[9px] border border-[var(--border2)] p-[10px_12px]">
-                  <span className="flex-1 text-[13px] font-semibold text-[var(--text)]">{o.label}</span>
-                  <span className="text-[11.5px] text-[var(--subtle)]">{o.unit}</span>
-                  <div className="flex h-[34px] w-[88px] flex-none items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[9px]">
-                    <span className="text-[12.5px] font-semibold text-[var(--subtle)]">{sym}</span>
-                    <input
-                      value={otherRateDrafts[o.id] ?? String(o.rate)}
-                      onChange={(e) => draftOtherRate(o.id, e.target.value.replace(/[^0-9]/g, ""))}
-                      inputMode="numeric"
-                      className="w-full border-none bg-transparent font-mono text-[13px] font-bold text-[var(--ok)] outline-none"
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
           </section>
         </>
       )}
