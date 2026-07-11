@@ -248,15 +248,6 @@ function fieldChange(label: string, before: string | null, after: string): strin
   return `${label} "${b}" → "${a}"`;
 }
 
-function fieldChange(label: string, before: string | null, after: string): string | null {
-  const b = before ?? "";
-  const a = after || "";
-  if (b === a) return null;
-  if (!b) return `${label} set to "${a}"`;
-  if (!a) return `${label} cleared`;
-  return `${label} "${b}" → "${a}"`;
-}
-
 export async function updateStudent(
   studentId: string,
   patch: {

@@ -9,7 +9,6 @@ export type PayCategory = { id: string; kind: "extra" | "deduction"; label: stri
 export type CourseRate = { offeringId: string; label: string; rate: number };
 export type Bracket = { id: string; name: string; lo: number; hi: number; pay: number };
 export type BracketSlot = { name: string; lo: number | null; hi: number | null; pay: number | null };
-export type OtherRate = { id: string; label: string; unit: string; rate: number };
 
 function offeringLabel(o: { session: string; unit: string | null; courses: { name: string } | { name: string }[] | null }) {
   const course = Array.isArray(o.courses) ? o.courses[0] : o.courses;
@@ -243,34 +242,36 @@ export async function deleteBracketSlot(offeringIds: string[], name: string) {
   if (error) throw new Error(error.message);
 }
 
-export async function listOtherRates(): Promise<OtherRate[]> {
+export type OfficeHourOrgDefault = { id: string; rate: number };
+
+// The org-wide fallback office-hour rate — what a course uses when Finance
+// hasn't set a per-course override for it (see listOfficeHourRatesByOffering
+// below). This is the only place that rate is editable.
+export async function getOfficeHourOrgDefault(): Promise<OfficeHourOrgDefault> {
   const profile = await getCurrentProfile();
   const orgId = profile?.org?.id;
-  if (!orgId) return [];
+  if (!orgId) return { id: "", rate: 15 };
   const supabase = await createClient();
-  // Org-wide reference rows only — per-course office-hour overrides
-  // (offering_id set) live in listOfficeHourRatesByOffering instead.
+
   const { data } = await supabase
     .from("other_rates")
-    .select("id, label, unit, rate")
+    .select("id, rate")
     .eq("org_id", orgId)
+    .eq("label", "Office hour")
     .is("offering_id", null)
-    .order("sort_order", { ascending: true });
-  if (data && data.length) return data.map((r) => ({ id: r.id, label: r.label, unit: r.unit, rate: Number(r.rate) }));
+    .maybeSingle();
+  if (data) return { id: data.id, rate: Number(data.rate) };
 
-  // Seed sensible defaults the first time Finance opens this org's rates.
-  const defaults = [
-    { label: "Office hour", unit: "per hour", rate: 15 },
-    { label: "Per paper (default)", unit: "per paper", rate: 8 },
-  ];
+  // Seed the default the first time Finance opens this org's rates.
   const { data: inserted } = await supabase
     .from("other_rates")
-    .insert(defaults.map((d) => ({ org_id: orgId, ...d })))
-    .select("id, label, unit, rate");
-  return (inserted ?? []).map((r) => ({ id: r.id, label: r.label, unit: r.unit, rate: Number(r.rate) }));
+    .insert({ org_id: orgId, label: "Office hour", unit: "per hour", rate: 15 })
+    .select("id, rate")
+    .single();
+  return inserted ? { id: inserted.id, rate: Number(inserted.rate) } : { id: "", rate: 15 };
 }
 
-export async function updateOtherRate(id: string, rate: number) {
+export async function setOfficeHourOrgDefault(id: string, rate: number) {
   const supabase = await createClient();
   const { error } = await supabase.from("other_rates").update({ rate }).eq("id", id);
   if (error) throw new Error(error.message);
