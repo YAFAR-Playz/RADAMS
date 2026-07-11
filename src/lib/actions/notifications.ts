@@ -85,9 +85,13 @@ function offeringLabel(o: { session: string; unit: string | null; courses: { nam
   return [course?.name, o.session, o.unit].filter(Boolean).join(" · ");
 }
 
+// Payroll runs in arrears — releasing pay on, say, Aug 1 pays out July's
+// work, so "this payroll period" always means last calendar month, not the
+// one still in progress.
 function currentPeriod() {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const prev = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+  return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`;
 }
 
 async function getAssistantNotifications(orgId: string, assistantId: string): Promise<NotificationItem[]> {
