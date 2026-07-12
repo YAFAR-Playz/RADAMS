@@ -9,9 +9,16 @@ import {
   updateAssignmentTemplate,
   deleteAssignmentTemplate,
   type AssignmentTemplate,
+  type ReportGroup,
 } from "@/lib/actions/assignment-templates";
 
-type Draft = { label: string; hasGrade: boolean; hasComment: boolean };
+type Draft = { label: string; hasGrade: boolean; hasComment: boolean; reportGroup: ReportGroup };
+
+const REPORT_GROUP_OPTS: { value: ReportGroup; label: string; desc: string }[] = [
+  { value: "homework", label: "Homeworks", desc: "Simple title + status list on the monthly report" },
+  { value: "quiz", label: "Quizzes", desc: "Its own Status/Grade/Mark table per entry on the monthly report" },
+  { value: "other", label: "Other", desc: "One combined table with grade + comment, same as before" },
+];
 
 function describe(t: { hasGrade: boolean; hasComment: boolean }) {
   if (t.hasGrade && t.hasComment) return "Status, grade, and a comment";
@@ -24,7 +31,7 @@ export function AssignmentTypesPanel() {
   const [templates, setTemplates] = useState<AssignmentTemplate[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | "new" | null>(null);
-  const [draft, setDraft] = useState<Draft>({ label: "", hasGrade: true, hasComment: true });
+  const [draft, setDraft] = useState<Draft>({ label: "", hasGrade: true, hasComment: true, reportGroup: "homework" });
   const [saving, setSaving] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -38,12 +45,12 @@ export function AssignmentTypesPanel() {
   }, []);
 
   function openNew() {
-    setDraft({ label: "", hasGrade: true, hasComment: true });
+    setDraft({ label: "", hasGrade: true, hasComment: true, reportGroup: "homework" });
     setEditingId("new");
   }
 
   function openEdit(t: AssignmentTemplate) {
-    setDraft({ label: t.label, hasGrade: t.hasGrade, hasComment: t.hasComment });
+    setDraft({ label: t.label, hasGrade: t.hasGrade, hasComment: t.hasComment, reportGroup: t.reportGroup });
     setEditingId(t.id);
   }
 
@@ -138,6 +145,7 @@ export function AssignmentTypesPanel() {
                     >
                       {t.hasComment ? "Comment" : "No comment"}
                     </span>
+                    <span className="rounded-full bg-[var(--surface2)] px-[8px] py-[2px] font-semibold capitalize text-[var(--muted)]">{t.reportGroup}</span>
                     <span className="text-[var(--subtle)]">{describe(t)}</span>
                   </div>
                 </div>
@@ -241,6 +249,34 @@ export function AssignmentTypesPanel() {
               <p className="m-0 text-[11.5px] leading-[1.5] text-[var(--subtle)]">
                 Status (logged / not logged) always applies — these two toggles control what else shows up next to it.
               </p>
+              <div>
+                <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Monthly report section</label>
+                <div className="flex flex-col gap-[7px]">
+                  {REPORT_GROUP_OPTS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setDraft((d) => ({ ...d, reportGroup: opt.value }))}
+                      className="flex items-start gap-[9px] rounded-[var(--rad-sm)] border p-[10px_12px] text-left"
+                      style={
+                        draft.reportGroup === opt.value
+                          ? { borderColor: "var(--brand)", background: "var(--brands)" }
+                          : { borderColor: "var(--border)", background: "var(--surface2)" }
+                      }
+                    >
+                      <div
+                        className="mt-[2px] flex h-[15px] w-[15px] flex-none items-center justify-center rounded-full border-[1.5px]"
+                        style={{ borderColor: draft.reportGroup === opt.value ? "var(--brand)" : "var(--border)" }}
+                      >
+                        {draft.reportGroup === opt.value && <span className="h-[7px] w-[7px] rounded-full" style={{ background: "var(--brand)" }} />}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[12.5px] font-semibold text-[var(--text)]">{opt.label}</div>
+                        <div className="text-[11px] leading-[1.4] text-[var(--subtle)]">{opt.desc}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
             <div className="flex gap-[10px] border-t border-[var(--border2)] p-[14px_18px]">
               <button

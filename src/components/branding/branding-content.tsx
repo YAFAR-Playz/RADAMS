@@ -5,6 +5,17 @@ import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { getBranding, saveBranding, uploadOrgLogo, removeOrgLogo, type BrandingDraft } from "@/lib/actions/branding";
 import { PRIMARIES, SECONDARIES, FONTS, CORNERS, mixHex } from "@/lib/branding-options";
+import { getReportSettings, setReportSettings, type ReportSettings } from "@/lib/actions/report-settings";
+
+const REPORT_TOGGLE_DEFS: { key: keyof ReportSettings; label: string; desc: string }[] = [
+  {
+    key: "groupByType",
+    label: "Group by assignment type",
+    desc: "Homeworks get a simple title + status list; each Quiz gets its own Status/Grade/Mark table — matches assignment types set in Assignment logging types.",
+  },
+  { key: "showWeakTopics", label: "Show weak topics", desc: "Include the approved weak-topics section for each student." },
+  { key: "showComment", label: "Show performance summary", desc: "Include the assistant's monthly comment alongside the average grade." },
+];
 
 export function BrandingContent() {
   const [saved, setSaved] = useState<BrandingDraft | null>(null);
@@ -13,6 +24,9 @@ export function BrandingContent() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
+
+  const [reportSettings, setReportSettingsState] = useState<ReportSettings | null>(null);
+  const [savingReport, setSavingReport] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -27,7 +41,23 @@ export function BrandingContent() {
         setLoading(false);
       }
     })();
+    getReportSettings().then(setReportSettingsState);
   }, []);
+
+  async function onToggleReportSetting(key: keyof ReportSettings) {
+    if (!reportSettings) return;
+    const next = { ...reportSettings, [key]: !reportSettings[key] };
+    setReportSettingsState(next);
+    setSavingReport(true);
+    try {
+      await setReportSettings(next);
+    } catch {
+      setError("Couldn't save report settings — try again.");
+      setReportSettingsState(reportSettings);
+    } finally {
+      setSavingReport(false);
+    }
+  }
 
   async function onSave() {
     if (!draft) return;
@@ -354,6 +384,44 @@ export function BrandingContent() {
           </p>
         </aside>
       </div>
+
+      <section className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
+        <h3 className="m-0 mb-1 text-[14px] font-semibold text-[var(--text)]">Monthly report look</h3>
+        <p className="m-0 mb-[13px] max-w-[560px] text-[12px] leading-[1.5] text-[var(--subtle)]">
+          Controls what a generated monthly report includes — the logo above appears on every report automatically.
+        </p>
+        {reportSettings === null ? (
+          <SkeletonRow className="h-[170px]" />
+        ) : (
+          <div className="flex flex-col gap-[9px]">
+            {REPORT_TOGGLE_DEFS.map((t) => {
+              const on = reportSettings[t.key];
+              return (
+                <div key={t.key} className="flex items-center gap-3 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[12px_13px]">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] font-semibold text-[var(--text)]">{t.label}</div>
+                    <div className="text-[11.5px] leading-[1.4] text-[var(--muted)]">{t.desc}</div>
+                  </div>
+                  {savingReport && <Spinner size={13} className="flex-none text-[var(--subtle)]" />}
+                  <button
+                    onClick={() => onToggleReportSetting(t.key)}
+                    disabled={savingReport}
+                    role="switch"
+                    aria-checked={on}
+                    className="relative h-6 w-[42px] flex-none rounded-full transition-colors disabled:opacity-60"
+                    style={{ background: on ? "var(--brand)" : "var(--border)" }}
+                  >
+                    <span
+                      className="absolute top-[2px] h-5 w-5 rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,.2)] transition-[left]"
+                      style={{ left: on ? "20px" : "2px" }}
+                    />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       {/* ACTION BAR */}
       <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[13px_18px] shadow-[var(--shadow)]">
