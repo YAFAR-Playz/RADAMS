@@ -102,6 +102,7 @@ export function StudentsContent({ role }: { role: Role }) {
   const [trafficLight, setTrafficLight] = useState<Record<string, StudentTrafficLight>>({});
   const [targetGradeDraft, setTargetGradeDraft] = useState("");
   const [savingTargetGrade, setSavingTargetGrade] = useState(false);
+  const [tierTemplates, setTierTemplates] = useState<Record<string, string>>({});
 
   useEffect(() => {
     (() => {
@@ -116,6 +117,19 @@ export function StudentsContent({ role }: { role: Role }) {
       setWelcomeTemplateStudent(tplS);
       setWelcomeTemplateParent(tplP);
       setOrgName(org);
+    });
+    Promise.all([
+      getEffectiveTemplate("critical_alert_student"),
+      getEffectiveTemplate("critical_alert_parent"),
+      getEffectiveTemplate("caution_flag_student"),
+      getEffectiveTemplate("caution_flag_parent"),
+    ]).then(([redStudent, redParent, yellowStudent, yellowParent]) => {
+      setTierTemplates({
+        critical_alert_student: redStudent,
+        critical_alert_parent: redParent,
+        caution_flag_student: yellowStudent,
+        caution_flag_parent: yellowParent,
+      });
     });
     getPayrollSettings().then((settings) => setSym(currencySymbol(settings?.currency)));
   }, []);
@@ -1186,6 +1200,43 @@ export function StudentsContent({ role }: { role: Role }) {
                           ))}
                         </div>
                       )}
+                      {(tier === "yellow" || tier === "red") &&
+                        (() => {
+                          const category = tier === "red" ? "critical_alert" : "caution_flag";
+                          const vars = {
+                            student: viewMoreStudent.name,
+                            org: orgName,
+                            course: current?.label ?? "this course",
+                            month: new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+                          };
+                          const recipients: { key: "student" | "parent"; label: string; phone: string | null }[] = [
+                            { key: "student", label: "Message student", phone: viewMoreStudent.phone },
+                            { key: "parent", label: "Message parent", phone: viewMoreStudent.guardianPhone },
+                          ];
+                          return (
+                            <div className="mt-[4px] flex flex-wrap gap-[8px] border-t border-dashed pt-[8px]" style={{ borderColor: fg }}>
+                              {recipients.map((r) => {
+                                const template = tierTemplates[`${category}_${r.key}`] ?? "";
+                                const message = applyTemplateVars(template, vars);
+                                const digits = (r.phone ?? "").replace(/[^\d]/g, "");
+                                return (
+                                  <a
+                                    key={r.key}
+                                    href={digits ? `https://wa.me/${digits}?text=${encodeURIComponent(message)}` : undefined}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    aria-disabled={!digits}
+                                    title={digits ? undefined : "No phone number on file"}
+                                    className="flex h-8 items-center gap-[6px] rounded-[7px] border border-[#25D366] bg-[var(--surface)] px-[10px] text-[11.5px] font-semibold text-[#1ea952] hover:bg-[rgba(37,211,102,0.1)] aria-disabled:pointer-events-none aria-disabled:opacity-50"
+                                  >
+                                    <Icon name="send" size={12} />
+                                    {r.label}
+                                  </a>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
                     </div>
                     {!isRegistration && (
                       <div className="mt-[9px] flex items-center gap-[8px]">

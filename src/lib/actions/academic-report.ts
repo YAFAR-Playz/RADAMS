@@ -90,7 +90,14 @@ export async function setStudentMonthlyComment(studentId: string, offeringId: st
   if (error) throw new Error(error.message);
 }
 
-export type ReportAssignmentDetail = { title: string; status: string | null; grade: string | null; comment: string | null };
+export type ReportAssignmentDetail = {
+  title: string;
+  status: string | null;
+  grade: string | null;
+  comment: string | null;
+  maxMarks: number | null;
+  reportGroup: "homework" | "quiz" | "other";
+};
 export type ReportWeakTopicMaterial = { kind: "video" | "drive"; label: string | null; link: string; duration: string | null };
 export type ReportWeakTopic = { label: string; materials: ReportWeakTopicMaterial[] };
 
@@ -110,6 +117,17 @@ export async function getAcademicMonthlyReport(offeringId: string, period: strin
 
   const includedAssignments = (await getReportAssignments(offeringId, period)).filter((a) => a.includeInReport);
   const assignmentIds = includedAssignments.map((a) => a.id);
+
+  const { data: assignmentMeta } = assignmentIds.length
+    ? await supabase.from("assignments").select("id, max_marks, assignment_templates(report_group)").in("id", assignmentIds)
+    : { data: [] as { id: string; max_marks: number | null; assignment_templates: { report_group: string } | { report_group: string }[] | null }[] };
+  const maxMarksByAssignment = new Map((assignmentMeta ?? []).map((a) => [a.id, a.max_marks]));
+  const reportGroupByAssignment = new Map(
+    (assignmentMeta ?? []).map((a) => {
+      const tpl = Array.isArray(a.assignment_templates) ? a.assignment_templates[0] : a.assignment_templates;
+      return [a.id, (tpl?.report_group as "homework" | "quiz" | "other") ?? "homework"];
+    })
+  );
 
   const { data: enrollments } = await supabase
     .from("enrollments")
@@ -146,7 +164,14 @@ export async function getAcademicMonthlyReport(offeringId: string, period: strin
 
       const assignments: ReportAssignmentDetail[] = includedAssignments.map((a) => {
         const log = (logs ?? []).find((l) => l.assignment_id === a.id && l.student_id === e.student_id);
-        return { title: a.title, status: log?.status ?? null, grade: log?.grade ?? null, comment: log?.comment ?? null };
+        return {
+          title: a.title,
+          status: log?.status ?? null,
+          grade: log?.grade ?? null,
+          comment: log?.comment ?? null,
+          maxMarks: maxMarksByAssignment.get(a.id) ?? null,
+          reportGroup: reportGroupByAssignment.get(a.id) ?? "homework",
+        };
       });
 
       const weakTopics: ReportWeakTopic[] = (topics ?? [])
@@ -195,6 +220,7 @@ export type GeneratedStudentReport = {
   studentId: string;
   studentName: string;
   studentCode: string;
+  assistantName: string | null;
   avgGrade: number | null;
   assignments: ReportAssignmentDetail[];
   weakTopics: ReportWeakTopic[];
@@ -240,9 +266,19 @@ export async function generateMonthlyAcademicReport(
   const modeByAssignment = new Map(selection.map((s) => [s.assignmentId, s.mode]));
 
   const { data: assignmentRows } = assignmentIds.length
-    ? await supabase.from("assignments").select("id, title").in("id", assignmentIds)
-    : { data: [] as { id: string; title: string }[] };
+    ? await supabase
+        .from("assignments")
+        .select("id, title, max_marks, assignment_templates(report_group)")
+        .in("id", assignmentIds)
+    : { data: [] as { id: string; title: string; max_marks: number | null; assignment_templates: { report_group: string } | { report_group: string }[] | null }[] };
   const titleByAssignment = new Map((assignmentRows ?? []).map((a) => [a.id, a.title]));
+  const maxMarksByAssignment = new Map((assignmentRows ?? []).map((a) => [a.id, a.max_marks]));
+  const reportGroupByAssignment = new Map(
+    (assignmentRows ?? []).map((a) => {
+      const tpl = Array.isArray(a.assignment_templates) ? a.assignment_templates[0] : a.assignment_templates;
+      return [a.id, (tpl?.report_group as "homework" | "quiz" | "other") ?? "homework"];
+    })
+  );
 
   const { data: logs } = assignmentIds.length
     ? await supabase
@@ -308,6 +344,8 @@ export async function generateMonthlyAcademicReport(
         status: log?.status ?? null,
         grade: mode === "grade" ? log?.grade ?? null : null,
         comment: log?.comment ?? null,
+        maxMarks: maxMarksByAssignment.get(s.assignmentId) ?? null,
+        reportGroup: reportGroupByAssignment.get(s.assignmentId) ?? "homework",
       };
     });
 
@@ -368,6 +406,20 @@ export async function getGeneratedReport(offeringId: string, period: string): Pr
 
   const creator = Array.isArray(gen.profiles) ? gen.profiles[0] : gen.profiles;
 
+  // Current assistant, not the one at generation time — enrollments.assistant_id
+  // can change (reassignment) after a report was generated, and showing who's
+  // actually on the course now is more useful than freezing a stale name.
+  const studentIds = (rows ?? []).map((r) => r.student_id);
+  const { data: enrollmentRows } = studentIds.length
+    ? await supabase.from("enrollments").select("student_id, profiles(full_name)").eq("offering_id", offeringId).in("student_id", studentIds)
+    : { data: [] as { student_id: string; profiles: { full_name: string } | { full_name: string }[] | null }[] };
+  const assistantNameByStudent = new Map(
+    (enrollmentRows ?? []).map((e) => {
+      const assistant = Array.isArray(e.profiles) ? e.profiles[0] : e.profiles;
+      return [e.student_id, assistant?.full_name ?? null];
+    })
+  );
+
   const students: GeneratedStudentReport[] = (rows ?? [])
     .map((r) => {
       const student = Array.isArray(r.students) ? r.students[0] : r.students;
@@ -376,6 +428,7 @@ export async function getGeneratedReport(offeringId: string, period: string): Pr
         studentId: r.student_id,
         studentName: student.name,
         studentCode: student.student_code,
+        assistantName: assistantNameByStudent.get(r.student_id) ?? null,
         avgGrade: r.avg_grade == null ? null : Number(r.avg_grade),
         assignments: (r.assignments as ReportAssignmentDetail[]) ?? [],
         weakTopics: (r.weak_topics as ReportWeakTopic[]) ?? [],
