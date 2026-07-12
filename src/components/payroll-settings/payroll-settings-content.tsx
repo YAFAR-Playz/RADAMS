@@ -13,7 +13,6 @@ import {
   type CalcMethod,
 } from "@/lib/actions/staff-payments";
 import { listAllOfferingsForOrg, type OfferingChoice } from "@/lib/actions/students";
-import { getTrafficLightBands, setTrafficLightBands, type GradeBand } from "@/lib/actions/traffic-light";
 
 const CALC_METHOD_OPTS: { value: CalcMethod; label: string }[] = [
   { value: "paper", label: "Per paper" },
@@ -78,9 +77,6 @@ export function PayrollSettingsContent() {
   const [coursePickMethod, setCoursePickMethod] = useState<CalcMethod>("paper");
   const [applyingToCourse, setApplyingToCourse] = useState(false);
 
-  const [bands, setBands] = useState<GradeBand[] | null>(null);
-  const [savingBands, setSavingBands] = useState(false);
-
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -103,33 +99,7 @@ export function PayrollSettingsContent() {
       setOfferings(data);
       if (data.length) setCoursePickId(data[0].id);
     });
-    getTrafficLightBands().then(setBands);
   }, []);
-
-  function addBand() {
-    setBands((prev) => [...(prev ?? []), { label: "", min: 0 }]);
-  }
-  function updateBand(i: number, patch: Partial<GradeBand>) {
-    setBands((prev) => (prev ? prev.map((b, idx) => (idx === i ? { ...b, ...patch } : b)) : prev));
-  }
-  function removeBand(i: number) {
-    setBands((prev) => (prev ? prev.filter((_, idx) => idx !== i) : prev));
-  }
-  async function onSaveBands() {
-    if (!bands) return;
-    setSavingBands(true);
-    setError(null);
-    try {
-      const sorted = [...bands].sort((a, b) => b.min - a.min);
-      await setTrafficLightBands(sorted);
-      setBands(sorted);
-      setNotice("Traffic light grade bands saved.");
-    } catch {
-      setError("Couldn't save these bands — try again.");
-    } finally {
-      setSavingBands(false);
-    }
-  }
 
   function onPickStaff(id: string) {
     setStaffPickId(id);
@@ -416,61 +386,6 @@ export function PayrollSettingsContent() {
                 </div>
               )}
             </div>
-          </section>
-
-          <section className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-            <h3 className="m-0 mb-1 text-[14px] font-semibold text-[var(--text)]">Traffic light grade bands</h3>
-            <p className="m-0 mb-[13px] text-[12px] text-[var(--subtle)]">
-              None of your courses use letter grades, so these org-wide percentage bands decide what counts as &quot;B&quot; and
-              &quot;C or below&quot; for each student&apos;s Green/Yellow/Red status on the Students tab. Highest band first.
-            </p>
-            {bands === null ? (
-              <SkeletonRow className="h-[140px]" />
-            ) : (
-              <div className="flex flex-col gap-[8px]">
-                {bands.map((b, i) => (
-                  <div key={i} className="flex items-center gap-[8px]">
-                    <input
-                      value={b.label}
-                      onChange={(e) => updateBand(i, { label: e.target.value })}
-                      placeholder="A"
-                      className="h-9 w-[70px] flex-none rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
-                    />
-                    <div className="flex h-9 flex-1 items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[10px]">
-                      <input
-                        type="number"
-                        value={b.min}
-                        onChange={(e) => updateBand(i, { min: Number(e.target.value) || 0 })}
-                        placeholder="85"
-                        className="h-full w-full border-none bg-transparent text-[12.5px] text-[var(--text)] outline-none"
-                      />
-                      <span className="text-[11.5px] font-semibold text-[var(--subtle)]">% min</span>
-                    </div>
-                    <button
-                      onClick={() => removeBand(i)}
-                      className="flex h-9 w-9 flex-none items-center justify-center rounded-[7px] border border-[var(--border)] bg-[var(--surface)] text-[var(--subtle)] hover:border-[var(--danger)] hover:text-[var(--danger)]"
-                    >
-                      <Icon name="x" size={13} />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  onClick={addBand}
-                  className="flex h-9 items-center justify-center gap-[6px] rounded-[8px] border border-dashed border-[var(--border)] text-[12.5px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)]"
-                >
-                  <Icon name="plus" size={13} />
-                  Add band
-                </button>
-                <button
-                  onClick={onSaveBands}
-                  disabled={savingBands}
-                  className="mt-[4px] flex h-9 items-center justify-center gap-[7px] rounded-[8px] bg-[var(--brand)] text-[12.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
-                >
-                  {savingBands && <Spinner size={13} />}
-                  Save bands
-                </button>
-              </div>
-            )}
           </section>
         </div>
 
