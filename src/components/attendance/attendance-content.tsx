@@ -692,11 +692,19 @@ export function AttendanceContent({ role }: { role: Role }) {
                 Cancel
               </button>
               <a
-                href={waUrl}
+                href={waMessage ? waUrl : undefined}
                 target="_blank"
                 rel="noopener"
-                onClick={() => setWaId(null)}
-                className="flex h-11 flex-[1.4] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[#25D366] text-[13.5px] font-semibold text-white"
+                aria-disabled={!waMessage}
+                title={waMessage ? undefined : "Message still loading…"}
+                onClick={(e) => {
+                  if (!waMessage) {
+                    e.preventDefault();
+                    return;
+                  }
+                  setWaId(null);
+                }}
+                className="flex h-11 flex-[1.4] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[#25D366] text-[13.5px] font-semibold text-white aria-disabled:pointer-events-none aria-disabled:opacity-60"
               >
                 <Icon name="send" size={16} />
                 Open WhatsApp
