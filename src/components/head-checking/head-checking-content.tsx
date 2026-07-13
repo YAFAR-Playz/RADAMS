@@ -85,6 +85,7 @@ export function HeadCheckingContent() {
   const [assignments, setAssignments] = useState<AssignmentOption[] | null>(null);
   const [assignmentId, setAssignmentId] = useState<string | null>(null);
   const [roster, setRoster] = useState<RosterStudent[] | null>(null);
+  const [rosterAssignmentId, setRosterAssignmentId] = useState<string | null>(null);
   const [rosterLoading, startRosterLoad] = useTransition();
   const [savingId, setSavingId] = useState<string | null>(null);
 
@@ -141,6 +142,7 @@ export function HeadCheckingContent() {
       try {
         const data = await getRoster(id);
         setRoster(data);
+        setRosterAssignmentId(id);
         setPage(0);
       } catch {
         setError("Couldn't load students for this assignment.");
@@ -152,6 +154,7 @@ export function HeadCheckingContent() {
     (() => {
       if (!assignmentId) {
         setRoster(null);
+        setRosterAssignmentId(null);
         return;
       }
       reloadRoster(assignmentId);
@@ -163,26 +166,34 @@ export function HeadCheckingContent() {
   const showComment = currentAssignment ? currentAssignment.hasComment : true;
   const currentOffering = offerings?.find((o) => o.id === offeringId) ?? null;
 
+  // roster can still hold the PREVIOUS assignment's rows while a switch is in
+  // flight (reloadRoster is async) — pairing that stale data with the new
+  // assignmentId is what let a comment/grade from assignment A "stick" onto
+  // assignment B's uncontrolled inputs. Only treat it as usable once it's
+  // confirmed to belong to the assignment currently selected.
+  const rosterReady = assignmentId !== null && rosterAssignmentId === assignmentId;
+  const effectiveRoster = rosterReady ? roster : null;
+
   const filtered = useMemo(() => {
-    if (!roster) return [];
-    return roster.filter((s) => {
+    if (!effectiveRoster) return [];
+    return effectiveRoster.filter((s) => {
       const matchesAssistant = search.trim() !== "" && (s.assistantName ?? "").toLowerCase().includes(search.trim().toLowerCase());
       if (!matchesStudentQuery(search, s.name, s.studentCode) && !matchesAssistant) return false;
       if (statusFilter && s.status !== statusFilter) return false;
       return true;
     });
-  }, [roster, search, statusFilter]);
+  }, [effectiveRoster, search, statusFilter]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
   const pageStart = safePage * PAGE_SIZE;
   const pageStudents = filtered.slice(pageStart, pageStart + PAGE_SIZE);
 
-  const total = roster?.length ?? 0;
-  const logged = roster?.filter((s) => s.status !== null).length ?? 0;
+  const total = effectiveRoster?.length ?? 0;
+  const logged = effectiveRoster?.filter((s) => s.status !== null).length ?? 0;
   const pct = total ? Math.round((logged / total) * 100) : 0;
 
-  const modalStudent = modalId != null ? roster?.find((s) => s.studentId === modalId) ?? null : null;
+  const modalStudent = modalId != null ? effectiveRoster?.find((s) => s.studentId === modalId) ?? null : null;
   const activeTemplate = recipient === "student" ? templateStudent : templateParent;
   const modalMessage =
     modalStudent && currentAssignment && activeTemplate
@@ -410,15 +421,15 @@ export function HeadCheckingContent() {
       </div>
 
       {/* ROSTER */}
-      {rosterLoading && !roster ? (
+      {!assignmentId ? (
+        <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-10 text-center text-[13.5px] text-[var(--muted)] shadow-[var(--shadow)]">
+          No assignment selected.
+        </div>
+      ) : !rosterReady ? (
         <div className="flex flex-col gap-3">
           {Array.from({ length: 5 }, (_, i) => (
             <SkeletonRow key={i} className="h-[58px]" />
           ))}
-        </div>
-      ) : !assignmentId ? (
-        <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-10 text-center text-[13.5px] text-[var(--muted)] shadow-[var(--shadow)]">
-          No assignment selected.
         </div>
       ) : (
         <>
@@ -646,14 +657,20 @@ export function HeadCheckingContent() {
                 Cancel
               </button>
               <a
-                href={modalWaUrl}
+                href={modalMessage ? modalWaUrl : undefined}
                 target="_blank"
                 rel="noopener"
-                onClick={() => {
+                aria-disabled={!modalMessage}
+                title={modalMessage ? undefined : "Message still loading…"}
+                onClick={(e) => {
+                  if (!modalMessage) {
+                    e.preventDefault();
+                    return;
+                  }
                   onConfirmSend();
                   setModalId(null);
                 }}
-                className="flex h-11 flex-[1.4] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[#25D366] text-[13.5px] font-semibold text-white"
+                className="flex h-11 flex-[1.4] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[#25D366] text-[13.5px] font-semibold text-white aria-disabled:pointer-events-none aria-disabled:opacity-60"
               >
                 <Icon name="send" size={16} />
                 Open WhatsApp

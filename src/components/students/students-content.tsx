@@ -906,11 +906,19 @@ export function StudentsContent({ role }: { role: Role }) {
                 Cancel
               </button>
               <a
-                href={welcomeWaUrl}
+                href={welcomeMessage ? welcomeWaUrl : undefined}
                 target="_blank"
                 rel="noopener"
-                onClick={() => setWelcomeId(null)}
-                className="flex h-11 flex-[1.4] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[#25D366] text-[13.5px] font-semibold text-white"
+                aria-disabled={!welcomeMessage}
+                title={welcomeMessage ? undefined : "Message still loading…"}
+                onClick={(e) => {
+                  if (!welcomeMessage) {
+                    e.preventDefault();
+                    return;
+                  }
+                  setWelcomeId(null);
+                }}
+                className="flex h-11 flex-[1.4] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[#25D366] text-[13.5px] font-semibold text-white aria-disabled:pointer-events-none aria-disabled:opacity-60"
               >
                 <Icon name="send" size={16} />
                 Open WhatsApp
@@ -1219,14 +1227,17 @@ export function StudentsContent({ role }: { role: Role }) {
                                 const template = tierTemplates[`${category}_${r.key}`] ?? "";
                                 const message = applyTemplateVars(template, vars);
                                 const digits = (r.phone ?? "").replace(/[^\d]/g, "");
+                                // Template text loads async after mount — sending before it
+                                // resolves would open WhatsApp with an empty message.
+                                const ready = digits && message;
                                 return (
                                   <a
                                     key={r.key}
-                                    href={digits ? `https://wa.me/${digits}?text=${encodeURIComponent(message)}` : undefined}
+                                    href={ready ? `https://wa.me/${digits}?text=${encodeURIComponent(message)}` : undefined}
                                     target="_blank"
                                     rel="noreferrer"
-                                    aria-disabled={!digits}
-                                    title={digits ? undefined : "No phone number on file"}
+                                    aria-disabled={!ready}
+                                    title={!digits ? "No phone number on file" : !message ? "Message still loading…" : undefined}
                                     className="flex h-8 items-center gap-[6px] rounded-[7px] border border-[#25D366] bg-[var(--surface)] px-[10px] text-[11.5px] font-semibold text-[#1ea952] hover:bg-[rgba(37,211,102,0.1)] aria-disabled:pointer-events-none aria-disabled:opacity-50"
                                   >
                                     <Icon name="send" size={12} />
