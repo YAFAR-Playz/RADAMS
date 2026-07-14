@@ -104,7 +104,28 @@ export async function createStaffMember(input: { name: string; email: string; ph
 
   if (existing) {
     if (existing.left_at) {
-      throw new Error("This email belongs to a former staff member who's left — reactivate them instead of creating a new account.");
+      // Returning staff member — reactivate rather than dead-ending with an
+      // error that pointed at a "reactivate" flow that doesn't exist.
+      // removeStaffMember bans the auth user for ~100 years to block login;
+      // that has to be lifted here too, or they'd still be locked out even
+      // once their profile looks active again.
+      const reactivateAdmin = createAdminClient();
+      const { error: unbanError } = await reactivateAdmin.auth.admin.updateUserById(existing.id, { ban_duration: "none" });
+      if (unbanError) throw new Error(unbanError.message);
+      const { error: reactivateError } = await reactivateAdmin
+        .from("profiles")
+        .update({ left_at: null, gave_notice: null, role: input.role })
+        .eq("id", existing.id);
+      if (reactivateError) throw new Error(reactivateError.message);
+      await reactivateAdmin.from("staffing_log").insert({
+        org_id: profile.org.id,
+        kind: "add",
+        target_name: input.name.trim(),
+        target_role: input.role,
+        hire_date: input.hireDate || new Date().toISOString().slice(0, 10),
+      });
+      await logActivity("staff", `Reactivated ${input.name.trim()} as ${input.role}`);
+      return { id: existing.id, merged: true };
     }
     if (existing.role !== input.role) {
       throw new Error(`This email already belongs to a ${existing.role} in your organization — can't also add them as ${input.role}.`);
@@ -313,28 +334,18 @@ export async function resolveStaffingRequest(id: string, status: "approved" | "d
       if (!request.candidate_name?.trim() || !request.candidate_email?.trim()) {
         throw new Error("This request is missing the candidate's name or email — can't add them yet.");
       }
-      // If an earlier approval attempt got partway through (e.g. created the
-      // account but failed on a later step) before this request was marked
-      // resolved, re-running it must reuse that account rather than trying
-      // to create a second one with the same email and crashing.
-      const { data: existingCandidate } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("org_id", profile.org.id)
-        .ilike("email", request.candidate_email.trim())
-        .maybeSingle();
-
-      newAssistantId = existingCandidate?.id;
-      if (!newAssistantId) {
-        const created = await createStaffMember({
-          name: request.candidate_name,
-          email: request.candidate_email,
-          phone: request.candidate_phone ?? "",
-          role: "assistant",
-          hireDate: request.proposed_date ?? undefined,
-        });
-        newAssistantId = created.id;
-      }
+      // createStaffMember already dedupes by email — reusing an existing
+      // profile (whether from a partial-retry after an earlier crash, or
+      // from re-adding someone who'd previously left) and reactivating a
+      // departed one, so it's safe to always go through it here.
+      const created = await createStaffMember({
+        name: request.candidate_name,
+        email: request.candidate_email,
+        phone: request.candidate_phone ?? "",
+        role: "assistant",
+        hireDate: request.proposed_date ?? undefined,
+      });
+      newAssistantId = created.id;
       if (request.offering_id) await assignStaffToCourses(newAssistantId, "assistant", [request.offering_id]);
     }
     if ((request.kind === "remove" || request.kind === "replace") && request.target_assistant_id) {
