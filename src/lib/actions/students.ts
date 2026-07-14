@@ -44,15 +44,15 @@ export async function getStudentsForOffering(offeringId: string): Promise<Studen
     query = query.eq("assistant_id", profile.id);
   }
 
-  const { data: enrollments, error } = await query;
+  // enrollments and assignments don't depend on each other — fetching them
+  // in parallel instead of one-after-another was needlessly doubling this
+  // function's round-trip latency.
+  const [{ data: enrollments, error }, { data: assignmentRows }] = await Promise.all([
+    query,
+    supabase.from("assignments").select("id, title, created_at").eq("offering_id", offeringId).order("created_at", { ascending: true }).limit(5),
+  ]);
   if (error || !enrollments) return [];
 
-  const { data: assignmentRows } = await supabase
-    .from("assignments")
-    .select("id, title, created_at")
-    .eq("offering_id", offeringId)
-    .order("created_at", { ascending: true })
-    .limit(5);
   const assignments = assignmentRows ?? [];
   const assignmentIds = assignments.map((a) => a.id);
 

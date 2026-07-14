@@ -39,17 +39,22 @@ export type StudentTrafficLight = TrafficLightResult & { studentId: string };
 // getStudentsForOffering (2 queries total, no per-student round trips).
 export async function getTrafficLightForOffering(offeringId: string): Promise<Record<string, StudentTrafficLight>> {
   const supabase = await createClient();
-  const bands = await getTrafficLightBands();
 
-  const { data: enrollments } = await supabase.from("enrollments").select("student_id, target_grade").eq("offering_id", offeringId);
+  // bands, enrollments and assignments are all independent of each other —
+  // fetching them one-after-another was tripling this function's round-trip
+  // latency for no reason.
+  const [bands, { data: enrollments }, { data: assignments }] = await Promise.all([
+    getTrafficLightBands(),
+    supabase.from("enrollments").select("student_id, target_grade").eq("offering_id", offeringId),
+    supabase
+      .from("assignments")
+      .select("id, max_marks, lettered, due_date, created_at")
+      .eq("offering_id", offeringId)
+      .order("due_date", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: true }),
+  ]);
   if (!enrollments || !enrollments.length) return {};
 
-  const { data: assignments } = await supabase
-    .from("assignments")
-    .select("id, max_marks, lettered, due_date, created_at")
-    .eq("offering_id", offeringId)
-    .order("due_date", { ascending: true, nullsFirst: false })
-    .order("created_at", { ascending: true });
   const totalAssignments = assignments?.length ?? 0;
   if (!totalAssignments) {
     return Object.fromEntries(
