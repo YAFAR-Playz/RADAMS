@@ -18,9 +18,11 @@ import {
 } from "@/lib/actions/courses";
 import { applyOfferingFeeChangeToPlans } from "@/lib/actions/payments";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
+import { getCourseExport } from "@/lib/actions/course-export";
 import { currencySymbol } from "@/lib/currency";
 import { consumeSearchHandoff } from "@/lib/search-handoff";
 import { pickerOnlyDateProps } from "@/lib/date-input";
+import { downloadXlsx } from "@/lib/xlsx-export";
 
 type ScheduleDraftRow = { seq: number; amount: string; dueDate: string };
 
@@ -92,6 +94,7 @@ export function CoursesContent() {
   const [originalFees, setOriginalFees] = useState<{ feeFull: string; feeInstallmentTotal: string; installmentCount: number } | null>(null);
   const [feeChangeConfirmOpen, setFeeChangeConfirmOpen] = useState(false);
   const [applyingFeeChange, setApplyingFeeChange] = useState(false);
+  const [exportingId, setExportingId] = useState<string | null>(null);
 
   // The number of rows shown always equals form.installmentCount — row count
   // can never desync from the selected count, only the amount/date per row
@@ -251,6 +254,20 @@ export function CoursesContent() {
       setError("Couldn't update this course — try again.");
     } finally {
       setTogglingId(null);
+    }
+  }
+
+  async function onExportCourse(c: CourseOffering) {
+    setExportingId(c.id);
+    try {
+      const data = await getCourseExport(c.id);
+      const headers = ["Assistant", "Student", "Student ID", ...data.assignmentTitles, "Overall comment", "Weak topics"];
+      const rows = data.rows.map((r) => [r.assistantName, r.studentName, r.studentCode, ...r.cells, r.comment, r.weakTopics]);
+      await downloadXlsx(data.courseLabel, headers, rows);
+    } catch {
+      setError("Couldn't export this course — try again.");
+    } finally {
+      setExportingId(null);
     }
   }
 
@@ -433,6 +450,14 @@ export function CoursesContent() {
                     >
                       <Icon name="users" size={14} />
                       Students
+                    </button>
+                    <button
+                      onClick={() => onExportCourse(c)}
+                      disabled={exportingId === c.id}
+                      title="Export this course's assignment grades and weak topics as Excel"
+                      className="flex h-9 w-9 flex-none items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)] disabled:opacity-60"
+                    >
+                      {exportingId === c.id ? <Spinner size={13} /> : <Icon name="file-up" size={15} />}
                     </button>
                     <button
                       onClick={() => openEdit(c)}
