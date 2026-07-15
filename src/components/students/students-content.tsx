@@ -1244,6 +1244,7 @@ export function StudentsContent({ role }: { role: Role }) {
                           const vars = {
                             student: viewMoreStudent.name,
                             grade: formatGrade(viewMoreStudent.avgGrade),
+                            target_grade: formatGrade(viewMoreStudent.targetGrade),
                             org: orgName,
                             course: current?.label ?? "this course",
                             month: new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" }),
