@@ -157,6 +157,45 @@ export async function listStudentTopicsForOffering(offeringId: string, period: s
     .sort((a, b) => a.studentName.localeCompare(b.studentName));
 }
 
+export type AssistantFillingProgress = { assistantId: string; assistantName: string; totalStudents: number; filled: number; pending: number };
+
+// "Filled" means the assistant has submitted at least one weak topic for that
+// student this period, regardless of whether a head has reviewed it yet —
+// this tracks whether the assistant did their monthly tagging, not whether
+// it's been approved. Approval status is a separate concern the Review
+// submissions tab already covers.
+export async function getAssistantFillingProgress(offeringId: string, period: string): Promise<AssistantFillingProgress[]> {
+  await requireHeadOrAdmin();
+  const supabase = await createClient();
+
+  const { data: enrollments } = await supabase
+    .from("enrollments")
+    .select("student_id, assistant_id, profiles(full_name)")
+    .eq("offering_id", offeringId);
+
+  const { data: submissions } = await supabase
+    .from("student_topic_submissions")
+    .select("student_id, assistant_id")
+    .eq("offering_id", offeringId)
+    .eq("period", period);
+
+  const filledStudentIds = new Set((submissions ?? []).map((s) => s.student_id));
+
+  const byAssistant = new Map<string, { assistantName: string; totalStudents: number; filled: number }>();
+  for (const e of enrollments ?? []) {
+    if (!e.assistant_id) continue;
+    const assistant = Array.isArray(e.profiles) ? e.profiles[0] : e.profiles;
+    const entry = byAssistant.get(e.assistant_id) ?? { assistantName: assistant?.full_name ?? "Unassigned", totalStudents: 0, filled: 0 };
+    entry.totalStudents += 1;
+    if (filledStudentIds.has(e.student_id)) entry.filled += 1;
+    byAssistant.set(e.assistant_id, entry);
+  }
+
+  return Array.from(byAssistant.entries())
+    .map(([assistantId, v]) => ({ assistantId, assistantName: v.assistantName, totalStudents: v.totalStudents, filled: v.filled, pending: v.totalStudents - v.filled }))
+    .sort((a, b) => a.assistantName.localeCompare(b.assistantName));
+}
+
 export async function submitStudentTopic(input: { studentId: string; offeringId: string; topicId: string; period: string }) {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org) throw new Error("Not authenticated");

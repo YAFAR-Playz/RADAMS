@@ -16,16 +16,52 @@ import {
   removeStudentTopicSubmission,
   listPendingTopicApprovals,
   reviewTopicSubmission,
+  getAssistantFillingProgress,
   type TopicOption,
   type MaterialInput,
   type AssistantStudentTopics,
   type StudentTopicSubmission,
+  type AssistantFillingProgress,
 } from "@/lib/actions/weak-topics";
 import { getMyStudentMonthlyComments, setStudentMonthlyComment } from "@/lib/actions/academic-report";
 import { pickerOnlyDateProps } from "@/lib/date-input";
 
 function currentPeriod() {
   return new Date().toISOString().slice(0, 7);
+}
+
+const PAGE_SIZE = 10;
+
+function PageNav({ page, setPage, pageCount, pageStart, total, label }: { page: number; setPage: (p: number) => void; pageCount: number; pageStart: number; total: number; label: string }) {
+  if (pageCount <= 1) return null;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-[10px] p-[12px_18px]">
+      <span className="text-[12px] text-[var(--subtle)]">
+        {pageStart + 1}–{Math.min(pageStart + PAGE_SIZE, total)} of {total} {label}
+      </span>
+      <div className="flex flex-wrap gap-[5px]">
+        {Array.from({ length: pageCount }, (_, i) => i)
+          .filter((i) => i >= page - 2 && i <= page + 2)
+          .map((i) => {
+            const active = i === page;
+            return (
+              <button
+                key={i}
+                onClick={() => setPage(i)}
+                className="h-7 min-w-7 rounded-[7px] border px-[7px] text-[12px] font-semibold"
+                style={
+                  active
+                    ? { borderColor: "var(--brand)", background: "var(--brand)", color: "var(--brandfg)" }
+                    : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
+                }
+              >
+                {i + 1}
+              </button>
+            );
+          })}
+      </div>
+    </div>
+  );
 }
 
 const STATUS_TONE: Record<string, string> = {
@@ -105,7 +141,7 @@ function MaterialsEditor({ materials, onChange }: { materials: MaterialInput[]; 
 }
 
 export function WeakTopicsContent({ role }: { role: Role }) {
-  const [tab, setTab] = useState<"submit" | "catalog" | "approvals">(role === "assistant" ? "submit" : "catalog");
+  const [tab, setTab] = useState<"submit" | "catalog" | "approvals" | "progress">(role === "assistant" ? "submit" : "catalog");
   const [offerings, setOfferings] = useState<OfferingOption[] | null>(null);
   const [offeringId, setOfferingId] = useState("");
   const [period, setPeriod] = useState(currentPeriod());
@@ -157,7 +193,7 @@ export function WeakTopicsContent({ role }: { role: Role }) {
 
         {role === "head" && (
           <div className="mt-4 flex gap-[6px] border-b border-[var(--border)]">
-            {(["catalog", "approvals"] as const).map((t) => (
+            {(["catalog", "approvals", "progress"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -165,7 +201,7 @@ export function WeakTopicsContent({ role }: { role: Role }) {
                   tab === t ? "border-[var(--brand)] text-[var(--text)]" : "border-transparent text-[var(--muted)]"
                 }`}
               >
-                {t === "catalog" ? "Topic catalog" : "Review submissions"}
+                {t === "catalog" ? "Topic catalog" : t === "approvals" ? "Review submissions" : "Assistant progress"}
               </button>
             ))}
           </div>
@@ -188,6 +224,8 @@ export function WeakTopicsContent({ role }: { role: Role }) {
         <AssistantSubmitPanel offeringId={offeringId} period={period} setError={setError} />
       ) : tab === "catalog" ? (
         <CatalogPanel offeringId={offeringId} setError={setError} />
+      ) : tab === "progress" ? (
+        <ProgressPanel offeringId={offeringId} period={period} />
       ) : (
         <ApprovalsPanel offeringId={offeringId} period={period} setError={setError} />
       )}
@@ -372,6 +410,7 @@ function AssistantSubmitPanel({ offeringId, period, setError }: { offeringId: st
   const [comments, setComments] = useState<Record<string, string>>({});
   const [savedComments, setSavedComments] = useState<Record<string, string>>({});
   const [savingComment, setSavingComment] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
 
   function reload() {
     if (!offeringId) return;
@@ -386,9 +425,17 @@ function AssistantSubmitPanel({ offeringId, period, setError }: { offeringId: st
   }
 
   useEffect(() => {
-    (() => reload())();
+    (() => {
+      setPage(0);
+      reload();
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offeringId, period]);
+
+  const pageCount = Math.max(1, Math.ceil((students?.length ?? 0) / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageStart = safePage * PAGE_SIZE;
+  const pageRows = (students ?? []).slice(pageStart, pageStart + PAGE_SIZE);
 
   async function onSaveComment(studentId: string) {
     setSavingComment(studentId);
@@ -440,8 +487,9 @@ function AssistantSubmitPanel({ offeringId, period, setError }: { offeringId: st
       ) : students.length === 0 ? (
         <div className="p-[30px] text-center text-[13px] text-[var(--muted)]">No students assigned to you for this offering.</div>
       ) : (
+        <>
         <div className="divide-y divide-[var(--border)]">
-          {students.map((s) => (
+          {pageRows.map((s) => (
             <div key={s.studentId} className="flex flex-col gap-[8px] p-[14px_18px]">
               <div className="flex flex-wrap items-center justify-between gap-[10px]">
                 <div className="text-[13.5px] font-semibold text-[var(--text)]">{s.studentName}</div>
@@ -502,6 +550,8 @@ function AssistantSubmitPanel({ offeringId, period, setError }: { offeringId: st
             </div>
           ))}
         </div>
+        <PageNav page={safePage} setPage={setPage} pageCount={pageCount} pageStart={pageStart} total={students.length} label="students" />
+        </>
       )}
     </div>
   );
@@ -510,6 +560,7 @@ function AssistantSubmitPanel({ offeringId, period, setError }: { offeringId: st
 function ApprovalsPanel({ offeringId, period, setError }: { offeringId: string; period: string; setError: (e: string | null) => void }) {
   const [items, setItems] = useState<StudentTopicSubmission[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
 
   function reload() {
     if (!offeringId) return;
@@ -518,7 +569,10 @@ function ApprovalsPanel({ offeringId, period, setError }: { offeringId: string; 
   }
 
   useEffect(() => {
-    (() => reload())();
+    (() => {
+      setPage(0);
+      reload();
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offeringId, period]);
 
@@ -536,6 +590,11 @@ function ApprovalsPanel({ offeringId, period, setError }: { offeringId: string; 
 
   if (!offeringId) return null;
 
+  const pageCount = Math.max(1, Math.ceil((items?.length ?? 0) / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageStart = safePage * PAGE_SIZE;
+  const pageRows = (items ?? []).slice(pageStart, pageStart + PAGE_SIZE);
+
   return (
     <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
       {items === null ? (
@@ -545,8 +604,9 @@ function ApprovalsPanel({ offeringId, period, setError }: { offeringId: string; 
       ) : items.length === 0 ? (
         <div className="p-[30px] text-center text-[13px] text-[var(--muted)]">No submissions for this month yet.</div>
       ) : (
+        <>
         <div className="divide-y divide-[var(--border)]">
-          {items.map((it) => (
+          {pageRows.map((it) => (
             <div key={it.id} className="flex flex-wrap items-center justify-between gap-[10px] p-[14px_18px]">
               <div>
                 <div className="text-[13.5px] font-semibold text-[var(--text)]">
@@ -581,7 +641,81 @@ function ApprovalsPanel({ offeringId, period, setError }: { offeringId: string; 
             </div>
           ))}
         </div>
+        <PageNav page={safePage} setPage={setPage} pageCount={pageCount} pageStart={pageStart} total={items.length} label="submissions" />
+        </>
       )}
+    </div>
+  );
+}
+
+function ProgressPanel({ offeringId, period }: { offeringId: string; period: string }) {
+  const [rows, setRows] = useState<AssistantFillingProgress[] | null>(null);
+
+  useEffect(() => {
+    (() => {
+      if (!offeringId) return;
+      setRows(null);
+      getAssistantFillingProgress(offeringId, period).then(setRows);
+    })();
+  }, [offeringId, period]);
+
+  if (!offeringId) return null;
+
+  const totals = (rows ?? []).reduce(
+    (acc, r) => ({ students: acc.students + r.totalStudents, filled: acc.filled + r.filled, pending: acc.pending + r.pending }),
+    { students: 0, filled: 0, pending: 0 }
+  );
+
+  return (
+    <div className="flex flex-col gap-3">
+      {rows !== null && rows.length > 0 && (
+        <div className="flex flex-wrap gap-[10px]">
+          <div className="min-w-[130px] flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] p-[13px_15px] shadow-[var(--shadow)]">
+            <div className="text-[10.5px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Students</div>
+            <div className="mt-[3px] text-[19px] font-bold text-[var(--text)]">{totals.students}</div>
+          </div>
+          <div className="min-w-[130px] flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] p-[13px_15px] shadow-[var(--shadow)]">
+            <div className="text-[10.5px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Filled this month</div>
+            <div className="mt-[3px] text-[19px] font-bold text-[var(--ok)]">{totals.filled}</div>
+          </div>
+          <div className="min-w-[130px] flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] p-[13px_15px] shadow-[var(--shadow)]">
+            <div className="text-[10.5px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Still pending</div>
+            <div className="mt-[3px] text-[19px] font-bold text-[var(--warn)]">{totals.pending}</div>
+          </div>
+        </div>
+      )}
+      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+        {rows === null ? (
+          <div className="p-[16px]">
+            <SkeletonRow className="h-[40px]" />
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="p-[30px] text-center text-[13px] text-[var(--muted)]">No assistants assigned to this course yet.</div>
+        ) : (
+          <div className="divide-y divide-[var(--border)]">
+            {rows.map((r) => {
+              const pct = r.totalStudents ? Math.round((r.filled / r.totalStudents) * 100) : 0;
+              return (
+                <div key={r.assistantId} className="flex flex-col gap-[7px] p-[14px_18px]">
+                  <div className="flex flex-wrap items-center justify-between gap-[8px]">
+                    <div className="text-[13.5px] font-semibold text-[var(--text)]">{r.assistantName}</div>
+                    <div className="flex items-center gap-[8px] text-[12px] font-semibold">
+                      <span className="text-[var(--ok)]">{r.filled} filled</span>
+                      {r.pending > 0 && <span className="text-[var(--warn)]">{r.pending} pending</span>}
+                    </div>
+                  </div>
+                  <div className="h-[7px] w-full overflow-hidden rounded-full bg-[var(--surface2)]">
+                    <div className="h-full rounded-full bg-[var(--ok)]" style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className="text-[11.5px] text-[var(--subtle)]">
+                    {r.filled} of {r.totalStudents} students tagged this month
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

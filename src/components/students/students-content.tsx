@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { toneColors } from "@/lib/tone";
@@ -104,6 +104,15 @@ export function StudentsContent({ role }: { role: Role }) {
   const [savingTargetGrade, setSavingTargetGrade] = useState(false);
   const [tierTemplates, setTierTemplates] = useState<Record<string, string>>({});
 
+  // Traffic light (and, for registration, payment/course-label) data loads
+  // in the background after the roster itself renders. If the offering
+  // changes again while that background fetch is still in flight, this lets
+  // it recognize it's stale and avoid overwriting the new offering's data.
+  const offeringIdRef = useRef(offeringId);
+  useEffect(() => {
+    offeringIdRef.current = offeringId;
+  }, [offeringId]);
+
   useEffect(() => {
     (() => {
       const handoff = consumeSearchHandoff();
@@ -146,22 +155,33 @@ export function StudentsContent({ role }: { role: Role }) {
 
   async function reload(id: string) {
     setLoading(true);
+    setTrafficLight({});
     try {
-      const [rows, ast, tl] = await Promise.all([getStudentsForOffering(id), listOfferingAssistants(id), getTrafficLightForOffering(id)]);
+      // Students+assistants are what the table actually needs to render —
+      // traffic light and (for registration) payment/course-label data are
+      // per-row enrichment that used to block the whole page behind its own
+      // slower queries. Loading them in the background after the roster
+      // itself paints means switching offerings feels instant even before
+      // every badge has resolved.
+      const [rows, ast] = await Promise.all([getStudentsForOffering(id), listOfferingAssistants(id)]);
+      if (offeringIdRef.current !== id) return;
       setStudents(rows);
       setAssistants(ast);
-      setTrafficLight(tl);
+      setLoading(false);
+
+      getTrafficLightForOffering(id).then((tl) => {
+        if (offeringIdRef.current === id) setTrafficLight(tl);
+      });
+
       if (isRegistration) {
-        const [payments, labels] = await Promise.all([
-          getPaymentStatusForOffering(id),
-          getCourseLabelsForStudents(rows.map((r) => r.studentId)),
-        ]);
-        setPaymentByStudent(payments);
-        setCourseLabelsByStudent(labels);
+        Promise.all([getPaymentStatusForOffering(id), getCourseLabelsForStudents(rows.map((r) => r.studentId))]).then(([payments, labels]) => {
+          if (offeringIdRef.current !== id) return;
+          setPaymentByStudent(payments);
+          setCourseLabelsByStudent(labels);
+        });
       }
     } catch {
       setError("Couldn't load students for this course.");
-    } finally {
       setLoading(false);
     }
   }
@@ -767,7 +787,17 @@ export function StudentsContent({ role }: { role: Role }) {
                       {!st.leftAt &&
                         (() => {
                           const tl = trafficLight[st.studentId];
-                          if (!tl) return <span className="w-[14px] flex-none" />;
+                          // Traffic light loads in the background after the roster itself
+                          // renders — a pulsing placeholder here (rather than a blank gap)
+                          // makes it clear more is still coming in, not that this student
+                          // has no status at all.
+                          if (!tl) {
+                            return (
+                              <span className="flex w-[14px] flex-none items-center justify-center">
+                                <span className="block h-[10px] w-[10px] animate-pulse rounded-full bg-[var(--surface2)]" />
+                              </span>
+                            );
+                          }
                           const tone = tl.tier === "green" ? "ok" : tl.tier === "yellow" ? "warn" : "danger";
                           const { fg } = toneColors(tone);
                           const title =
