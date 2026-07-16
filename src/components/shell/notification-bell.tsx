@@ -7,7 +7,11 @@ import { SkeletonRow } from "@/components/ui/spinner";
 import { toneColors } from "@/lib/tone";
 import { getNotifications, type NotificationItem } from "@/lib/actions/notifications";
 
-const POLL_MS = 60_000;
+// Runs on every page for every logged-in user (not just while a specific
+// tab is open like Chat), and fans out across several role-specific queries
+// per call — no one needs sub-minute freshness for a notification badge, so
+// this is kept conservative to limit its share of Vercel Fluid CPU usage.
+const POLL_MS = 120_000;
 const DISMISSED_KEY = "radams-dismissed-notifications";
 
 function loadDismissed(): Set<string> {
