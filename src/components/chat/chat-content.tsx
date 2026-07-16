@@ -10,6 +10,7 @@ import {
   getOrStartDm,
   getOrCreateOfferingChannel,
   listMessages,
+  markConversationRead,
   sendMessage,
   type ConversationSummary,
   type StaffDirectoryEntry,
@@ -17,7 +18,10 @@ import {
 } from "@/lib/actions/chat";
 import type { Role } from "@/lib/roles";
 
-const POLL_MS = 4000;
+// Polling, not push — kept deliberately unaggressive since every open tab
+// hits the server on this interval for as long as Chat stays open. 4s here
+// used to be a meaningful chunk of the app's Vercel Fluid CPU usage.
+const POLL_MS = 15_000;
 
 function timeAgo(iso: string | null) {
   if (!iso) return "";
@@ -63,6 +67,7 @@ export function ChatContent({ role }: { role: Role }) {
       if (!cancelled) setMessages(data);
     }
     load();
+    markConversationRead(activeId);
     const t = setInterval(load, POLL_MS);
     return () => {
       cancelled = true;

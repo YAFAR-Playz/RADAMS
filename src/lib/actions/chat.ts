@@ -239,6 +239,11 @@ export async function getOrCreateOfferingChannel(offeringId: string): Promise<st
   return conversationId;
 }
 
+// Read-only on purpose — this is polled every few seconds while a
+// conversation is open, so it must not also write on every tick (that was
+// turning a cheap poll into a repeated read+write and was a meaningful chunk
+// of the app's Vercel Fluid CPU usage). Marking as read happens once, via
+// markConversationRead, when the conversation is opened.
 export async function listMessages(conversationId: string): Promise<ChatMessage[]> {
   const profile = await getCurrentProfile();
   if (!profile) return [];
@@ -250,8 +255,6 @@ export async function listMessages(conversationId: string): Promise<ChatMessage[
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true })
     .limit(200);
-
-  await supabase.from("chat_conversation_members").update({ last_read_at: new Date().toISOString() }).eq("conversation_id", conversationId).eq("profile_id", profile.id);
 
   return (data ?? []).map((m) => {
     const sender = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
@@ -265,6 +268,13 @@ export async function listMessages(conversationId: string): Promise<ChatMessage[
       mine: m.sender_id === profile.id,
     };
   });
+}
+
+export async function markConversationRead(conversationId: string): Promise<void> {
+  const profile = await getCurrentProfile();
+  if (!profile) return;
+  const supabase = await createClient();
+  await supabase.from("chat_conversation_members").update({ last_read_at: new Date().toISOString() }).eq("conversation_id", conversationId).eq("profile_id", profile.id);
 }
 
 export async function sendMessage(conversationId: string, body: string): Promise<void> {
