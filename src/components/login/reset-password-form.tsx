@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { authErrorMessage } from "@/lib/auth-error";
 import { Icon } from "@/components/icons";
 
 type Status = "checking" | "landing" | "exchanging" | "ready" | "done" | "invalid";
@@ -115,7 +116,7 @@ export function ResetPasswordForm() {
     try {
       const { error: updateError } = await supabase.auth.updateUser({ password: newPw });
       if (updateError) {
-        setError(updateError.message || "Something went wrong. Please try again.");
+        setError(authErrorMessage(updateError));
         return;
       }
       // The recovery link leaves the browser holding a live session — sign it

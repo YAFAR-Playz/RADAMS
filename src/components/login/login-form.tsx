@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { signInWithPassword } from "@/lib/actions/auth";
+import { authErrorMessage } from "@/lib/auth-error";
 import { Icon } from "@/components/icons";
 
 type Step = "contact" | "password" | "sent";
@@ -73,7 +74,7 @@ export function LoginForm() {
         redirectTo: `${window.location.origin}/reset-password`,
       });
       if (resetError) {
-        setError(resetError.message || "Something went wrong. Please try again.");
+        setError(authErrorMessage(resetError));
         return;
       }
       setResendIn(RESEND_SECONDS);
