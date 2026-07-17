@@ -76,29 +76,33 @@ export function ResetPasswordForm() {
 
   async function onContinue() {
     setStatus("exchanging");
-    if (hashTokens) {
-      const { error: sessionError } = await supabase.auth.setSession({
-        access_token: hashTokens.accessToken,
-        refresh_token: hashTokens.refreshToken,
-      });
-      setStatus(sessionError ? "invalid" : "ready");
-      return;
-    }
+    try {
+      if (hashTokens) {
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: hashTokens.accessToken,
+          refresh_token: hashTokens.refreshToken,
+        });
+        setStatus(sessionError ? "invalid" : "ready");
+        return;
+      }
 
-    const tokenHash = searchParams.get("token_hash");
-    if (tokenHash) {
-      const { error: verifyError } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "recovery" });
-      setStatus(verifyError ? "invalid" : "ready");
-      return;
-    }
+      const tokenHash = searchParams.get("token_hash");
+      if (tokenHash) {
+        const { error: verifyError } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "recovery" });
+        setStatus(verifyError ? "invalid" : "ready");
+        return;
+      }
 
-    const code = searchParams.get("code");
-    if (!code) {
+      const code = searchParams.get("code");
+      if (!code) {
+        setStatus("invalid");
+        return;
+      }
+      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+      setStatus(exchangeError ? "invalid" : "ready");
+    } catch {
       setStatus("invalid");
-      return;
     }
-    const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-    setStatus(exchangeError ? "invalid" : "ready");
   }
 
   const createValid = newPw.length >= 8 && newPw === confirmPw;
@@ -108,18 +112,22 @@ export function ResetPasswordForm() {
     if (!createValid) return;
     setSaving(true);
     setError(null);
-    const { error: updateError } = await supabase.auth.updateUser({ password: newPw });
-    if (updateError) {
+    try {
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPw });
+      if (updateError) {
+        setError(updateError.message || "Something went wrong. Please try again.");
+        return;
+      }
+      // The recovery link leaves the browser holding a live session — sign it
+      // out immediately so the user lands back at a normal sign-in screen
+      // rather than being silently logged in as themselves.
+      await supabase.auth.signOut();
+      setStatus("done");
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
       setSaving(false);
-      setError(updateError.message || "Something went wrong. Please try again.");
-      return;
     }
-    // The recovery link leaves the browser holding a live session — sign it
-    // out immediately so the user lands back at a normal sign-in screen
-    // rather than being silently logged in as themselves.
-    await supabase.auth.signOut();
-    setSaving(false);
-    setStatus("done");
   }
 
   if (status === "checking") {

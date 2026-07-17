@@ -68,16 +68,21 @@ export function LoginForm() {
   async function sendResetCode() {
     setLoading(true);
     setError(null);
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    setLoading(false);
-    if (resetError) {
-      setError(resetError.message || "Something went wrong. Please try again.");
-      return;
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (resetError) {
+        setError(resetError.message || "Something went wrong. Please try again.");
+        return;
+      }
+      setResendIn(RESEND_SECONDS);
+      setStep("sent");
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
     }
-    setResendIn(RESEND_SECONDS);
-    setStep("sent");
   }
 
   return (
