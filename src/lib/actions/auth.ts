@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { authErrorMessage } from "@/lib/auth-error";
 
 const MAX_ATTEMPTS = 5;
 const WINDOW_MINUTES = 15;
@@ -49,7 +50,7 @@ export async function signInWithPassword(email: string, password: string): Promi
     await recordAttempt(normalizedEmail, !error);
 
     if (error) {
-      return { error: error.message || "Something went wrong. Please try again." };
+      return { error: authErrorMessage(error) };
     }
     return { error: null };
   } catch {
