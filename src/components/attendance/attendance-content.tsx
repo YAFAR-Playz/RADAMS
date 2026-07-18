@@ -88,6 +88,17 @@ export function AttendanceContent({ role }: { role: Role }) {
     });
   }, []);
 
+  // Refetch on every modal open (not just page mount) — an admin editing
+  // Templates while an assistant already has this page open shouldn't leave
+  // them sending a stale message.
+  useEffect(() => {
+    if (!waId) return;
+    Promise.all([getEffectiveTemplate("attendance_student"), getEffectiveTemplate("attendance_parent")]).then(([tplS, tplP]) => {
+      setTemplateStudent(tplS);
+      setTemplateParent(tplP);
+    });
+  }, [waId]);
+
   async function reloadSessions(id: string, selectId?: string) {
     const data = await listSessions(id);
     setSessions(data);
