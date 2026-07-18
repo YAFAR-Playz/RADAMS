@@ -138,20 +138,21 @@ export async function getAssistantDashboard(): Promise<AssistantDashboard> {
   const myEnrollments = (enrollments ?? []).filter((e) => offeringIds.includes(e.offering_id));
   const studentsCount = new Set(myEnrollments.map((e) => e.student_id)).size;
 
-  const { data: assignedRows } = await supabase
-    .from("assignment_assistants")
-    .select("assignment_id")
-    .eq("assistant_id", profile.id);
-  const assignedAssignmentIds = (assignedRows ?? []).map((r) => r.assignment_id);
-
-  const { data: assignments } = assignedAssignmentIds.length
-    ? await supabase.from("assignments").select("id, title, offering_id, closed_at").in("id", assignedAssignmentIds)
+  // Scope by offering, not assignment_assistants — that join table is only
+  // populated when a head explicitly picks assistants while creating an
+  // assignment (optional), but the actual logging page (listAssignmentsForOffering
+  // + getRoster) shows every assignment in every offering this assistant is
+  // linked to, regardless of that table. Scoping "pending" by it silently
+  // undercounted any assignment created without explicit assistant picks.
+  const { data: assignments } = offeringIds.length
+    ? await supabase.from("assignments").select("id, title, offering_id, closed_at").in("offering_id", offeringIds)
     : { data: [] as { id: string; title: string; offering_id: string; closed_at: string | null }[] };
 
   const openAssignments = (assignments ?? []).filter((a) => !a.closed_at);
+  const assignmentIds = (assignments ?? []).map((a) => a.id);
 
-  const { data: logs } = assignedAssignmentIds.length
-    ? await supabase.from("assignment_logs").select("assignment_id, student_id, status").in("assignment_id", assignedAssignmentIds)
+  const { data: logs } = assignmentIds.length
+    ? await supabase.from("assignment_logs").select("assignment_id, student_id, status").in("assignment_id", assignmentIds)
     : { data: [] as { assignment_id: string; student_id: string; status: string | null }[] };
 
   const loggedSet = new Set((logs ?? []).filter((l) => l.status).map((l) => `${l.assignment_id}:${l.student_id}`));
@@ -216,16 +217,17 @@ export async function getAssistantPendingLogCount(): Promise<number> {
   if (!profile) return 0;
   const supabase = await createClient();
 
-  const { data: assignedRows } = await supabase.from("assignment_assistants").select("assignment_id").eq("assistant_id", profile.id);
-  const assignedAssignmentIds = (assignedRows ?? []).map((r) => r.assignment_id);
-  if (!assignedAssignmentIds.length) return 0;
+  const { data: offeringLinks } = await supabase.from("offering_assistants").select("offering_id").eq("assistant_id", profile.id);
+  const offeringIds = (offeringLinks ?? []).map((r) => r.offering_id);
+  if (!offeringIds.length) return 0;
 
-  const { data: assignments } = await supabase.from("assignments").select("id, offering_id, closed_at").in("id", assignedAssignmentIds);
+  const { data: assignments } = await supabase.from("assignments").select("id, offering_id, closed_at").in("offering_id", offeringIds);
   const openAssignments = (assignments ?? []).filter((a) => !a.closed_at);
   if (!openAssignments.length) return 0;
+  const assignmentIds = openAssignments.map((a) => a.id);
 
   const { data: enrollments } = await supabase.from("enrollments").select("offering_id, student_id").eq("assistant_id", profile.id);
-  const { data: logs } = await supabase.from("assignment_logs").select("assignment_id, student_id, status").in("assignment_id", assignedAssignmentIds);
+  const { data: logs } = await supabase.from("assignment_logs").select("assignment_id, student_id, status").in("assignment_id", assignmentIds);
   const loggedSet = new Set((logs ?? []).filter((l) => l.status).map((l) => `${l.assignment_id}:${l.student_id}`));
 
   let pendingCount = 0;
@@ -362,8 +364,34 @@ export async function getHeadDashboard(): Promise<HeadDashboard> {
     (s) => s.count > 0
   );
 
+  // The KPI above (pendingMessages) is summed across every offering this
+  // head runs, so the panel showing "the same number" broken down by
+  // assistant needs to match that scope too — combine each assistant's
+  // sent/total across every offering they help with, not just offerings[0].
+  // A single-offering head would otherwise never notice, but anyone running
+  // 2+ courses saw a KPI and a panel that silently disagreed.
+  const combinedAssistants = new Map<string, { id: string; name: string; initials: string; sent: number; total: number }>();
+  for (const rows of perOfferingAssistants.values()) {
+    for (const r of rows) {
+      const existing = combinedAssistants.get(r.id);
+      if (existing) {
+        existing.sent += r.sent;
+        existing.total += r.total;
+      } else {
+        combinedAssistants.set(r.id, { id: r.id, name: r.name, initials: r.initials, sent: r.sent, total: r.total });
+      }
+    }
+  }
+  const assistants: AssistantRow[] = Array.from(combinedAssistants.values())
+    .map((a) => {
+      const pct = a.total ? Math.round((a.sent / a.total) * 100) : 0;
+      const track = trackInfo(pct);
+      return { id: a.id, name: a.name, initials: a.initials, sent: a.sent, total: a.total, pct, badge: { text: track.text, tone: track.tone, icon: track.icon as "check2" | "clock" | "alert" } };
+    })
+    .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+
   const primaryOffering = offerings[0];
-  const assistants = primaryOffering ? perOfferingAssistants.get(primaryOffering.id) ?? [] : [];
+  const offeringLabel = offerings.length > 1 ? `All ${offerings.length} courses` : primaryOffering?.label ?? "";
 
   const kpis: Kpi[] = [
     { icon: "clipboard-list", value: String(offeringIds.length), label: "My courses", tone: "brand" },
@@ -372,7 +400,7 @@ export async function getHeadDashboard(): Promise<HeadDashboard> {
     { icon: "clock", value: String(Math.max(0, pendingMessages)), label: "Pending messages", tone: pendingMessages > 0 ? "warn" : "ok" },
   ];
 
-  return { kpis, offeringLabel: primaryOffering?.label ?? "", assistants, statusBreakdown, completionPct };
+  return { kpis, offeringLabel, assistants, statusBreakdown, completionPct };
 }
 
 export type RecentEnrollment = { name: string; initials: string; offering: string; enrolledAt: string };

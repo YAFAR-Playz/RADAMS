@@ -143,6 +143,34 @@ export function StudentsContent({ role }: { role: Role }) {
     getPayrollSettings().then((settings) => setSym(currencySymbol(settings?.currency)));
   }, []);
 
+  // Refetch on every modal open (not just page mount) — an admin editing
+  // Templates while an assistant already has this page open shouldn't leave
+  // them sending a stale message.
+  useEffect(() => {
+    if (!welcomeId) return;
+    Promise.all([getEffectiveTemplate("welcome_student"), getEffectiveTemplate("welcome_parent")]).then(([tplS, tplP]) => {
+      setWelcomeTemplateStudent(tplS);
+      setWelcomeTemplateParent(tplP);
+    });
+  }, [welcomeId]);
+
+  useEffect(() => {
+    if (!viewMoreStudent) return;
+    Promise.all([
+      getEffectiveTemplate("critical_alert_student"),
+      getEffectiveTemplate("critical_alert_parent"),
+      getEffectiveTemplate("caution_flag_student"),
+      getEffectiveTemplate("caution_flag_parent"),
+    ]).then(([redStudent, redParent, yellowStudent, yellowParent]) => {
+      setTierTemplates({
+        critical_alert_student: redStudent,
+        critical_alert_parent: redParent,
+        caution_flag_student: yellowStudent,
+        caution_flag_parent: yellowParent,
+      });
+    });
+  }, [viewMoreStudent]);
+
   useEffect(() => {
     (() => {
       if (!offeringId) {
