@@ -213,8 +213,15 @@ export async function setGrade(assignmentId: string, studentId: string, grade: s
   await upsertLog(assignmentId, studentId, { grade: grade || null });
 }
 
+// Deliberately does NOT collapse "" to null. A null comment means "the
+// assistant never touched this field" (falls back to the assignment's
+// default comment when building a message); an explicit "" means "the
+// assistant cleared it on purpose" and must stay empty. Collapsing both to
+// null made an intentionally-cleared comment indistinguishable from an
+// untouched one, so the head's default comment kept reappearing in the
+// WhatsApp message even after an assistant deleted it.
 export async function setComment(assignmentId: string, studentId: string, comment: string) {
-  await upsertLog(assignmentId, studentId, { comment: comment || null });
+  await upsertLog(assignmentId, studentId, { comment });
 }
 
 export async function markSent(assignmentId: string, studentId: string) {

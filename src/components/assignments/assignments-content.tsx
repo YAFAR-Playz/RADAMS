@@ -248,7 +248,7 @@ export function AssignmentsContent() {
     setSavingId(studentId);
     try {
       await setComment(assignmentId, studentId, value);
-      patchLocal(studentId, { comment: value || null });
+      patchLocal(studentId, { comment: value });
     } catch {
       setError("Couldn't save comment — try again.");
     } finally {
