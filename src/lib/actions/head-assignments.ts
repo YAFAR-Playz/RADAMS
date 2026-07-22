@@ -80,10 +80,26 @@ export async function listAssignmentsWithProgress(offeringId: string): Promise<A
     .select("student_id, assistant_id")
     .eq("offering_id", offeringId);
 
-  const { data: logs } = await supabase
-    .from("assignment_logs")
-    .select("assignment_id, student_id, status")
-    .in("assignment_id", assignmentIds);
+  // A course with several assignment categories easily logs assignments ×
+  // roster-size rows across the whole offering — comfortably past
+  // PostgREST's default 1000-row cap on a single unbounded select. That cap
+  // was already found (and paginated around) for the admin dashboard's
+  // enrollment counts; this query had the same shape and needed the same
+  // fix — an un-paginated fetch here silently truncated to whichever
+  // assignment's logs happened to sort first, leaving every other
+  // assignment's progress reading 0 logged despite real data existing.
+  const logs: { assignment_id: string; student_id: string; status: string | null }[] = [];
+  const LOGS_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += LOGS_PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("assignment_logs")
+      .select("assignment_id, student_id, status")
+      .in("assignment_id", assignmentIds)
+      .range(from, from + LOGS_PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    logs.push(...page);
+    if (page.length < LOGS_PAGE_SIZE) break;
+  }
 
   const studentsByAssistant = new Map<string, string[]>();
   for (const e of enrollments ?? []) {
@@ -94,7 +110,7 @@ export async function listAssignmentsWithProgress(offeringId: string): Promise<A
   }
 
   const loggedStudentsByAssignment = new Map<string, Set<string>>();
-  for (const log of logs ?? []) {
+  for (const log of logs) {
     if (!log.status) continue;
     const set = loggedStudentsByAssignment.get(log.assignment_id) ?? new Set<string>();
     set.add(log.student_id);

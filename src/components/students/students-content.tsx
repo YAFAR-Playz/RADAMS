@@ -96,6 +96,7 @@ export function StudentsContent({ role }: { role: Role }) {
   const [viewMoreStudent, setViewMoreStudent] = useState<StudentRow | null>(null);
   const [viewMoreAttendance, setViewMoreAttendance] = useState<StudentAttendanceSummary | null>(null);
   const [viewMoreDetail, setViewMoreDetail] = useState<StudentDetailPanel | null>(null);
+  const [showAllAssignments, setShowAllAssignments] = useState(false);
   const [folderLink, setFolderLink] = useState<string | null>(null);
   const [folderLinkDraft, setFolderLinkDraft] = useState("");
   const [savingFolderLink, setSavingFolderLink] = useState(false);
@@ -368,6 +369,7 @@ export function StudentsContent({ role }: { role: Role }) {
     setViewMoreStudent(s);
     setViewMoreAttendance(null);
     setViewMoreDetail(null);
+    setShowAllAssignments(false);
     setFolderLink(null);
     setTargetGradeDraft(s.targetGrade != null ? String(s.targetGrade) : "");
     getStudentAttendance(s.studentId).then(setViewMoreAttendance);
@@ -1388,12 +1390,14 @@ export function StudentsContent({ role }: { role: Role }) {
                 </div>
                 {viewMoreDetail === null ? (
                   <SkeletonRow className="h-[40px]" />
-                ) : viewMoreDetail.recentAssignments.length === 0 ? (
+                ) : viewMoreDetail.assignments.length === 0 ? (
                   <div className="text-[12.5px] text-[var(--subtle)]">No assignments logged yet.</div>
                 ) : (
                   <div className="flex flex-col gap-[4px]">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[var(--subtle)]">Latest 5</div>
-                    {viewMoreDetail.recentAssignments.map((a, i) => {
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[var(--subtle)]">
+                      {showAllAssignments ? `All ${viewMoreDetail.assignments.length}` : "Latest 5"}
+                    </div>
+                    {(showAllAssignments ? viewMoreDetail.assignments : viewMoreDetail.assignments.slice(0, 5)).map((a, i) => {
                       const def = a.status ? statusDef(a.status as never) : null;
                       const { bg, fg } = def ? toneColors(def.tone) : { bg: "var(--surface2)", fg: "var(--subtle)" };
                       return (
@@ -1409,6 +1413,14 @@ export function StudentsContent({ role }: { role: Role }) {
                         </div>
                       );
                     })}
+                    {viewMoreDetail.assignments.length > 5 && (
+                      <button
+                        onClick={() => setShowAllAssignments((v) => !v)}
+                        className="mt-[2px] cursor-pointer self-start border-none bg-none p-0 text-[11.5px] font-semibold text-[var(--brand)]"
+                      >
+                        {showAllAssignments ? "Show less" : `Show all ${viewMoreDetail.assignments.length}`}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

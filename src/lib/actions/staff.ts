@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { logActivity } from "@/lib/actions/activity-log";
+import { sendEmail, renderBrandedEmail } from "@/lib/email";
 import type { Role } from "@/lib/roles";
 
 export type StaffMember = {
@@ -322,7 +323,7 @@ export async function resolveStaffingRequest(id: string, status: "approved" | "d
 
   const { data: request } = await supabase
     .from("staffing_requests")
-    .select("kind, status, candidate_name, candidate_email, candidate_phone, target_assistant_id, offering_id, leave_date, gave_notice, proposed_date")
+    .select("kind, status, candidate_name, candidate_email, candidate_phone, target_assistant_id, offering_id, leave_date, gave_notice, proposed_date, requested_by")
     .eq("id", id)
     .single();
   if (!request) throw new Error("Request not found");
@@ -366,6 +367,57 @@ export async function resolveStaffingRequest(id: string, status: "approved" | "d
   const { error } = await supabase.from("staffing_requests").update({ status }).eq("id", id);
   if (error) throw new Error(error.message);
   await logActivity("requests", `${status === "approved" ? "Approved" : "Declined"} ${request.kind} request for ${request.candidate_name ?? "a staff change"}`);
+
+  if (request.requested_by) {
+    await notifyRequesterOfResolution(supabase, profile.org.id, request.requested_by, status, request);
+  }
+}
+
+// The head who filed the request only sees the outcome in-app if they
+// happen to check back — email closes that gap, mirroring the
+// notifyHrAndAdminOfPendingRequest email sent when the request was filed.
+// Best-effort: a failed email must never surface as a failure to resolve
+// the request itself, so errors are swallowed inside sendEmail already.
+async function notifyRequesterOfResolution(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  orgId: string,
+  requesterId: string,
+  status: "approved" | "declined",
+  request: { kind: "add" | "remove" | "replace"; candidate_name: string | null; offering_id: string | null }
+) {
+  const [{ data: requester }, { data: offering }, { data: org }] = await Promise.all([
+    supabase.from("profiles").select("email").eq("id", requesterId).maybeSingle(),
+    request.offering_id
+      ? supabase.from("course_offerings").select("session, unit, courses(name)").eq("id", request.offering_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    supabase.from("organizations").select("brand_name, primary_color").eq("id", orgId).maybeSingle(),
+  ]);
+  if (!requester?.email) return;
+
+  const offeringLbl = offering ? offeringLabel(offering) : "your course";
+  const kindLabel = request.kind === "add" ? "New assistant request" : request.kind === "remove" ? "Removal request" : "Replacement request";
+  const brandName = org?.brand_name || "RadAMS";
+  const primaryColor = org?.primary_color || "#2563eb";
+  const approved = status === "approved";
+
+  await sendEmail({
+    to: [requester.email],
+    subject: `${kindLabel} ${approved ? "approved" : "declined"} — ${offeringLbl}`,
+    fromName: brandName,
+    html: renderBrandedEmail({
+      brandName,
+      primaryColor,
+      bodyHtml: `
+        <p>Your staffing request has been <strong>${approved ? "approved" : "declined"}</strong>.</p>
+        <ul>
+          <li><strong>Type:</strong> ${kindLabel}</li>
+          <li><strong>Course:</strong> ${offeringLbl}</li>
+          ${request.candidate_name ? `<li><strong>Candidate:</strong> ${request.candidate_name}</li>` : ""}
+        </ul>
+        ${approved ? "<p>The change has been applied.</p>" : "<p>No changes were made to staffing for this course.</p>"}
+      `,
+    }),
+  });
 }
 
 export async function assignStaffToCourses(profileId: string, role: "head" | "assistant", offeringIds: string[]) {

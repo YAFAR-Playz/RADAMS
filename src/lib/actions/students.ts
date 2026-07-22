@@ -303,13 +303,15 @@ export type StudentDetailAssignment = {
 
 export type StudentDetailPanel = {
   avgGrade: number | null;
-  recentAssignments: StudentDetailAssignment[];
+  assignments: StudentDetailAssignment[];
 };
 
 // A focused summary for the "View more" panel — the full grade average
-// across every assignment the student has ever been logged for (not just
-// the handful shown in the roster's progress cells), plus the 5 most
-// recent assignments for a quick glance.
+// across every assignment the student has ever been logged for, plus every
+// assignment itself (newest first) so the panel can show a quick glance at
+// the most recent few while still letting a head/assistant expand to the
+// complete history instead of being capped at whatever fit in the initial
+// view.
 export async function getStudentDetailPanel(studentId: string, offeringId: string): Promise<StudentDetailPanel> {
   const supabase = await createClient();
 
@@ -336,12 +338,12 @@ export async function getStudentDetailPanel(studentId: string, offeringId: strin
     .filter((n) => !Number.isNaN(n));
   const avgGrade = numericGrades.length ? Math.round(numericGrades.reduce((s, n) => s + n, 0) / numericGrades.length) : null;
 
-  const recentAssignments: StudentDetailAssignment[] = assignments.slice(0, 5).map((a) => {
+  const allAssignments: StudentDetailAssignment[] = assignments.map((a) => {
     const log = logByAssignment.get(a.id);
     return { title: a.title, dueDate: a.due_date, status: log?.status ?? null, grade: log?.grade ?? null };
   });
 
-  return { avgGrade, recentAssignments };
+  return { avgGrade, assignments: allAssignments };
 }
 
 // Drive folder link for a student's reports — set/sent by whichever
