@@ -6,11 +6,12 @@ import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { toneColors } from "@/lib/tone";
 import type { Role } from "@/lib/roles";
 import { statusDef, STATUS_DEFS } from "@/lib/assignments-data";
-import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
-import { listOfferingAssistants, type AssistantOption } from "@/lib/actions/head-assignments";
+import { type OfferingOption } from "@/lib/actions/assignments";
+import { type AssistantOption } from "@/lib/actions/head-assignments";
 import {
-  getStudentsForOffering,
-  getCourseLabelsForStudents,
+  getStudentsTabBootstrap,
+  getStudentsTabForOffering,
+  getStudentsRegistrationExtras,
   reassignStudentAssistant,
   updateStudent,
   getStudentEnrollments,
@@ -26,17 +27,15 @@ import {
   type OfferingChoice,
   type StudentDetailPanel,
 } from "@/lib/actions/students";
-import { getGradeScale, type GradeScaleSetting } from "@/lib/actions/oversight";
+import { type GradeScaleSetting } from "@/lib/actions/oversight";
 import { getTrafficLightForOffering, setStudentTargetGrade, type StudentTrafficLight } from "@/lib/actions/traffic-light";
 import { getStudentAttendance, type StudentAttendanceSummary } from "@/lib/actions/attendance";
 import { downloadCsv } from "@/lib/csv-export";
-import { getEffectiveTemplate, getOrgBrandName } from "@/lib/actions/templates";
-import { getOfferingParentWhatsappLink } from "@/lib/actions/assistant-groups";
+import { getEffectiveTemplates } from "@/lib/actions/templates";
 import { applyTemplateVars } from "@/lib/message-vars";
 import { consumeSearchHandoff } from "@/lib/search-handoff";
 import { AutoAssignModal } from "@/components/shared/auto-assign-modal";
-import { getPaymentStatusForOffering, type PaymentStatusSummary } from "@/lib/actions/payments";
-import { getPayrollSettings } from "@/lib/actions/payroll-settings";
+import { type PaymentStatusSummary } from "@/lib/actions/payments";
 import { currencySymbol } from "@/lib/currency";
 import { matchesStudentQuery } from "@/lib/student-search";
 
@@ -114,34 +113,24 @@ export function StudentsContent({ role }: { role: Role }) {
     offeringIdRef.current = offeringId;
   }, [offeringId]);
 
+  // Bundled into one Server Function call — this Next.js version dispatches
+  // and awaits Server Functions invoked from the client one at a time, so
+  // separate calls (even wrapped in their own Promise.all) were still
+  // sequential round trips end-to-end. See getStudentsTabBootstrap.
   useEffect(() => {
     (() => {
       const handoff = consumeSearchHandoff();
       if (handoff) setSearch(handoff);
     })();
-    listMyOfferings().then((data) => {
-      setOfferings(data);
-      setOfferingId(data[0]?.id ?? null);
+    getStudentsTabBootstrap().then((data) => {
+      setOfferings(data.offerings);
+      setOfferingId(data.offerings[0]?.id ?? null);
+      setWelcomeTemplateStudent(data.welcomeTemplateStudent);
+      setWelcomeTemplateParent(data.welcomeTemplateParent);
+      setOrgName(data.orgName);
+      setTierTemplates(data.tierTemplates);
+      setSym(currencySymbol(data.currency));
     });
-    Promise.all([getEffectiveTemplate("welcome_student"), getEffectiveTemplate("welcome_parent"), getOrgBrandName()]).then(([tplS, tplP, org]) => {
-      setWelcomeTemplateStudent(tplS);
-      setWelcomeTemplateParent(tplP);
-      setOrgName(org);
-    });
-    Promise.all([
-      getEffectiveTemplate("critical_alert_student"),
-      getEffectiveTemplate("critical_alert_parent"),
-      getEffectiveTemplate("caution_flag_student"),
-      getEffectiveTemplate("caution_flag_parent"),
-    ]).then(([redStudent, redParent, yellowStudent, yellowParent]) => {
-      setTierTemplates({
-        critical_alert_student: redStudent,
-        critical_alert_parent: redParent,
-        caution_flag_student: yellowStudent,
-        caution_flag_parent: yellowParent,
-      });
-    });
-    getPayrollSettings().then((settings) => setSym(currencySymbol(settings?.currency)));
   }, []);
 
   // Refetch on every modal open (not just page mount) — an admin editing
@@ -149,38 +138,23 @@ export function StudentsContent({ role }: { role: Role }) {
   // them sending a stale message.
   useEffect(() => {
     if (!welcomeId) return;
-    Promise.all([getEffectiveTemplate("welcome_student"), getEffectiveTemplate("welcome_parent")]).then(([tplS, tplP]) => {
-      setWelcomeTemplateStudent(tplS);
-      setWelcomeTemplateParent(tplP);
+    getEffectiveTemplates(["welcome_student", "welcome_parent"] as const).then((t) => {
+      setWelcomeTemplateStudent(t.welcome_student);
+      setWelcomeTemplateParent(t.welcome_parent);
     });
   }, [welcomeId]);
 
   useEffect(() => {
     if (!viewMoreStudent) return;
-    Promise.all([
-      getEffectiveTemplate("critical_alert_student"),
-      getEffectiveTemplate("critical_alert_parent"),
-      getEffectiveTemplate("caution_flag_student"),
-      getEffectiveTemplate("caution_flag_parent"),
-    ]).then(([redStudent, redParent, yellowStudent, yellowParent]) => {
-      setTierTemplates({
-        critical_alert_student: redStudent,
-        critical_alert_parent: redParent,
-        caution_flag_student: yellowStudent,
-        caution_flag_parent: yellowParent,
-      });
-    });
+    getEffectiveTemplates([
+      "critical_alert_student",
+      "critical_alert_parent",
+      "caution_flag_student",
+      "caution_flag_parent",
+    ] as const).then(setTierTemplates);
   }, [viewMoreStudent]);
 
-  useEffect(() => {
-    (() => {
-      if (!offeringId) {
-        setParentWhatsappLink(null);
-        return;
-      }
-      getOfferingParentWhatsappLink(offeringId).then(setParentWhatsappLink);
-    })();
-  }, [offeringId]);
+  const [gradeScale, setGradeScaleState] = useState<GradeScaleSetting>({ scale: "percentage", bands: [] });
 
   async function reload(id: string) {
     setLoading(true);
@@ -192,10 +166,12 @@ export function StudentsContent({ role }: { role: Role }) {
       // slower queries. Loading them in the background after the roster
       // itself paints means switching offerings feels instant even before
       // every badge has resolved.
-      const [rows, ast] = await Promise.all([getStudentsForOffering(id), listOfferingAssistants(id)]);
+      const { rows, assistants: ast, gradeScale: gs, parentWhatsappLink: link } = await getStudentsTabForOffering(id);
       if (offeringIdRef.current !== id) return;
       setStudents(rows);
       setAssistants(ast);
+      setGradeScaleState(gs);
+      setParentWhatsappLink(link);
       setLoading(false);
 
       getTrafficLightForOffering(id).then((tl) => {
@@ -203,7 +179,7 @@ export function StudentsContent({ role }: { role: Role }) {
       });
 
       if (isRegistration) {
-        Promise.all([getPaymentStatusForOffering(id), getCourseLabelsForStudents(rows.map((r) => r.studentId))]).then(([payments, labels]) => {
+        getStudentsRegistrationExtras(id, rows.map((r) => r.studentId)).then(({ payments, labels }) => {
           if (offeringIdRef.current !== id) return;
           setPaymentByStudent(payments);
           setCourseLabelsByStudent(labels);
@@ -220,17 +196,12 @@ export function StudentsContent({ role }: { role: Role }) {
       if (!offeringId) {
         setStudents([]);
         setAssistants([]);
+        setParentWhatsappLink(null);
         return;
       }
       setPage(0);
       await reload(offeringId);
     })();
-  }, [offeringId]);
-
-  const [gradeScale, setGradeScaleState] = useState<GradeScaleSetting>({ scale: "percentage", bands: [] });
-  useEffect(() => {
-    if (!offeringId) return;
-    getGradeScale(offeringId).then(setGradeScaleState);
   }, [offeringId]);
 
   function formatGrade(avgGrade: number | null): string {

@@ -188,7 +188,7 @@ export function AcademicReportContent() {
               Generate a snapshot of assignments, weak topics and comments for {periodLabel(period)}.
             </p>
           </div>
-          <div className="flex flex-none flex-wrap items-center gap-[8px]">
+          <div className="flex flex-wrap items-center gap-[8px]">
             {offerings && offerings.length > 0 && (
               <select
                 value={offeringId}
@@ -327,7 +327,10 @@ export function AcademicReportContent() {
                     >
                       <div>
                         <div className="text-[14px] font-semibold text-[var(--text)]">{s.studentName}</div>
-                        <div className="text-[11.5px] text-[var(--subtle)]">{s.studentCode}</div>
+                        <div className="text-[11.5px] text-[var(--subtle)]">
+                          {s.studentCode}
+                          {s.assistantName ? ` · ${s.assistantName}` : ""}
+                        </div>
                       </div>
                       <div className="flex items-center gap-[14px]">
                         <div className="text-right">

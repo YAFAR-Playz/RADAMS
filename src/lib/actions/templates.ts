@@ -36,6 +36,16 @@ export async function getEffectiveTemplate(key: TemplateKey): Promise<string> {
   return data?.body ?? fallback;
 }
 
+// Fetches several templates in one round trip. A client component calling
+// getEffectiveTemplate() several times inside its own Promise.all looks
+// parallel, but this Next.js version dispatches and awaits Server Functions
+// invoked from the client one at a time — the real parallel Promise.all has
+// to happen in here, server-side, to actually save the extra round trips.
+export async function getEffectiveTemplates<K extends TemplateKey>(keys: K[]): Promise<Record<K, string>> {
+  const values = await Promise.all(keys.map((k) => getEffectiveTemplate(k)));
+  return Object.fromEntries(keys.map((k, i) => [k, values[i]])) as Record<K, string>;
+}
+
 export async function getPlatformTemplates(): Promise<Record<TemplateKey, string | null>> {
   const result = emptyTemplateRecord();
   const supabase = await createClient();
