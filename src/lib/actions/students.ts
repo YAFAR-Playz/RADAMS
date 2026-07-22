@@ -3,6 +3,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { logActivity } from "@/lib/actions/activity-log";
+import { listOfferingAssistants } from "@/lib/actions/head-assignments";
+import { getGradeScale, type GradeScaleSetting } from "@/lib/actions/oversight";
+import { getOfferingParentWhatsappLink } from "@/lib/actions/assistant-groups";
+import { getPaymentStatusForOffering, type PaymentStatusSummary } from "@/lib/actions/payments";
+import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
+import { getOrgBrandName, getEffectiveTemplates } from "@/lib/actions/templates";
+import { getPayrollSettings } from "@/lib/actions/payroll-settings";
 
 export type ProgressCell = { assignmentTitle: string; status: string | null };
 
@@ -111,6 +118,85 @@ export async function getStudentsForOffering(offeringId: string): Promise<Studen
       };
     })
     .filter((x): x is StudentRow => !!x);
+}
+
+export type StudentsTabForOffering = {
+  rows: StudentRow[];
+  assistants: Awaited<ReturnType<typeof listOfferingAssistants>>;
+  gradeScale: GradeScaleSetting;
+  parentWhatsappLink: string | null;
+};
+
+// Bundles every independent query the Students tab needs for a given
+// offering into one round trip. This Next.js version dispatches and awaits
+// Server Functions invoked from the client one at a time, so four separate
+// client-side calls (roster, assistants, grade scale, WhatsApp link) — even
+// wrapped in Promise.all or fired from separate effects in the same tick —
+// were still four sequential round trips. The Promise.all here is real
+// parallelism because it never crosses the client/server boundary.
+export async function getStudentsTabForOffering(offeringId: string): Promise<StudentsTabForOffering> {
+  const [rows, assistants, gradeScale, parentWhatsappLink] = await Promise.all([
+    getStudentsForOffering(offeringId),
+    listOfferingAssistants(offeringId),
+    getGradeScale(offeringId),
+    getOfferingParentWhatsappLink(offeringId),
+  ]);
+  return { rows, assistants, gradeScale, parentWhatsappLink };
+}
+
+export type StudentsRegistrationExtras = {
+  payments: Record<string, PaymentStatusSummary>;
+  labels: CourseLabelsByStudent;
+};
+
+export async function getStudentsRegistrationExtras(offeringId: string, studentIds: string[]): Promise<StudentsRegistrationExtras> {
+  const [payments, labels] = await Promise.all([getPaymentStatusForOffering(offeringId), getCourseLabelsForStudents(studentIds)]);
+  return { payments, labels };
+}
+
+export type StudentsTabBootstrap = {
+  offerings: OfferingOption[];
+  orgName: string;
+  currency: string | null;
+  welcomeTemplateStudent: string;
+  welcomeTemplateParent: string;
+  tierTemplates: {
+    critical_alert_student: string;
+    critical_alert_parent: string;
+    caution_flag_student: string;
+    caution_flag_parent: string;
+  };
+};
+
+// Everything the Students tab needs before an offering is even picked —
+// same one-round-trip-instead-of-many reasoning as getStudentsTabForOffering.
+export async function getStudentsTabBootstrap(): Promise<StudentsTabBootstrap> {
+  const [offerings, orgName, payrollSettings, templates] = await Promise.all([
+    listMyOfferings(),
+    getOrgBrandName(),
+    getPayrollSettings(),
+    getEffectiveTemplates([
+      "welcome_student",
+      "welcome_parent",
+      "critical_alert_student",
+      "critical_alert_parent",
+      "caution_flag_student",
+      "caution_flag_parent",
+    ] as const),
+  ]);
+  return {
+    offerings,
+    orgName,
+    currency: payrollSettings?.currency ?? null,
+    welcomeTemplateStudent: templates.welcome_student,
+    welcomeTemplateParent: templates.welcome_parent,
+    tierTemplates: {
+      critical_alert_student: templates.critical_alert_student,
+      critical_alert_parent: templates.critical_alert_parent,
+      caution_flag_student: templates.caution_flag_student,
+      caution_flag_parent: templates.caution_flag_parent,
+    },
+  };
 }
 
 export async function getEnrollmentCounts(studentIds: string[]): Promise<Record<string, number>> {
