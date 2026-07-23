@@ -3,12 +3,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { getGradeScale, type GradeScaleSetting } from "@/lib/actions/oversight";
+import { resolveTemplateFlags } from "@/lib/assignment-template-fallback";
 
 export type ReportAssignmentOption = {
   id: string;
   title: string;
   dueDate: string | null;
   includeInReport: boolean;
+  hasGrade: boolean;
 };
 
 function monthRange(period: string) {
@@ -28,13 +30,20 @@ export async function getReportAssignments(offeringId: string, period: string): 
   const supabase = await createClient();
   const { start, end } = monthRange(period);
 
-  const { data } = await supabase.from("assignments").select("id, title, due_date, created_at, include_in_report").eq("offering_id", offeringId);
+  const { data } = await supabase
+    .from("assignments")
+    .select("id, title, due_date, created_at, include_in_report, template, assignment_templates(has_grade, has_comment)")
+    .eq("offering_id", offeringId);
   return (data ?? [])
     .filter((a) => {
       const d = a.due_date ?? a.created_at.slice(0, 10);
       return d >= start && d < end;
     })
-    .map((a) => ({ id: a.id, title: a.title, dueDate: a.due_date, includeInReport: a.include_in_report }))
+    .map((a) => {
+      const joined = Array.isArray(a.assignment_templates) ? a.assignment_templates[0] : a.assignment_templates;
+      const { hasGrade } = resolveTemplateFlags(a.template, joined);
+      return { id: a.id, title: a.title, dueDate: a.due_date, includeInReport: a.include_in_report, hasGrade };
+    })
     .sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""));
 }
 
@@ -94,7 +103,6 @@ export type ReportAssignmentDetail = {
   title: string;
   status: string | null;
   grade: string | null;
-  comment: string | null;
   maxMarks: number | null;
   reportGroup: "homework" | "quiz" | "other";
 };
@@ -138,8 +146,8 @@ export async function getAcademicMonthlyReport(offeringId: string, period: strin
   const studentIds = enrollments.map((e) => e.student_id);
 
   const { data: logs } = assignmentIds.length
-    ? await supabase.from("assignment_logs").select("assignment_id, student_id, status, grade, comment").in("assignment_id", assignmentIds).in("student_id", studentIds)
-    : { data: [] as { assignment_id: string; student_id: string; status: string | null; grade: string | null; comment: string | null }[] };
+    ? await supabase.from("assignment_logs").select("assignment_id, student_id, status, grade").in("assignment_id", assignmentIds).in("student_id", studentIds)
+    : { data: [] as { assignment_id: string; student_id: string; status: string | null; grade: string | null }[] };
 
   const { data: topics } = await supabase
     .from("student_topic_submissions")
@@ -168,7 +176,6 @@ export async function getAcademicMonthlyReport(offeringId: string, period: strin
           title: a.title,
           status: log?.status ?? null,
           grade: log?.grade ?? null,
-          comment: log?.comment ?? null,
           maxMarks: maxMarksByAssignment.get(a.id) ?? null,
           reportGroup: reportGroupByAssignment.get(a.id) ?? "homework",
         };
@@ -283,10 +290,10 @@ export async function generateMonthlyAcademicReport(
   const { data: logs } = assignmentIds.length
     ? await supabase
         .from("assignment_logs")
-        .select("assignment_id, student_id, status, grade, comment")
+        .select("assignment_id, student_id, status, grade")
         .in("assignment_id", assignmentIds)
         .in("student_id", studentIds)
-    : { data: [] as { assignment_id: string; student_id: string; status: string | null; grade: string | null; comment: string | null }[] };
+    : { data: [] as { assignment_id: string; student_id: string; status: string | null; grade: string | null }[] };
 
   const { data: topics } = await supabase
     .from("student_topic_submissions")
@@ -343,7 +350,6 @@ export async function generateMonthlyAcademicReport(
         title: titleByAssignment.get(s.assignmentId) ?? "",
         status: log?.status ?? null,
         grade: mode === "grade" ? log?.grade ?? null : null,
-        comment: log?.comment ?? null,
         maxMarks: maxMarksByAssignment.get(s.assignmentId) ?? null,
         reportGroup: reportGroupByAssignment.get(s.assignmentId) ?? "homework",
       };

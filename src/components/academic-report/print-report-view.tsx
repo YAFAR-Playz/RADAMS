@@ -166,8 +166,7 @@ export function PrintReportView({
                           <tr className="border-b border-[#ccc] text-left text-[#555]">
                             <th className="py-[6px] pr-2">Assignment</th>
                             <th className="py-[6px] pr-2">Status</th>
-                            <th className="py-[6px] pr-2">Grade</th>
-                            <th className="py-[6px]">Comment</th>
+                            <th className="py-[6px]">Grade</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -175,8 +174,7 @@ export function PrintReportView({
                             <tr key={i} className="border-b border-[#eee]">
                               <td className="py-[6px] pr-2 font-medium">{a.title}</td>
                               <td className="py-[6px] pr-2 capitalize">{a.status ?? "not logged"}</td>
-                              <td className="py-[6px] pr-2">{a.grade ?? "—"}</td>
-                              <td className="py-[6px] text-[#555]">{a.comment ?? ""}</td>
+                              <td className="py-[6px]">{a.grade ?? "—"}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -197,8 +195,7 @@ export function PrintReportView({
                         <tr className="border-b border-[#ccc] text-left text-[#555]">
                           <th className="py-[6px] pr-2">Assignment</th>
                           <th className="py-[6px] pr-2">Status</th>
-                          <th className="py-[6px] pr-2">Grade</th>
-                          <th className="py-[6px]">Comment</th>
+                          <th className="py-[6px]">Grade</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -206,8 +203,7 @@ export function PrintReportView({
                           <tr key={i} className="border-b border-[#eee]">
                             <td className="py-[6px] pr-2 font-medium">{a.title}</td>
                             <td className="py-[6px] pr-2 capitalize">{a.status ?? "not logged"}</td>
-                            <td className="py-[6px] pr-2">{a.grade ?? "—"}</td>
-                            <td className="py-[6px] text-[#555]">{a.comment ?? ""}</td>
+                            <td className="py-[6px]">{a.grade ?? "—"}</td>
                           </tr>
                         ))}
                       </tbody>
