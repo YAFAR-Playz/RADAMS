@@ -98,7 +98,9 @@ export function AcademicReportContent() {
 
   function openGenerate() {
     if (!assignments) return;
-    setSelection(Object.fromEntries(assignments.map((a) => [a.id, a.includeInReport ? "grade" : "excluded"])));
+    setSelection(
+      Object.fromEntries(assignments.map((a) => [a.id, a.includeInReport ? (a.hasGrade ? "grade" : "status_only") : "excluded"]))
+    );
     setGenerateOpen(true);
   }
 
@@ -156,9 +158,9 @@ export function AcademicReportContent() {
     const rows: unknown[][] = [];
     for (const s of students) {
       for (const a of s.assignments) {
-        rows.push([s.studentCode, s.studentName, formatGradeByScale(s.avgGrade, meta.gradeScale), a.title, a.status ?? "not logged", a.grade ?? "", a.comment ?? ""]);
+        rows.push([s.studentCode, s.studentName, formatGradeByScale(s.avgGrade, meta.gradeScale), a.title, a.status ?? "not logged", a.grade ?? ""]);
       }
-      if (s.assignments.length === 0) rows.push([s.studentCode, s.studentName, formatGradeByScale(s.avgGrade, meta.gradeScale), "", "", "", ""]);
+      if (s.assignments.length === 0) rows.push([s.studentCode, s.studentName, formatGradeByScale(s.avgGrade, meta.gradeScale), "", "", ""]);
     }
     rows.push([]);
     rows.push(["WEAK TOPICS"]);
@@ -174,7 +176,7 @@ export function AcademicReportContent() {
     rows.push(["Student code", "Student", "Comment"]);
     for (const s of students) rows.push([s.studentCode, s.studentName, s.assistantComment]);
 
-    downloadCsv(`academic-report-${period}`, ["Student code", "Student", "Avg grade", "Assignment", "Status", "Grade", "Comment"], rows);
+    downloadCsv(`academic-report-${period}`, ["Student code", "Student", "Avg grade", "Assignment", "Status", "Grade"], rows);
   }
 
   return (
@@ -367,7 +369,6 @@ export function AcademicReportContent() {
                                       {a.grade ? ` · ${a.grade}` : ""}
                                     </span>
                                   </div>
-                                  {a.comment && <div className="mt-[3px] text-[12px] text-[var(--muted)]">{a.comment}</div>}
                                 </div>
                               ))}
                             </div>
@@ -460,7 +461,7 @@ export function AcademicReportContent() {
                         [
                           ["excluded", "Excluded"],
                           ["status_only", "Status only"],
-                          ["grade", "Status + grade"],
+                          ...(a.hasGrade ? ([["grade", "Status + grade"]] as const) : []),
                         ] as const
                       ).map(([mode, label]) => (
                         <button
