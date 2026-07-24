@@ -135,11 +135,7 @@ export function MonthlyReportContent() {
             {gradeScales.map((g) => (
               <div key={g.offeringId} className="flex flex-wrap items-center justify-between gap-[10px] p-[12px_18px]">
                 <span className="text-[13px] font-semibold text-[var(--text)]">{g.label}</span>
-                {g.scale === "percentage" ? (
-                  <span className="text-[12.5px] text-[var(--muted)]">Percentage (0–100)</span>
-                ) : g.bands.length === 0 ? (
-                  <span className="text-[12.5px] text-[var(--subtle)]">Letter scale — no bands set</span>
-                ) : (
+                {g.bands.length > 0 ? (
                   <div className="flex flex-wrap gap-[6px]">
                     {g.bands.map((b) => (
                       <span
@@ -150,6 +146,10 @@ export function MonthlyReportContent() {
                       </span>
                     ))}
                   </div>
+                ) : g.scale === "percentage" ? (
+                  <span className="text-[12.5px] text-[var(--muted)]">Percentage (0–100)</span>
+                ) : (
+                  <span className="text-[12.5px] text-[var(--subtle)]">{g.scale === "numeric" ? "Numeric" : "Letter"} scale — no bands set</span>
                 )}
               </div>
             ))}

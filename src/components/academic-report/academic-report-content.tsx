@@ -526,40 +526,43 @@ export function AcademicReportContent() {
                 ))}
               </div>
 
-              {scaleDraft.scale !== "percentage" && (
-                <div className="flex flex-col gap-[8px]">
-                  <label className="text-[12.5px] font-semibold text-[var(--text)]">
-                    Bands ({scaleDraft.scale === "numeric" ? "number" : "label"} + minimum %)
-                  </label>
-                  {scaleDraft.bands.map((b, i) => (
-                    <div key={i} className="flex items-center gap-[8px]">
-                      <input
-                        value={b.label}
-                        onChange={(e) => updateBand(i, { label: e.target.value })}
-                        placeholder={scaleDraft.scale === "numeric" ? "9" : "A*"}
-                        className="h-9 w-[70px] flex-none rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
-                      />
-                      <input
-                        type="number"
-                        value={b.min}
-                        onChange={(e) => updateBand(i, { min: Number(e.target.value) || 0 })}
-                        placeholder="90"
-                        className="h-9 flex-1 rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
-                      />
-                      <button onClick={() => removeBand(i)} className="flex h-9 w-9 flex-none items-center justify-center rounded-[7px] border border-[var(--border)] bg-[var(--surface)] text-[var(--subtle)] hover:border-[var(--danger)] hover:text-[var(--danger)]">
-                        <Icon name="x" size={13} />
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    onClick={addBand}
-                    className="flex h-9 items-center justify-center gap-[6px] rounded-[8px] border border-dashed border-[var(--border)] text-[12.5px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)]"
-                  >
-                    <Icon name="plus" size={13} />
-                    Add band
-                  </button>
-                </div>
-              )}
+              <div className="flex flex-col gap-[8px]">
+                <label className="text-[12.5px] font-semibold text-[var(--text)]">
+                  Bands ({scaleDraft.scale === "numeric" ? "number" : "label"} + minimum %)
+                </label>
+                <p className="m-0 text-[11.5px] text-[var(--muted)]">
+                  {scaleDraft.scale === "percentage"
+                    ? "Optional — leave empty to just show the raw percentage (e.g. 87%). Add bands to show a label once a student's average crosses a threshold."
+                    : "A student's average grade shows the highest band whose minimum they meet."}
+                </p>
+                {scaleDraft.bands.map((b, i) => (
+                  <div key={i} className="flex items-center gap-[8px]">
+                    <input
+                      value={b.label}
+                      onChange={(e) => updateBand(i, { label: e.target.value })}
+                      placeholder={scaleDraft.scale === "numeric" ? "9" : scaleDraft.scale === "percentage" ? "Distinction" : "A*"}
+                      className="h-9 w-[90px] flex-none rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+                    />
+                    <input
+                      type="number"
+                      value={b.min}
+                      onChange={(e) => updateBand(i, { min: Number(e.target.value) || 0 })}
+                      placeholder="90"
+                      className="h-9 flex-1 rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+                    />
+                    <button onClick={() => removeBand(i)} className="flex h-9 w-9 flex-none items-center justify-center rounded-[7px] border border-[var(--border)] bg-[var(--surface)] text-[var(--subtle)] hover:border-[var(--danger)] hover:text-[var(--danger)]">
+                      <Icon name="x" size={13} />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={addBand}
+                  className="flex h-9 items-center justify-center gap-[6px] rounded-[8px] border border-dashed border-[var(--border)] text-[12.5px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)]"
+                >
+                  <Icon name="plus" size={13} />
+                  Add band
+                </button>
+              </div>
             </div>
             <div className="flex gap-[10px] border-t border-[var(--border2)] p-[14px_18px]">
               <button onClick={() => setScaleOpen(false)} className="h-11 flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]">

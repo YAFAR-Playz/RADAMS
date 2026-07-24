@@ -119,7 +119,7 @@ export async function setGradeScale(offeringId: string, setting: GradeScaleSetti
   const supabase = await createClient();
   const { error } = await supabase
     .from("course_offerings")
-    .update({ grade_scale: setting.scale, grade_bands: setting.scale !== "percentage" ? setting.bands : null })
+    .update({ grade_scale: setting.scale, grade_bands: setting.bands })
     .eq("id", offeringId);
   if (error) throw new Error(error.message);
 }
