@@ -75,10 +75,13 @@ export async function listAssignmentsWithProgress(offeringId: string): Promise<A
     .select("assignment_id, profiles(id, full_name, initials)")
     .in("assignment_id", assignmentIds);
 
+  // Exclude students marked as "left" — they shouldn't count toward
+  // expected/logged totals for assignment progress once they're gone.
   const { data: enrollments } = await supabase
     .from("enrollments")
-    .select("student_id, assistant_id")
-    .eq("offering_id", offeringId);
+    .select("student_id, assistant_id, students!inner(left_at)")
+    .eq("offering_id", offeringId)
+    .is("students.left_at", null);
 
   // A course with several assignment categories easily logs assignments ×
   // roster-size rows across the whole offering — comfortably past
