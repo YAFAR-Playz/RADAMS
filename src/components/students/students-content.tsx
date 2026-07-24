@@ -28,6 +28,7 @@ import {
   type StudentDetailPanel,
 } from "@/lib/actions/students";
 import { type GradeScaleSetting } from "@/lib/actions/oversight";
+import { formatGradeByScale } from "@/lib/grade-scale";
 import { getTrafficLightForOffering, setStudentTargetGrade, type StudentTrafficLight } from "@/lib/actions/traffic-light";
 import { getStudentAttendance, type StudentAttendanceSummary } from "@/lib/actions/attendance";
 import { downloadCsv } from "@/lib/csv-export";
@@ -205,12 +206,7 @@ export function StudentsContent({ role }: { role: Role }) {
   }, [offeringId]);
 
   function formatGrade(avgGrade: number | null): string {
-    if (avgGrade == null) return "—";
-    if (gradeScale.scale !== "percentage" && gradeScale.bands.length) {
-      const band = gradeScale.bands.find((b) => avgGrade >= b.min);
-      if (band) return band.label;
-    }
-    return `${avgGrade}%`;
+    return formatGradeByScale(avgGrade, gradeScale);
   }
 
   const offeringsLoading = offerings === null;
