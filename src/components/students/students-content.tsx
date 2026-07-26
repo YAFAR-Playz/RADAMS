@@ -263,29 +263,16 @@ export function StudentsContent({ role }: { role: Role }) {
     if (!offeringId) return;
     setExporting(true);
     try {
-      const rows = await getStudentDetailedExport(offeringId);
+      const { columns, rows } = await getStudentDetailedExport(offeringId);
+      const assignmentHeaders = columns.flatMap((c) => {
+        const h = [`${c.assignmentTitle} — Status`];
+        if (c.hasGrade) h.push(`${c.assignmentTitle} — Grade`);
+        if (c.hasComment) h.push(`${c.assignmentTitle} — Comment`);
+        return h;
+      });
       downloadCsv(
         `students-detailed-${current?.label ?? "all"}`,
-        [
-          "Student ID",
-          "Name",
-          "Email",
-          "Phone",
-          "Guardian name",
-          "Guardian phone",
-          "Assistant",
-          "Enrolled",
-          "Left",
-          "Assignment",
-          "Due date",
-          "Max marks",
-          "Status",
-          "Grade",
-          "Comment",
-          "Logged by",
-          "Sent to parent",
-          "Last updated",
-        ],
+        ["Student ID", "Name", "Email", "Phone", "Guardian name", "Guardian phone", "Assistant", "Enrolled", "Left", ...assignmentHeaders],
         rows.map((r) => [
           r.studentCode,
           r.studentName,
@@ -296,15 +283,7 @@ export function StudentsContent({ role }: { role: Role }) {
           r.assistantName ?? "",
           r.enrolledAt,
           r.leftAt ?? "",
-          r.assignmentTitle,
-          r.dueDate ?? "",
-          r.maxMarks || "",
-          r.status,
-          r.grade,
-          r.comment,
-          r.loggedBy ?? "",
-          r.sentAt ?? "",
-          r.updatedAt ?? "",
+          ...r.cells,
         ])
       );
     } finally {
