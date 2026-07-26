@@ -10,6 +10,7 @@ import { getPaymentStatusForOffering, type PaymentStatusSummary } from "@/lib/ac
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import { getOrgBrandName, getEffectiveTemplates } from "@/lib/actions/templates";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
+import { resolveTemplateFlags } from "@/lib/assignment-template-fallback";
 
 export type ProgressCell = { assignmentTitle: string; status: string | null };
 
@@ -450,7 +451,13 @@ export async function setStudentDriveFolderLink(studentId: string, link: string)
   if (error) throw new Error(error.message);
 }
 
-export type StudentAssignmentDetailRow = {
+// One column per assignment per (status/grade/comment) field it actually
+// has — a status-only assignment contributes one column, a graded+commented
+// one contributes three. Every student's row uses this exact same column
+// set (in the same order), so the header only needs to be computed once.
+export type StudentDetailedExportColumn = { assignmentTitle: string; hasGrade: boolean; hasComment: boolean };
+
+export type StudentDetailedExportRow = {
   studentCode: string;
   studentName: string;
   email: string | null;
@@ -460,121 +467,89 @@ export type StudentAssignmentDetailRow = {
   assistantName: string | null;
   enrolledAt: string;
   leftAt: string | null;
-  assignmentTitle: string;
-  dueDate: string | null;
-  maxMarks: number;
-  status: string;
-  grade: string;
-  comment: string;
-  loggedBy: string | null;
-  sentAt: string | null;
-  updatedAt: string | null;
+  // Flattened cell values, in the same order/shape as `columns` — each
+  // assignment contributes [status] or [status, grade] or [status, comment]
+  // or [status, grade, comment] depending on that assignment's own flags.
+  cells: string[];
 };
 
-// One row per (student, assignment) for the offering — every assignment
-// detail and comment a student has, not just a summary — so heads/admins can
-// audit exactly what was logged rather than a single rolled-up average.
-export async function getStudentDetailedExport(offeringId: string): Promise<StudentAssignmentDetailRow[]> {
+export type StudentDetailedExport = {
+  columns: StudentDetailedExportColumn[];
+  rows: StudentDetailedExportRow[];
+};
+
+// One row per student for the offering (never one row per assignment) —
+// every assignment's status/grade/comment becomes its own column instead,
+// so heads/admins can audit everything for a student without duplicate rows.
+export async function getStudentDetailedExport(offeringId: string): Promise<StudentDetailedExport> {
   const profile = await getCurrentProfile();
-  if (!profile || profile.role === "assistant") return [];
+  if (!profile || profile.role === "assistant") return { columns: [], rows: [] };
   const supabase = await createClient();
 
   const { data: enrollments } = await supabase
     .from("enrollments")
     .select("student_id, created_at, students(name, initials, student_code, email, phone, guardian_name, guardian_phone, left_at), profiles(full_name)")
     .eq("offering_id", offeringId);
-  if (!enrollments || enrollments.length === 0) return [];
+  if (!enrollments || enrollments.length === 0) return { columns: [], rows: [] };
 
   const { data: assignmentRows } = await supabase
     .from("assignments")
-    .select("id, title, due_date, max_marks")
+    .select("id, title, template, assignment_templates(has_grade, has_comment)")
     .eq("offering_id", offeringId)
     .order("created_at", { ascending: true });
-  const assignments = assignmentRows ?? [];
+  const assignments = (assignmentRows ?? []).map((a) => {
+    const joined = Array.isArray(a.assignment_templates) ? a.assignment_templates[0] : a.assignment_templates;
+    const { hasGrade, hasComment } = resolveTemplateFlags(a.template, joined);
+    return { id: a.id, title: a.title, hasGrade, hasComment };
+  });
 
-  type LogRow = {
-    assignment_id: string;
-    student_id: string;
-    status: string | null;
-    grade: string | null;
-    comment: string | null;
-    sent_at: string | null;
-    updated_at: string;
-    profiles: { full_name: string } | { full_name: string }[] | null;
-  };
+  const columns: StudentDetailedExportColumn[] = assignments.map((a) => ({
+    assignmentTitle: a.title,
+    hasGrade: a.hasGrade,
+    hasComment: a.hasComment,
+  }));
 
   const studentIds = enrollments.map((e) => e.student_id);
   const assignmentIds = assignments.map((a) => a.id);
-  const logs: LogRow[] =
+  const { data: logs } =
     assignmentIds.length && studentIds.length
-      ? ((
-          await supabase
-            .from("assignment_logs")
-            .select("assignment_id, student_id, status, grade, comment, sent_at, updated_at, profiles(full_name)")
-            .in("assignment_id", assignmentIds)
-            .in("student_id", studentIds)
-        ).data ?? [])
-      : [];
+      ? await supabase
+          .from("assignment_logs")
+          .select("assignment_id, student_id, status, grade, comment")
+          .in("assignment_id", assignmentIds)
+          .in("student_id", studentIds)
+      : { data: [] as { assignment_id: string; student_id: string; status: string | null; grade: string | null; comment: string | null }[] };
 
   const logKey = (assignmentId: string, studentId: string) => `${assignmentId}::${studentId}`;
-  const logByKey = new Map<string, LogRow>();
-  for (const l of logs) logByKey.set(logKey(l.assignment_id, l.student_id), l);
+  const logByKey = new Map((logs ?? []).map((l) => [logKey(l.assignment_id, l.student_id), l]));
 
-  const rows: StudentAssignmentDetailRow[] = [];
+  const rows: StudentDetailedExportRow[] = [];
   for (const e of enrollments) {
     const student = Array.isArray(e.students) ? e.students[0] : e.students;
     const assistant = Array.isArray(e.profiles) ? e.profiles[0] : e.profiles;
     if (!student) continue;
 
-    if (assignments.length === 0) {
-      rows.push({
-        studentCode: student.student_code,
-        studentName: student.name,
-        email: student.email,
-        phone: student.phone,
-        guardianName: student.guardian_name,
-        guardianPhone: student.guardian_phone,
-        assistantName: assistant?.full_name ?? null,
-        enrolledAt: e.created_at,
-        leftAt: student.left_at,
-        assignmentTitle: "",
-        dueDate: null,
-        maxMarks: 0,
-        status: "",
-        grade: "",
-        comment: "",
-        loggedBy: null,
-        sentAt: null,
-        updatedAt: null,
-      });
-      continue;
-    }
-
+    const cells: string[] = [];
     for (const a of assignments) {
       const log = logByKey.get(logKey(a.id, e.student_id));
-      const loggedBy = log ? (Array.isArray(log.profiles) ? log.profiles[0] : log.profiles) : null;
-      rows.push({
-        studentCode: student.student_code,
-        studentName: student.name,
-        email: student.email,
-        phone: student.phone,
-        guardianName: student.guardian_name,
-        guardianPhone: student.guardian_phone,
-        assistantName: assistant?.full_name ?? null,
-        enrolledAt: e.created_at,
-        leftAt: student.left_at,
-        assignmentTitle: a.title,
-        dueDate: a.due_date,
-        maxMarks: a.max_marks,
-        status: log?.status ?? "not logged",
-        grade: log?.grade ?? "",
-        comment: log?.comment ?? "",
-        loggedBy: loggedBy?.full_name ?? null,
-        sentAt: log?.sent_at ?? null,
-        updatedAt: log?.updated_at ?? null,
-      });
+      cells.push(log?.status ?? "not logged");
+      if (a.hasGrade) cells.push(log?.grade ?? "");
+      if (a.hasComment) cells.push(log?.comment ?? "");
     }
+
+    rows.push({
+      studentCode: student.student_code,
+      studentName: student.name,
+      email: student.email,
+      phone: student.phone,
+      guardianName: student.guardian_name,
+      guardianPhone: student.guardian_phone,
+      assistantName: assistant?.full_name ?? null,
+      enrolledAt: e.created_at,
+      leftAt: student.left_at,
+      cells,
+    });
   }
 
-  return rows.sort((a, b) => a.studentName.localeCompare(b.studentName));
+  return { columns, rows: rows.sort((a, b) => a.studentName.localeCompare(b.studentName)) };
 }
