@@ -509,19 +509,33 @@ export async function getStudentDetailedExport(offeringId: string): Promise<Stud
     hasComment: a.hasComment,
   }));
 
+  // A course with a full roster and several assignments easily produces
+  // students × assignments log rows — well past PostgREST's default
+  // 1000-row cap on a single unbounded select (one offering here alone has
+  // 325 students × 10 assignments = 2,484 rows). An un-paginated fetch
+  // silently truncated the result, so whichever assignments' logs happened
+  // to sort past the cutoff read as "not logged" despite being genuinely
+  // logged — paginate through with .range() until exhausted instead.
   const studentIds = enrollments.map((e) => e.student_id);
   const assignmentIds = assignments.map((a) => a.id);
-  const { data: logs } =
-    assignmentIds.length && studentIds.length
-      ? await supabase
-          .from("assignment_logs")
-          .select("assignment_id, student_id, status, grade, comment")
-          .in("assignment_id", assignmentIds)
-          .in("student_id", studentIds)
-      : { data: [] as { assignment_id: string; student_id: string; status: string | null; grade: string | null; comment: string | null }[] };
+  const logs: { assignment_id: string; student_id: string; status: string | null; grade: string | null; comment: string | null }[] = [];
+  if (assignmentIds.length && studentIds.length) {
+    const LOGS_PAGE_SIZE = 1000;
+    for (let from = 0; ; from += LOGS_PAGE_SIZE) {
+      const { data: page } = await supabase
+        .from("assignment_logs")
+        .select("assignment_id, student_id, status, grade, comment")
+        .in("assignment_id", assignmentIds)
+        .in("student_id", studentIds)
+        .range(from, from + LOGS_PAGE_SIZE - 1);
+      if (!page || page.length === 0) break;
+      logs.push(...page);
+      if (page.length < LOGS_PAGE_SIZE) break;
+    }
+  }
 
   const logKey = (assignmentId: string, studentId: string) => `${assignmentId}::${studentId}`;
-  const logByKey = new Map((logs ?? []).map((l) => [logKey(l.assignment_id, l.student_id), l]));
+  const logByKey = new Map(logs.map((l) => [logKey(l.assignment_id, l.student_id), l]));
 
   const rows: StudentDetailedExportRow[] = [];
   for (const e of enrollments) {
