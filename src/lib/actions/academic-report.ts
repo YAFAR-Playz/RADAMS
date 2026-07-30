@@ -499,3 +499,22 @@ export async function getGeneratedReport(offeringId: string, period: string): Pr
     students,
   };
 }
+
+// Assistant-facing counterpart to getGeneratedReport — same generated
+// snapshot, scoped down to just the students currently enrolled under this
+// assistant for this offering. Returns an empty student list (with meta
+// still set) if the report exists but this assistant has none of its
+// students in it; meta stays null if the head hasn't generated it yet.
+export async function getMyGeneratedReport(offeringId: string, period: string): Promise<{ meta: GeneratedReportMeta | null; students: GeneratedStudentReport[] }> {
+  const profile = await getCurrentProfile();
+  if (!profile || profile.role !== "assistant") return { meta: null, students: [] };
+  const supabase = await createClient();
+
+  const [{ meta, students }, { data: myEnrollments }] = await Promise.all([
+    getGeneratedReport(offeringId, period),
+    supabase.from("enrollments").select("student_id").eq("offering_id", offeringId).eq("assistant_id", profile.id),
+  ]);
+  const myStudentIds = new Set((myEnrollments ?? []).map((e) => e.student_id));
+
+  return { meta, students: students.filter((s) => myStudentIds.has(s.studentId)) };
+}

@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Icon } from "@/components/icons";
 import { formatGradeByScale } from "@/lib/grade-scale";
+import { renderElementToPdfBlob, downloadBlob, shareOrDownloadPdf } from "@/lib/pdf-export";
 import type { GeneratedReportMeta, GeneratedStudentReport } from "@/lib/actions/academic-report";
 import type { ReportSettings } from "@/lib/actions/report-settings";
 
@@ -42,7 +44,7 @@ export function PrintReportView({
   orgName,
   logoUrl,
   settings,
-  autoPrint,
+  autoAction,
 }: {
   meta: GeneratedReportMeta | null;
   students: GeneratedStudentReport[];
@@ -50,15 +52,60 @@ export function PrintReportView({
   orgName: string;
   logoUrl: string | null;
   settings: ReportSettings;
-  autoPrint?: boolean;
+  autoAction?: "print" | "download" | "share";
 }) {
-  // The "Download" action opens this same page with ?autoprint=1 so the
-  // browser's print dialog (defaulting to "Save as PDF") pops up without an
-  // extra click — there's no server-side PDF generation for the in-app view,
-  // so this is the closest thing to a one-click download.
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [busy, setBusy] = useState<"download" | "share" | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  function fileName() {
+    const monthPart = meta ? periodLabel(meta.period) : "Report";
+    if (students.length === 1) return `${students[0].studentName} - Monthly Report (${monthPart}).pdf`;
+    return `${courseName} - Monthly Reports (${monthPart}).pdf`;
+  }
+
+  async function onDownload() {
+    if (!containerRef.current || busy) return;
+    setBusy("download");
+    setActionError(null);
+    try {
+      const blob = await renderElementToPdfBlob(containerRef.current);
+      downloadBlob(blob, fileName());
+    } catch {
+      setActionError("Couldn't build the PDF — try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function onShare() {
+    if (!containerRef.current || busy) return;
+    setBusy("share");
+    setActionError(null);
+    try {
+      await shareOrDownloadPdf(containerRef.current, fileName());
+    } catch {
+      setActionError("Couldn't share the PDF — try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  // The list view's Share/Download/Print actions open this same page with
+  // ?action=... so the right thing happens immediately without an extra
+  // click. Auto-firing navigator.share() right after a fresh navigation can
+  // fail in some browsers (Web Share generally wants a direct user gesture),
+  // but shareOrDownloadPdf already falls back to a plain download when
+  // sharing is rejected, so there's no silent failure either way.
   useEffect(() => {
-    if (autoPrint && meta) window.print();
-  }, [autoPrint, meta]);
+    (() => {
+      if (!meta || !autoAction) return;
+      if (autoAction === "print") window.print();
+      if (autoAction === "download") onDownload();
+      if (autoAction === "share") onShare();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoAction, meta]);
 
   if (!meta) {
     return <div className="p-10 text-[14px] text-[#666]">No report has been generated for this month yet.</div>;
@@ -75,22 +122,46 @@ export function PrintReportView({
         }
       `}</style>
 
-      <div className="no-print mb-6 flex items-center justify-between rounded-[10px] border border-[#ddd] bg-[#f7f7f8] p-4">
-        <div className="text-[13px] text-[#555]">
-          {students.length} student report{students.length === 1 ? "" : "s"} · {periodLabel(meta.period)}
+      <div className="no-print mb-6 flex flex-col gap-3 rounded-[10px] border border-[#ddd] bg-[#f7f7f8] p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="text-[13px] text-[#555]">
+            {students.length} student report{students.length === 1 ? "" : "s"} · {periodLabel(meta.period)}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onShare}
+              disabled={busy !== null}
+              className="flex items-center gap-[6px] rounded-[8px] border border-[#ccc] bg-white px-3 py-2 text-[13px] font-semibold text-[#333] disabled:opacity-60"
+            >
+              <Icon name="share" size={15} />
+              {busy === "share" ? "Sharing…" : "Share"}
+            </button>
+            <button
+              onClick={onDownload}
+              disabled={busy !== null}
+              className="flex items-center gap-[6px] rounded-[8px] border border-[#ccc] bg-white px-3 py-2 text-[13px] font-semibold text-[#333] disabled:opacity-60"
+            >
+              <Icon name="download" size={15} />
+              {busy === "download" ? "Preparing…" : "Download"}
+            </button>
+            <button
+              onClick={() => window.print()}
+              disabled={busy !== null}
+              className="flex items-center gap-[6px] rounded-[8px] bg-[#2563eb] px-3 py-2 text-[13px] font-semibold text-white disabled:opacity-60"
+            >
+              <Icon name="printer" size={15} />
+              Print
+            </button>
+          </div>
         </div>
-        <button
-          onClick={() => window.print()}
-          className="rounded-[8px] bg-[#2563eb] px-4 py-2 text-[13px] font-semibold text-white"
-        >
-          Print / Save as PDF
-        </button>
+        {actionError && <div className="text-[12.5px] font-medium text-[#c0392b]">{actionError}</div>}
       </div>
 
       {students.length === 0 ? (
         <div className="text-[14px] text-[#666]">No student found for this report.</div>
       ) : (
-        students.map((s) => {
+        <div ref={containerRef}>
+        {students.map((s) => {
           const homeworks = s.assignments.filter((a) => a.reportGroup === "homework");
           const classwork = s.assignments.filter((a) => a.reportGroup === "classwork");
           const quizzes = s.assignments.filter((a) => a.reportGroup === "quiz");
@@ -382,7 +453,8 @@ export function PrintReportView({
               )}
             </div>
           );
-        })
+        })}
+        </div>
       )}
     </div>
   );

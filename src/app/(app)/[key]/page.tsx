@@ -33,6 +33,7 @@ import { OwnerSystemContent } from "@/components/owner-system/owner-system-conte
 import { HistoryContent } from "@/components/history/history-content";
 import { MonthlyReportContent } from "@/components/monthly-report/monthly-report-content";
 import { AcademicReportContent } from "@/components/academic-report/academic-report-content";
+import { AssistantReportContent } from "@/components/assistant-report/assistant-report-content";
 import { WeakTopicsContent } from "@/components/weak-topics/weak-topics-content";
 import { ChatContent } from "@/components/chat/chat-content";
 
@@ -158,6 +159,10 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
 
   if (key === "report" && profile.role === "head") {
     return <AcademicReportContent />;
+  }
+
+  if (key === "report" && profile.role === "assistant") {
+    return <AssistantReportContent />;
   }
 
   if (key === "evaluations" && profile.role === "head") {

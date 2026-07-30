@@ -20,6 +20,7 @@ import { formatGradeByScale } from "@/lib/grade-scale";
 import { downloadCsv } from "@/lib/csv-export";
 import { pickerOnlyDateProps } from "@/lib/date-input";
 import { matchesStudentQuery } from "@/lib/student-search";
+import { ReportActionButtons } from "@/components/academic-report/report-action-buttons";
 
 const PAGE_SIZE = 10;
 
@@ -41,65 +42,6 @@ function periodLabel(period: string) {
 }
 
 const SCALE_OPTIONS = ["percentage", "letter", "numeric"] as const;
-
-// Share / Download / Print all point at the same in-app print view — there's
-// no server-side PDF generation for it, so Download just opens that same
-// page with ?autoprint=1 so the browser's print dialog (defaulting to "Save
-// as PDF") pops up without an extra click, and Share copies that page's URL
-// (falling back from the Web Share API when it's unavailable).
-function ReportActionButtons({ href, disabled, compact }: { href: string; disabled?: boolean; compact?: boolean }) {
-  const [copied, setCopied] = useState(false);
-
-  async function onShare(e: React.MouseEvent) {
-    e.stopPropagation();
-    if (disabled) return;
-    const url = new URL(href, window.location.origin).toString();
-    if (typeof navigator.share === "function") {
-      try {
-        await navigator.share({ url, title: "Monthly report" });
-      } catch {
-        // user cancelled the share sheet — not an error
-      }
-      return;
-    }
-    await navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  function onDownload(e: React.MouseEvent) {
-    e.stopPropagation();
-    if (disabled) return;
-    window.open(`${href}${href.includes("?") ? "&" : "?"}autoprint=1`, "_blank", "noreferrer");
-  }
-
-  function onPrint(e: React.MouseEvent) {
-    e.stopPropagation();
-    if (disabled) return;
-    window.open(href, "_blank", "noreferrer");
-  }
-
-  const btnClass = compact
-    ? "flex h-8 w-8 flex-none items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
-    : "flex h-10 flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-[14px] text-[13px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60";
-
-  return (
-    <div className="flex items-center gap-[6px]">
-      <button onClick={onShare} disabled={disabled} title={copied ? "Link copied!" : "Share"} className={btnClass}>
-        <Icon name={copied ? "check" : "share"} size={compact ? 14 : 16} />
-        {!compact && (copied ? "Copied!" : "Share")}
-      </button>
-      <button onClick={onDownload} disabled={disabled} title="Download" className={btnClass}>
-        <Icon name="download" size={compact ? 14 : 16} />
-        {!compact && "Download"}
-      </button>
-      <button onClick={onPrint} disabled={disabled} title="Print" className={btnClass}>
-        <Icon name="printer" size={compact ? 14 : 16} />
-        {!compact && "Print"}
-      </button>
-    </div>
-  );
-}
 
 export function AcademicReportContent() {
   const [offerings, setOfferings] = useState<OfferingOption[] | null>(null);
