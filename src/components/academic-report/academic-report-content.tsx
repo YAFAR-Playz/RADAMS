@@ -153,30 +153,30 @@ export function AcademicReportContent() {
     }
   }
 
+  // One row per student, matching the Students tab export — each assignment
+  // contributes its own Status/Grade columns instead of a repeated row per
+  // assignment, with the overall monthly comment and weak topics appended
+  // as the final two columns instead of separate blocks at the bottom.
   function onExport() {
     if (!students || !meta) return;
-    const rows: unknown[][] = [];
-    for (const s of students) {
-      for (const a of s.assignments) {
-        rows.push([s.studentCode, s.studentName, formatGradeByScale(s.avgGrade, meta.gradeScale), a.title, a.status ?? "not logged", a.grade ?? ""]);
-      }
-      if (s.assignments.length === 0) rows.push([s.studentCode, s.studentName, formatGradeByScale(s.avgGrade, meta.gradeScale), "", "", ""]);
-    }
-    rows.push([]);
-    rows.push(["WEAK TOPICS"]);
-    rows.push(["Student code", "Student", "Topic", "Materials"]);
-    for (const s of students) {
-      for (const t of s.weakTopics) {
-        const materials = t.materials.map((m) => `${m.label?.trim() || m.kind}: ${m.link}${m.duration ? ` (${m.duration})` : ""}`).join(" | ");
-        rows.push([s.studentCode, s.studentName, t.label, materials]);
-      }
-    }
-    rows.push([]);
-    rows.push(["ASSISTANT COMMENTS"]);
-    rows.push(["Student code", "Student", "Comment"]);
-    for (const s of students) rows.push([s.studentCode, s.studentName, s.assistantComment]);
-
-    downloadCsv(`academic-report-${period}`, ["Student code", "Student", "Avg grade", "Assignment", "Status", "Grade"], rows);
+    const assignmentTitles = students[0]?.assignments.map((a) => a.title) ?? [];
+    const headers = [
+      "Student code",
+      "Student",
+      "Avg grade",
+      ...assignmentTitles.flatMap((t) => [`${t} — Status`, `${t} — Grade`]),
+      "Assistant comment",
+      "Weak topics",
+    ];
+    const rows = students.map((s) => [
+      s.studentCode,
+      s.studentName,
+      formatGradeByScale(s.avgGrade, meta.gradeScale),
+      ...s.assignments.flatMap((a) => [a.status ?? "not logged", a.grade ?? ""]),
+      s.assistantComment,
+      s.weakTopics.map((t) => t.label).join(", "),
+    ]);
+    downloadCsv(`academic-report-${period}`, headers, rows);
   }
 
   return (
