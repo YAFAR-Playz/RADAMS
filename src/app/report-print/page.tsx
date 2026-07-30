@@ -7,13 +7,13 @@ import { getBranding } from "@/lib/actions/branding";
 import { getReportSettings } from "@/lib/actions/report-settings";
 import { PrintReportView } from "@/components/academic-report/print-report-view";
 
-type SearchParams = Promise<{ offeringId?: string; period?: string; studentId?: string }>;
+type SearchParams = Promise<{ offeringId?: string; period?: string; studentId?: string; autoprint?: string }>;
 
 export default async function ReportPrintPage({ searchParams }: { searchParams: SearchParams }) {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
 
-  const { offeringId, period, studentId } = await searchParams;
+  const { offeringId, period, studentId, autoprint } = await searchParams;
   if (!offeringId || !period) {
     return <div className="p-10 text-[14px] text-[var(--muted)]">Missing report reference.</div>;
   }
@@ -36,6 +36,7 @@ export default async function ReportPrintPage({ searchParams }: { searchParams: 
       orgName={orgName}
       logoUrl={branding?.logoUrl ?? null}
       settings={reportSettings}
+      autoPrint={autoprint === "1"}
     />
   );
 }
