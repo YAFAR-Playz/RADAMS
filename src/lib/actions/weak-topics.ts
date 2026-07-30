@@ -13,18 +13,6 @@ export type TopicOption = {
   materials: TopicMaterial[];
 };
 
-export type StudentTopicSubmission = {
-  id: string;
-  studentId: string;
-  studentName: string;
-  topicId: string;
-  topicLabel: string;
-  materials: TopicMaterial[];
-  status: "pending" | "approved" | "rejected";
-  period: string;
-  assistantName: string | null;
-};
-
 async function requireHeadOrAdmin() {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org || (profile.role !== "head" && profile.role !== "admin")) throw new Error("Not authorized");
@@ -120,7 +108,7 @@ export async function deleteTopic(id: string) {
 export type AssistantStudentTopics = {
   studentId: string;
   studentName: string;
-  submissions: { id: string; topicId: string; topicLabel: string; status: "pending" | "approved" | "rejected" }[];
+  submissions: { id: string; topicId: string; topicLabel: string }[];
 };
 
 export async function listStudentTopicsForOffering(offeringId: string, period: string): Promise<AssistantStudentTopics[]> {
@@ -136,7 +124,7 @@ export async function listStudentTopicsForOffering(offeringId: string, period: s
 
   const { data: submissions } = await supabase
     .from("student_topic_submissions")
-    .select("id, student_id, topic_id, status, topic_catalog(label)")
+    .select("id, student_id, topic_id, topic_catalog(label)")
     .eq("offering_id", offeringId)
     .eq("assistant_id", profile.id)
     .eq("period", period);
@@ -149,7 +137,7 @@ export async function listStudentTopicsForOffering(offeringId: string, period: s
         .filter((sub) => sub.student_id === s.id)
         .map((sub) => {
           const topic = Array.isArray(sub.topic_catalog) ? sub.topic_catalog[0] : sub.topic_catalog;
-          return { id: sub.id, topicId: sub.topic_id, topicLabel: topic?.label ?? "", status: sub.status as "pending" | "approved" | "rejected" };
+          return { id: sub.id, topicId: sub.topic_id, topicLabel: topic?.label ?? "" };
         });
       return { studentId: s.id, studentName: s.name, submissions: subs };
     })
@@ -159,11 +147,10 @@ export async function listStudentTopicsForOffering(offeringId: string, period: s
 
 export type AssistantFillingProgress = { assistantId: string; assistantName: string; totalStudents: number; filled: number; pending: number };
 
-// "Filled" means the assistant has submitted at least one weak topic for that
-// student this period, regardless of whether a head has reviewed it yet —
-// this tracks whether the assistant did their monthly tagging, not whether
-// it's been approved. Approval status is a separate concern the Review
-// submissions tab already covers.
+// "Filled" means the assistant has tagged at least one weak topic for that
+// student this period — this tracks whether the assistant did their monthly
+// tagging, distinct from "pending" review (there's no review step anymore;
+// every submission counts immediately).
 export async function getAssistantFillingProgress(offeringId: string, period: string): Promise<AssistantFillingProgress[]> {
   await requireHeadOrAdmin();
   const supabase = await createClient();
@@ -196,18 +183,46 @@ export async function getAssistantFillingProgress(offeringId: string, period: st
     .sort((a, b) => a.assistantName.localeCompare(b.assistantName));
 }
 
+// Submissions count immediately — there's no head-approval queue to sit in.
+// A head/admin can also add one directly on a student's behalf; in that
+// case it's attributed to the student's actual assigned assistant (not the
+// head who clicked Add), so the assistant's own view and the monthly report
+// stay consistent regardless of who submitted it.
 export async function submitStudentTopic(input: { studentId: string; offeringId: string; topicId: string; period: string }) {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org) throw new Error("Not authenticated");
   const supabase = await createClient();
+
+  let assistantId = profile.id;
+  if (profile.role === "head" || profile.role === "admin") {
+    const { data: enrollment } = await supabase
+      .from("enrollments")
+      .select("assistant_id")
+      .eq("student_id", input.studentId)
+      .eq("offering_id", input.offeringId)
+      .maybeSingle();
+    if (!enrollment?.assistant_id) throw new Error("This student has no assistant assigned yet.");
+    assistantId = enrollment.assistant_id;
+  }
+
   const { error } = await supabase.from("student_topic_submissions").insert({
     org_id: profile.org.id,
     student_id: input.studentId,
     offering_id: input.offeringId,
     topic_id: input.topicId,
-    assistant_id: profile.id,
+    assistant_id: assistantId,
     period: input.period,
+    status: "approved",
   });
+  if (error) throw new Error(error.message);
+}
+
+// Lets a head change which topic a submission is tagged with, without
+// having to delete and re-add it.
+export async function updateStudentTopicSubmission(id: string, topicId: string) {
+  await requireHeadOrAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.from("student_topic_submissions").update({ topic_id: topicId }).eq("id", id);
   if (error) throw new Error(error.message);
 }
 
@@ -217,45 +232,47 @@ export async function removeStudentTopicSubmission(id: string) {
   if (error) throw new Error(error.message);
 }
 
-export async function listPendingTopicApprovals(offeringId: string, period: string): Promise<StudentTopicSubmission[]> {
+export type HeadStudentTopics = {
+  studentId: string;
+  studentName: string;
+  assistantName: string | null;
+  submissions: { id: string; topicId: string; topicLabel: string }[];
+};
+
+// The head-facing counterpart to listStudentTopicsForOffering — every
+// enrolled student in the offering regardless of assistant, since a head
+// oversees (and can now edit) the whole course rather than just their own
+// students.
+export async function listAllStudentTopicsForOffering(offeringId: string, period: string): Promise<HeadStudentTopics[]> {
   await requireHeadOrAdmin();
   const supabase = await createClient();
-  const { data } = await supabase
+
+  const { data: enrollments } = await supabase
+    .from("enrollments")
+    .select("student_id, students(id, name), profiles(full_name)")
+    .eq("offering_id", offeringId);
+
+  const { data: submissions } = await supabase
     .from("student_topic_submissions")
-    .select(
-      "id, status, period, student_id, students(name), topic_id, topic_catalog(label, topic_materials(id, kind, label, link, duration, sort_order)), profiles!student_topic_submissions_assistant_id_fkey(full_name)"
-    )
+    .select("id, student_id, topic_id, topic_catalog(label)")
     .eq("offering_id", offeringId)
-    .eq("period", period)
-    .order("submitted_at", { ascending: false });
+    .eq("period", period);
 
-  return (data ?? []).map((r) => {
-    const student = Array.isArray(r.students) ? r.students[0] : r.students;
-    const topic = Array.isArray(r.topic_catalog) ? r.topic_catalog[0] : r.topic_catalog;
-    const assistant = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles;
-    const materials = (topic ? (Array.isArray(topic.topic_materials) ? topic.topic_materials : []) : []).sort((a, b) => a.sort_order - b.sort_order);
-    return {
-      id: r.id,
-      studentId: r.student_id,
-      studentName: student?.name ?? "",
-      topicId: r.topic_id,
-      topicLabel: topic?.label ?? "",
-      materials: materials.map((m) => ({ id: m.id, kind: m.kind as "video" | "drive", label: m.label, link: m.link, duration: m.duration })),
-      status: r.status as "pending" | "approved" | "rejected",
-      period: r.period,
-      assistantName: assistant?.full_name ?? null,
-    };
-  });
-}
-
-export async function reviewTopicSubmission(id: string, status: "approved" | "rejected") {
-  const profile = await requireHeadOrAdmin();
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("student_topic_submissions")
-    .update({ status, reviewed_by: profile.id, reviewed_at: new Date().toISOString() })
-    .eq("id", id);
-  if (error) throw new Error(error.message);
+  return (enrollments ?? [])
+    .map((e) => {
+      const s = Array.isArray(e.students) ? e.students[0] : e.students;
+      if (!s) return null;
+      const assistant = Array.isArray(e.profiles) ? e.profiles[0] : e.profiles;
+      const subs = (submissions ?? [])
+        .filter((sub) => sub.student_id === s.id)
+        .map((sub) => {
+          const topic = Array.isArray(sub.topic_catalog) ? sub.topic_catalog[0] : sub.topic_catalog;
+          return { id: sub.id, topicId: sub.topic_id, topicLabel: topic?.label ?? "" };
+        });
+      return { studentId: s.id, studentName: s.name, assistantName: assistant?.full_name ?? null, submissions: subs };
+    })
+    .filter((x): x is HeadStudentTopics => !!x)
+    .sort((a, b) => a.studentName.localeCompare(b.studentName));
 }
 
 export type ApprovedStudentTopic = {

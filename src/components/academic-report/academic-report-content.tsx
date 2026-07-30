@@ -15,6 +15,7 @@ import {
   type GeneratedStudentReport,
 } from "@/lib/actions/academic-report";
 import { getGradeScale, setGradeScale, type GradeBand, type GradeScaleSetting } from "@/lib/actions/oversight";
+import { deliverGeneratedReportsToDrive } from "@/lib/actions/drive";
 import { formatGradeByScale } from "@/lib/grade-scale";
 import { downloadCsv } from "@/lib/csv-export";
 import { pickerOnlyDateProps } from "@/lib/date-input";
@@ -50,6 +51,9 @@ export function AcademicReportContent() {
   const [generateOpen, setGenerateOpen] = useState(false);
   const [selection, setSelection] = useState<Record<string, AssignmentReportMode | "excluded">>({});
   const [generating, setGenerating] = useState(false);
+
+  const [sendingToDrive, setSendingToDrive] = useState(false);
+  const [driveResult, setDriveResult] = useState<string | null>(null);
 
   const [scaleOpen, setScaleOpen] = useState(false);
   const [scaleDraft, setScaleDraft] = useState<GradeScaleSetting>({ scale: "percentage", bands: [] });
@@ -119,6 +123,30 @@ export function AcademicReportContent() {
       setError(e instanceof Error ? e.message : "Couldn't generate the report — try again.");
     } finally {
       setGenerating(false);
+    }
+  }
+
+  // Can take a while — Apps Script builds every student's PDF in one
+  // execution, so a large course means a genuinely long wait, not a stuck
+  // button. See maxDuration in the shared route for the corresponding
+  // server-side timeout bump.
+  async function onSendToDrive() {
+    if (!offeringId || !meta) return;
+    setSendingToDrive(true);
+    setDriveResult(null);
+    setError(null);
+    try {
+      const results = await deliverGeneratedReportsToDrive(offeringId, period);
+      const failed = results.filter((r) => !r.ok);
+      setDriveResult(
+        failed.length === 0
+          ? `Delivered ${results.length} report${results.length === 1 ? "" : "s"} to Drive.`
+          : `Delivered ${results.length - failed.length}/${results.length} — ${failed.length} failed. Try again to retry just the failed ones.`
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't deliver reports to Drive — try again.");
+    } finally {
+      setSendingToDrive(false);
     }
   }
 
@@ -239,6 +267,15 @@ export function AcademicReportContent() {
               Print / PDF
             </a>
             <button
+              onClick={onSendToDrive}
+              disabled={!meta || sendingToDrive}
+              title="Generate every student's branded PDF and save it into their Drive folder"
+              className="flex h-10 flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-[14px] text-[13px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
+            >
+              {sendingToDrive ? <Spinner size={14} /> : <Icon name="upload" size={16} />}
+              Send to Drive
+            </button>
+            <button
               onClick={openGenerate}
               disabled={!offeringId || assignments === null}
               className="flex h-10 flex-none items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[14px] text-[13px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
@@ -274,6 +311,15 @@ export function AcademicReportContent() {
         <div className="flex items-center justify-between gap-3 rounded-[var(--rad-sm)] border border-[var(--danger)] bg-[var(--dangers)] px-4 py-3 text-[13px] font-medium text-[var(--danger)]">
           {error}
           <button onClick={() => setError(null)} className="flex-none">
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+      )}
+
+      {driveResult && (
+        <div className="flex items-center justify-between gap-3 rounded-[var(--rad-sm)] border border-[var(--ok)] bg-[var(--oks)] px-4 py-3 text-[13px] font-medium text-[var(--ok)]">
+          {driveResult}
+          <button onClick={() => setDriveResult(null)} className="flex-none">
             <Icon name="x" size={16} />
           </button>
         </div>

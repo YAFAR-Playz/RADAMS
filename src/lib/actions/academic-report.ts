@@ -99,6 +99,49 @@ export async function setStudentMonthlyComment(studentId: string, offeringId: st
   if (error) throw new Error(error.message);
 }
 
+// Head-facing counterpart to getMyStudentMonthlyComments — every enrolled
+// student's comment for the offering, not just the caller's own.
+export async function getAllStudentMonthlyComments(offeringId: string, period: string): Promise<Record<string, string>> {
+  const profile = await getCurrentProfile();
+  if (!profile || (profile.role !== "head" && profile.role !== "admin")) return {};
+  const supabase = await createClient();
+  const { data } = await supabase.from("student_monthly_notes").select("student_id, comment").eq("offering_id", offeringId).eq("period", period);
+  return Object.fromEntries((data ?? []).map((n) => [n.student_id, n.comment]));
+}
+
+// Lets a head create or override a student's monthly comment directly,
+// instead of only the enrolled assistant being able to write it. The note
+// is still attributed to that student's actual assigned assistant (not the
+// head), matching how submitStudentTopic attributes head-added weak topics —
+// this is "who this note is about", not "who last typed it".
+export async function setStudentMonthlyCommentAsHead(studentId: string, offeringId: string, period: string, comment: string) {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org || (profile.role !== "head" && profile.role !== "admin")) throw new Error("Not authorized");
+  const supabase = await createClient();
+
+  const { data: enrollment } = await supabase
+    .from("enrollments")
+    .select("assistant_id")
+    .eq("student_id", studentId)
+    .eq("offering_id", offeringId)
+    .maybeSingle();
+  if (!enrollment?.assistant_id) throw new Error("This student has no assistant assigned yet.");
+
+  const { error } = await supabase.from("student_monthly_notes").upsert(
+    {
+      org_id: profile.org.id,
+      student_id: studentId,
+      offering_id: offeringId,
+      period,
+      assistant_id: enrollment.assistant_id,
+      comment,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "student_id,offering_id,period" }
+  );
+  if (error) throw new Error(error.message);
+}
+
 export type ReportAssignmentDetail = {
   title: string;
   status: string | null;

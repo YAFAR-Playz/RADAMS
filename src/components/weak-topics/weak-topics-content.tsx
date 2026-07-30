@@ -12,18 +12,23 @@ import {
   updateTopic,
   deleteTopic,
   listStudentTopicsForOffering,
+  listAllStudentTopicsForOffering,
   submitStudentTopic,
+  updateStudentTopicSubmission,
   removeStudentTopicSubmission,
-  listPendingTopicApprovals,
-  reviewTopicSubmission,
   getAssistantFillingProgress,
   type TopicOption,
   type MaterialInput,
   type AssistantStudentTopics,
-  type StudentTopicSubmission,
+  type HeadStudentTopics,
   type AssistantFillingProgress,
 } from "@/lib/actions/weak-topics";
-import { getMyStudentMonthlyComments, setStudentMonthlyComment } from "@/lib/actions/academic-report";
+import {
+  getMyStudentMonthlyComments,
+  setStudentMonthlyComment,
+  getAllStudentMonthlyComments,
+  setStudentMonthlyCommentAsHead,
+} from "@/lib/actions/academic-report";
 import { pickerOnlyDateProps } from "@/lib/date-input";
 
 function currentPeriod() {
@@ -63,12 +68,6 @@ function PageNav({ page, setPage, pageCount, pageStart, total, label }: { page: 
     </div>
   );
 }
-
-const STATUS_TONE: Record<string, string> = {
-  pending: "bg-[var(--warns)] text-[var(--warn)]",
-  approved: "bg-[var(--oks)] text-[var(--ok)]",
-  rejected: "bg-[var(--dangers)] text-[var(--danger)]",
-};
 
 function MaterialLinks({ materials }: { materials: { id: string; kind: "video" | "drive"; label: string | null; link: string; duration: string | null }[] }) {
   if (materials.length === 0) return null;
@@ -141,7 +140,7 @@ function MaterialsEditor({ materials, onChange }: { materials: MaterialInput[]; 
 }
 
 export function WeakTopicsContent({ role }: { role: Role }) {
-  const [tab, setTab] = useState<"submit" | "catalog" | "approvals" | "progress">(role === "assistant" ? "submit" : "catalog");
+  const [tab, setTab] = useState<"submit" | "catalog" | "manage" | "progress">(role === "assistant" ? "submit" : "catalog");
   const [offerings, setOfferings] = useState<OfferingOption[] | null>(null);
   const [offeringId, setOfferingId] = useState("");
   const [period, setPeriod] = useState(currentPeriod());
@@ -162,7 +161,7 @@ export function WeakTopicsContent({ role }: { role: Role }) {
             <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Weak topics</div>
             <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Weak / revision topics</h1>
             <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">
-              {role === "head" ? "Manage the topic catalog and review monthly submissions." : "Tag your students with weak topics each month."}
+              {role === "head" ? "Manage the topic catalog and every student's monthly tags and comment." : "Tag your students with weak topics each month."}
             </p>
           </div>
           <div className="flex flex-none items-center gap-[8px]">
@@ -193,7 +192,7 @@ export function WeakTopicsContent({ role }: { role: Role }) {
 
         {role === "head" && (
           <div className="mt-4 flex gap-[6px] border-b border-[var(--border)]">
-            {(["catalog", "approvals", "progress"] as const).map((t) => (
+            {(["catalog", "manage", "progress"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -201,7 +200,7 @@ export function WeakTopicsContent({ role }: { role: Role }) {
                   tab === t ? "border-[var(--brand)] text-[var(--text)]" : "border-transparent text-[var(--muted)]"
                 }`}
               >
-                {t === "catalog" ? "Topic catalog" : t === "approvals" ? "Review submissions" : "Assistant progress"}
+                {t === "catalog" ? "Topic catalog" : t === "manage" ? "Manage submissions" : "Assistant progress"}
               </button>
             ))}
           </div>
@@ -227,7 +226,7 @@ export function WeakTopicsContent({ role }: { role: Role }) {
       ) : tab === "progress" ? (
         <ProgressPanel offeringId={offeringId} period={period} />
       ) : (
-        <ApprovalsPanel offeringId={offeringId} period={period} setError={setError} />
+        <ManagePanel offeringId={offeringId} period={period} setError={setError} />
       )}
     </div>
   );
@@ -519,14 +518,11 @@ function AssistantSubmitPanel({ offeringId, period, setError }: { offeringId: st
               {s.submissions.length > 0 && (
                 <div className="flex flex-wrap gap-[6px]">
                   {s.submissions.map((sub) => (
-                    <span key={sub.id} className={`flex items-center gap-[6px] rounded-full py-[4px] pl-[10px] pr-[6px] text-[12px] font-semibold ${STATUS_TONE[sub.status]}`}>
+                    <span key={sub.id} className="flex items-center gap-[6px] rounded-full bg-[var(--oks)] py-[4px] pl-[10px] pr-[6px] text-[12px] font-semibold text-[var(--ok)]">
                       {sub.topicLabel}
-                      <span className="text-[10.5px] font-medium opacity-70">{sub.status}</span>
-                      {sub.status === "pending" && (
-                        <button onClick={() => onRemove(sub.id)} disabled={busyId === sub.id} className="flex h-4 w-4 items-center justify-center rounded-full hover:bg-black/10 disabled:opacity-60">
-                          <Icon name="x" size={11} />
-                        </button>
-                      )}
+                      <button onClick={() => onRemove(sub.id)} disabled={busyId === sub.id} className="flex h-4 w-4 items-center justify-center rounded-full hover:bg-black/10 disabled:opacity-60">
+                        <Icon name="x" size={11} />
+                      </button>
                     </span>
                   ))}
                 </div>
@@ -557,15 +553,26 @@ function AssistantSubmitPanel({ offeringId, period, setError }: { offeringId: st
   );
 }
 
-function ApprovalsPanel({ offeringId, period, setError }: { offeringId: string; period: string; setError: (e: string | null) => void }) {
-  const [items, setItems] = useState<StudentTopicSubmission[] | null>(null);
+function ManagePanel({ offeringId, period, setError }: { offeringId: string; period: string; setError: (e: string | null) => void }) {
+  const [students, setStudents] = useState<HeadStudentTopics[] | null>(null);
+  const [catalog, setCatalog] = useState<TopicOption[] | null>(null);
+  const [picks, setPicks] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [comments, setComments] = useState<Record<string, string>>({});
+  const [savedComments, setSavedComments] = useState<Record<string, string>>({});
+  const [savingComment, setSavingComment] = useState<string | null>(null);
   const [page, setPage] = useState(0);
 
   function reload() {
     if (!offeringId) return;
-    setItems(null);
-    listPendingTopicApprovals(offeringId, period).then(setItems);
+    setStudents(null);
+    listAllStudentTopicsForOffering(offeringId, period).then(setStudents);
+    getAllStudentMonthlyComments(offeringId, period).then((c) => {
+      setComments(c);
+      setSavedComments(c);
+    });
+    setCatalog(null);
+    getOfferingCourse(offeringId).then((c) => listTopicCatalog(c?.courseId ?? undefined).then(setCatalog));
   }
 
   useEffect(() => {
@@ -576,13 +583,58 @@ function ApprovalsPanel({ offeringId, period, setError }: { offeringId: string; 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offeringId, period]);
 
-  async function onReview(id: string, status: "approved" | "rejected") {
-    setBusyId(id);
+  const pageCount = Math.max(1, Math.ceil((students?.length ?? 0) / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageStart = safePage * PAGE_SIZE;
+  const pageRows = (students ?? []).slice(pageStart, pageStart + PAGE_SIZE);
+
+  async function onSaveComment(studentId: string) {
+    setSavingComment(studentId);
     try {
-      await reviewTopicSubmission(id, status);
+      await setStudentMonthlyCommentAsHead(studentId, offeringId, period, comments[studentId] ?? "");
+      setSavedComments((c) => ({ ...c, [studentId]: comments[studentId] ?? "" }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't save that comment — try again.");
+    } finally {
+      setSavingComment(null);
+    }
+  }
+
+  async function onAdd(studentId: string) {
+    const topicId = picks[studentId];
+    if (!topicId) return;
+    setBusyId(studentId);
+    try {
+      await submitStudentTopic({ studentId, offeringId, topicId, period });
+      setPicks((p) => ({ ...p, [studentId]: "" }));
+      reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't add that topic — it may already be tagged for this student this month.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function onChangeTopic(submissionId: string, topicId: string) {
+    if (!topicId) return;
+    setBusyId(submissionId);
+    try {
+      await updateStudentTopicSubmission(submissionId, topicId);
       reload();
     } catch {
-      setError("Couldn't update that submission — try again.");
+      setError("Couldn't change that topic — try again.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function onRemove(id: string) {
+    setBusyId(id);
+    try {
+      await removeStudentTopicSubmission(id);
+      reload();
+    } catch {
+      setError("Couldn't remove that submission — try again.");
     } finally {
       setBusyId(null);
     }
@@ -590,58 +642,94 @@ function ApprovalsPanel({ offeringId, period, setError }: { offeringId: string; 
 
   if (!offeringId) return null;
 
-  const pageCount = Math.max(1, Math.ceil((items?.length ?? 0) / PAGE_SIZE));
-  const safePage = Math.min(page, pageCount - 1);
-  const pageStart = safePage * PAGE_SIZE;
-  const pageRows = (items ?? []).slice(pageStart, pageStart + PAGE_SIZE);
-
   return (
     <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
-      {items === null ? (
+      {students === null || catalog === null ? (
         <div className="p-[16px]">
           <SkeletonRow className="h-[40px]" />
         </div>
-      ) : items.length === 0 ? (
-        <div className="p-[30px] text-center text-[13px] text-[var(--muted)]">No submissions for this month yet.</div>
+      ) : students.length === 0 ? (
+        <div className="p-[30px] text-center text-[13px] text-[var(--muted)]">No students enrolled in this course yet.</div>
       ) : (
         <>
         <div className="divide-y divide-[var(--border)]">
-          {pageRows.map((it) => (
-            <div key={it.id} className="flex flex-wrap items-center justify-between gap-[10px] p-[14px_18px]">
-              <div>
-                <div className="text-[13.5px] font-semibold text-[var(--text)]">
-                  {it.studentName} <span className="font-normal text-[var(--muted)]">— {it.topicLabel}</span>
+          {pageRows.map((s) => (
+            <div key={s.studentId} className="flex flex-col gap-[8px] p-[14px_18px]">
+              <div className="flex flex-wrap items-center justify-between gap-[10px]">
+                <div>
+                  <div className="text-[13.5px] font-semibold text-[var(--text)]">{s.studentName}</div>
+                  <div className="text-[11.5px] text-[var(--subtle)]">{s.assistantName ?? "Unassigned"}</div>
                 </div>
-                <div className="mt-[2px] flex flex-wrap items-center gap-[10px] text-[12px] text-[var(--muted)]">
-                  <span>Submitted by {it.assistantName ?? "—"}</span>
-                  <MaterialLinks materials={it.materials} />
+                <div className="flex items-center gap-[8px]">
+                  <select
+                    value={picks[s.studentId] ?? ""}
+                    onChange={(e) => setPicks((p) => ({ ...p, [s.studentId]: e.target.value }))}
+                    className="h-9 rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none"
+                  >
+                    <option value="">Add a weak topic…</option>
+                    {catalog.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => onAdd(s.studentId)}
+                    disabled={!picks[s.studentId] || busyId === s.studentId}
+                    className="flex h-9 items-center gap-[6px] rounded-[8px] bg-[var(--brand)] px-[12px] text-[12.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+                  >
+                    {busyId === s.studentId ? <Spinner size={13} /> : <Icon name="plus" size={13} />}
+                    Add
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center gap-[8px]">
-                <span className={`rounded-full px-[10px] py-[4px] text-[12px] font-semibold ${STATUS_TONE[it.status]}`}>{it.status}</span>
-                {it.status === "pending" && (
-                  <>
-                    <button
-                      onClick={() => onReview(it.id, "approved")}
-                      disabled={busyId === it.id}
-                      className="h-8 rounded-[8px] bg-[var(--brand)] px-[10px] text-[12px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
-                    >
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => onReview(it.id, "rejected")}
-                      disabled={busyId === it.id}
-                      className="h-8 rounded-[8px] border border-[var(--border)] px-[10px] text-[12px] font-semibold text-[var(--muted)] disabled:opacity-60"
-                    >
-                      Reject
-                    </button>
-                  </>
-                )}
+              {s.submissions.length > 0 && (
+                <div className="flex flex-wrap gap-[8px]">
+                  {s.submissions.map((sub) => (
+                    <div key={sub.id} className="flex items-center gap-[6px] rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] p-[4px_4px_4px_10px]">
+                      <select
+                        value={sub.topicId}
+                        onChange={(e) => onChangeTopic(sub.id, e.target.value)}
+                        disabled={busyId === sub.id}
+                        className="h-7 rounded-[6px] border-none bg-transparent text-[12px] font-semibold text-[var(--text)] outline-none disabled:opacity-60"
+                      >
+                        {catalog.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => onRemove(sub.id)}
+                        disabled={busyId === sub.id}
+                        className="flex h-6 w-6 flex-none items-center justify-center rounded-full text-[var(--muted)] hover:bg-black/10 hover:text-[var(--danger)] disabled:opacity-60"
+                      >
+                        <Icon name="x" size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-start gap-[8px]">
+                <textarea
+                  value={comments[s.studentId] ?? ""}
+                  onChange={(e) => setComments((c) => ({ ...c, [s.studentId]: e.target.value }))}
+                  placeholder="Overall comment for this student this month — shown in the monthly report…"
+                  className="h-[54px] flex-1 resize-none rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] py-[7px] text-[12px] leading-[1.4] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+                />
+                <button
+                  onClick={() => onSaveComment(s.studentId)}
+                  disabled={(comments[s.studentId] ?? "") === (savedComments[s.studentId] ?? "") || savingComment === s.studentId}
+                  className="flex h-9 flex-none items-center gap-[6px] self-end rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px] text-[12px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
+                >
+                  {savingComment === s.studentId ? <Spinner size={13} /> : <Icon name="check" size={13} />}
+                  Save
+                </button>
               </div>
             </div>
           ))}
         </div>
-        <PageNav page={safePage} setPage={setPage} pageCount={pageCount} pageStart={pageStart} total={items.length} label="submissions" />
+        <PageNav page={safePage} setPage={setPage} pageCount={pageCount} pageStart={pageStart} total={students.length} label="students" />
         </>
       )}
     </div>
