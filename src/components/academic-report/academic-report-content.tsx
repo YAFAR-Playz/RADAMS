@@ -149,6 +149,10 @@ export function AcademicReportContent() {
     setError(null);
     try {
       const studentIds = await getDriveDeliveryStudentIds(offeringId, period);
+      if (studentIds.length === 0) {
+        setDriveResult("All reports already delivered to Drive.");
+        return;
+      }
       const allResults: DriveDeliveryResult[] = [];
       setDriveProgress({ done: 0, total: studentIds.length });
       for (let i = 0; i < studentIds.length; i += DRIVE_DELIVERY_CHUNK_SIZE) {
@@ -161,7 +165,7 @@ export function AcademicReportContent() {
       setDriveResult(
         failed.length === 0
           ? `Delivered ${allResults.length} report${allResults.length === 1 ? "" : "s"} to Drive.`
-          : `Delivered ${allResults.length - failed.length}/${allResults.length} — ${failed.length} failed. Click Send to Drive again to retry (already-delivered ones are safely replaced, not duplicated).`
+          : `Delivered ${allResults.length - failed.length}/${allResults.length} — ${failed.length} failed. Click Send to Drive again to retry just the rest (delivered ones are skipped, not redone). If the tab or app gets closed partway through, the same thing applies — reopen and click Send to Drive again to pick up where it left off.`
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't deliver reports to Drive — try again.");
