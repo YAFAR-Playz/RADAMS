@@ -78,12 +78,21 @@ async function loadDriveDeliveryContext(offeringId: string, period: string) {
   };
 }
 
-// The full, ordered list of student ids this report covers — the client
-// slices this into DRIVE_DELIVERY_CHUNK_SIZE-sized batches and calls
-// deliverDriveReportsChunk once per batch.
+// The ordered list of student ids still needing delivery for this report —
+// the client slices this into DRIVE_DELIVERY_CHUNK_SIZE-sized batches and
+// calls deliverDriveReportsChunk once per batch. Already-delivered students
+// (delivered_at set) are left out, so if a head closes the tab/app partway
+// through, clicking "Send to Drive" again just resumes the rest instead of
+// redoing everyone from scratch.
 export async function getDriveDeliveryStudentIds(offeringId: string, period: string): Promise<string[]> {
-  const { students } = await loadDriveDeliveryContext(offeringId, period);
-  return students.map((s) => s.studentId);
+  const { supabase, meta, students } = await loadDriveDeliveryContext(offeringId, period);
+  const { data: delivered } = await supabase
+    .from("monthly_report_students")
+    .select("student_id")
+    .eq("generation_id", meta.id)
+    .not("delivered_at", "is", null);
+  const deliveredIds = new Set((delivered ?? []).map((d) => d.student_id));
+  return students.filter((s) => !deliveredIds.has(s.studentId)).map((s) => s.studentId);
 }
 
 export type DriveDeliveryResult = { studentId: string; ok: boolean; folderUrl?: string; fileUrl?: string; error?: string };
@@ -138,7 +147,13 @@ export async function deliverDriveReportsChunk(offeringId: string, period: strin
   const { results } = await callDriveBridge<{ results: DriveDeliveryResult[] }>("generateReportsBatch", payload);
 
   await Promise.all(
-    results.map((r) => (r.ok && r.folderUrl ? supabase.from("students").update({ drive_folder_link: r.folderUrl }).eq("id", r.studentId) : Promise.resolve()))
+    results.map((r) => {
+      if (!r.ok) return Promise.resolve();
+      return Promise.all([
+        r.folderUrl ? supabase.from("students").update({ drive_folder_link: r.folderUrl }).eq("id", r.studentId) : Promise.resolve(),
+        supabase.from("monthly_report_students").update({ delivered_at: new Date().toISOString() }).eq("generation_id", meta.id).eq("student_id", r.studentId),
+      ]);
+    })
   );
 
   return results;
