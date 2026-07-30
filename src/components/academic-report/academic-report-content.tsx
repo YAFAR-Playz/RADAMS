@@ -15,13 +15,21 @@ import {
   type GeneratedStudentReport,
 } from "@/lib/actions/academic-report";
 import { getGradeScale, setGradeScale, type GradeBand, type GradeScaleSetting } from "@/lib/actions/oversight";
-import { deliverGeneratedReportsToDrive } from "@/lib/actions/drive";
+import { getDriveDeliveryStudentIds, deliverDriveReportsChunk, type DriveDeliveryResult } from "@/lib/actions/drive";
 import { formatGradeByScale } from "@/lib/grade-scale";
 import { downloadCsv } from "@/lib/csv-export";
 import { pickerOnlyDateProps } from "@/lib/date-input";
 import { matchesStudentQuery } from "@/lib/student-search";
 
 const PAGE_SIZE = 10;
+
+// A course can have hundreds of students — generating each one's Doc/PDF
+// takes a few seconds inside Apps Script, so delivering everyone in a
+// single call risks exceeding both Apps Script's own execution limit and
+// Vercel's function timeout. Slicing into chunks this size keeps each
+// individual server-action call comfortably short no matter how large the
+// course is, with visible progress instead of one long silent wait.
+const DRIVE_DELIVERY_CHUNK_SIZE = 25;
 
 function currentPeriod() {
   return new Date().toISOString().slice(0, 7);
@@ -53,6 +61,7 @@ export function AcademicReportContent() {
   const [generating, setGenerating] = useState(false);
 
   const [sendingToDrive, setSendingToDrive] = useState(false);
+  const [driveProgress, setDriveProgress] = useState<{ done: number; total: number } | null>(null);
   const [driveResult, setDriveResult] = useState<string | null>(null);
 
   const [scaleOpen, setScaleOpen] = useState(false);
@@ -126,27 +135,39 @@ export function AcademicReportContent() {
     }
   }
 
-  // Can take a while — Apps Script builds every student's PDF in one
-  // execution, so a large course means a genuinely long wait, not a stuck
-  // button. See maxDuration in the shared route for the corresponding
-  // server-side timeout bump.
+  // Delivered in chunks rather than one giant call — a course can have
+  // hundreds of students, and generating each one's Doc/PDF inside Apps
+  // Script takes a few seconds, so a single request risks exceeding both
+  // Apps Script's own execution limit and Vercel's function timeout. Each
+  // chunk stays comfortably short regardless of course size, and progress
+  // is visible instead of one long silent wait.
   async function onSendToDrive() {
     if (!offeringId || !meta) return;
     setSendingToDrive(true);
     setDriveResult(null);
+    setDriveProgress(null);
     setError(null);
     try {
-      const results = await deliverGeneratedReportsToDrive(offeringId, period);
-      const failed = results.filter((r) => !r.ok);
+      const studentIds = await getDriveDeliveryStudentIds(offeringId, period);
+      const allResults: DriveDeliveryResult[] = [];
+      setDriveProgress({ done: 0, total: studentIds.length });
+      for (let i = 0; i < studentIds.length; i += DRIVE_DELIVERY_CHUNK_SIZE) {
+        const chunk = studentIds.slice(i, i + DRIVE_DELIVERY_CHUNK_SIZE);
+        const chunkResults = await deliverDriveReportsChunk(offeringId, period, chunk);
+        allResults.push(...chunkResults);
+        setDriveProgress({ done: allResults.length, total: studentIds.length });
+      }
+      const failed = allResults.filter((r) => !r.ok);
       setDriveResult(
         failed.length === 0
-          ? `Delivered ${results.length} report${results.length === 1 ? "" : "s"} to Drive.`
-          : `Delivered ${results.length - failed.length}/${results.length} — ${failed.length} failed. Try again to retry just the failed ones.`
+          ? `Delivered ${allResults.length} report${allResults.length === 1 ? "" : "s"} to Drive.`
+          : `Delivered ${allResults.length - failed.length}/${allResults.length} — ${failed.length} failed. Click Send to Drive again to retry (already-delivered ones are safely replaced, not duplicated).`
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't deliver reports to Drive — try again.");
     } finally {
       setSendingToDrive(false);
+      setDriveProgress(null);
     }
   }
 
@@ -273,7 +294,7 @@ export function AcademicReportContent() {
               className="flex h-10 flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-[14px] text-[13px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
             >
               {sendingToDrive ? <Spinner size={14} /> : <Icon name="upload" size={16} />}
-              Send to Drive
+              {sendingToDrive && driveProgress ? `Sending ${driveProgress.done}/${driveProgress.total}…` : "Send to Drive"}
             </button>
             <button
               onClick={openGenerate}
