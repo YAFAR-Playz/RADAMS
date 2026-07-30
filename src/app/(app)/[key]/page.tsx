@@ -36,6 +36,16 @@ import { AcademicReportContent } from "@/components/academic-report/academic-rep
 import { WeakTopicsContent } from "@/components/weak-topics/weak-topics-content";
 import { ChatContent } from "@/components/chat/chat-content";
 
+// Delivering monthly reports to Drive (academic-report-content.tsx) waits
+// on one Apps Script call that generates every student's PDF in a single
+// execution — a large course can take well past Next.js/Vercel's default
+// function timeout. Every server action dispatched from this shared route
+// gets the same higher ceiling; it only raises the cap, not the actual
+// runtime of fast actions. Note: Vercel's Hobby plan hard-caps functions at
+// 60s regardless of this setting — very large courses may still need a
+// paid plan or a future chunked-delivery approach.
+export const maxDuration = 300;
+
 export default async function AppPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
   const profile = await getCurrentProfile();
