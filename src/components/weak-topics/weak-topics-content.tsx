@@ -69,13 +69,19 @@ function PageNav({ page, setPage, pageCount, pageStart, total, label }: { page: 
   );
 }
 
-function MaterialLinks({ materials }: { materials: { id: string; kind: "video" | "drive"; label: string | null; link: string; duration: string | null }[] }) {
+const MATERIAL_KIND_FALLBACK_LABEL: Record<"video" | "notes" | "tricky_question", string> = {
+  video: "Video",
+  notes: "Notes",
+  tricky_question: "Tricky Question",
+};
+
+function MaterialLinks({ materials }: { materials: { id: string; kind: "video" | "notes" | "tricky_question"; label: string | null; link: string; duration: string | null }[] }) {
   if (materials.length === 0) return null;
   return (
     <>
       {materials.map((m) => (
         <a key={m.id} href={m.link} target="_blank" rel="noreferrer" className="text-[var(--brand)] hover:underline">
-          {m.label?.trim() || (m.kind === "video" ? "Video" : "Document")}
+          {m.label?.trim() || MATERIAL_KIND_FALLBACK_LABEL[m.kind]}
           {m.duration ? ` (${m.duration})` : ""}
         </a>
       ))}
@@ -100,11 +106,12 @@ function MaterialsEditor({ materials, onChange }: { materials: MaterialInput[]; 
         <div key={i} className="flex items-center gap-[6px]">
           <select
             value={m.kind}
-            onChange={(e) => update(i, { kind: e.target.value as "video" | "drive" })}
+            onChange={(e) => update(i, { kind: e.target.value as "video" | "notes" | "tricky_question" })}
             className="h-9 flex-none rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[8px] text-[12.5px] text-[var(--text)] outline-none"
           >
             <option value="video">Video</option>
-            <option value="drive">Document</option>
+            <option value="notes">Notes</option>
+            <option value="tricky_question">Tricky Question</option>
           </select>
           <input
             value={m.label}

@@ -147,9 +147,9 @@ export type ReportAssignmentDetail = {
   status: string | null;
   grade: string | null;
   maxMarks: number | null;
-  reportGroup: "homework" | "quiz" | "other";
+  reportGroup: "homework" | "classwork" | "quiz" | "mock_exam" | "other";
 };
-export type ReportWeakTopicMaterial = { kind: "video" | "drive"; label: string | null; link: string; duration: string | null };
+export type ReportWeakTopicMaterial = { kind: "video" | "notes" | "tricky_question"; label: string | null; link: string; duration: string | null };
 export type ReportWeakTopic = { label: string; materials: ReportWeakTopicMaterial[] };
 
 export type StudentAcademicReport = {
@@ -176,7 +176,7 @@ export async function getAcademicMonthlyReport(offeringId: string, period: strin
   const reportGroupByAssignment = new Map(
     (assignmentMeta ?? []).map((a) => {
       const tpl = Array.isArray(a.assignment_templates) ? a.assignment_templates[0] : a.assignment_templates;
-      return [a.id, (tpl?.report_group as "homework" | "quiz" | "other") ?? "homework"];
+      return [a.id, (tpl?.report_group as "homework" | "classwork" | "quiz" | "mock_exam" | "other") ?? "homework"];
     })
   );
 
@@ -231,7 +231,7 @@ export async function getAcademicMonthlyReport(offeringId: string, period: strin
           const materials = (topic ? (Array.isArray(topic.topic_materials) ? topic.topic_materials : []) : []).slice().sort((a, b) => a.sort_order - b.sort_order);
           return {
             label: topic?.label ?? "",
-            materials: materials.map((m) => ({ kind: m.kind as "video" | "drive", label: m.label, link: m.link, duration: m.duration })),
+            materials: materials.map((m) => ({ kind: m.kind as "video" | "notes" | "tricky_question", label: m.label, link: m.link, duration: m.duration })),
           };
         });
 
@@ -326,7 +326,7 @@ export async function generateMonthlyAcademicReport(
   const reportGroupByAssignment = new Map(
     (assignmentRows ?? []).map((a) => {
       const tpl = Array.isArray(a.assignment_templates) ? a.assignment_templates[0] : a.assignment_templates;
-      return [a.id, (tpl?.report_group as "homework" | "quiz" | "other") ?? "homework"];
+      return [a.id, (tpl?.report_group as "homework" | "classwork" | "quiz" | "mock_exam" | "other") ?? "homework"];
     })
   );
 
@@ -413,7 +413,7 @@ export async function generateMonthlyAcademicReport(
         const materials = (topic ? (Array.isArray(topic.topic_materials) ? topic.topic_materials : []) : []).slice().sort((a, b) => a.sort_order - b.sort_order);
         return {
           label: topic?.label ?? "",
-          materials: materials.map((m) => ({ kind: m.kind as "video" | "drive", label: m.label, link: m.link, duration: m.duration })),
+          materials: materials.map((m) => ({ kind: m.kind as "video" | "notes" | "tricky_question", label: m.label, link: m.link, duration: m.duration })),
         };
       });
 

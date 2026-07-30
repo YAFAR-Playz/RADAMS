@@ -16,7 +16,9 @@ type Draft = { label: string; hasGrade: boolean; hasComment: boolean; reportGrou
 
 const REPORT_GROUP_OPTS: { value: ReportGroup; label: string; desc: string }[] = [
   { value: "homework", label: "Homeworks", desc: "Simple title + status list on the monthly report" },
+  { value: "classwork", label: "Classwork", desc: "Simple title + status list, in its own section" },
   { value: "quiz", label: "Quizzes", desc: "Its own Status/Grade/Mark table per entry on the monthly report" },
+  { value: "mock_exam", label: "Mock Exams", desc: "Its own Status/Grade/Mark table per entry, in its own section" },
   { value: "other", label: "Other", desc: "One combined table with grade + comment, same as before" },
 ];
 

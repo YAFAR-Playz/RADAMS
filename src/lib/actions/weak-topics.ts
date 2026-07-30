@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
 
-export type TopicMaterial = { id: string; kind: "video" | "drive"; label: string | null; link: string; duration: string | null };
+export type TopicMaterial = { id: string; kind: "video" | "notes" | "tricky_question"; label: string | null; link: string; duration: string | null };
 
 export type TopicOption = {
   id: string;
@@ -51,12 +51,12 @@ export async function listTopicCatalog(courseId?: string): Promise<TopicOption[]
       label: r.label,
       courseId: r.course_id,
       courseName: course?.name ?? null,
-      materials: materials.map((m) => ({ id: m.id, kind: m.kind as "video" | "drive", label: m.label, link: m.link, duration: m.duration })),
+      materials: materials.map((m) => ({ id: m.id, kind: m.kind as "video" | "notes" | "tricky_question", label: m.label, link: m.link, duration: m.duration })),
     };
   });
 }
 
-export type MaterialInput = { kind: "video" | "drive"; label: string; link: string; duration: string };
+export type MaterialInput = { kind: "video" | "notes" | "tricky_question"; label: string; link: string; duration: string };
 
 async function replaceMaterials(topicId: string, materials: MaterialInput[]) {
   const supabase = await createClient();
@@ -301,7 +301,7 @@ export async function listApprovedTopicsForPeriod(period: string): Promise<Appro
       studentId: r.student_id,
       studentName: student?.name ?? "",
       topicLabel: topic?.label ?? "",
-      materials: materials.map((m) => ({ id: m.id, kind: m.kind as "video" | "drive", label: m.label, link: m.link, duration: m.duration })),
+      materials: materials.map((m) => ({ id: m.id, kind: m.kind as "video" | "notes" | "tricky_question", label: m.label, link: m.link, duration: m.duration })),
     };
   });
 }
