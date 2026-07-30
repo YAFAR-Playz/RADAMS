@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
 
-export type ReportGroup = "homework" | "quiz" | "other";
+export type ReportGroup = "homework" | "classwork" | "quiz" | "mock_exam" | "other";
 export type AssignmentTemplate = { id: string; label: string; hasGrade: boolean; hasComment: boolean; reportGroup: ReportGroup };
 
 const DEFAULT_TEMPLATES: { label: string; hasGrade: boolean; hasComment: boolean }[] = [

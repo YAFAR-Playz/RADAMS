@@ -14,6 +14,26 @@ function markFraction(grade: string | null, maxMarks: number | null): string | n
   return maxMarks ? `${grade}/${maxMarks}` : grade;
 }
 
+const MATERIAL_KIND_LABEL: Record<"video" | "notes" | "tricky_question", string> = {
+  video: "Video",
+  notes: "Notes",
+  tricky_question: "Tricky Question",
+};
+
+function MaterialCard({ label, link, duration, actionLabel }: { label: string; link: string; duration: string | null; actionLabel: string }) {
+  return (
+    <div className="mb-2 flex items-center justify-between rounded-[8px] border border-[#ddd] px-3 py-2 text-[12.5px]">
+      <div>
+        <div className="font-semibold">{label}</div>
+        {duration && <div className="text-[11px] text-[#777]">⏱ {duration}</div>}
+      </div>
+      <a href={link} target="_blank" rel="noreferrer" className="rounded-full bg-[#2a5298] px-3 py-1 text-[11.5px] font-semibold text-white">
+        {actionLabel}
+      </a>
+    </div>
+  );
+}
+
 export function PrintReportView({
   meta,
   students,
@@ -40,6 +60,7 @@ export function PrintReportView({
           .no-print { display: none !important; }
           .report-page { break-after: page; }
           .report-page:last-child { break-after: auto; }
+          .revision-page { break-before: page; }
         }
       `}</style>
 
@@ -60,7 +81,9 @@ export function PrintReportView({
       ) : (
         students.map((s) => {
           const homeworks = s.assignments.filter((a) => a.reportGroup === "homework");
+          const classwork = s.assignments.filter((a) => a.reportGroup === "classwork");
           const quizzes = s.assignments.filter((a) => a.reportGroup === "quiz");
+          const mockExams = s.assignments.filter((a) => a.reportGroup === "mock_exam");
           const other = s.assignments.filter((a) => !a.reportGroup || a.reportGroup === "other");
 
           return (
@@ -131,10 +154,53 @@ export function PrintReportView({
                     </div>
                   )}
 
+                  {classwork.length > 0 && (
+                    <div className="mb-5">
+                      <div className="mb-2 border-b-2 border-[#2a5298] pb-1 text-[15px] font-bold text-[#2a5298]">Classwork</div>
+                      <table className="w-full border-collapse text-[12.5px]">
+                        <tbody>
+                          {classwork.map((a, i) => (
+                            <tr key={i} className="border-b border-[#ddd]">
+                              <td className="w-1/2 py-[7px] pr-2 font-semibold text-[#2a5298]">{a.title}</td>
+                              <td className="py-[7px] capitalize">{a.status ?? "not logged"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
                   {quizzes.length > 0 && (
                     <div className="mb-5">
                       <div className="mb-2 border-b-2 border-[#2a5298] pb-1 text-[15px] font-bold text-[#2a5298]">Quizzes</div>
                       {quizzes.map((a, i) => (
+                        <div key={i} className="mb-3">
+                          <div className="mb-1 text-[13px] font-bold text-[#2a5298]">{a.title}</div>
+                          <table className="w-full border-collapse text-[12.5px]">
+                            <tbody>
+                              <tr className="border-b border-[#ddd]">
+                                <td className="w-1/3 py-[6px] pr-2 font-semibold">Status</td>
+                                <td className="py-[6px] capitalize">{a.status ?? "not logged"}</td>
+                              </tr>
+                              <tr className="border-b border-[#ddd]">
+                                <td className="py-[6px] pr-2 font-semibold">Grade</td>
+                                <td className="py-[6px]">{a.grade ?? "—"}</td>
+                              </tr>
+                              <tr className="border-b border-[#ddd]">
+                                <td className="py-[6px] pr-2 font-semibold">Mark</td>
+                                <td className="py-[6px]">{markFraction(a.grade, a.maxMarks) ?? "—"}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {mockExams.length > 0 && (
+                    <div className="mb-5">
+                      <div className="mb-2 border-b-2 border-[#2a5298] pb-1 text-[15px] font-bold text-[#2a5298]">Mock Exams</div>
+                      {mockExams.map((a, i) => (
                         <div key={i} className="mb-3">
                           <div className="mb-1 text-[13px] font-bold text-[#2a5298]">{a.title}</div>
                           <table className="w-full border-collapse text-[12.5px]">
@@ -212,7 +278,7 @@ export function PrintReportView({
                 </div>
               )}
 
-              {settings.showWeakTopics && (
+              {settings.showWeakTopics && !settings.groupByType && (
                 <div className="mb-5">
                   <div className="mb-2 text-[12px] font-bold uppercase tracking-wide text-[#555]">Weak topics</div>
                   {s.weakTopics.length === 0 ? (
@@ -225,7 +291,7 @@ export function PrintReportView({
                           {t.materials.length > 0 && (
                             <span className="text-[#555]">
                               {" — "}
-                              {t.materials.map((m) => `${m.label?.trim() || (m.kind === "video" ? "Video" : "Document")}${m.duration ? ` (${m.duration})` : ""}`).join(", ")}
+                              {t.materials.map((m) => `${m.label?.trim() || MATERIAL_KIND_LABEL[m.kind]}${m.duration ? ` (${m.duration})` : ""}`).join(", ")}
                             </span>
                           )}
                         </li>
@@ -262,6 +328,46 @@ export function PrintReportView({
                     <div className="text-[13px] leading-[1.5]">{s.assistantComment || <span className="text-[#777]">No comment left.</span>}</div>
                   </div>
                 )
+              )}
+
+              {settings.groupByType && settings.showWeakTopics && s.weakTopics.length > 0 && (
+                <div className="revision-page mt-8">
+                  <h2 className="mb-6 border-b-2 border-[#2a5298] pb-2 text-center text-[20px] font-bold text-[#2a5298]">Final Revision Priorities</h2>
+                  {s.weakTopics.map((t, i) => {
+                    const notes = t.materials.filter((m) => m.kind === "notes");
+                    const trickyQuestions = t.materials.filter((m) => m.kind === "tricky_question");
+                    const videos = t.materials.filter((m) => m.kind === "video");
+                    return (
+                      <div key={i} className="mb-6">
+                        <div className="mb-2 border-b-2 border-[#2a5298] pb-1 text-[15px] font-bold text-[#2a5298]">{t.label}</div>
+                        {notes.length > 0 && (
+                          <div className="mb-3">
+                            <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-[#2a5298]">Notes ({notes.length})</div>
+                            {notes.map((m, j) => (
+                              <MaterialCard key={j} label={m.label?.trim() || MATERIAL_KIND_LABEL.notes} link={m.link} duration={null} actionLabel="View" />
+                            ))}
+                          </div>
+                        )}
+                        {trickyQuestions.length > 0 && (
+                          <div className="mb-3">
+                            <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-[#2a5298]">Tricky Questions ({trickyQuestions.length})</div>
+                            {trickyQuestions.map((m, j) => (
+                              <MaterialCard key={j} label={m.label?.trim() || MATERIAL_KIND_LABEL.tricky_question} link={m.link} duration={null} actionLabel="View" />
+                            ))}
+                          </div>
+                        )}
+                        {videos.length > 0 && (
+                          <div className="mb-3">
+                            <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-[#2a5298]">Summarized Videos ({videos.length})</div>
+                            {videos.map((m, j) => (
+                              <MaterialCard key={j} label={m.label?.trim() || MATERIAL_KIND_LABEL.video} link={m.link} duration={m.duration} actionLabel="Watch" />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           );

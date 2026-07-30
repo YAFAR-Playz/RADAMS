@@ -452,7 +452,7 @@ export function AcademicReportContent() {
                                   {t.label}
                                   {t.materials.map((m, j) => (
                                     <a key={j} href={m.link} target="_blank" rel="noreferrer" className="font-medium underline">
-                                      {m.label?.trim() || (m.kind === "video" ? "Video" : "Document")}
+                                      {m.label?.trim() || (m.kind === "video" ? "Video" : m.kind === "tricky_question" ? "Tricky Question" : "Notes")}
                                       {m.duration ? ` (${m.duration})` : ""}
                                     </a>
                                   ))}

@@ -114,14 +114,24 @@ export async function deliverDriveReportsChunk(offeringId: string, period: strin
       studentName: s.studentName,
       assistantName: s.assistantName ?? "Unassigned",
       homeworks: s.assignments.filter((a) => a.reportGroup === "homework").map((a) => ({ title: a.title, status: a.status })),
+      classwork: s.assignments.filter((a) => a.reportGroup === "classwork").map((a) => ({ title: a.title, status: a.status })),
       quizzes: s.assignments
         .filter((a) => a.reportGroup === "quiz")
+        .map((a) => ({ title: a.title, status: a.status, grade: a.grade, mark: markFraction(a.grade, a.maxMarks) })),
+      mockExams: s.assignments
+        .filter((a) => a.reportGroup === "mock_exam")
         .map((a) => ({ title: a.title, status: a.status, grade: a.grade, mark: markFraction(a.grade, a.maxMarks) })),
       other: s.assignments
         .filter((a) => !a.reportGroup || a.reportGroup === "other")
         .map((a) => ({ title: a.title, status: a.status, grade: a.grade })),
       performanceComment: s.assistantComment,
       averageGrade: formatGradeByScale(s.avgGrade, meta.gradeScale),
+      weakTopics: s.weakTopics.map((t) => ({
+        label: t.label,
+        notes: t.materials.filter((m) => m.kind === "notes").map((m) => ({ label: m.label, link: m.link })),
+        trickyQuestions: t.materials.filter((m) => m.kind === "tricky_question").map((m) => ({ label: m.label, link: m.link })),
+        videos: t.materials.filter((m) => m.kind === "video").map((m) => ({ label: m.label, link: m.link, duration: m.duration })),
+      })),
     })),
   };
 
