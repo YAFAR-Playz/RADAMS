@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { formatGradeByScale } from "@/lib/grade-scale";
 import type { GeneratedReportMeta, GeneratedStudentReport } from "@/lib/actions/academic-report";
 import type { ReportSettings } from "@/lib/actions/report-settings";
@@ -41,6 +42,7 @@ export function PrintReportView({
   orgName,
   logoUrl,
   settings,
+  autoPrint,
 }: {
   meta: GeneratedReportMeta | null;
   students: GeneratedStudentReport[];
@@ -48,7 +50,16 @@ export function PrintReportView({
   orgName: string;
   logoUrl: string | null;
   settings: ReportSettings;
+  autoPrint?: boolean;
 }) {
+  // The "Download" action opens this same page with ?autoprint=1 so the
+  // browser's print dialog (defaulting to "Save as PDF") pops up without an
+  // extra click — there's no server-side PDF generation for the in-app view,
+  // so this is the closest thing to a one-click download.
+  useEffect(() => {
+    if (autoPrint && meta) window.print();
+  }, [autoPrint, meta]);
+
   if (!meta) {
     return <div className="p-10 text-[14px] text-[#666]">No report has been generated for this month yet.</div>;
   }
