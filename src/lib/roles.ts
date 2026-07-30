@@ -77,6 +77,7 @@ const NAV_DEF: Record<Role, NavItem[]> = {
     { icon: "cal-check", label: "Attendance", key: "attendance" },
     { icon: "target", label: "Weak Topics", key: "weak-topics" },
     { icon: "wallet", label: "My Pay", key: "mypay" },
+    { icon: "trend", label: "Monthly Reports", key: "report" },
     { icon: "message", label: "Chat", key: "chat" },
   ],
   registration: [
