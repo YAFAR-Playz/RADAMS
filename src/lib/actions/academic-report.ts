@@ -29,6 +29,28 @@ function parseGradeNumber(grade: string): number | null {
   return Number.isNaN(last) ? null : last;
 }
 
+// Many orgs never re-tag their assignment types in Templates — they reuse a
+// handful of generic templates ("Grade + comment", "Complete / Missing")
+// across every assignment type, all left at that template's default report
+// section. Confirmed against live data: a course with Quiz/Classwork/
+// Homework assignments all sharing 2-3 generic templates had every single
+// one bucketed as "homework" — hiding quiz grades entirely, since the
+// Homeworks section doesn't render a grade column. Titles are named clearly
+// in practice ("Quiz 1", "Classwork 13", "Mock Exam 1"), so infer the
+// section from the title first and only fall back to the template's tag
+// when the title doesn't match a recognizable pattern.
+function inferReportGroup(
+  title: string,
+  templateGroup: "homework" | "classwork" | "quiz" | "mock_exam" | "other" | undefined
+): "homework" | "classwork" | "quiz" | "mock_exam" | "other" {
+  const t = title.toLowerCase();
+  if (/mock\s*exam/.test(t)) return "mock_exam";
+  if (/\bquiz(zes)?\b/.test(t)) return "quiz";
+  if (/class\s*work/.test(t)) return "classwork";
+  if (/\bhome\s*work\b|\bhw\b/.test(t)) return "homework";
+  return templateGroup ?? "other";
+}
+
 function monthRange(period: string) {
   const [y, m] = period.split("-").map(Number);
   const start = `${period}-01`;
@@ -186,13 +208,13 @@ export async function getAcademicMonthlyReport(offeringId: string, period: strin
   const assignmentIds = includedAssignments.map((a) => a.id);
 
   const { data: assignmentMeta } = assignmentIds.length
-    ? await supabase.from("assignments").select("id, max_marks, assignment_templates(report_group)").in("id", assignmentIds)
-    : { data: [] as { id: string; max_marks: number | null; assignment_templates: { report_group: string } | { report_group: string }[] | null }[] };
+    ? await supabase.from("assignments").select("id, title, max_marks, assignment_templates(report_group)").in("id", assignmentIds)
+    : { data: [] as { id: string; title: string; max_marks: number | null; assignment_templates: { report_group: string } | { report_group: string }[] | null }[] };
   const maxMarksByAssignment = new Map((assignmentMeta ?? []).map((a) => [a.id, a.max_marks]));
   const reportGroupByAssignment = new Map(
     (assignmentMeta ?? []).map((a) => {
       const tpl = Array.isArray(a.assignment_templates) ? a.assignment_templates[0] : a.assignment_templates;
-      return [a.id, (tpl?.report_group as "homework" | "classwork" | "quiz" | "mock_exam" | "other") ?? "homework"];
+      return [a.id, inferReportGroup(a.title, tpl?.report_group as "homework" | "classwork" | "quiz" | "mock_exam" | "other" | undefined)];
     })
   );
 
@@ -342,7 +364,7 @@ export async function generateMonthlyAcademicReport(
   const reportGroupByAssignment = new Map(
     (assignmentRows ?? []).map((a) => {
       const tpl = Array.isArray(a.assignment_templates) ? a.assignment_templates[0] : a.assignment_templates;
-      return [a.id, (tpl?.report_group as "homework" | "classwork" | "quiz" | "mock_exam" | "other") ?? "homework"];
+      return [a.id, inferReportGroup(a.title, tpl?.report_group as "homework" | "classwork" | "quiz" | "mock_exam" | "other" | undefined)];
     })
   );
 
