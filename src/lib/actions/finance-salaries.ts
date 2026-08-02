@@ -405,7 +405,7 @@ async function computeBaseForMethod(
   assistantId: string,
   period: string,
   method: "per_paper" | "bracket",
-  checkedCount: number
+  checkedCount: CheckedPapersCount
 ): Promise<{ base: number; methodLabel: string; prorationNote: string | null }> {
   if (method === "bracket") {
     const { data: brackets } = await supabase.from("pay_brackets").select("lo, hi, pay").eq("offering_id", offeringId);
@@ -414,21 +414,20 @@ async function computeBaseForMethod(
     const fraction = prorationFraction(period, joinedAt, leftAt);
     const prorationNote = fraction < 1 ? formatProrationNote(period, joinedAt, leftAt, fraction) : null;
 
-    // Brackets are calibrated against a full period — a partial-period
-    // assistant naturally checks fewer papers just because they had fewer
-    // days, so match against their pace extrapolated to a full period
-    // instead of the raw (and therefore artificially low) count. The pay
-    // itself still only gets prorated by the actual fraction below.
-    const normalizedCount = fraction > 0 ? checkedCount / fraction : checkedCount;
+    // Brackets are calibrated against average papers checked PER ASSIGNMENT,
+    // not a raw cumulative total across the whole period — a course with
+    // many assignments would otherwise blow past every bracket at a
+    // perfectly normal pace. Averaging already accounts for a partial
+    // period (fewer assignments were open to check), so no separate
+    // date-based adjustment is needed here — the pay itself still only
+    // gets prorated by the actual active fraction below.
+    const avgPerAssignment = checkedCount.assignments > 0 ? checkedCount.papers / checkedCount.assignments : checkedCount.papers;
 
-    // Brackets step up, they don't cap out — someone who clears the top
-    // bracket's lo but exceeds its hi (e.g. an unusually busy course, or a
-    // count normalized above the highest configured tier) should still earn
-    // at least that top tier, not fall through to $0 for over-performing.
-    // Only an org whose brackets don't even start at 1 (a real config gap)
-    // can leave someone below every lo with no match at all.
+    // Brackets step up, they don't cap out — someone whose average clears
+    // the top bracket's lo but exceeds its hi should still earn at least
+    // that top tier, not fall through to $0 for over-performing.
     const match = (brackets ?? [])
-      .filter((b) => normalizedCount >= b.lo)
+      .filter((b) => avgPerAssignment >= b.lo)
       .sort((a, b) => b.lo - a.lo)[0];
     const fullPay = match ? Number(match.pay) : 0;
 
@@ -436,7 +435,7 @@ async function computeBaseForMethod(
   }
   const { data: rateRow } = await supabase.from("per_paper_rates").select("rate").eq("offering_id", offeringId).maybeSingle();
   const rate = rateRow ? Number(rateRow.rate) : 8;
-  return { base: checkedCount * rate, methodLabel: "Per paper", prorationNote: null };
+  return { base: checkedCount.papers * rate, methodLabel: "Per paper", prorationNote: null };
 }
 
 async function defaultMethodForOffering(supabase: Awaited<ReturnType<typeof createClient>>, offeringId: string): Promise<"per_paper" | "bracket"> {
@@ -527,7 +526,7 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
       let basis = "No checked papers this period";
       if (checkedCount.papers > 0) {
         const method = await resolveMethodForAssistant(supabase, offering.id, assistantId, staffDefaultByAssistant.get(assistantId));
-        const computed = await computeBaseForMethod(supabase, offering.id, assistantId, period, method, checkedCount.papers);
+        const computed = await computeBaseForMethod(supabase, offering.id, assistantId, period, method, checkedCount);
         base = computed.base;
         methodLabel = computed.methodLabel;
         calcMethod = method;
@@ -578,7 +577,7 @@ export async function setLineCalcMethod(lineId: string, method: "per_paper" | "b
   }
 
   const checkedCount = await countCheckedPapers(supabase, line.offering_id, line.payee_id, line.period);
-  const { base, methodLabel, prorationNote } = await computeBaseForMethod(supabase, line.offering_id, line.payee_id, line.period, method, checkedCount.papers);
+  const { base, methodLabel, prorationNote } = await computeBaseForMethod(supabase, line.offering_id, line.payee_id, line.period, method, checkedCount);
   const { error } = await supabase
     .from("salary_lines")
     .update({ calc_method: method, method: methodLabel, basis: formatBasis(method, checkedCount, prorationNote), base, updated_at: new Date().toISOString() })
