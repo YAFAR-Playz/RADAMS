@@ -414,7 +414,7 @@ export function PrintReportView({
 
               {settings.groupByType && settings.showWeakTopics && s.weakTopics.length > 0 && (
                 <div className="revision-page mt-8">
-                  <h2 className="mb-6 border-b-2 border-[#2a5298] pb-2 text-center text-[20px] font-bold text-[#2a5298]">Final Revision Priorities</h2>
+                  <h2 className="mb-6 border-b-2 border-[#2a5298] pb-2 text-center text-[20px] font-bold text-[#2a5298]">Weak Topics</h2>
                   {s.weakTopics.map((t, i) => {
                     const notes = t.materials.filter((m) => m.kind === "notes");
                     const trickyQuestions = t.materials.filter((m) => m.kind === "tricky_question");
