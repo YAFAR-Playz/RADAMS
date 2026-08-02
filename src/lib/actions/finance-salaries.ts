@@ -409,12 +409,20 @@ async function computeBaseForMethod(
 ): Promise<{ base: number; methodLabel: string; prorationNote: string | null }> {
   if (method === "bracket") {
     const { data: brackets } = await supabase.from("pay_brackets").select("lo, hi, pay").eq("offering_id", offeringId);
-    const match = (brackets ?? []).find((b) => checkedCount >= b.lo && checkedCount <= b.hi);
-    const fullPay = match ? Number(match.pay) : 0;
 
     const { joinedAt, leftAt } = await getActivityWindow(supabase, offeringId, assistantId);
     const fraction = prorationFraction(period, joinedAt, leftAt);
     const prorationNote = fraction < 1 ? formatProrationNote(period, joinedAt, leftAt, fraction) : null;
+
+    // Brackets are calibrated against a full period — a partial-period
+    // assistant naturally checks fewer papers just because they had fewer
+    // days, so match against their pace extrapolated to a full period
+    // instead of the raw (and therefore artificially low) count. The pay
+    // itself still only gets prorated by the actual fraction below.
+    const normalizedCount = fraction > 0 ? checkedCount / fraction : checkedCount;
+    const match = (brackets ?? []).find((b) => normalizedCount >= b.lo && normalizedCount <= b.hi);
+    const fullPay = match ? Number(match.pay) : 0;
+
     return { base: Math.round(fullPay * fraction), methodLabel: "Bracket", prorationNote };
   }
   const { data: rateRow } = await supabase.from("per_paper_rates").select("rate").eq("offering_id", offeringId).maybeSingle();
