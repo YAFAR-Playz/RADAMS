@@ -1,4 +1,4 @@
-export type TemplateCategory = "assignment" | "attendance" | "payment" | "welcome" | "critical_alert" | "caution_flag";
+export type TemplateCategory = "assignment" | "attendance" | "payment" | "welcome" | "critical_alert" | "caution_flag" | "monthly_report";
 export type TemplateRecipient = "student" | "parent";
 export type TemplateKey = `${TemplateCategory}_${TemplateRecipient}`;
 
@@ -6,7 +6,7 @@ export type TemplateCategoryDef = {
   category: TemplateCategory;
   label: string;
   usage: string;
-  icon: "clipboard-list" | "cal-check" | "wallet" | "user-plus" | "alert";
+  icon: "clipboard-list" | "cal-check" | "wallet" | "user-plus" | "alert" | "trend";
   vars: string[];
   student: { def: string };
   parent: { def: string };
@@ -92,6 +92,19 @@ export const TEMPLATE_CATEGORY_DEFS: TemplateCategoryDef[] = [
     },
     parent: {
       def: "Dear parent {student}\nبتواصل مع حضرتك بخصوص متابعة مستوى الطالب\nحالياً تقديره {grade} ولكن الطالب عنده القدرة للحصول على {target_grade}\nعلشان كدة قررنا نضمه لمجموعات المذاكرة والدعم الخاص بينا (study circles) في المتابعة دي هنوفر الآتي:\n-خطة مذاكرة منظمة: لمراجعة كل المواضيع اللي فاتت خطوة بخطوة.\n-حصص إضافية (Office Hours): مخصصة للحل والتدريب على الأجزاء والأسئلة الصعبة في كل موضوع.\n-جدول متابعة يومي (Daily Checklist): عشان نتأكد إنه بيذاكر وبيخلص واجباته أول بأول.\n-امتحان إعادة (Re-do Exam): في نهاية الخطة عشان نقيس مدى تحسنه ونشوف النتيجة مع بعض.\n\nابن حضرتك/بنت حضرتك انضم بالفعل لجروب واتساب فرعي مخصص للمرحلة دي مع course head و assistant المتابعة. هنبعت لحضرتك رسالة تحديث بعد مراجعة كل موضوع، وكمان تقرير كامل قبل امتحان الإعادة.\nشاكرين جداً لتعاونكم وثقتكم المستمرة فينا\nبالتوفيق\n{org} Team",
+    },
+  },
+  {
+    category: "monthly_report",
+    label: "Monthly report",
+    usage: "Sent from the Monthly Reports tab",
+    icon: "trend",
+    vars: ["{student}", "{org}", "{course}", "{month}", "{grade}", "{link}"],
+    student: {
+      def: "Hi {student}, this is {org}.\n\nYour monthly report for {course} ({month}) is ready.\nAverage grade: {grade}\n\nView it here: {link}\n\nThank you.",
+    },
+    parent: {
+      def: "Assalamu alaikum, this is {org}.\n\n{student}'s monthly report for {course} ({month}) is ready.\nAverage grade: {grade}\n\nView it here: {link}\n\nThank you.",
     },
   },
 ];

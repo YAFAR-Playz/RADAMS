@@ -313,6 +313,10 @@ export type GeneratedStudentReport = {
   assignments: ReportAssignmentDetail[];
   weakTopics: ReportWeakTopic[];
   assistantComment: string;
+  phone: string | null;
+  guardianName: string | null;
+  guardianPhone: string | null;
+  driveFolderLink: string | null;
 };
 
 function requireHeadOrAdminForReports(role: string | undefined) {
@@ -488,7 +492,7 @@ export async function getGeneratedReport(offeringId: string, period: string): Pr
 
   const { data: rows } = await supabase
     .from("monthly_report_students")
-    .select("student_id, avg_grade, assignments, weak_topics, assistant_comment, students(name, student_code)")
+    .select("student_id, avg_grade, assignments, weak_topics, assistant_comment, students(name, student_code, phone, guardian_name, guardian_phone, drive_folder_link)")
     .eq("generation_id", gen.id);
 
   const creator = Array.isArray(gen.profiles) ? gen.profiles[0] : gen.profiles;
@@ -520,6 +524,10 @@ export async function getGeneratedReport(offeringId: string, period: string): Pr
         assignments: (r.assignments as ReportAssignmentDetail[]) ?? [],
         weakTopics: (r.weak_topics as ReportWeakTopic[]) ?? [],
         assistantComment: r.assistant_comment ?? "",
+        phone: student.phone ?? null,
+        guardianName: student.guardian_name ?? null,
+        guardianPhone: student.guardian_phone ?? null,
+        driveFolderLink: student.drive_folder_link ?? null,
       };
     })
     .filter((x): x is GeneratedStudentReport => !!x)

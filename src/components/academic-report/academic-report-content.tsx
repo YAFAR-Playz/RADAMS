@@ -21,8 +21,19 @@ import { downloadCsv } from "@/lib/csv-export";
 import { pickerOnlyDateProps } from "@/lib/date-input";
 import { matchesStudentQuery } from "@/lib/student-search";
 import { ReportActionButtons } from "@/components/academic-report/report-action-buttons";
+import { SendReportMessageButton, type ReportMessageTemplates } from "@/components/academic-report/send-report-message-button";
+import { getEffectiveTemplates, getOrgBrandName } from "@/lib/actions/templates";
 
 const PAGE_SIZE = 10;
+
+function initialsOf(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase())
+    .join("");
+}
 
 // A course can have hundreds of students — generating each one's Doc/PDF
 // takes a few seconds inside Apps Script, so delivering everyone in a
@@ -70,6 +81,16 @@ export function AcademicReportContent() {
   const [scaleSaving, setScaleSaving] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
+
+  const [messageTemplates, setMessageTemplates] = useState<ReportMessageTemplates | null>(null);
+  const [orgName, setOrgName] = useState("");
+
+  useEffect(() => {
+    getEffectiveTemplates(["monthly_report_student", "monthly_report_parent"]).then((t) =>
+      setMessageTemplates({ student: t.monthly_report_student, parent: t.monthly_report_parent })
+    );
+    getOrgBrandName().then(setOrgName);
+  }, []);
 
   useEffect(() => {
     listMyOfferings().then((data) => {
@@ -401,10 +422,24 @@ export function AcademicReportContent() {
                           <div className="text-[11px] uppercase tracking-[0.03em] text-[var(--subtle)]">Avg grade</div>
                           <div className="font-mono text-[15px] font-bold text-[var(--text)]">{formatGradeByScale(s.avgGrade, meta.gradeScale)}</div>
                         </div>
-                        <div onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-[6px]" onClick={(e) => e.stopPropagation()}>
                           <ReportActionButtons
                             href={`/report-print?offeringId=${offeringId}&period=${period}&studentId=${s.studentId}`}
                             compact
+                          />
+                          <SendReportMessageButton
+                            compact
+                            templates={messageTemplates}
+                            orgName={orgName}
+                            courseName={offerings?.find((o) => o.id === offeringId)?.label ?? ""}
+                            monthLabel={periodLabel(period)}
+                            studentName={s.studentName}
+                            studentInitials={initialsOf(s.studentName)}
+                            guardianName={s.guardianName}
+                            phone={s.phone}
+                            guardianPhone={s.guardianPhone}
+                            driveFolderLink={s.driveFolderLink}
+                            avgGradeDisplay={formatGradeByScale(s.avgGrade, meta.gradeScale)}
                           />
                         </div>
                         <Icon name="chevron-down" size={16} className="flex-none text-[var(--muted)]" style={{ transform: isOpen ? "none" : "rotate(-90deg)" }} />
