@@ -420,7 +420,16 @@ async function computeBaseForMethod(
     // instead of the raw (and therefore artificially low) count. The pay
     // itself still only gets prorated by the actual fraction below.
     const normalizedCount = fraction > 0 ? checkedCount / fraction : checkedCount;
-    const match = (brackets ?? []).find((b) => normalizedCount >= b.lo && normalizedCount <= b.hi);
+
+    // Brackets step up, they don't cap out — someone who clears the top
+    // bracket's lo but exceeds its hi (e.g. an unusually busy course, or a
+    // count normalized above the highest configured tier) should still earn
+    // at least that top tier, not fall through to $0 for over-performing.
+    // Only an org whose brackets don't even start at 1 (a real config gap)
+    // can leave someone below every lo with no match at all.
+    const match = (brackets ?? [])
+      .filter((b) => normalizedCount >= b.lo)
+      .sort((a, b) => b.lo - a.lo)[0];
     const fullPay = match ? Number(match.pay) : 0;
 
     return { base: Math.round(fullPay * fraction), methodLabel: "Bracket", prorationNote };
