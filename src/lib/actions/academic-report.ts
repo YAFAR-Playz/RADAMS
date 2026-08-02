@@ -51,6 +51,35 @@ function inferReportGroup(
   return templateGroup ?? "other";
 }
 
+// A course with a full roster and several assignments easily produces
+// students × assignments log rows — well past PostgREST's default 1000-row
+// cap on a single unbounded select (one offering here alone had 86 students
+// × ~21 assignments = 1,794 rows). An un-paginated fetch silently truncated
+// the result, so whichever assignments' logs happened to sort past the
+// cutoff read as "not logged" despite being genuinely logged — paginate
+// through with .range() until exhausted instead.
+async function fetchAllAssignmentLogs(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  assignmentIds: string[],
+  studentIds: string[]
+): Promise<{ assignment_id: string; student_id: string; status: string | null; grade: string | null }[]> {
+  const logs: { assignment_id: string; student_id: string; status: string | null; grade: string | null }[] = [];
+  if (!assignmentIds.length || !studentIds.length) return logs;
+  const PAGE_SIZE = 1000;
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("assignment_logs")
+      .select("assignment_id, student_id, status, grade")
+      .in("assignment_id", assignmentIds)
+      .in("student_id", studentIds)
+      .range(from, from + PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    logs.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
+  return logs;
+}
+
 function monthRange(period: string) {
   const [y, m] = period.split("-").map(Number);
   const start = `${period}-01`;
@@ -226,9 +255,7 @@ export async function getAcademicMonthlyReport(offeringId: string, period: strin
 
   const studentIds = enrollments.map((e) => e.student_id);
 
-  const { data: logs } = assignmentIds.length
-    ? await supabase.from("assignment_logs").select("assignment_id, student_id, status, grade").in("assignment_id", assignmentIds).in("student_id", studentIds)
-    : { data: [] as { assignment_id: string; student_id: string; status: string | null; grade: string | null }[] };
+  const logs = await fetchAllAssignmentLogs(supabase, assignmentIds, studentIds);
 
   const { data: topics } = await supabase
     .from("student_topic_submissions")
@@ -372,13 +399,7 @@ export async function generateMonthlyAcademicReport(
     })
   );
 
-  const { data: logs } = assignmentIds.length
-    ? await supabase
-        .from("assignment_logs")
-        .select("assignment_id, student_id, status, grade")
-        .in("assignment_id", assignmentIds)
-        .in("student_id", studentIds)
-    : { data: [] as { assignment_id: string; student_id: string; status: string | null; grade: string | null }[] };
+  const logs = await fetchAllAssignmentLogs(supabase, assignmentIds, studentIds);
 
   const { data: topics } = await supabase
     .from("student_topic_submissions")
