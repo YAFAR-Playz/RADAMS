@@ -520,6 +520,23 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
     const staffDefaultByAssistant = new Map((staffSettings ?? []).map((s) => [s.profile_id, s.calc_method as "paper" | "category" | "fixed"]));
 
     for (const assistantId of assistantIds) {
+      // A bracket-method line stuck at $0 is unambiguously the
+      // unmatched-bracket bug, not a value Finance reviewed and meant to
+      // leave at zero — recompute it on every re-generate until it
+      // resolves. Anything else with an existing line (any nonzero base, or
+      // a manual/per-paper line) is left completely untouched, so it's
+      // still safe to re-run without clobbering hand edits.
+      const { data: existing } = await supabase
+        .from("salary_lines")
+        .select("id, base, calc_method")
+        .eq("org_id", orgId)
+        .eq("payee_id", assistantId)
+        .eq("offering_id", offering.id)
+        .eq("period", period)
+        .maybeSingle();
+      const staleZeroBracket = existing?.calc_method === "bracket" && Number(existing.base) === 0;
+      if (existing && !staleZeroBracket) continue;
+
       const checkedCount = await countCheckedPapers(supabase, offering.id, assistantId, period);
       const evalAmounts = evalByAssistant.get(assistantId);
       if (checkedCount.papers <= 0 && !evalAmounts) continue;
@@ -554,7 +571,7 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
             bonus_reason: evalAmounts?.extra ? "From head evaluation" : null,
             deduction_reason: evalAmounts?.deduction ? "From head evaluation" : null,
           },
-          { onConflict: "org_id,payee_id,offering_id,period", ignoreDuplicates: true }
+          { onConflict: "org_id,payee_id,offering_id,period" }
         );
       if (!error) created++;
     }
