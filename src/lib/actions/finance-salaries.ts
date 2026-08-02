@@ -325,7 +325,11 @@ async function countCheckedPapers(
     .in("assignment_id", assignmentIds)
     .eq("logged_by", assistantId)
     .eq("status", "checked");
-  return { papers: logs?.length ?? 0, assignments: new Set((logs ?? []).map((l) => l.assignment_id)).size };
+  // The denominator is every counts-in-salary assignment due this month,
+  // not just the ones this assistant happened to check at least one paper
+  // in — an assignment they skipped entirely should still pull the average
+  // down, not disappear from the count.
+  return { papers: logs?.length ?? 0, assignments: assignmentIds.length };
 }
 
 function formatBasis(method: "per_paper" | "bracket", count: CheckedPapersCount, prorationNote: string | null): string {
