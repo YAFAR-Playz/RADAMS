@@ -463,9 +463,20 @@ export async function generateMonthlyAcademicReport(
 
     // Number(null) is 0, not NaN — filter out ungraded/status-only entries
     // before converting, so they don't silently drag the average down.
+    // Grades are raw marks against each assignment's own max marks (a 38 on
+    // a /50 quiz means something different from a 38 on a /100 exam), so
+    // each one has to be normalized to a percentage of its own maxMarks
+    // before averaging — averaging the raw numbers directly (as if every
+    // assignment were out of 100) skews toward whichever assignments happen
+    // to have higher maxMarks, and formatGradeByScale's percent/band
+    // matching downstream assumes avgGrade is already a 0-100 percentage.
     const numericGrades = assignments
       .filter((a) => a.grade != null && a.grade.trim() !== "")
-      .map((a) => parseGradeNumber(a.grade as string))
+      .map((a) => {
+        const raw = parseGradeNumber(a.grade as string);
+        if (raw == null) return null;
+        return a.maxMarks && a.maxMarks > 0 ? (raw / a.maxMarks) * 100 : raw;
+      })
       .filter((n): n is number => n != null);
     const avgGrade = numericGrades.length ? Math.round(numericGrades.reduce((s, n) => s + n, 0) / numericGrades.length) : null;
 
