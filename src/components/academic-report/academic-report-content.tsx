@@ -75,6 +75,7 @@ export function AcademicReportContent() {
   const [sendingToDrive, setSendingToDrive] = useState(false);
   const [driveProgress, setDriveProgress] = useState<{ done: number; total: number } | null>(null);
   const [driveResult, setDriveResult] = useState<string | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
 
   const [scaleOpen, setScaleOpen] = useState(false);
   const [scaleDraft, setScaleDraft] = useState<GradeScaleSetting>({ scale: "percentage", bands: [] });
@@ -194,6 +195,27 @@ export function AcademicReportContent() {
     } finally {
       setSendingToDrive(false);
       setDriveProgress(null);
+    }
+  }
+
+  // "Send to Drive" above deliberately skips anyone already delivered, so
+  // it can resume a large course without re-touching everyone. That means
+  // it can never recover a student whose Drive folder got deleted outside
+  // the app — this bypasses that skip for exactly one student, forcing
+  // Apps Script to recreate their folder and refreshing the stored link.
+  async function onResendToDrive(studentId: string) {
+    if (!offeringId || !meta) return;
+    setResendingId(studentId);
+    setError(null);
+    try {
+      const [result] = await deliverDriveReportsChunk(offeringId, period, [studentId]);
+      if (!result?.ok) throw new Error(result?.error || "Couldn't resend this report to Drive.");
+      setStudents((prev) => prev?.map((s) => (s.studentId === studentId ? { ...s, driveFolderLink: result.folderUrl ?? s.driveFolderLink } : s)) ?? prev);
+      setDriveResult(`Resent to Drive — the link is refreshed for this student.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't resend this report to Drive — try again.");
+    } finally {
+      setResendingId(null);
     }
   }
 
@@ -441,6 +463,14 @@ export function AcademicReportContent() {
                             driveFolderLink={s.driveFolderLink}
                             avgGradeDisplay={formatGradeByScale(s.avgGrade, meta.gradeScale)}
                           />
+                          <button
+                            onClick={() => onResendToDrive(s.studentId)}
+                            disabled={resendingId !== null}
+                            title="Resend to Drive — use this if you deleted their Drive folder and need the link refreshed"
+                            className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
+                          >
+                            {resendingId === s.studentId ? <Spinner size={13} /> : <Icon name="refresh" size={14} />}
+                          </button>
                         </div>
                         <Icon name="chevron-down" size={16} className="flex-none text-[var(--muted)]" style={{ transform: isOpen ? "none" : "rotate(-90deg)" }} />
                       </div>
