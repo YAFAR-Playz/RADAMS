@@ -13,20 +13,37 @@ export type ReportAssignmentOption = {
   hasGrade: boolean;
 };
 
-// Grade fields are free text, and some heads/assistants type compound
-// values like "(A*/9) 47" or "6/B - 34" — a letter/scale grade next to the
-// raw mark — rather than a bare number. A plain Number(grade) turns every
-// one of those into NaN and silently drops it from the average. The raw
-// mark consistently comes last in every observed format, so fall back to
-// the last number found in the string when the whole thing isn't already
-// a clean number.
-function parseGradeNumber(grade: string): number | null {
-  const direct = Number(grade.trim());
-  if (!Number.isNaN(direct)) return direct;
-  const matches = grade.match(/\d+(\.\d+)?/g);
-  if (!matches || !matches.length) return null;
-  const last = Number(matches[matches.length - 1]);
-  return Number.isNaN(last) ? null : last;
+// Grade fields are free text. Three shapes show up in practice:
+//   - a clean number ("47") meaning "47 out of this assignment's maxMarks"
+//   - a compound letter/scale grade next to the raw mark, e.g. "(A*/9) 47"
+//     or "6/B - 34" — the raw mark consistently comes last
+//   - a self-contained "raw/total" fraction the assistant typed directly,
+//     e.g. "24/37", usually because the assignment's own maxMarks field is
+//     wrong or generic (left at a default 100) and doesn't match what they
+//     actually graded out of
+// A bare "X/Y" has to be scored against its own Y, not the assignment's
+// maxMarks — otherwise the old "take the last number as the raw mark"
+// fallback reads "24/37" as raw=37 (the denominator) over a maxMarks of
+// 100, giving 37% instead of the intended 24/37 ≈ 65%.
+function gradeToPercent(grade: string, maxMarks: number | null): number | null {
+  const trimmed = grade.trim();
+  const fraction = trimmed.match(/^(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)$/);
+  if (fraction) {
+    const num = Number(fraction[1]);
+    const den = Number(fraction[2]);
+    return den > 0 ? (num / den) * 100 : null;
+  }
+  const direct = Number(trimmed);
+  let raw: number | null;
+  if (!Number.isNaN(direct)) {
+    raw = direct;
+  } else {
+    const matches = trimmed.match(/\d+(\.\d+)?/g);
+    const last = matches && matches.length ? Number(matches[matches.length - 1]) : NaN;
+    raw = Number.isNaN(last) ? null : last;
+  }
+  if (raw == null) return null;
+  return maxMarks && maxMarks > 0 ? (raw / maxMarks) * 100 : raw;
 }
 
 // Many orgs never re-tag their assignment types in Templates — they reuse a
@@ -472,11 +489,7 @@ export async function generateMonthlyAcademicReport(
     // matching downstream assumes avgGrade is already a 0-100 percentage.
     const numericGrades = assignments
       .filter((a) => a.grade != null && a.grade.trim() !== "")
-      .map((a) => {
-        const raw = parseGradeNumber(a.grade as string);
-        if (raw == null) return null;
-        return a.maxMarks && a.maxMarks > 0 ? (raw / a.maxMarks) * 100 : raw;
-      })
+      .map((a) => gradeToPercent(a.grade as string, a.maxMarks))
       .filter((n): n is number => n != null);
     const avgGrade = numericGrades.length ? Math.round(numericGrades.reduce((s, n) => s + n, 0) / numericGrades.length) : null;
 
