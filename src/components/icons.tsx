@@ -50,6 +50,7 @@ import {
   Share2,
   Download,
   Printer,
+  RefreshCw,
   type LucideIcon,
 } from "lucide-react";
 
@@ -104,6 +105,7 @@ export const ICONS = {
   share: Share2,
   download: Download,
   printer: Printer,
+  refresh: RefreshCw,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;
