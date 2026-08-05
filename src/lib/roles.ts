@@ -65,9 +65,9 @@ const NAV_DEF: Record<Role, NavItem[]> = {
     { icon: "user-check", label: "Assistants", key: "assistants" },
     { icon: "cal-check", label: "Attendance", key: "attendance" },
     { icon: "chart", label: "Evaluations", key: "evaluations" },
+    { icon: "trend", label: "Monthly report", key: "report" },
     { icon: "target", label: "Weak Topics", key: "weak-topics" },
     { icon: "wallet", label: "My Pay", key: "mypay" },
-    { icon: "trend", label: "Monthly report", key: "report" },
     { icon: "message", label: "Chat", key: "chat" },
   ],
   assistant: [
@@ -75,9 +75,9 @@ const NAV_DEF: Record<Role, NavItem[]> = {
     { icon: "grad", label: "My Students", key: "students" },
     { icon: "clipboard-list", label: "Assignments", key: "assignments" },
     { icon: "cal-check", label: "Attendance", key: "attendance" },
+    { icon: "trend", label: "Monthly Reports", key: "report" },
     { icon: "target", label: "Weak Topics", key: "weak-topics" },
     { icon: "wallet", label: "My Pay", key: "mypay" },
-    { icon: "trend", label: "Monthly Reports", key: "report" },
     { icon: "message", label: "Chat", key: "chat" },
   ],
   registration: [
