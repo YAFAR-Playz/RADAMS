@@ -28,8 +28,14 @@ export function AuthCallback() {
           setFailed(true);
           return;
         }
-        router.push("/dashboard");
-        router.refresh();
+        // This branch always replaces an existing session (an admin's own,
+        // for Login As) rather than establishing a fresh one — router.push +
+        // router.refresh() is a soft navigation that can fire its server
+        // request before the browser has finished persisting setSession()'s
+        // new cookie, so the server still reads the old session and the
+        // page loads back into the same account. A hard navigation only
+        // fires after this async function's cookie writes are flushed.
+        window.location.href = "/dashboard";
         return;
       }
 
