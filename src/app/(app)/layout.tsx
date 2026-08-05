@@ -21,7 +21,12 @@ export async function generateMetadata() {
   const profile = await getCurrentProfile();
   return {
     title: profile?.org?.name ?? "ZAD-AMS",
-    icons: { icon: `/icon?org=${profile?.org?.id ?? "none"}` },
+    // No `type` here — icon.tsx proxies whatever format the org actually
+    // uploaded (png/jpeg/svg/webp), so a hardcoded type could mismatch the
+    // real Content-Type header and cause Safari specifically to reject it
+    // (it's stricter about this than Chrome). `sizes` alone is enough to
+    // satisfy Safari's pickier <link rel="icon"> parsing.
+    icons: { icon: { url: `/icon?org=${profile?.org?.id ?? "none"}`, sizes: "64x64" } },
   };
 }
 
