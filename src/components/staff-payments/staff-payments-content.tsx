@@ -12,6 +12,7 @@ const METHOD_OPTS: { value: CalcMethod; label: string }[] = [
   { value: "paper", label: "Per paper" },
   { value: "category", label: "Avg-paper category" },
   { value: "fixed", label: "Fixed salary" },
+  { value: "fixed_per_paper", label: "Fixed + per paper" },
 ];
 const PAY_OPTS = ["Bank transfer", "Mobile wallet", "InstaPay"];
 
