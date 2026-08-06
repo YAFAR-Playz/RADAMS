@@ -234,6 +234,7 @@ export function PayCategoriesContent() {
   const [categoryDrafts, setCategoryDrafts] = useState<Record<string, CategoryDraft>>({});
   const [optionDrafts, setOptionDrafts] = useState<Record<string, OptionDraft>>({});
   const [courseRateDrafts, setCourseRateDrafts] = useState<Record<string, string>>({});
+  const [courseFixedSalaryDrafts, setCourseFixedSalaryDrafts] = useState<Record<string, string>>({});
   const [bracketDrafts, setBracketDrafts] = useState<Record<string, BracketDraft>>({});
   const [officeHourOrgDefaultDraft, setOfficeHourOrgDefaultDraft] = useState<string | null>(null);
   const [officeHourRateDrafts, setOfficeHourRateDrafts] = useState<Record<string, string>>({});
@@ -294,6 +295,7 @@ export function PayCategoriesContent() {
       setCategoryDrafts({});
       setOptionDrafts({});
       setCourseRateDrafts({});
+      setCourseFixedSalaryDrafts({});
       setBracketDrafts({});
       setOfficeHourOrgDefaultDraft(null);
       setOfficeHourRateDrafts({});
@@ -418,6 +420,9 @@ export function PayCategoriesContent() {
   function draftCourseRate(offeringId: string, value: string) {
     setCourseRateDrafts((prev) => ({ ...prev, [offeringId]: value }));
   }
+  function draftCourseFixedSalary(offeringId: string, value: string) {
+    setCourseFixedSalaryDrafts((prev) => ({ ...prev, [offeringId]: value }));
+  }
   function draftBracket(name: string, patch: Partial<BracketDraft>) {
     setBracketDrafts((prev) => ({ ...prev, [name]: { ...prev[name], ...patch } }));
   }
@@ -484,7 +489,13 @@ export function PayCategoriesContent() {
       await Promise.all([
         ...Object.entries(categoryDrafts).map(([id, d]) => updatePayCategory(id, { label: d.label, rate: Number(d.rate) || 0 })),
         ...Object.entries(optionDrafts).map(([id, d]) => updateCategoryOption(id, { label: d.label, amount: Number(d.amount) || 0 })),
-        ...Object.entries(courseRateDrafts).map(([offeringId, v]) => setCourseRate(offeringId, Number(v) || 0)),
+        ...Array.from(new Set([...Object.keys(courseRateDrafts), ...Object.keys(courseFixedSalaryDrafts)])).map((offeringId) => {
+          const current = courseRates?.find((c) => c.offeringId === offeringId);
+          const rate = courseRateDrafts[offeringId] !== undefined ? Number(courseRateDrafts[offeringId]) || 0 : current?.rate ?? 0;
+          const fixedSalary =
+            courseFixedSalaryDrafts[offeringId] !== undefined ? Number(courseFixedSalaryDrafts[offeringId]) || 0 : current?.fixedSalary ?? 0;
+          return setCourseRate(offeringId, rate, fixedSalary);
+        }),
         ...Object.entries(bracketDrafts).map(([name, d]) => {
           // Only fields the user actually typed into are included in the
           // patch — anything left blank stays untouched for every course.
@@ -676,27 +687,46 @@ export function PayCategoriesContent() {
             />
           </div>
 
-          {/* PER-PAPER RATE BY COURSE */}
+          {/* PER-PAPER RATE & FIXED SALARY BY COURSE — the fixed-salary field
+              feeds the "Fixed + per paper" calc method (fixed base + this
+              same per-paper rate × papers checked), set here per course. */}
           <section className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
             <header className="border-b border-[var(--border2)] p-[14px_16px]">
-              <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Per-paper rate by course</h3>
+              <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Per-paper rate & fixed salary by course</h3>
+              <p className="m-0 mt-[2px] text-[12px] text-[var(--muted)]">
+                The fixed salary is used by the &quot;Fixed + per paper&quot; calc method — a flat base plus this course&apos;s per-paper rate.
+              </p>
             </header>
             {courseScope.length === 0 ? (
-              <div className="p-[30px] text-center text-[13px] text-[var(--muted)]">Select one or more courses above to set their per-paper rate.</div>
+              <div className="p-[30px] text-center text-[13px] text-[var(--muted)]">Select one or more courses above to set their rates.</div>
             ) : (
               <div className="grid grid-cols-1 gap-[10px] p-[10px] sm:grid-cols-2">
                 {visibleCourseRates.map((c) => (
-                  <div key={c.offeringId} className="flex items-center gap-[10px] rounded-[9px] border border-[var(--border2)] p-[10px_12px]">
-                    <span className="flex-1 text-[13px] font-semibold text-[var(--text)]">{c.label}</span>
-                    <span className="text-[11.5px] text-[var(--subtle)]">per paper</span>
-                    <div className="flex h-[34px] w-[88px] flex-none items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[9px]">
-                      <span className="text-[12.5px] font-semibold text-[var(--subtle)]">{sym}</span>
-                      <input
-                        value={courseRateDrafts[c.offeringId] ?? String(c.rate)}
-                        onChange={(e) => draftCourseRate(c.offeringId, e.target.value.replace(/[^0-9]/g, ""))}
-                        inputMode="numeric"
-                        className="w-full border-none bg-transparent font-mono text-[13px] font-bold text-[var(--ok)] outline-none"
-                      />
+                  <div key={c.offeringId} className="flex flex-col gap-[8px] rounded-[9px] border border-[var(--border2)] p-[10px_12px]">
+                    <span className="text-[13px] font-semibold text-[var(--text)]">{c.label}</span>
+                    <div className="flex items-center gap-[10px]">
+                      <span className="w-[80px] flex-none text-[11.5px] text-[var(--subtle)]">per paper</span>
+                      <div className="flex h-[34px] w-[88px] flex-none items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[9px]">
+                        <span className="text-[12.5px] font-semibold text-[var(--subtle)]">{sym}</span>
+                        <input
+                          value={courseRateDrafts[c.offeringId] ?? String(c.rate)}
+                          onChange={(e) => draftCourseRate(c.offeringId, e.target.value.replace(/[^0-9]/g, ""))}
+                          inputMode="numeric"
+                          className="w-full border-none bg-transparent font-mono text-[13px] font-bold text-[var(--ok)] outline-none"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-[10px]">
+                      <span className="w-[80px] flex-none text-[11.5px] text-[var(--subtle)]">fixed salary</span>
+                      <div className="flex h-[34px] w-[88px] flex-none items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[9px]">
+                        <span className="text-[12.5px] font-semibold text-[var(--subtle)]">{sym}</span>
+                        <input
+                          value={courseFixedSalaryDrafts[c.offeringId] ?? String(c.fixedSalary)}
+                          onChange={(e) => draftCourseFixedSalary(c.offeringId, e.target.value.replace(/[^0-9]/g, ""))}
+                          inputMode="numeric"
+                          className="w-full border-none bg-transparent font-mono text-[13px] font-bold text-[var(--brand)] outline-none"
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}

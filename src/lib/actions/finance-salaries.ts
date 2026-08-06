@@ -14,7 +14,7 @@ export type SalaryLineRow = {
   officeHoursOfferingId: string | null;
   offering: string;
   method: string;
-  calcMethod: "per_paper" | "bracket" | "manual" | null;
+  calcMethod: "per_paper" | "bracket" | "fixed_per_paper" | "manual" | null;
   basis: string | null;
   base: number;
   bonus: number;
@@ -332,7 +332,14 @@ async function countCheckedPapers(
   return { papers: logs?.length ?? 0, assignments: assignmentIds.length };
 }
 
-function formatBasis(method: "per_paper" | "bracket", count: CheckedPapersCount, prorationNote: string | null): string {
+function formatBasis(method: "per_paper" | "bracket" | "fixed_per_paper", count: CheckedPapersCount, prorationNote: string | null): string {
+  // Unlike per_paper/bracket, a fixed_per_paper line still has something to
+  // show (its fixed base) even with zero papers checked, so it never falls
+  // into the "no papers" short-circuit below.
+  if (method === "fixed_per_paper") {
+    const base = `Fixed base + ${count.papers} paper${count.papers === 1 ? "" : "s"} checked`;
+    return prorationNote ? `${base} · ${prorationNote}` : base;
+  }
   if (count.papers === 0) return "No checked papers this period";
   const base =
     method === "bracket"
@@ -408,9 +415,25 @@ async function computeBaseForMethod(
   offeringId: string,
   assistantId: string,
   period: string,
-  method: "per_paper" | "bracket",
+  method: "per_paper" | "bracket" | "fixed_per_paper",
   checkedCount: CheckedPapersCount
 ): Promise<{ base: number; methodLabel: string; prorationNote: string | null }> {
+  if (method === "fixed_per_paper") {
+    const { data: rateRow } = await supabase.from("per_paper_rates").select("rate, fixed_salary").eq("offering_id", offeringId).maybeSingle();
+    const rate = rateRow ? Number(rateRow.rate) : 8;
+    const fixedSalary = rateRow ? Number(rateRow.fixed_salary) : 0;
+
+    // The fixed portion is a recurring monthly amount, so it's prorated by
+    // active time same as bracket pay; the per-paper portion already
+    // self-scales with a partial period (fewer papers were even checkable),
+    // so it's added on top unprorated.
+    const { joinedAt, leftAt } = await getActivityWindow(supabase, offeringId, assistantId);
+    const fraction = prorationFraction(period, joinedAt, leftAt);
+    const prorationNote = fraction < 1 ? formatProrationNote(period, joinedAt, leftAt, fraction) : null;
+
+    const base = Math.round(fixedSalary * fraction) + checkedCount.papers * rate;
+    return { base, methodLabel: "Fixed + per paper", prorationNote };
+  }
   if (method === "bracket") {
     const { data: brackets } = await supabase.from("pay_brackets").select("lo, hi, pay").eq("offering_id", offeringId);
 
@@ -450,31 +473,38 @@ async function defaultMethodForOffering(supabase: Awaited<ReturnType<typeof crea
 // A staff member's own default (set in Payroll Settings, or bulk-applied to
 // a whole course) takes priority over the offering's bracket-presence-based
 // default — that offering-level default only exists as a fallback for staff
-// who've never had a personal preference set. "fixed" isn't wired into this
-// paper-counting engine at all (a flat recurring salary isn't a function of
-// papers checked), so it's treated the same as no preference set: fall
-// through and let the assistant's line stay "manual" unless they have
-// checked papers, exactly like today's behavior for anyone with no default.
+// who've never had a personal preference set. Plain "fixed" (a flat
+// recurring salary with no course/paper basis at all) still isn't wired
+// into this engine, so it's treated the same as no preference set: fall
+// through and let the line stay "manual" unless they have checked papers.
+// "fixed_per_paper" IS wired in, since — unlike plain "fixed" — it's still
+// anchored to a specific course's own rates.
 async function resolveMethodForAssistant(
   supabase: Awaited<ReturnType<typeof createClient>>,
   offeringId: string,
   assistantId: string,
-  staffDefault: "paper" | "category" | "fixed" | undefined
-): Promise<"per_paper" | "bracket"> {
+  staffDefault: "paper" | "category" | "fixed" | "fixed_per_paper" | undefined
+): Promise<"per_paper" | "bracket" | "fixed_per_paper"> {
   if (staffDefault === "paper") return "per_paper";
   if (staffDefault === "category") return "bracket";
+  if (staffDefault === "fixed_per_paper") return "fixed_per_paper";
   return defaultMethodForOffering(supabase, offeringId);
 }
 
-// Generates one salary_line per (assistant, offering) that has at least one
-// checked paper in this period, OR an evaluation with a nonzero extra/
-// deduction logged by their head for this period — a head's bonus or
-// deduction still needs somewhere for Finance to see and pay it even when
-// the assistant had nothing due this month. Also creates that period's
-// office-hours line for any assistant with a standing default_office_hours
-// set on this course (Pay categories → Fixed office hours per assistant).
-// Existing lines for that exact (org, payee, offering, period) — or
-// (payee, office_hours_offering_id, period) for office hours — are left
+// Generates one salary_line per (staff member, offering) that has at least
+// one checked paper in this period, an evaluation with a nonzero extra/
+// deduction logged by a head for this period, or "fixed_per_paper" as their
+// resolved calc method (a fixed_per_paper line is owed its fixed base
+// regardless of papers checked, so it's never skipped just for having none).
+// Covers both assistants (via enrollments, offering_assistants, or an eval)
+// and heads (via offering_heads) — heads previously never got a line at
+// all here, even though papers they personally check already tally the same
+// way (assignment_logs.logged_by is whoever actually checked it, not
+// assistant-specific). Also creates that period's office-hours line for any
+// assistant with a standing default_office_hours set on this course (Pay
+// categories → Fixed office hours per assistant) — heads have no such
+// setting. Existing lines for that exact (org, payee, offering, period) —
+// or (payee, office_hours_offering_id, period) for office hours — are left
 // completely untouched, so it's safe to re-run without clobbering anything
 // Finance has already reviewed or hand-edited.
 export async function generateSalariesForPeriod(period: string): Promise<{ created: number }> {
@@ -487,8 +517,19 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
   let created = 0;
 
   for (const offering of offerings ?? []) {
-    const { data: enrollments } = await supabase.from("enrollments").select("assistant_id").eq("offering_id", offering.id).not("assistant_id", "is", null);
-    const enrolledAssistantIds = new Set((enrollments ?? []).map((e) => e.assistant_id as string));
+    const [{ data: enrollments }, { data: assigned }, { data: headRows }] = await Promise.all([
+      supabase.from("enrollments").select("assistant_id").eq("offering_id", offering.id).not("assistant_id", "is", null),
+      supabase.from("offering_assistants").select("assistant_id").eq("offering_id", offering.id),
+      supabase.from("offering_heads").select("head_id").eq("offering_id", offering.id),
+    ]);
+    // Everyone actually assigned to the course counts as a candidate, not
+    // just assistants with enrolled students — a fixed_per_paper assistant
+    // is owed their fixed base whether or not they have students yet.
+    const assistantCandidates = new Set<string>([
+      ...(enrollments ?? []).map((e) => e.assistant_id as string),
+      ...(assigned ?? []).map((a) => a.assistant_id),
+    ]);
+    const headCandidates = new Set((headRows ?? []).map((h) => h.head_id));
 
     const { data: evalRows } = await supabase
       .from("evaluations")
@@ -503,6 +544,7 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
       const deduction = evLines.filter((l) => l.kind === "deduction").reduce((sum, l) => sum + Number(l.amount), 0);
       if (extra > 0 || deduction > 0) evalByAssistant.set(ev.assistant_id, { extra, deduction });
     }
+    for (const id of evalByAssistant.keys()) assistantCandidates.add(id);
 
     const { data: officeHourDefaults } = await supabase
       .from("offering_assistants")
@@ -513,13 +555,15 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
       await createDefaultOfficeHoursLineIfMissing(supabase, orgId, row.assistant_id, period, offering.id, Number(row.default_office_hours));
     }
 
-    const assistantIds = Array.from(new Set([...enrolledAssistantIds, ...evalByAssistant.keys()]));
-    if (!assistantIds.length) continue;
+    const payeeIds = Array.from(new Set([...assistantCandidates, ...headCandidates]));
+    if (!payeeIds.length) continue;
 
-    const { data: staffSettings } = await supabase.from("staff_pay_settings").select("profile_id, calc_method").in("profile_id", assistantIds);
-    const staffDefaultByAssistant = new Map((staffSettings ?? []).map((s) => [s.profile_id, s.calc_method as "paper" | "category" | "fixed"]));
+    const { data: staffSettings } = await supabase.from("staff_pay_settings").select("profile_id, calc_method").in("profile_id", payeeIds);
+    const staffDefaultByPayee = new Map(
+      (staffSettings ?? []).map((s) => [s.profile_id, s.calc_method as "paper" | "category" | "fixed" | "fixed_per_paper"])
+    );
 
-    for (const assistantId of assistantIds) {
+    for (const payeeId of payeeIds) {
       // A bracket-method line stuck at $0 is unambiguously the
       // unmatched-bracket bug, not a value Finance reviewed and meant to
       // leave at zero — recompute it on every re-generate until it
@@ -530,24 +574,24 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
         .from("salary_lines")
         .select("id, base, calc_method")
         .eq("org_id", orgId)
-        .eq("payee_id", assistantId)
+        .eq("payee_id", payeeId)
         .eq("offering_id", offering.id)
         .eq("period", period)
         .maybeSingle();
       const staleZeroBracket = existing?.calc_method === "bracket" && Number(existing.base) === 0;
       if (existing && !staleZeroBracket) continue;
 
-      const checkedCount = await countCheckedPapers(supabase, offering.id, assistantId, period);
-      const evalAmounts = evalByAssistant.get(assistantId);
-      if (checkedCount.papers <= 0 && !evalAmounts) continue;
+      const checkedCount = await countCheckedPapers(supabase, offering.id, payeeId, period);
+      const evalAmounts = evalByAssistant.get(payeeId);
+      const method = await resolveMethodForAssistant(supabase, offering.id, payeeId, staffDefaultByPayee.get(payeeId));
+      if (checkedCount.papers <= 0 && !evalAmounts && method !== "fixed_per_paper") continue;
 
       let base = 0;
       let methodLabel = "Manual";
-      let calcMethod: "per_paper" | "bracket" | "manual" = "manual";
+      let calcMethod: "per_paper" | "bracket" | "fixed_per_paper" | "manual" = "manual";
       let basis = "No checked papers this period";
-      if (checkedCount.papers > 0) {
-        const method = await resolveMethodForAssistant(supabase, offering.id, assistantId, staffDefaultByAssistant.get(assistantId));
-        const computed = await computeBaseForMethod(supabase, offering.id, assistantId, period, method, checkedCount);
+      if (checkedCount.papers > 0 || method === "fixed_per_paper") {
+        const computed = await computeBaseForMethod(supabase, offering.id, payeeId, period, method, checkedCount);
         base = computed.base;
         methodLabel = computed.methodLabel;
         calcMethod = method;
@@ -559,7 +603,7 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
         .upsert(
           {
             org_id: orgId,
-            payee_id: assistantId,
+            payee_id: payeeId,
             offering_id: offering.id,
             period,
             method: methodLabel,
@@ -583,7 +627,7 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
 // Finance overriding a line's calc method recomputes its base from scratch
 // using that method — "manual" leaves the existing base alone so Finance can
 // type any number directly.
-export async function setLineCalcMethod(lineId: string, method: "per_paper" | "bracket" | "manual") {
+export async function setLineCalcMethod(lineId: string, method: "per_paper" | "bracket" | "fixed_per_paper" | "manual") {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org) throw new Error("Not authenticated");
   const supabase = await createClient();

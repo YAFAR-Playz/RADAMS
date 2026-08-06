@@ -388,7 +388,7 @@ export function FinanceSalariesContent() {
     }
   }
 
-  async function onChangeCalcMethod(lineId: string, method: "per_paper" | "bracket" | "manual") {
+  async function onChangeCalcMethod(lineId: string, method: "per_paper" | "bracket" | "fixed_per_paper" | "manual") {
     setBusyId(lineId);
     try {
       await setLineCalcMethod(lineId, method);
@@ -551,15 +551,16 @@ export function FinanceSalariesContent() {
       <section className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
         <header className="flex items-center justify-between border-b border-[var(--border2)] p-[15px_18px]">
           <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">
-            Assistant salaries {period ? `· ${periodLabel(period)}` : ""}
+            Staff salaries {period ? `· ${periodLabel(period)}` : ""}
           </h3>
           <span className="text-[12px] text-[var(--subtle)]">Tap a row to edit adjustments</span>
         </header>
         <div className="flex items-start gap-[10px] border-b border-[var(--border2)] bg-[var(--infos)] p-[11px_18px]">
           <Icon name="trend" size={16} className="mt-[1px] flex-none text-[var(--info)]" />
           <span className="text-[12px] leading-[1.45] text-[var(--text)]">
-            Amounts are editable before you release payment — bonus/deduction reasons show up on the assistant&apos;s own view too. Only assistants with a
-            checked paper due in this month appear — someone missing usually just has nothing due yet this period.
+            Amounts are editable before you release payment — bonus/deduction reasons show up on the assistant&apos;s own view too. Covers both assistants
+            and heads. Someone appears if they have a checked paper due this month, a &quot;Fixed + per paper&quot; course (owed its fixed base
+            regardless), or a head-logged bonus/deduction — someone missing usually just has none of those yet this period.
           </span>
         </div>
         <div className="flex items-center gap-2 border-b border-[var(--border2)] p-[11px_18px]">
@@ -660,13 +661,14 @@ export function FinanceSalariesContent() {
                           <div className="flex h-7 flex-none items-center gap-[4px] rounded-full bg-[var(--infos)] pl-[9px] pr-[4px]">
                             <select
                               value={l.calcMethod ?? "manual"}
-                              onChange={(e) => onChangeCalcMethod(l.id, e.target.value as "per_paper" | "bracket" | "manual")}
+                              onChange={(e) => onChangeCalcMethod(l.id, e.target.value as "per_paper" | "bracket" | "fixed_per_paper" | "manual")}
                               disabled={!l.offeringId || busyId === l.id}
                               title={l.offeringId ? "Calc method" : "No course linked — manual only"}
                               className="cursor-pointer appearance-none border-none bg-transparent text-[11px] font-semibold text-[var(--info)] outline-none disabled:cursor-not-allowed"
                             >
                               <option value="per_paper">Per paper</option>
                               <option value="bracket">Bracket</option>
+                              <option value="fixed_per_paper">Fixed + per paper</option>
                               <option value="manual">Manual</option>
                             </select>
                             {l.offeringId && l.calcMethod !== "manual" && (
