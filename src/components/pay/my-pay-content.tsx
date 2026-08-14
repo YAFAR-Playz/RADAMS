@@ -107,7 +107,7 @@ export function MyPayContent() {
   }
 
   const stats = [
-    { value: data.paid ? fmt(data.total) : "—", label: "Total this month" },
+    { value: data.released ? fmt(data.total) : "—", label: "Total this month" },
     { value: String(data.courses.length), label: "Courses" },
     { value: data.paid ? "Paid" : "Pending", label: "Payment status" },
   ];
@@ -168,22 +168,27 @@ export function MyPayContent() {
 
       {loading ? (
         <SkeletonRow className="h-[200px]" />
-      ) : data.paid ? (
+      ) : data.released ? (
         <section className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
           <header className="flex items-center justify-between border-b border-[var(--border2)] p-[15px_18px]">
             <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Breakdown · {periodLabel(data.period)}</h3>
             <div className="flex items-center gap-[8px]">
-              <button
-                onClick={onViewReceipt}
-                disabled={receiptLoading}
-                className="flex items-center gap-[6px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 py-[7px] text-[12px] font-semibold text-[var(--muted)] disabled:opacity-60"
+              {data.paid && (
+                <button
+                  onClick={onViewReceipt}
+                  disabled={receiptLoading}
+                  className="flex items-center gap-[6px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 py-[7px] text-[12px] font-semibold text-[var(--muted)] disabled:opacity-60"
+                >
+                  {receiptLoading ? <Spinner size={13} /> : <Icon name="file-up" size={13} />}
+                  Receipt
+                </button>
+              )}
+              <span
+                className="inline-flex items-center gap-[5px] rounded-full px-[10px] py-[4px] text-[11.5px] font-semibold"
+                style={data.paid ? { background: "var(--oks)", color: "var(--ok)" } : { background: "var(--warns)", color: "var(--warn)" }}
               >
-                {receiptLoading ? <Spinner size={13} /> : <Icon name="file-up" size={13} />}
-                Receipt
-              </button>
-              <span className="inline-flex items-center gap-[5px] rounded-full bg-[var(--oks)] px-[10px] py-[4px] text-[11.5px] font-semibold text-[var(--ok)]">
-                <Icon name="check2" size={12} />
-                Paid
+                <Icon name={data.paid ? "check2" : "clock"} size={12} />
+                {data.paid ? "Paid" : "Pending"}
               </span>
             </div>
           </header>
@@ -242,11 +247,11 @@ export function MyPayContent() {
           </div>
           <div>
             <h2 className="m-0 mb-[6px] text-[18px] font-semibold text-[var(--text)]">
-              Your {periodLabel(data.period)} pay isn&apos;t finalized yet
+              Your {periodLabel(data.period)} pay hasn&apos;t been released yet
             </h2>
             <p className="m-0 max-w-[380px] text-[13.5px] leading-[1.55] text-[var(--muted)]">
-              Finance is still reviewing this month&apos;s adjustments. Your full breakdown will appear here once your
-              salary is marked as paid.
+              Finance is still reviewing this month&apos;s adjustments. Your full breakdown will appear here once they
+              release it.
             </p>
           </div>
         </section>
