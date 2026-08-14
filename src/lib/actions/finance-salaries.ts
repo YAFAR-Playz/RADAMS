@@ -30,6 +30,11 @@ export type AssistantSalary = {
   initials: string;
   payMethod: string;
   status: "paid" | "pending";
+  // Whether this payee's breakdown is visible to them yet in My Pay — a
+  // separate step from "paid" so Finance can freely edit adjustments
+  // without a half-finished number being visible, then release once
+  // everything's reviewed. "Paid" now only tracks whether money was sent.
+  released: boolean;
   lines: SalaryLineRow[];
 };
 
@@ -57,7 +62,7 @@ export async function listSalariesForPeriod(period: string): Promise<AssistantSa
   const { data: lines } = await supabase
     .from("salary_lines")
     .select(
-      "id, payee_id, offering_id, office_hours_offering_id, method, calc_method, basis, base, bonus, deduction, bonus_reason, deduction_reason, office_hours, status, pay_method, profiles(full_name, initials), course_offerings!salary_lines_offering_id_fkey(session, unit, courses(name)), office_hours_course:course_offerings!salary_lines_office_hours_offering_id_fkey(session, unit, courses(name))"
+      "id, payee_id, offering_id, office_hours_offering_id, method, calc_method, basis, base, bonus, deduction, bonus_reason, deduction_reason, office_hours, status, released_at, pay_method, profiles(full_name, initials), course_offerings!salary_lines_offering_id_fkey(session, unit, courses(name)), office_hours_course:course_offerings!salary_lines_office_hours_offering_id_fkey(session, unit, courses(name))"
     )
     .eq("org_id", orgId)
     .eq("period", period);
@@ -75,12 +80,14 @@ export async function listSalariesForPeriod(period: string): Promise<AssistantSa
       const payee = Array.isArray(rows[0].profiles) ? rows[0].profiles[0] : rows[0].profiles;
       if (!payee) return null;
       const allPaid = rows.every((r) => r.status === "paid");
+      const allReleased = rows.every((r) => r.released_at != null);
       return {
         payeeId,
         name: payee.full_name,
         initials: payee.initials,
         payMethod: rows[0].pay_method,
         status: allPaid ? ("paid" as const) : ("pending" as const),
+        released: allReleased,
         lines: rows.map((r) => {
           const offering = Array.isArray(r.course_offerings) ? r.course_offerings[0] : r.course_offerings;
           const officeHoursCourse = Array.isArray(r.office_hours_course) ? r.office_hours_course[0] : r.office_hours_course;
@@ -234,6 +241,47 @@ export async function setPayeeStatus(payeeId: string, period: string, status: "p
 
   const { data: payee } = await supabase.from("profiles").select("full_name").eq("id", payeeId).single();
   await logActivity("payments", `Marked ${payee?.full_name ?? "a payee"} as ${status} for ${period}`);
+}
+
+// Toggles whether one payee's breakdown for a period is visible to them in
+// My Pay — independent of "paid", so Finance can freely edit adjustments
+// beforehand without a half-finished number being visible, then release
+// once everything's reviewed.
+export async function setPayeeReleased(payeeId: string, period: string, released: boolean) {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("salary_lines")
+    .update({ released_at: released ? new Date().toISOString() : null, updated_at: new Date().toISOString() })
+    .eq("org_id", profile.org.id)
+    .eq("payee_id", payeeId)
+    .eq("period", period);
+  if (error) throw new Error(error.message);
+
+  const { data: payee } = await supabase.from("profiles").select("full_name").eq("id", payeeId).single();
+  await logActivity("payments", `${released ? "Released" : "Unreleased"} ${payee?.full_name ?? "a payee"}'s pay for ${period}`);
+}
+
+// Releases every not-yet-released line in a period at once — the common
+// case is "I've finished reviewing everyone this month," not releasing one
+// payee at a time. Only touches lines still unreleased, so it can't stomp
+// on someone Finance deliberately held back.
+export async function releaseAllForPeriod(period: string): Promise<{ released: number }> {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("salary_lines")
+    .update({ released_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("org_id", profile.org.id)
+    .eq("period", period)
+    .is("released_at", null)
+    .select("id");
+  if (error) throw new Error(error.message);
+
+  await logActivity("payments", `Released all pending pay for ${period}`);
+  return { released: data?.length ?? 0 };
 }
 
 // Optional proof-of-payment attached when marking a payee paid. Storage lives

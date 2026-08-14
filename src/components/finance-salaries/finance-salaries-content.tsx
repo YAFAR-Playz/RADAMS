@@ -9,6 +9,8 @@ import {
   listSalariesForPeriod,
   updateSalaryLine,
   setPayeeStatus,
+  setPayeeReleased,
+  releaseAllForPeriod,
   generateSalariesForPeriod,
   setLineCalcMethod,
   uploadSalaryReceipt,
@@ -215,6 +217,7 @@ export function FinanceSalariesContent() {
   const [exportingFull, setExportingFull] = useState(false);
   const [search, setSearch] = useState("");
   const [officeHoursCourseByPayee, setOfficeHoursCourseByPayee] = useState<Record<string, string>>({});
+  const [releasingAll, setReleasingAll] = useState(false);
 
   useEffect(() => {
     (() => {
@@ -400,6 +403,33 @@ export function FinanceSalariesContent() {
     }
   }
 
+  async function onToggleReleased(a: AssistantSalary) {
+    if (!period) return;
+    setBusyId(a.payeeId);
+    try {
+      await setPayeeReleased(a.payeeId, period, !a.released);
+      await reload(period);
+    } catch {
+      setError("Couldn't update release status — try again.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function onReleaseAll() {
+    if (!period) return;
+    setReleasingAll(true);
+    setError(null);
+    try {
+      await releaseAllForPeriod(period);
+      await reload(period);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't release this period's pay — try again.");
+    } finally {
+      setReleasingAll(false);
+    }
+  }
+
   async function onTogglePaid(a: AssistantSalary) {
     if (!period) return;
     if (a.status !== "paid") {
@@ -454,6 +484,7 @@ export function FinanceSalariesContent() {
   const totalPayroll = (assistants ?? []).reduce((sum, a) => sum + total(a), 0);
   const paidAmt = (assistants ?? []).filter((a) => a.status === "paid").reduce((sum, a) => sum + total(a), 0);
   const pendingCount = (assistants ?? []).filter((a) => a.status !== "paid").length;
+  const unreleasedCount = (assistants ?? []).filter((a) => !a.released).length;
   const q = search.trim().toLowerCase();
   const visibleAssistants = (assistants ?? []).filter(
     (a) => !q || a.name.toLowerCase().includes(q) || a.lines.some((l) => l.offering.toLowerCase().includes(q))
@@ -512,6 +543,15 @@ export function FinanceSalariesContent() {
               </button>
             </div>
             <button
+              onClick={onReleaseAll}
+              disabled={releasingAll || !period || unreleasedCount === 0}
+              title="Make this period's breakdown visible to everyone in My Pay — separate from marking paid"
+              className="flex h-10 flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-[14px] text-[13px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
+            >
+              {releasingAll ? <Spinner size={14} /> : <Icon name="send" size={16} />}
+              {unreleasedCount > 0 ? `Release all (${unreleasedCount})` : "All released"}
+            </button>
+            <button
               onClick={onExport}
               disabled={!assistants || assistants.length === 0}
               className="flex h-10 flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-[14px] text-[13px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
@@ -558,9 +598,10 @@ export function FinanceSalariesContent() {
         <div className="flex items-start gap-[10px] border-b border-[var(--border2)] bg-[var(--infos)] p-[11px_18px]">
           <Icon name="trend" size={16} className="mt-[1px] flex-none text-[var(--info)]" />
           <span className="text-[12px] leading-[1.45] text-[var(--text)]">
-            Amounts are editable before you release payment — bonus/deduction reasons show up on the assistant&apos;s own view too. Covers both assistants
-            and heads. Someone appears if they have a checked paper due this month, a &quot;Fixed + per paper&quot; course (owed its fixed base
-            regardless), or a head-logged bonus/deduction — someone missing usually just has none of those yet this period.
+            Nobody sees anything in My Pay until you release it — edit freely, then hit Release (per person, or &quot;Release all&quot; above) when
+            ready. Bonus/deduction reasons show up on their view too once released. Covers both assistants and heads. Someone appears if they have a
+            checked paper due this month, a &quot;Fixed + per paper&quot; course (owed its fixed base regardless), or a head-logged bonus/deduction —
+            someone missing usually just has none of those yet this period.
           </span>
         </div>
         <div className="flex items-center gap-2 border-b border-[var(--border2)] p-[11px_18px]">
@@ -612,6 +653,23 @@ export function FinanceSalariesContent() {
                     </div>
                   </div>
                   <div className="flex-none font-mono text-[17px] font-bold text-[var(--text)]">{fmt(t)}</div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleReleased(a);
+                    }}
+                    disabled={busyId === a.payeeId}
+                    title={a.released ? "Visible to them in My Pay — click to unrelease" : "Not visible to them yet — click to release"}
+                    className="flex flex-none items-center gap-[6px] rounded-[8px] border px-3 py-[7px] text-[12px] font-semibold disabled:opacity-60"
+                    style={
+                      a.released
+                        ? { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
+                        : { borderColor: "var(--brand)", background: "var(--brand)", color: "var(--brandfg)" }
+                    }
+                  >
+                    {busyId === a.payeeId ? <Spinner size={13} /> : <Icon name={a.released ? "eye" : "send"} size={13} />}
+                    {a.released ? "Released" : "Release"}
+                  </button>
                   <span
                     className="inline-flex flex-none items-center gap-[5px] rounded-full px-[10px] py-[4px] text-[11.5px] font-semibold"
                     style={a.status === "paid" ? { background: "var(--oks)", color: "var(--ok)" } : { background: "var(--warns)", color: "var(--warn)" }}
