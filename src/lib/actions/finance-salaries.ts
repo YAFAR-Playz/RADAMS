@@ -584,7 +584,16 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
       const checkedCount = await countCheckedPapers(supabase, offering.id, payeeId, period);
       const evalAmounts = evalByAssistant.get(payeeId);
       const method = await resolveMethodForAssistant(supabase, offering.id, payeeId, staffDefaultByPayee.get(payeeId));
-      if (checkedCount.papers <= 0 && !evalAmounts && method !== "fixed_per_paper") continue;
+      // A head essentially never has checked papers or a self-logged eval —
+      // they're paid a set amount Finance decides each month, not computed
+      // from either. Skipping them here (as an assistant with nothing due
+      // would be) meant a head could never get a line to even review or
+      // pay, since nothing would ever trigger the automatic per_paper/
+      // bracket/fixed_per_paper paths for them either. Heads always get a
+      // $0 manual placeholder line instead, same shape as a course with no
+      // per-paper rate, for Finance to fill in.
+      const isHead = headCandidates.has(payeeId);
+      if (!isHead && checkedCount.papers <= 0 && !evalAmounts && method !== "fixed_per_paper") continue;
 
       let base = 0;
       let methodLabel = "Manual";
