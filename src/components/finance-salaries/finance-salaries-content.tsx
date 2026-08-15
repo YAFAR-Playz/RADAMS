@@ -403,14 +403,19 @@ export function FinanceSalariesContent() {
     }
   }
 
-  async function onToggleReleased(a: AssistantSalary) {
-    if (!period) return;
+  // Deliberately one-directional, not a toggle — a button that flips back
+  // to "unreleased" on a second click is a real footgun here: clicking an
+  // already-released row again (e.g. because nothing visibly confirmed it
+  // worked) silently hid that person's pay again. Unreleasing isn't
+  // something anyone's asked for, so it's not exposed at all right now.
+  async function onRelease(a: AssistantSalary) {
+    if (!period || a.released) return;
     setBusyId(a.payeeId);
     try {
-      await setPayeeReleased(a.payeeId, period, !a.released);
+      await setPayeeReleased(a.payeeId, period, true);
       await reload(period);
     } catch {
-      setError("Couldn't update release status — try again.");
+      setError("Couldn't release this payee's pay — try again.");
     } finally {
       setBusyId(null);
     }
@@ -653,23 +658,28 @@ export function FinanceSalariesContent() {
                     </div>
                   </div>
                   <div className="flex-none font-mono text-[17px] font-bold text-[var(--text)]">{fmt(t)}</div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleReleased(a);
-                    }}
-                    disabled={busyId === a.payeeId}
-                    title={a.released ? "Visible to them in My Pay — click to unrelease" : "Not visible to them yet — click to release"}
-                    className="flex flex-none items-center gap-[6px] rounded-[8px] border px-3 py-[7px] text-[12px] font-semibold disabled:opacity-60"
-                    style={
-                      a.released
-                        ? { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
-                        : { borderColor: "var(--brand)", background: "var(--brand)", color: "var(--brandfg)" }
-                    }
-                  >
-                    {busyId === a.payeeId ? <Spinner size={13} /> : <Icon name={a.released ? "eye" : "send"} size={13} />}
-                    {a.released ? "Released" : "Release"}
-                  </button>
+                  {a.released ? (
+                    <span
+                      title="Visible to them in My Pay"
+                      className="inline-flex flex-none items-center gap-[6px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 py-[7px] text-[12px] font-semibold text-[var(--muted)]"
+                    >
+                      <Icon name="eye" size={13} />
+                      Released
+                    </span>
+                  ) : (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRelease(a);
+                      }}
+                      disabled={busyId === a.payeeId}
+                      title="Not visible to them yet — click to release"
+                      className="flex flex-none items-center gap-[6px] rounded-[8px] border border-[var(--brand)] bg-[var(--brand)] px-3 py-[7px] text-[12px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+                    >
+                      {busyId === a.payeeId ? <Spinner size={13} /> : <Icon name="send" size={13} />}
+                      Release
+                    </button>
+                  )}
                   <span
                     className="inline-flex flex-none items-center gap-[5px] rounded-full px-[10px] py-[4px] text-[11.5px] font-semibold"
                     style={a.status === "paid" ? { background: "var(--oks)", color: "var(--ok)" } : { background: "var(--warns)", color: "var(--warn)" }}
