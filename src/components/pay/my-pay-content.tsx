@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
-import { getMyPay, getMyReceiptUrl, sendFinanceMessage, type MyPay } from "@/lib/actions/pay";
+import { getMyPay, getMyReceiptUrl, sendFinanceMessage, markPayViewed, type MyPay } from "@/lib/actions/pay";
 
 function periodLabel(period: string) {
   if (!period) return "";
@@ -17,6 +18,7 @@ function fmt(n: number, currency: string) {
 }
 
 export function MyPayContent() {
+  const router = useRouter();
   const [data, setData] = useState<MyPay | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +54,11 @@ export function MyPayContent() {
         setLoading(false);
       }
     })();
+    // Clears the sidebar's "unviewed released pay" dot — router.refresh()
+    // re-runs the layout server component so it picks up the new
+    // pay_viewed_at without a full page reload.
+    markPayViewed().then(() => router.refresh());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function onChangePeriod(period: string) {

@@ -334,8 +334,9 @@ export function AppShell({
                   fontWeight: isActive ? 600 : 500,
                 }}
               >
-                <span className="flex h-5 w-5 flex-none items-center justify-center">
+                <span className="relative flex h-5 w-5 flex-none items-center justify-center">
                   <Icon name={n.icon} size={20} />
+                  {!!n.dot && <span className="absolute top-0 right-0 h-[8px] w-[8px] rounded-full bg-[var(--danger)] ring-2 ring-[var(--surface)]" />}
                 </span>
                 <span className={`min-w-0 flex-1 whitespace-nowrap ${isRail ? "opacity-0" : "opacity-100"}`}>{n.label}</span>
                 {!!n.badge && (
@@ -428,8 +429,9 @@ export function AppShell({
                     fontWeight: isActive ? 600 : 500,
                   }}
                 >
-                  <span className="flex h-6 w-6 flex-none items-center justify-center">
+                  <span className="relative flex h-6 w-6 flex-none items-center justify-center">
                     <Icon name={n.icon} size={22} />
+                    {!!n.dot && <span className="absolute top-0 right-0 h-[9px] w-[9px] rounded-full bg-[var(--danger)] ring-2 ring-[var(--surface)]" />}
                   </span>
                   <span className="min-w-0 flex-1">{n.label}</span>
                   {!!n.badge && (
