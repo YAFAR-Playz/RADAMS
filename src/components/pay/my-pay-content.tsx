@@ -214,20 +214,40 @@ export function MyPayContent() {
                 <span className="w-[72px] flex-none text-right font-mono text-[12.5px] text-[var(--danger)]">{c.deduction ? `−${fmt(c.deduction, data.currency)}` : "—"}</span>
                 <span className="w-[84px] flex-none text-right font-mono text-[12.5px] font-bold text-[var(--text)]">{fmt(c.subtotal, data.currency)}</span>
               </div>
-              {(c.bonusReason || c.deductionReason) && (
+              {(c.extraItems.length > 0 || c.deductionItems.length > 0 || c.bonusReason || c.deductionReason) && (
                 <div className="mt-[7px] flex flex-wrap gap-[6px] pl-[2px]">
-                  {c.bonusReason && (
-                    <span className="inline-flex items-center gap-[5px] rounded-full bg-[var(--oks)] px-[9px] py-[3px] text-[11px] font-medium text-[var(--ok)]">
-                      <Icon name="trend" size={11} />
-                      {c.bonusReason}
-                    </span>
-                  )}
-                  {c.deductionReason && (
-                    <span className="inline-flex items-center gap-[5px] rounded-full bg-[var(--dangers)] px-[9px] py-[3px] text-[11px] font-medium text-[var(--danger)]">
-                      <Icon name="minus" size={11} />
-                      {c.deductionReason}
-                    </span>
-                  )}
+                  {c.extraItems.length > 0
+                    ? c.extraItems.map((it, j) => (
+                        <span
+                          key={`extra-${j}`}
+                          className="inline-flex items-center gap-[5px] rounded-full bg-[var(--oks)] px-[9px] py-[3px] text-[11px] font-medium text-[var(--ok)]"
+                        >
+                          <Icon name="trend" size={11} />
+                          {[it.category, it.note].filter(Boolean).join(" — ") || "Extra work"} (+{fmt(it.amount, data.currency)})
+                        </span>
+                      ))
+                    : c.bonusReason && (
+                        <span className="inline-flex items-center gap-[5px] rounded-full bg-[var(--oks)] px-[9px] py-[3px] text-[11px] font-medium text-[var(--ok)]">
+                          <Icon name="trend" size={11} />
+                          {c.bonusReason}
+                        </span>
+                      )}
+                  {c.deductionItems.length > 0
+                    ? c.deductionItems.map((it, j) => (
+                        <span
+                          key={`deduction-${j}`}
+                          className="inline-flex items-center gap-[5px] rounded-full bg-[var(--dangers)] px-[9px] py-[3px] text-[11px] font-medium text-[var(--danger)]"
+                        >
+                          <Icon name="minus" size={11} />
+                          {[it.category, it.note].filter(Boolean).join(" — ") || "Deduction"} (−{fmt(it.amount, data.currency)})
+                        </span>
+                      ))
+                    : c.deductionReason && (
+                        <span className="inline-flex items-center gap-[5px] rounded-full bg-[var(--dangers)] px-[9px] py-[3px] text-[11px] font-medium text-[var(--danger)]">
+                          <Icon name="minus" size={11} />
+                          {c.deductionReason}
+                        </span>
+                      )}
                 </div>
               )}
             </div>

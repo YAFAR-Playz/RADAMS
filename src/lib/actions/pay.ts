@@ -5,6 +5,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { currencySymbol } from "@/lib/currency";
 
+export type EvaluationItem = {
+  category: string | null;
+  note: string | null;
+  amount: number;
+};
+
 export type SalaryCourseLine = {
   course: string;
   method: string;
@@ -14,6 +20,13 @@ export type SalaryCourseLine = {
   deduction: number;
   bonusReason: string | null;
   deductionReason: string | null;
+  // Itemized breakdown behind the bonus/deduction totals, from the head's
+  // evaluation for this course/period — a lump "From head evaluation" reason
+  // isn't enough for the assistant to know WHAT the extra work or penalty
+  // actually was, so each individual eval line (category + note + amount)
+  // is surfaced here when one generated the total.
+  extraItems: EvaluationItem[];
+  deductionItems: EvaluationItem[];
   subtotal: number;
 };
 
@@ -74,11 +87,31 @@ export async function getMyPay(period?: string): Promise<MyPay | null> {
     return { period: targetPeriod, periods, paid, released, payMethod, currency, total: 0, courses: [] };
   }
 
+  const offeringIds = Array.from(new Set(rows.map((l) => l.offering_id).filter((id): id is string => !!id)));
+  const { data: evalRows } = offeringIds.length
+    ? await supabase
+        .from("evaluations")
+        .select("offering_id, evaluation_lines(kind, category, note, amount)")
+        .eq("assistant_id", profile.id)
+        .eq("period", targetPeriod)
+        .in("offering_id", offeringIds)
+    : { data: [] };
+  const evalByOffering = new Map<string, { extras: EvaluationItem[]; deductions: EvaluationItem[] }>();
+  for (const ev of evalRows ?? []) {
+    const evLines = Array.isArray(ev.evaluation_lines) ? ev.evaluation_lines : [];
+    const toItem = (l: (typeof evLines)[number]) => ({ category: l.category, note: l.note, amount: Number(l.amount) });
+    evalByOffering.set(ev.offering_id, {
+      extras: evLines.filter((l) => l.kind === "extra").map(toItem),
+      deductions: evLines.filter((l) => l.kind === "deduction").map(toItem),
+    });
+  }
+
   const courses: SalaryCourseLine[] = rows.map((l) => {
     const offering = Array.isArray(l.course_offerings) ? l.course_offerings[0] : l.course_offerings;
     const base = Number(l.base);
     const bonus = Number(l.bonus);
     const deduction = Number(l.deduction);
+    const evalItems = l.offering_id ? evalByOffering.get(l.offering_id) : undefined;
     return {
       course: offeringLabel(offering),
       method: l.method,
@@ -88,6 +121,8 @@ export async function getMyPay(period?: string): Promise<MyPay | null> {
       deduction,
       bonusReason: l.bonus_reason,
       deductionReason: l.deduction_reason,
+      extraItems: evalItems?.extras ?? [],
+      deductionItems: evalItems?.deductions ?? [],
       subtotal: base + bonus - deduction,
     };
   });
