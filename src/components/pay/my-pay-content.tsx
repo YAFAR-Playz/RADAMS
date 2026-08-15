@@ -11,9 +11,9 @@ function periodLabel(period: string) {
   return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
-function fmt(n: number) {
+function fmt(n: number, currency: string) {
   const neg = n < 0;
-  return `${neg ? "−" : ""}$${Math.abs(n).toLocaleString("en-US")}`;
+  return `${neg ? "−" : ""}${currency}${Math.abs(n).toLocaleString("en-US")}`;
 }
 
 export function MyPayContent() {
@@ -107,7 +107,7 @@ export function MyPayContent() {
   }
 
   const stats = [
-    { value: data.released ? fmt(data.total) : "—", label: "Total this month" },
+    { value: data.released ? fmt(data.total, data.currency) : "—", label: "Total this month" },
     { value: String(data.courses.length), label: "Courses" },
     { value: data.paid ? "Paid" : "Pending", label: "Payment status" },
   ];
@@ -209,10 +209,10 @@ export function MyPayContent() {
                   <span className="rounded-full bg-[var(--infos)] px-2 py-[2px] text-[11px] font-semibold text-[var(--info)]">{c.method}</span>
                 </span>
                 <span className="min-w-[110px] flex-1 text-[12.5px] text-[var(--muted)]">{c.basis}</span>
-                <span className="w-[78px] flex-none text-right font-mono text-[12.5px] text-[var(--text)]">{fmt(c.base)}</span>
-                <span className="w-[64px] flex-none text-right font-mono text-[12.5px] text-[var(--ok)]">{c.bonus ? `+${fmt(c.bonus)}` : "—"}</span>
-                <span className="w-[72px] flex-none text-right font-mono text-[12.5px] text-[var(--danger)]">{c.deduction ? `−${fmt(c.deduction)}` : "—"}</span>
-                <span className="w-[84px] flex-none text-right font-mono text-[12.5px] font-bold text-[var(--text)]">{fmt(c.subtotal)}</span>
+                <span className="w-[78px] flex-none text-right font-mono text-[12.5px] text-[var(--text)]">{fmt(c.base, data.currency)}</span>
+                <span className="w-[64px] flex-none text-right font-mono text-[12.5px] text-[var(--ok)]">{c.bonus ? `+${fmt(c.bonus, data.currency)}` : "—"}</span>
+                <span className="w-[72px] flex-none text-right font-mono text-[12.5px] text-[var(--danger)]">{c.deduction ? `−${fmt(c.deduction, data.currency)}` : "—"}</span>
+                <span className="w-[84px] flex-none text-right font-mono text-[12.5px] font-bold text-[var(--text)]">{fmt(c.subtotal, data.currency)}</span>
               </div>
               {(c.bonusReason || c.deductionReason) && (
                 <div className="mt-[7px] flex flex-wrap gap-[6px] pl-[2px]">
@@ -236,7 +236,7 @@ export function MyPayContent() {
             <span className="text-[12.5px] font-medium text-[var(--muted)]">Paid via {data.payMethod}</span>
             <div className="flex items-center gap-[10px]">
               <span className="text-[13px] text-[var(--muted)]">Total this month</span>
-              <span className="font-mono text-[19px] font-bold text-[var(--text)]">{fmt(data.total)}</span>
+              <span className="font-mono text-[19px] font-bold text-[var(--text)]">{fmt(data.total, data.currency)}</span>
             </div>
           </div>
         </section>

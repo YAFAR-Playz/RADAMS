@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/current-profile";
+import { currencySymbol } from "@/lib/currency";
 
 export type SalaryCourseLine = {
   course: string;
@@ -26,6 +27,7 @@ export type MyPay = {
   // so a still-being-edited number is never actually sent to the browser.
   released: boolean;
   payMethod: string;
+  currency: string;
   total: number;
   courses: SalaryCourseLine[];
 };
@@ -40,6 +42,10 @@ export async function getMyPay(period?: string): Promise<MyPay | null> {
   const profile = await getCurrentProfile();
   if (!profile) return null;
   const supabase = await createClient();
+  const { data: org } = profile.org
+    ? await supabase.from("organizations").select("currency").eq("id", profile.org.id).single()
+    : { data: null };
+  const currency = currencySymbol(org?.currency);
 
   const { data: allLines } = await supabase
     .from("salary_lines")
@@ -48,7 +54,8 @@ export async function getMyPay(period?: string): Promise<MyPay | null> {
     .order("period", { ascending: false });
   const periods = Array.from(new Set((allLines ?? []).map((l) => l.period)));
   const targetPeriod = period ?? periods[0];
-  if (!targetPeriod) return { period: "", periods: [], paid: false, released: false, payMethod: "Bank transfer", total: 0, courses: [] };
+  if (!targetPeriod)
+    return { period: "", periods: [], paid: false, released: false, payMethod: "Bank transfer", currency, total: 0, courses: [] };
 
   const { data: lines } = await supabase
     .from("salary_lines")
@@ -64,7 +71,7 @@ export async function getMyPay(period?: string): Promise<MyPay | null> {
   const payMethod = rows[0]?.pay_method ?? "Bank transfer";
 
   if (!released) {
-    return { period: targetPeriod, periods, paid, released, payMethod, total: 0, courses: [] };
+    return { period: targetPeriod, periods, paid, released, payMethod, currency, total: 0, courses: [] };
   }
 
   const courses: SalaryCourseLine[] = rows.map((l) => {
@@ -87,7 +94,7 @@ export async function getMyPay(period?: string): Promise<MyPay | null> {
 
   const total = courses.reduce((sum, c) => sum + c.subtotal, 0);
 
-  return { period: targetPeriod, periods, paid, released, payMethod, total, courses };
+  return { period: targetPeriod, periods, paid, released, payMethod, currency, total, courses };
 }
 
 export async function getMyReceiptUrl(period: string): Promise<string | null> {
