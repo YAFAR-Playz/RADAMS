@@ -53,7 +53,7 @@ export async function getMyPay(period?: string): Promise<MyPay | null> {
   const { data: lines } = await supabase
     .from("salary_lines")
     .select(
-      "offering_id, method, basis, base, bonus, deduction, bonus_reason, deduction_reason, status, released_at, pay_method, course_offerings(session, unit, courses(name))"
+      "offering_id, method, basis, base, bonus, deduction, bonus_reason, deduction_reason, status, released_at, pay_method, course_offerings!salary_lines_offering_id_fkey(session, unit, courses(name))"
     )
     .eq("payee_id", profile.id)
     .eq("period", targetPeriod);
