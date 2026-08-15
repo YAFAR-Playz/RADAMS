@@ -12,6 +12,10 @@ export type NotificationItem = {
   title: string;
   detail: string;
   href: string;
+  // Pre-fills the destination list page's search box (via the search
+  // handoff mechanism) so clicking through lands the reader directly on
+  // the relevant row instead of a generic unfiltered list.
+  searchTerm?: string;
   createdAt: string;
 };
 
@@ -306,12 +310,16 @@ async function getFinanceNotifications(orgId: string): Promise<NotificationItem[
   const since = daysAgoIso(RECENT_MESSAGE_DAYS);
   const { data: messages } = await supabase
     .from("finance_messages")
-    .select("id, body, created_at, profiles(full_name)")
+    .select("id, from_id, payee_id, body, created_at, profiles!finance_messages_from_id_fkey(full_name)")
     .eq("org_id", orgId)
     .gte("created_at", since)
     .order("created_at", { ascending: false })
     .limit(8);
   for (const m of messages ?? []) {
+    // Only the original inquiry (sent by the payee themselves) is
+    // notification-worthy here — otherwise Finance/Admin's own replies would
+    // show up as a "Salary inquiry from [themselves]" notification.
+    if (m.from_id !== m.payee_id) continue;
     const sender = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
     items.push({
       id: `inquiry-${m.id}`,
@@ -319,7 +327,10 @@ async function getFinanceNotifications(orgId: string): Promise<NotificationItem[
       tone: "info",
       title: `Salary inquiry from ${sender?.full_name ?? "staff"}`,
       detail: m.body.length > 80 ? `${m.body.slice(0, 80)}…` : m.body,
-      href: "/payments",
+      // /payments is finance-only and has no message UI anyway — /salaries
+      // is shared by finance and admin and now has the actual reply panel.
+      href: "/salaries",
+      searchTerm: sender?.full_name,
       createdAt: m.created_at,
     });
   }

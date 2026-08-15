@@ -190,10 +190,42 @@ export async function getMyReceiptUrl(period: string): Promise<string | null> {
   return data.signedUrl;
 }
 
+export type PayMessage = {
+  id: string;
+  fromName: string;
+  isReply: boolean;
+  body: string;
+  createdAt: string;
+};
+
+export async function getMyMessages(period: string): Promise<PayMessage[]> {
+  const profile = await getCurrentProfile();
+  if (!profile) return [];
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("finance_messages")
+    .select("id, from_id, body, created_at, profiles!finance_messages_from_id_fkey(full_name)")
+    .eq("payee_id", profile.id)
+    .eq("period", period)
+    .order("created_at", { ascending: true });
+  return (data ?? []).map((m) => {
+    const sender = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
+    return {
+      id: m.id,
+      fromName: m.from_id === profile.id ? "You" : (sender?.full_name ?? "Finance"),
+      isReply: m.from_id !== profile.id,
+      body: m.body,
+      createdAt: m.created_at,
+    };
+  });
+}
+
 export async function sendFinanceMessage(body: string, period: string) {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org) throw new Error("Not authenticated");
   const supabase = await createClient();
-  const { error } = await supabase.from("finance_messages").insert({ org_id: profile.org.id, from_id: profile.id, body, period });
+  const { error } = await supabase
+    .from("finance_messages")
+    .insert({ org_id: profile.org.id, from_id: profile.id, payee_id: profile.id, body, period });
   if (error) throw new Error(error.message);
 }

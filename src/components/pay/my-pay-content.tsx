@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
-import { getMyPay, getMyReceiptUrl, sendFinanceMessage, markPayViewed, type MyPay } from "@/lib/actions/pay";
+import { getMyPay, getMyReceiptUrl, sendFinanceMessage, markPayViewed, getMyMessages, type MyPay, type PayMessage } from "@/lib/actions/pay";
 
 function periodLabel(period: string) {
   if (!period) return "";
@@ -27,7 +27,19 @@ export function MyPayContent() {
   const [msgBody, setMsgBody] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [messages, setMessages] = useState<PayMessage[] | null>(null);
   const [receiptLoading, setReceiptLoading] = useState(false);
+
+  async function loadMessages() {
+    if (!data) return;
+    setMessages(await getMyMessages(data.period));
+  }
+
+  function openMessages() {
+    setMsgOpen(true);
+    setMessages(null);
+    loadMessages();
+  }
 
   async function onViewReceipt() {
     if (!data) return;
@@ -77,12 +89,10 @@ export function MyPayContent() {
     setSending(true);
     try {
       await sendFinanceMessage(msgBody.trim(), data.period);
-      setSent(true);
       setMsgBody("");
-      setTimeout(() => {
-        setMsgOpen(false);
-        setSent(false);
-      }, 1200);
+      await loadMessages();
+      setSent(true);
+      setTimeout(() => setSent(false), 1200);
     } catch {
       setError("Couldn't send your message — try again.");
     } finally {
@@ -154,7 +164,7 @@ export function MyPayContent() {
               </select>
             </div>
             <button
-              onClick={() => setMsgOpen(true)}
+              onClick={openMessages}
               className="flex items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[14px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)]"
             >
               <Icon name="message" size={15} />
@@ -289,7 +299,7 @@ export function MyPayContent() {
         <span className="flex-1 text-[13px] leading-[1.45] text-[var(--text)]">
           Question about your pay or a deduction? <span className="text-[var(--muted)]">Message the Finance team and they&apos;ll review it.</span>
         </span>
-        <button onClick={() => setMsgOpen(true)} className="flex-none rounded-[var(--rad-sm)] bg-[var(--brand)] px-[13px] py-2 text-[12.5px] font-semibold text-[var(--brandfg)]">
+        <button onClick={openMessages} className="flex-none rounded-[var(--rad-sm)] bg-[var(--brand)] px-[13px] py-2 text-[12.5px] font-semibold text-[var(--brandfg)]">
           Message Finance
         </button>
       </div>
@@ -297,8 +307,8 @@ export function MyPayContent() {
       {/* MESSAGE FINANCE MODAL */}
       {msgOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(8,12,22,0.5)] p-5">
-          <div className="w-full max-w-[440px] overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(8,12,22,.34)]">
-            <div className="flex items-center gap-[11px] border-b border-[var(--border2)] p-[16px_18px]">
+          <div className="flex max-h-[85vh] w-full max-w-[440px] flex-col overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(8,12,22,.34)]">
+            <div className="flex flex-none items-center gap-[11px] border-b border-[var(--border2)] p-[16px_18px]">
               <div className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-[10px] bg-[var(--brands)] text-[var(--brand)]">
                 <Icon name="message" size={19} />
               </div>
@@ -313,20 +323,42 @@ export function MyPayContent() {
                 <Icon name="x" size={18} />
               </button>
             </div>
-            <div className="p-[18px]">
+            {messages === null ? (
+              <div className="flex flex-col gap-2 p-[18px]">
+                <SkeletonRow className="h-[40px]" />
+                <SkeletonRow className="h-[40px]" />
+              </div>
+            ) : messages.length > 0 ? (
+              <div className="flex flex-1 flex-col gap-[10px] overflow-y-auto p-[18px]">
+                {messages.map((m) => (
+                  <div key={m.id} className={`flex flex-col gap-[3px] ${m.isReply ? "items-start" : "items-end"}`}>
+                    <div
+                      className="max-w-[85%] rounded-[10px] px-3 py-2 text-[13px] leading-[1.45]"
+                      style={m.isReply ? { background: "var(--surface2)", color: "var(--text)" } : { background: "var(--brand)", color: "var(--brandfg)" }}
+                    >
+                      {m.body}
+                    </div>
+                    <span className="px-1 text-[10.5px] text-[var(--subtle)]">
+                      {m.fromName} · {new Date(m.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            <div className="flex-none p-[18px] pt-0">
               <textarea
                 value={msgBody}
                 onChange={(e) => setMsgBody(e.target.value)}
                 placeholder="Describe your question for the Finance team…"
-                className="h-[120px] w-full resize-none rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-3 text-[13.5px] leading-[1.5] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                className="h-[80px] w-full resize-none rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-3 text-[13.5px] leading-[1.5] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
               />
             </div>
-            <div className="flex gap-[10px] p-[0_18px_16px]">
+            <div className="flex flex-none gap-[10px] p-[0_18px_16px]">
               <button
                 onClick={() => setMsgOpen(false)}
                 className="h-11 flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]"
               >
-                Cancel
+                Close
               </button>
               <button
                 onClick={onSendMessage}
