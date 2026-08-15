@@ -108,57 +108,66 @@ function EvaluationPanel({ payeeId, offeringId, period, sym }: { payeeId: string
             const cats = l.kind === "extra" ? extraCats : dedCats;
             const cfg = cats.find((c) => c.label === l.category) ?? cats[0];
             return (
-              <div key={l.id} className="flex flex-wrap items-center gap-[8px] rounded-[6px] bg-[var(--surface2)] p-[6px_8px]">
-                <span
-                  className="flex-none rounded-full px-[7px] py-[2px] text-[10.5px] font-bold"
-                  style={l.kind === "extra" ? { background: "var(--oks)", color: "var(--ok)" } : { background: "var(--dangers)", color: "var(--danger)" }}
-                >
-                  {l.kind === "extra" ? "Extra" : "Deduction"}
-                </span>
-                <select
-                  value={l.category}
-                  onChange={(e) => onUpdate(l.id, { category: e.target.value })}
-                  className="h-7 min-w-[130px] flex-1 cursor-pointer appearance-none rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-2 text-[12px] font-medium text-[var(--text)] outline-none"
-                >
-                  {cats.map((c) => (
-                    <option key={c.label} value={c.label}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
-                {cfg.mode === "number" && (
-                  <input
-                    key={`qty-${l.id}-${l.qty}`}
-                    defaultValue={l.qty}
-                    onBlur={(e) => onUpdate(l.id, { qty: e.target.value.replace(/[^0-9]/g, "") })}
-                    placeholder="0"
-                    className="h-7 w-[50px] flex-none rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-2 text-center font-mono text-[12px] text-[var(--text)] outline-none"
-                  />
-                )}
-                {cfg.mode === "dropdown" && (
-                  <select
-                    value={l.sub}
-                    onChange={(e) => onUpdate(l.id, { sub: e.target.value })}
-                    className="h-7 flex-none cursor-pointer appearance-none rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-2 text-[12px] font-semibold text-[var(--text)] outline-none"
+              <div key={l.id} className="flex flex-col gap-[6px] rounded-[6px] bg-[var(--surface2)] p-[6px_8px]">
+                <div className="flex flex-wrap items-center gap-[8px]">
+                  <span
+                    className="flex-none rounded-full px-[7px] py-[2px] text-[10.5px] font-bold"
+                    style={l.kind === "extra" ? { background: "var(--oks)", color: "var(--ok)" } : { background: "var(--dangers)", color: "var(--danger)" }}
                   >
-                    {(cfg.subs ?? []).map((s) => (
-                      <option key={s[0]} value={s[0]}>
-                        {s[0]}
+                    {l.kind === "extra" ? "Extra" : "Deduction"}
+                  </span>
+                  <select
+                    value={l.category}
+                    onChange={(e) => onUpdate(l.id, { category: e.target.value })}
+                    className="h-7 min-w-[130px] flex-1 cursor-pointer appearance-none rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-2 text-[12px] font-medium text-[var(--text)] outline-none"
+                  >
+                    {cats.map((c) => (
+                      <option key={c.label} value={c.label}>
+                        {c.label}
                       </option>
                     ))}
                   </select>
-                )}
-                {cfg.mode === "locked" && <span className="flex-none text-[11px] font-semibold text-[var(--subtle)]">Fixed</span>}
-                <span className="ml-auto flex-none font-mono text-[12.5px] font-bold text-[var(--text)]">
-                  {sym}
-                  {Math.round(l.amount).toLocaleString()}
-                </span>
-                <button
-                  onClick={() => onDelete(l.id)}
-                  className="flex h-6 w-6 flex-none items-center justify-center rounded-[5px] text-[var(--subtle)] hover:text-[var(--danger)]"
-                >
-                  <Icon name="x" size={12} />
-                </button>
+                  {cfg.mode === "number" && (
+                    <input
+                      key={`qty-${l.id}-${l.qty}`}
+                      defaultValue={l.qty}
+                      onBlur={(e) => onUpdate(l.id, { qty: e.target.value.replace(/[^0-9]/g, "") })}
+                      placeholder="0"
+                      className="h-7 w-[50px] flex-none rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-2 text-center font-mono text-[12px] text-[var(--text)] outline-none"
+                    />
+                  )}
+                  {cfg.mode === "dropdown" && (
+                    <select
+                      value={l.sub}
+                      onChange={(e) => onUpdate(l.id, { sub: e.target.value })}
+                      className="h-7 flex-none cursor-pointer appearance-none rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-2 text-[12px] font-semibold text-[var(--text)] outline-none"
+                    >
+                      {(cfg.subs ?? []).map((s) => (
+                        <option key={s[0]} value={s[0]}>
+                          {s[0]}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {cfg.mode === "locked" && <span className="flex-none text-[11px] font-semibold text-[var(--subtle)]">Fixed</span>}
+                  <span className="ml-auto flex-none font-mono text-[12.5px] font-bold text-[var(--text)]">
+                    {sym}
+                    {Math.round(l.amount).toLocaleString()}
+                  </span>
+                  <button
+                    onClick={() => onDelete(l.id)}
+                    className="flex h-6 w-6 flex-none items-center justify-center rounded-[5px] text-[var(--subtle)] hover:text-[var(--danger)]"
+                  >
+                    <Icon name="x" size={12} />
+                  </button>
+                </div>
+                <input
+                  key={`note-${l.id}-${l.note}`}
+                  defaultValue={l.note}
+                  onBlur={(e) => onUpdate(l.id, { note: e.target.value })}
+                  placeholder="Note from the head (e.g. what was actually extra)…"
+                  className="h-7 w-full rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-2 text-[12px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+                />
               </div>
             );
           })}
