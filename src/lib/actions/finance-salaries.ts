@@ -154,7 +154,11 @@ async function upsertOfficeHoursLine(
   payeeId: string,
   period: string,
   offeringId: string,
-  hours: number
+  hours: number,
+  // Only set for a brand-new line auto-created inside generateSalariesForPeriod
+  // when the period itself is already marked released — a manual Finance
+  // edit (setAssistantOfficeHours) never touches release state either way.
+  releasedAt: string | null = null
 ) {
   const rate = await resolveOfficeHourRate(supabase, orgId, offeringId);
   const base = Math.round(hours * rate);
@@ -189,6 +193,7 @@ async function upsertOfficeHoursLine(
       basis,
       base,
       office_hours: hours,
+      released_at: releasedAt,
     });
     if (error) throw new Error(error.message);
   }
@@ -210,7 +215,8 @@ async function createDefaultOfficeHoursLineIfMissing(
   payeeId: string,
   period: string,
   offeringId: string,
-  hours: number
+  hours: number,
+  releasedAt: string | null
 ) {
   const { data: existing } = await supabase
     .from("salary_lines")
@@ -223,7 +229,7 @@ async function createDefaultOfficeHoursLineIfMissing(
     .eq("office_hours_offering_id", offeringId)
     .maybeSingle();
   if (existing) return;
-  await upsertOfficeHoursLine(supabase, orgId, payeeId, period, offeringId, hours);
+  await upsertOfficeHoursLine(supabase, orgId, payeeId, period, offeringId, hours, releasedAt);
 }
 
 export async function setPayeeStatus(payeeId: string, period: string, status: "paid" | "pending") {
@@ -266,19 +272,31 @@ export async function setPayeeReleased(payeeId: string, period: string, released
 // Releases every not-yet-released line in a period at once — the common
 // case is "I've finished reviewing everyone this month," not releasing one
 // payee at a time. Only touches lines still unreleased, so it can't stomp
-// on someone Finance deliberately held back.
+// on someone Finance deliberately held back. Also marks the period itself
+// as released going forward (salary_period_releases), so a line created
+// later for this same period — a newly added assistant, a course
+// regenerated with a new calc method, etc. — is auto-released the moment
+// generateSalariesForPeriod creates it, instead of silently sitting
+// unreleased until someone notices and clicks Release all again.
 export async function releaseAllForPeriod(period: string): Promise<{ released: number }> {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");
   const supabase = await createClient();
+  const now = new Date().toISOString();
+
   const { data, error } = await supabase
     .from("salary_lines")
-    .update({ released_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .update({ released_at: now, updated_at: now })
     .eq("org_id", profile.org.id)
     .eq("period", period)
     .is("released_at", null)
     .select("id");
   if (error) throw new Error(error.message);
+
+  const { error: markError } = await supabase
+    .from("salary_period_releases")
+    .upsert({ org_id: profile.org.id, period, released_at: now }, { onConflict: "org_id,period" });
+  if (markError) throw new Error(markError.message);
 
   await logActivity("payments", `Released all pending pay for ${period}`);
   return { released: data?.length ?? 0 };
@@ -554,7 +572,11 @@ async function resolveMethodForAssistant(
 // setting. Existing lines for that exact (org, payee, offering, period) —
 // or (payee, office_hours_offering_id, period) for office hours — are left
 // completely untouched, so it's safe to re-run without clobbering anything
-// Finance has already reviewed or hand-edited.
+// Finance has already reviewed or hand-edited. A brand-new line picks up
+// the period's release state from salary_period_releases (set by "Release
+// all") so it's immediately visible if the rest of the period already is;
+// a recomputed stale-zero-bracket line keeps whatever release state it
+// already had instead.
 export async function generateSalariesForPeriod(period: string): Promise<{ created: number }> {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");
@@ -563,6 +585,18 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
 
   const { data: offerings } = await supabase.from("course_offerings").select("id").eq("org_id", orgId);
   let created = 0;
+
+  // If Finance already clicked "Release all" for this period, any line
+  // created from here on is released the moment it's created — otherwise a
+  // newly added assistant or a course regenerated with a new calc method
+  // would silently sit unreleased until someone noticed and re-released.
+  const { data: periodRelease } = await supabase
+    .from("salary_period_releases")
+    .select("released_at")
+    .eq("org_id", orgId)
+    .eq("period", period)
+    .maybeSingle();
+  const autoReleasedAt = periodRelease?.released_at ?? null;
 
   for (const offering of offerings ?? []) {
     const [{ data: enrollments }, { data: assigned }, { data: headRows }] = await Promise.all([
@@ -600,7 +634,7 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
       .eq("offering_id", offering.id)
       .not("default_office_hours", "is", null);
     for (const row of officeHourDefaults ?? []) {
-      await createDefaultOfficeHoursLineIfMissing(supabase, orgId, row.assistant_id, period, offering.id, Number(row.default_office_hours));
+      await createDefaultOfficeHoursLineIfMissing(supabase, orgId, row.assistant_id, period, offering.id, Number(row.default_office_hours), autoReleasedAt);
     }
 
     const payeeIds = Array.from(new Set([...assistantCandidates, ...headCandidates]));
@@ -620,7 +654,7 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
       // still safe to re-run without clobbering hand edits.
       const { data: existing } = await supabase
         .from("salary_lines")
-        .select("id, base, calc_method")
+        .select("id, base, calc_method, released_at")
         .eq("org_id", orgId)
         .eq("payee_id", payeeId)
         .eq("offering_id", offering.id)
@@ -628,6 +662,11 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
         .maybeSingle();
       const staleZeroBracket = existing?.calc_method === "bracket" && Number(existing.base) === 0;
       if (existing && !staleZeroBracket) continue;
+      // A stale-zero-bracket recompute keeps whatever release state that row
+      // already had (it existed, so it went through the normal release flow
+      // already) — only a genuinely brand-new row picks up the period's
+      // auto-release timestamp.
+      const releasedAtForRow = existing ? existing.released_at : autoReleasedAt;
 
       const checkedCount = await countCheckedPapers(supabase, offering.id, payeeId, period);
       const evalAmounts = evalByAssistant.get(payeeId);
@@ -671,6 +710,7 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
             deduction: evalAmounts?.deduction ?? 0,
             bonus_reason: evalAmounts?.extra ? "From head evaluation" : null,
             deduction_reason: evalAmounts?.deduction ? "From head evaluation" : null,
+            released_at: releasedAtForRow,
           },
           { onConflict: "org_id,payee_id,offering_id,period" }
         );
