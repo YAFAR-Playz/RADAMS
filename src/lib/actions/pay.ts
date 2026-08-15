@@ -132,6 +132,46 @@ export async function getMyPay(period?: string): Promise<MyPay | null> {
   return { period: targetPeriod, periods, paid, released, payMethod, currency, total, courses };
 }
 
+// Whether this payee has a period that's fully released but they haven't
+// opened My Pay since — drives the nav sidebar's red dot. Compared against
+// profiles.pay_viewed_at rather than a per-period table, so opening My Pay
+// at all clears it (like a normal "new" indicator), not just viewing the
+// specific period that triggered it.
+export async function hasUnviewedReleasedPay(): Promise<boolean> {
+  const profile = await getCurrentProfile();
+  if (!profile) return false;
+  const supabase = await createClient();
+
+  const [{ data: lines }, { data: viewedRow }] = await Promise.all([
+    supabase.from("salary_lines").select("period, released_at").eq("payee_id", profile.id),
+    supabase.from("profiles").select("pay_viewed_at").eq("id", profile.id).single(),
+  ]);
+  if (!lines || lines.length === 0) return false;
+
+  const byPeriod = new Map<string, { allReleased: boolean; maxReleasedAt: string }>();
+  for (const l of lines) {
+    const entry = byPeriod.get(l.period) ?? { allReleased: true, maxReleasedAt: "" };
+    entry.allReleased = entry.allReleased && l.released_at != null;
+    if (l.released_at && l.released_at > entry.maxReleasedAt) entry.maxReleasedAt = l.released_at;
+    byPeriod.set(l.period, entry);
+  }
+
+  const latestRelease = Array.from(byPeriod.values())
+    .filter((p) => p.allReleased)
+    .reduce((max, p) => (p.maxReleasedAt > max ? p.maxReleasedAt : max), "");
+  if (!latestRelease) return false;
+
+  const viewedAt = viewedRow?.pay_viewed_at ?? "";
+  return latestRelease > viewedAt;
+}
+
+export async function markPayViewed() {
+  const profile = await getCurrentProfile();
+  if (!profile) return;
+  const admin = createAdminClient();
+  await admin.from("profiles").update({ pay_viewed_at: new Date().toISOString() }).eq("id", profile.id);
+}
+
 export async function getMyReceiptUrl(period: string): Promise<string | null> {
   const profile = await getCurrentProfile();
   if (!profile) return null;

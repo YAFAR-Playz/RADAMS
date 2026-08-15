@@ -14,6 +14,10 @@ export type NavItem = {
   label: string;
   key: string;
   badge?: number;
+  // A plain unread-style indicator, distinct from `badge`'s numeric count —
+  // for a one-off "something new here" alert (e.g. newly released pay)
+  // rather than a count of pending items.
+  dot?: boolean;
 };
 
 export const ROLE_LABELS: Record<Role, string> = {

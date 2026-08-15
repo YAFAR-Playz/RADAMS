@@ -5,6 +5,7 @@ import { AppShell } from "@/components/shell/app-shell";
 import { listAllStaffingRequests } from "@/lib/actions/hr";
 import { getAssistantPendingLogCount } from "@/lib/actions/dashboard";
 import { getPlatformDefaultBranding } from "@/lib/actions/branding";
+import { hasUnviewedReleasedPay } from "@/lib/actions/pay";
 
 // The tab title otherwise falls back to the root layout's static "ZAD-AMS" —
 // once inside an org, show that org's own name instead.
@@ -43,6 +44,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (profile.role === "assistant") {
     const pending = await getAssistantPendingLogCount();
     navItems = navItems.map((n) => (n.key === "assignments" ? { ...n, badge: pending > 0 ? pending : undefined } : n));
+  }
+  if (profile.role === "assistant" || profile.role === "head") {
+    const unviewedPay = await hasUnviewedReleasedPay();
+    navItems = navItems.map((n) => (n.key === "mypay" ? { ...n, dot: unviewedPay } : n));
   }
 
   // Owner has no org, so there's nothing for getCurrentProfile() to resolve
