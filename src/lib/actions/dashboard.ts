@@ -523,7 +523,7 @@ export async function getFinanceDashboard(): Promise<FinanceDashboard> {
   const { data: lines } = await supabase
     .from("salary_lines")
     .select(
-      "payee_id, base, bonus, deduction, status, pay_method, profiles(full_name, initials), course_offerings(session, unit, courses(name))"
+      "payee_id, base, bonus, deduction, status, pay_method, profiles(full_name, initials), course_offerings!salary_lines_offering_id_fkey(session, unit, courses(name))"
     )
     .eq("org_id", orgId)
     .eq("period", period);

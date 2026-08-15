@@ -801,7 +801,7 @@ export async function getAssistantDetailedExport(): Promise<{ detail: AssistantD
   const { data: lines } = await supabase
     .from("salary_lines")
     .select(
-      "id, payee_id, offering_id, period, method, calc_method, base, bonus, deduction, bonus_reason, deduction_reason, status, pay_method, profiles(full_name, email, phone), course_offerings(session, unit, courses(name))"
+      "id, payee_id, offering_id, period, method, calc_method, base, bonus, deduction, bonus_reason, deduction_reason, status, pay_method, profiles(full_name, email, phone), course_offerings!salary_lines_offering_id_fkey(session, unit, courses(name))"
     )
     .eq("org_id", orgId)
     .order("period", { ascending: false });
