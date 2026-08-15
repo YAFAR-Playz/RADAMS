@@ -17,7 +17,10 @@ import {
   getSalaryReceiptUrl,
   getAssistantDetailedExport,
   setAssistantOfficeHours,
+  listMessagesForPayee,
+  replyToPayee,
   type AssistantSalary,
+  type SalaryMessage,
 } from "@/lib/actions/finance-salaries";
 import {
   getEvaluationForFinance,
@@ -195,6 +198,106 @@ function EvaluationPanel({ payeeId, offeringId, period, sym }: { payeeId: string
   );
 }
 
+// Full salary-inquiry thread for one payee, across all periods they've ever
+// messaged about — reachable from the notification bell's "Salary inquiry"
+// item (which previously linked to /payments, a route admin doesn't even
+// have) and from the Messages button on each row here.
+function MessagesModal({ payeeId, payeeName, defaultPeriod, onClose }: { payeeId: string; payeeName: string; defaultPeriod: string | null; onClose: () => void }) {
+  const [messages, setMessages] = useState<SalaryMessage[] | null>(null);
+  const [body, setBody] = useState("");
+  const [sending, setSending] = useState(false);
+
+  async function reload() {
+    setMessages(await listMessagesForPayee(payeeId));
+  }
+
+  useEffect(() => {
+    listMessagesForPayee(payeeId).then(setMessages);
+  }, [payeeId]);
+
+  async function onSend() {
+    if (!body.trim()) return;
+    setSending(true);
+    try {
+      const period = messages?.[messages.length - 1]?.period ?? defaultPeriod;
+      await replyToPayee(payeeId, body.trim(), period);
+      setBody("");
+      await reload();
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(8,12,22,0.5)] p-5">
+      <div className="flex max-h-[85vh] w-full max-w-[440px] flex-col overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(8,12,22,.34)]">
+        <div className="flex flex-none items-center gap-[11px] border-b border-[var(--border2)] p-[16px_18px]">
+          <div className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-[10px] bg-[var(--brands)] text-[var(--brand)]">
+            <Icon name="message" size={19} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Messages with {payeeName}</h3>
+            <div className="text-[12px] text-[var(--muted)]">Salary inquiry thread</div>
+          </div>
+          <button onClick={onClose} className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]">
+            <Icon name="x" size={18} />
+          </button>
+        </div>
+        {messages === null ? (
+          <div className="flex flex-col gap-2 p-[18px]">
+            <SkeletonRow className="h-[40px]" />
+            <SkeletonRow className="h-[40px]" />
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="p-[26px] text-center text-[12.5px] text-[var(--muted)]">No messages yet.</div>
+        ) : (
+          <div className="flex flex-1 flex-col gap-[10px] overflow-y-auto p-[18px]">
+            {messages.map((m) => (
+              <div key={m.id} className={`flex flex-col gap-[3px] ${m.isReply ? "items-end" : "items-start"}`}>
+                <div
+                  className="max-w-[85%] rounded-[10px] px-3 py-2 text-[13px] leading-[1.45]"
+                  style={m.isReply ? { background: "var(--brand)", color: "var(--brandfg)" } : { background: "var(--surface2)", color: "var(--text)" }}
+                >
+                  {m.body}
+                </div>
+                <span className="px-1 text-[10.5px] text-[var(--subtle)]">
+                  {m.fromName}
+                  {m.period ? ` · ${periodLabel(m.period)}` : ""} ·{" "}
+                  {new Date(m.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex-none p-[18px] pt-0">
+          <textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder="Reply to this inquiry…"
+            className="h-[80px] w-full resize-none rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-3 text-[13.5px] leading-[1.5] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+          />
+        </div>
+        <div className="flex flex-none gap-[10px] p-[0_18px_16px]">
+          <button
+            onClick={onClose}
+            className="h-11 flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]"
+          >
+            Close
+          </button>
+          <button
+            onClick={onSend}
+            disabled={sending || !body.trim()}
+            className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-70"
+          >
+            {sending ? <Spinner size={15} /> : <Icon name="send" size={15} />}
+            Send reply
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function periodLabel(period: string) {
   const [y, m] = period.split("-").map(Number);
   return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
@@ -220,6 +323,7 @@ export function FinanceSalariesContent() {
   });
   const [generating, setGenerating] = useState(false);
   const [receiptTarget, setReceiptTarget] = useState<AssistantSalary | null>(null);
+  const [messagesTarget, setMessagesTarget] = useState<AssistantSalary | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptSaving, setReceiptSaving] = useState(false);
   const [viewingReceiptId, setViewingReceiptId] = useState<string | null>(null);
@@ -726,6 +830,17 @@ export function FinanceSalariesContent() {
                     {busyId === a.payeeId ? <Spinner size={13} /> : <Icon name={a.status === "paid" ? "clock" : "check"} size={13} />}
                     {a.status === "paid" ? "Mark pending" : "Mark as paid"}
                   </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMessagesTarget(a);
+                    }}
+                    title="View and reply to salary messages"
+                    className="flex flex-none items-center gap-[6px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 py-[7px] text-[12px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)]"
+                  >
+                    <Icon name="message" size={13} />
+                    Messages
+                  </button>
                   <Icon name="chevron-down" size={18} className="flex-none text-[var(--subtle)]" style={{ transform: expanded ? "rotate(180deg)" : "none" }} />
                 </div>
 
@@ -916,6 +1031,15 @@ export function FinanceSalariesContent() {
             </div>
           </div>
         </div>
+      )}
+
+      {messagesTarget && (
+        <MessagesModal
+          payeeId={messagesTarget.payeeId}
+          payeeName={messagesTarget.name}
+          defaultPeriod={period}
+          onClose={() => setMessagesTarget(null)}
+        />
       )}
     </div>
   );

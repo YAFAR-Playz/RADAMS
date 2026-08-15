@@ -6,6 +6,7 @@ import { Icon } from "@/components/icons";
 import { SkeletonRow } from "@/components/ui/spinner";
 import { toneColors } from "@/lib/tone";
 import { getNotifications, type NotificationItem } from "@/lib/actions/notifications";
+import { setSearchHandoff } from "@/lib/search-handoff";
 
 // Runs on every page for every logged-in user (not just while a specific
 // tab is open like Chat), and fans out across several role-specific queries
@@ -107,6 +108,7 @@ export function NotificationBell() {
                     key={n.id}
                     href={n.href}
                     onClick={() => {
+                      if (n.searchTerm) setSearchHandoff(n.searchTerm);
                       dismiss(n.id);
                       setOpen(false);
                     }}

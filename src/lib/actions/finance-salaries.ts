@@ -118,6 +118,51 @@ export async function listSalariesForPeriod(period: string): Promise<AssistantSa
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+export type SalaryMessage = {
+  id: string;
+  fromName: string;
+  // From Finance/Admin, replying to the payee — as opposed to the payee's
+  // own message. There's no other role in this table, so this is enough to
+  // tell the two sides of the thread apart without a separate role column.
+  isReply: boolean;
+  body: string;
+  period: string | null;
+  createdAt: string;
+};
+
+export async function listMessagesForPayee(payeeId: string): Promise<SalaryMessage[]> {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) return [];
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("finance_messages")
+    .select("id, from_id, body, period, created_at, profiles!finance_messages_from_id_fkey(full_name)")
+    .eq("org_id", profile.org.id)
+    .eq("payee_id", payeeId)
+    .order("created_at", { ascending: true });
+  return (data ?? []).map((m) => {
+    const sender = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
+    return {
+      id: m.id,
+      fromName: m.from_id === payeeId ? sender?.full_name ?? "Staff" : "You",
+      isReply: m.from_id !== payeeId,
+      body: m.body,
+      period: m.period,
+      createdAt: m.created_at,
+    };
+  });
+}
+
+export async function replyToPayee(payeeId: string, body: string, period: string | null) {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("finance_messages")
+    .insert({ org_id: profile.org.id, from_id: profile.id, payee_id: payeeId, body, period });
+  if (error) throw new Error(error.message);
+}
+
 export async function updateSalaryLine(
   id: string,
   patch: { base?: number; bonus?: number; deduction?: number; bonusReason?: string; deductionReason?: string }
