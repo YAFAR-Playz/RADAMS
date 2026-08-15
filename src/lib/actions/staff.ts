@@ -86,6 +86,49 @@ export async function listStaff(): Promise<StaffMember[]> {
   }));
 }
 
+export type DepartedStaffMember = {
+  id: string;
+  name: string;
+  initials: string;
+  email: string;
+  role: Role;
+  hiredAt: string | null;
+  leftAt: string;
+  gaveNotice: boolean | null;
+  // Whole days between hiredAt and leftAt — null when hiredAt isn't known
+  // (e.g. staff added before that column existed), since a tenure figure
+  // computed from a missing start date would be actively misleading.
+  tenureDays: number | null;
+};
+
+export async function listDepartedStaff(): Promise<DepartedStaffMember[]> {
+  const profile = await getCurrentProfile();
+  const orgId = profile?.org?.id;
+  if (!orgId || (profile.role !== "admin" && profile.role !== "hr")) return [];
+  const supabase = await createClient();
+
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, full_name, initials, email, role, hired_at, left_at, gave_notice")
+    .eq("org_id", orgId)
+    .not("left_at", "is", null)
+    .order("left_at", { ascending: false });
+  // HR manages non-admin staff only — same restriction as listStaff.
+  const rows = (data ?? []).filter((p) => profile.role !== "hr" || !["admin", "owner"].includes(p.role));
+
+  return rows.map((p) => ({
+    id: p.id,
+    name: p.full_name,
+    initials: p.initials,
+    email: p.email,
+    role: p.role as Role,
+    hiredAt: p.hired_at,
+    leftAt: p.left_at as string,
+    gaveNotice: p.gave_notice,
+    tenureDays: p.hired_at ? Math.round((new Date(p.left_at as string).getTime() - new Date(p.hired_at).getTime()) / 86400000) : null,
+  }));
+}
+
 // Detects "this person already has an account" before ever touching Auth,
 // so adding the same assistant/head to a second course reuses their
 // existing profile instead of throwing a raw "already registered" error
