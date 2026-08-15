@@ -766,6 +766,153 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
   return { created };
 }
 
+function requireAdminOrHr(role: string | undefined) {
+  if (role !== "admin" && role !== "hr") throw new Error("Not authorized");
+}
+
+export type DepartedStaffOffering = {
+  offeringId: string;
+  courseLabel: string;
+  papers: number;
+  assignments: number;
+  hasSalaryLine: boolean;
+};
+
+// offering_assistants/offering_heads rows are hard-deleted the moment
+// someone's removed or replaced off a course (see removeAssistantFromOffering
+// in staff.ts) — by design, so an ex-assistant doesn't linger as a live
+// candidate anywhere. That also means it's the wrong place to look for
+// "which course(s) were they actually on" after the fact. assignment_logs is
+// never reassigned or deleted, so it's the only durable trace: any offering
+// they ever personally logged a check against is a candidate course, and
+// countCheckedPapers (the same function salary generation itself uses) gives
+// an accurate papers/assignments count for their final calendar month there.
+export async function getDepartedStaffFinalMonthDetail(payeeId: string): Promise<{ finalPeriod: string | null; offerings: DepartedStaffOffering[] }> {
+  const profile = await getCurrentProfile();
+  requireAdminOrHr(profile?.role);
+  if (!profile?.org) return { finalPeriod: null, offerings: [] };
+  const orgId = profile.org.id;
+  const supabase = await createClient();
+
+  const { data: person } = await supabase.from("profiles").select("left_at").eq("id", payeeId).maybeSingle();
+  if (!person?.left_at) return { finalPeriod: null, offerings: [] };
+  const finalPeriod = String(person.left_at).slice(0, 7);
+
+  const { data: logs } = await supabase
+    .from("assignment_logs")
+    .select("assignments(offering_id)")
+    .eq("logged_by", payeeId);
+  const offeringIds = new Set<string>();
+  for (const l of logs ?? []) {
+    const a = Array.isArray(l.assignments) ? l.assignments[0] : l.assignments;
+    if (a?.offering_id) offeringIds.add(a.offering_id);
+  }
+  if (!offeringIds.size) return { finalPeriod, offerings: [] };
+
+  const [{ data: offeringRows }, { data: existingLines }] = await Promise.all([
+    supabase
+      .from("course_offerings")
+      .select("id, session, unit, courses(name)")
+      .eq("org_id", orgId)
+      .in("id", Array.from(offeringIds)),
+    supabase.from("salary_lines").select("offering_id").eq("org_id", orgId).eq("payee_id", payeeId).eq("period", finalPeriod),
+  ]);
+  const linedOfferingIds = new Set((existingLines ?? []).map((l) => l.offering_id));
+
+  const offerings = await Promise.all(
+    (offeringRows ?? []).map(async (o) => {
+      const checked = await countCheckedPapers(supabase, o.id, payeeId, finalPeriod);
+      return {
+        offeringId: o.id,
+        courseLabel: offeringLabel(o),
+        papers: checked.papers,
+        assignments: checked.assignments,
+        hasSalaryLine: linedOfferingIds.has(o.id),
+      };
+    })
+  );
+
+  return { finalPeriod, offerings };
+}
+
+// Manually creates a salary_line for one specific (payee, offering, period)
+// regardless of current candidacy — generateSalariesForPeriod only ever
+// considers people currently linked via enrollments/offering_assistants/
+// offering_heads, none of which a departed assistant is in anymore, so
+// their final (possibly prorated) month never gets generated on its own.
+export async function backfillDepartedSalaryLine(payeeId: string, offeringId: string, period: string): Promise<{ created: boolean }> {
+  const profile = await getCurrentProfile();
+  requireAdminOrHr(profile?.role);
+  if (!profile?.org) throw new Error("Not authenticated");
+  const orgId = profile.org.id;
+  const supabase = await createClient();
+
+  const { data: existing } = await supabase
+    .from("salary_lines")
+    .select("id")
+    .eq("org_id", orgId)
+    .eq("payee_id", payeeId)
+    .eq("offering_id", offeringId)
+    .eq("period", period)
+    .maybeSingle();
+  if (existing) return { created: false };
+
+  const [{ data: person }, { data: staffSetting }, { data: evalRows }] = await Promise.all([
+    supabase.from("profiles").select("full_name, role").eq("id", payeeId).single(),
+    supabase.from("staff_pay_settings").select("calc_method").eq("profile_id", payeeId).maybeSingle(),
+    supabase.from("evaluations").select("evaluation_lines(kind, amount)").eq("org_id", orgId).eq("assistant_id", payeeId).eq("offering_id", offeringId).eq("period", period),
+  ]);
+  if (!person) throw new Error("Staff member not found");
+  const isHead = person.role === "head";
+
+  const checkedCount = await countCheckedPapers(supabase, offeringId, payeeId, period);
+  const method = await resolveMethodForAssistant(
+    supabase,
+    offeringId,
+    payeeId,
+    staffSetting?.calc_method as "paper" | "category" | "fixed" | "fixed_per_paper" | undefined
+  );
+
+  let base = 0;
+  let methodLabel = "Manual";
+  let calcMethod: "per_paper" | "bracket" | "fixed_per_paper" | "manual" = "manual";
+  let basis = isHead ? "Final month — set manually" : "No checked papers this period";
+  if (checkedCount.papers > 0 || method === "fixed_per_paper") {
+    const computed = await computeBaseForMethod(supabase, offeringId, payeeId, period, method, checkedCount);
+    base = computed.base;
+    methodLabel = computed.methodLabel;
+    calcMethod = method;
+    basis = formatBasis(method, checkedCount, computed.prorationNote);
+  }
+
+  let bonus = 0;
+  let deduction = 0;
+  for (const ev of evalRows ?? []) {
+    const lines = Array.isArray(ev.evaluation_lines) ? ev.evaluation_lines : [];
+    bonus += lines.filter((l) => l.kind === "extra").reduce((sum, l) => sum + Number(l.amount), 0);
+    deduction += lines.filter((l) => l.kind === "deduction").reduce((sum, l) => sum + Number(l.amount), 0);
+  }
+
+  const { error } = await supabase.from("salary_lines").insert({
+    org_id: orgId,
+    payee_id: payeeId,
+    offering_id: offeringId,
+    period,
+    method: methodLabel,
+    calc_method: calcMethod,
+    basis,
+    base,
+    bonus,
+    deduction,
+    bonus_reason: bonus ? "From head evaluation" : null,
+    deduction_reason: deduction ? "From head evaluation" : null,
+    released_at: null,
+  });
+  if (error) throw new Error(error.message);
+  await logActivity("payments", `Added final-month salary line for ${person.full_name} (${period})`);
+  return { created: true };
+}
+
 // Finance overriding a line's calc method recomputes its base from scratch
 // using that method — "manual" leaves the existing base alone so Finance can
 // type any number directly.

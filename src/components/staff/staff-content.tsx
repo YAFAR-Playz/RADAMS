@@ -17,6 +17,7 @@ import {
   type StaffMember,
 } from "@/lib/actions/staff";
 import { listAllStaffingRequests, type StaffingRequestDetail } from "@/lib/actions/hr";
+import { DepartedStaffPanel } from "@/components/staff/departed-staff-panel";
 import { listAllOfferingsForOrg, type OfferingChoice } from "@/lib/actions/students";
 import { downloadCsv } from "@/lib/csv-export";
 import { consumeSearchHandoff } from "@/lib/search-handoff";
@@ -74,6 +75,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
   const [removeTarget, setRemoveTarget] = useState<StaffMember | null>(null);
   const [removeLeaveDate, setRemoveLeaveDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [removeGaveNotice, setRemoveGaveNotice] = useState(false);
+  const [departedOpen, setDepartedOpen] = useState(false);
 
   async function reload() {
     setLoading(true);
@@ -260,6 +262,13 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
             </p>
           </div>
           <div className="flex flex-none items-center gap-[8px]">
+            <button
+              onClick={() => setDepartedOpen(true)}
+              className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-[14px] py-[10px] text-[13px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)]"
+            >
+              <Icon name="logout" size={16} />
+              Departed staff
+            </button>
             <button
               onClick={onExport}
               disabled={filtered.length === 0}
@@ -796,6 +805,8 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
           </div>
         </div>
       )}
+
+      {departedOpen && <DepartedStaffPanel onClose={() => setDepartedOpen(false)} />}
     </div>
   );
 }
