@@ -286,6 +286,105 @@ export async function addStudentEnrollment(studentId: string, offeringId: string
   return { enrollmentId: data.id };
 }
 
+export type StudentDuplicateMatch = {
+  id: string;
+  name: string;
+  studentCode: string;
+  guardianName: string | null;
+  guardianPhone: string | null;
+};
+
+// Phone-only match, scoped to the org — deliberately simple (no fuzzy name
+// matching) so a Head gets a clear, unambiguous "is this them?" rather than
+// a list of maybe-matches to sift through.
+export async function findStudentByPhone(phone: string): Promise<StudentDuplicateMatch | null> {
+  const profile = await getCurrentProfile();
+  const orgId = profile?.org?.id;
+  if (!orgId || !phone.trim()) return null;
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("students")
+    .select("id, name, student_code, guardian_name, guardian_phone")
+    .eq("org_id", orgId)
+    .eq("phone", phone.trim())
+    .maybeSingle();
+  if (!data) return null;
+  return { id: data.id, name: data.name, studentCode: data.student_code, guardianName: data.guardian_name, guardianPhone: data.guardian_phone };
+}
+
+export type HeadAddStudentInput = {
+  name: string;
+  phone: string;
+  email?: string;
+  guardianName?: string;
+  guardianPhone?: string;
+  offeringId: string;
+  // Set once the Head has confirmed a phone match found by findStudentByPhone
+  // really is the same person — skips creating a new student row entirely
+  // and just enrolls the existing one, so the org doesn't accumulate a
+  // second disconnected record for someone already in the system.
+  existingStudentId?: string;
+};
+
+// Gated by the org's heads_can_add_students feature flag (off by default)
+// and re-checked here server-side, not just hidden in the UI when off.
+// Doesn't create a payment_plan — that's Registration/Finance's call to
+// make with actual fee data a Head has no visibility into; enrollment and
+// billing are handled as two separate steps here, same as they already are
+// everywhere else a student can be enrolled without registration.
+export async function headAddStudent(input: HeadAddStudentInput): Promise<{ studentId: string }> {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org) throw new Error("Not authenticated");
+  if (profile.role !== "head") throw new Error("Not authorized");
+  const supabase = await createClient();
+
+  const { data: org } = await supabase.from("organizations").select("heads_can_add_students").eq("id", profile.org.id).single();
+  if (!org?.heads_can_add_students) throw new Error("Not enabled for your organization");
+
+  const { data: headLink } = await supabase
+    .from("offering_heads")
+    .select("head_id")
+    .eq("head_id", profile.id)
+    .eq("offering_id", input.offeringId)
+    .maybeSingle();
+  if (!headLink) throw new Error("You're not assigned to this course");
+
+  if (input.existingStudentId) {
+    await addStudentEnrollment(input.existingStudentId, input.offeringId);
+    return { studentId: input.existingStudentId };
+  }
+
+  if (!input.name.trim()) throw new Error("Name is required");
+  const initials = input.name
+    .trim()
+    .split(/\s+/)
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  const { data: student, error } = await supabase
+    .from("students")
+    .insert({
+      org_id: profile.org.id,
+      name: input.name.trim(),
+      initials,
+      phone: input.phone || null,
+      email: input.email || null,
+      guardian_name: input.guardianName || null,
+      guardian_phone: input.guardianPhone || null,
+    })
+    .select("id")
+    .single();
+  if (error || !student) throw new Error(error?.message ?? "Failed to add student");
+
+  const { error: enrollError } = await supabase.from("enrollments").insert({ student_id: student.id, offering_id: input.offeringId });
+  if (enrollError) throw new Error(enrollError.message);
+
+  await logActivity("students", `Registered ${input.name.trim()} (added by Head)`);
+  return { studentId: student.id };
+}
+
 // Enrollments have no soft-delete/history of their own — once this row is
 // gone, nothing else records that this student was ever on this course, or
 // who took them off it. Logging it here is the only trace that survives.

@@ -22,11 +22,15 @@ import {
   getStudentDetailPanel,
   getStudentDriveFolderLink,
   setStudentDriveFolderLink,
+  findStudentByPhone,
+  headAddStudent,
   type StudentRow,
   type EnrollmentDetail,
   type OfferingChoice,
   type StudentDetailPanel,
+  type StudentDuplicateMatch,
 } from "@/lib/actions/students";
+import { getPayrollSettings } from "@/lib/actions/payroll-settings";
 import { type GradeScaleSetting } from "@/lib/actions/oversight";
 import { formatGradeByScale } from "@/lib/grade-scale";
 import { getTrafficLightForOffering, setStudentTargetGrade, type StudentTrafficLight } from "@/lib/actions/traffic-light";
@@ -105,6 +109,14 @@ export function StudentsContent({ role }: { role: Role }) {
   const [savingTargetGrade, setSavingTargetGrade] = useState(false);
   const [tierTemplates, setTierTemplates] = useState<Record<string, string>>({});
 
+  const isHead = role === "head";
+  const [headsCanAddStudents, setHeadsCanAddStudents] = useState(false);
+  const [addStudentOpen, setAddStudentOpen] = useState(false);
+  const [addForm, setAddForm] = useState({ name: "", phone: "", email: "", guardianName: "", guardianPhone: "", offeringId: "" });
+  const [addStudentBusy, setAddStudentBusy] = useState(false);
+  const [addStudentError, setAddStudentError] = useState<string | null>(null);
+  const [duplicateMatch, setDuplicateMatch] = useState<StudentDuplicateMatch | null>(null);
+
   // Traffic light (and, for registration, payment/course-label) data loads
   // in the background after the roster itself renders. If the offering
   // changes again while that background fetch is still in flight, this lets
@@ -132,6 +144,8 @@ export function StudentsContent({ role }: { role: Role }) {
       setTierTemplates(data.tierTemplates);
       setSym(currencySymbol(data.currency));
     });
+    if (isHead) getPayrollSettings().then((s) => setHeadsCanAddStudents(!!s?.headsCanAddStudents));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Refetch on every modal open (not just page mount) — an admin editing
@@ -288,6 +302,56 @@ export function StudentsContent({ role }: { role: Role }) {
       );
     } finally {
       setExporting(false);
+    }
+  }
+
+  function openAddStudent() {
+    setAddForm({ name: "", phone: "", email: "", guardianName: "", guardianPhone: "", offeringId: offeringId ?? offerings?.[0]?.id ?? "" });
+    setDuplicateMatch(null);
+    setAddStudentError(null);
+    setAddStudentOpen(true);
+  }
+
+  async function onSubmitNewStudent() {
+    if (!addForm.name.trim() || !addForm.offeringId) return;
+    setAddStudentBusy(true);
+    setAddStudentError(null);
+    try {
+      // First pass: no duplicate confirmed yet — check before creating
+      // anything, so a re-registration under the same phone doesn't spawn a
+      // second disconnected student record.
+      if (!duplicateMatch) {
+        const match = await findStudentByPhone(addForm.phone);
+        if (match) {
+          setDuplicateMatch(match);
+          return;
+        }
+      }
+      await headAddStudent({ ...addForm, existingStudentId: duplicateMatch?.id });
+      setAddStudentOpen(false);
+      if (offeringId) await reload(offeringId);
+    } catch {
+      setAddStudentError("Couldn't add this student — try again.");
+    } finally {
+      setAddStudentBusy(false);
+    }
+  }
+
+  async function onConfirmDuplicate(sameStudent: boolean) {
+    if (!duplicateMatch) return;
+    setAddStudentBusy(true);
+    setAddStudentError(null);
+    try {
+      // "Not the same person" still skips a second phone lookup — asking
+      // again would just find the same match and loop back here.
+      await headAddStudent({ ...addForm, existingStudentId: sameStudent ? duplicateMatch.id : undefined });
+      setAddStudentOpen(false);
+      if (offeringId) await reload(offeringId);
+    } catch {
+      setAddStudentError(sameStudent ? "Couldn't enroll this student — try again." : "Couldn't add this student — try again.");
+    } finally {
+      setAddStudentBusy(false);
+      setDuplicateMatch(null);
     }
   }
 
@@ -489,6 +553,15 @@ export function StudentsContent({ role }: { role: Role }) {
             >
               {exporting ? <Spinner size={15} /> : <Icon name="file-up" size={16} />}
               Export CSV
+            </button>
+          )}
+          {isHead && headsCanAddStudents && (
+            <button
+              onClick={openAddStudent}
+              className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[14px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)]"
+            >
+              <Icon name="user-plus" size={16} />
+              Add Student
             </button>
           )}
         </div>
@@ -1406,6 +1479,143 @@ export function StudentsContent({ role }: { role: Role }) {
                   </a>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {addStudentOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(8,12,22,0.5)] p-5">
+          <div className="w-full max-w-[440px] overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(8,12,22,.34)]">
+            <div className="flex items-center gap-[11px] border-b border-[var(--border2)] p-[16px_18px]">
+              <div className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-[10px] bg-[var(--brands)] text-[var(--brand)]">
+                <Icon name="user-plus" size={19} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">{duplicateMatch ? "Possible duplicate" : "Add Student"}</h3>
+                <div className="text-[12px] text-[var(--muted)]">{duplicateMatch ? "Check before we create a second record" : "Enrolls directly into one of your courses"}</div>
+              </div>
+              <button
+                onClick={() => setAddStudentOpen(false)}
+                className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]"
+              >
+                <Icon name="x" size={18} />
+              </button>
+            </div>
+
+            {addStudentError && (
+              <div className="m-[16px_18px_0] flex items-center justify-between gap-3 rounded-[var(--rad-sm)] border border-[var(--danger)] bg-[var(--dangers)] px-3 py-2 text-[12.5px] font-medium text-[var(--danger)]">
+                {addStudentError}
+                <button onClick={() => setAddStudentError(null)} className="flex-none">
+                  <Icon name="x" size={14} />
+                </button>
+              </div>
+            )}
+
+            {duplicateMatch ? (
+              <div className="p-[18px]">
+                <p className="m-0 mb-[12px] text-[13px] leading-[1.5] text-[var(--text)]">
+                  A student with this phone number already exists. Is this the same person as <strong>{addForm.name.trim() || "the one you're adding"}</strong>?
+                </p>
+                <div className="rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[12px_13px]">
+                  <div className="text-[13.5px] font-semibold text-[var(--text)]">{duplicateMatch.name}</div>
+                  <div className="mt-[3px] text-[12px] text-[var(--muted)]">Student code {duplicateMatch.studentCode}</div>
+                  {duplicateMatch.guardianName && (
+                    <div className="mt-[6px] text-[12px] text-[var(--muted)]">
+                      Guardian: {duplicateMatch.guardianName}
+                      {duplicateMatch.guardianPhone ? ` · ${duplicateMatch.guardianPhone}` : ""}
+                    </div>
+                  )}
+                </div>
+                <p className="m-0 mt-[12px] text-[12px] leading-[1.5] text-[var(--subtle)]">
+                  If yes, they&apos;ll be enrolled into the selected course instead of creating a new student record.
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-[10px] p-[18px]">
+                <input
+                  value={addForm.name}
+                  onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="Student name"
+                  className="h-10 w-full rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[11px] text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+                />
+                <input
+                  value={addForm.phone}
+                  onChange={(e) => setAddForm((f) => ({ ...f, phone: e.target.value }))}
+                  placeholder="Phone"
+                  className="h-10 w-full rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[11px] text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+                />
+                <input
+                  value={addForm.email}
+                  onChange={(e) => setAddForm((f) => ({ ...f, email: e.target.value }))}
+                  placeholder="Email (optional)"
+                  className="h-10 w-full rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[11px] text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+                />
+                <div className="flex gap-[10px]">
+                  <input
+                    value={addForm.guardianName}
+                    onChange={(e) => setAddForm((f) => ({ ...f, guardianName: e.target.value }))}
+                    placeholder="Guardian name"
+                    className="h-10 min-w-0 flex-1 rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[11px] text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+                  />
+                  <input
+                    value={addForm.guardianPhone}
+                    onChange={(e) => setAddForm((f) => ({ ...f, guardianPhone: e.target.value }))}
+                    placeholder="Guardian phone"
+                    className="h-10 min-w-0 flex-1 rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[11px] text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+                  />
+                </div>
+                <select
+                  value={addForm.offeringId}
+                  onChange={(e) => setAddForm((f) => ({ ...f, offeringId: e.target.value }))}
+                  className="h-10 w-full cursor-pointer appearance-none rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[11px] text-[13px] font-medium text-[var(--text)] outline-none focus:border-[var(--brand)]"
+                >
+                  {(offerings ?? []).map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="flex gap-[10px] border-t border-[var(--border2)] p-[14px_18px]">
+              {duplicateMatch ? (
+                <>
+                  <button
+                    onClick={() => onConfirmDuplicate(false)}
+                    disabled={addStudentBusy}
+                    className="h-11 flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)] disabled:opacity-60"
+                  >
+                    No, different person
+                  </button>
+                  <button
+                    onClick={() => onConfirmDuplicate(true)}
+                    disabled={addStudentBusy}
+                    className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-70"
+                  >
+                    {addStudentBusy ? <Spinner size={15} /> : <Icon name="check" size={15} />}
+                    Yes, this is them
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setAddStudentOpen(false)}
+                    className="h-11 flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={onSubmitNewStudent}
+                    disabled={addStudentBusy || !addForm.name.trim() || !addForm.offeringId}
+                    className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-70"
+                  >
+                    {addStudentBusy ? <Spinner size={15} /> : <Icon name="user-plus" size={15} />}
+                    Add Student
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
