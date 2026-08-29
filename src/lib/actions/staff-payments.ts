@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
 
-export type CalcMethod = "paper" | "category" | "fixed" | "fixed_per_paper";
+export type CalcMethod = "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant";
 
 export type StaffPaymentRow = {
   id: string;

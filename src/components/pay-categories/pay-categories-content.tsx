@@ -237,6 +237,9 @@ export function PayCategoriesContent() {
   const [courseFixedSalaryDrafts, setCourseFixedSalaryDrafts] = useState<Record<string, string>>({});
   const [courseMockExamRateDrafts, setCourseMockExamRateDrafts] = useState<Record<string, string>>({});
   const [mockExamEnabled, setMockExamEnabled] = useState(false);
+  const [courseHeadFixedSalaryDrafts, setCourseHeadFixedSalaryDrafts] = useState<Record<string, string>>({});
+  const [courseHeadPerAssistantRateDrafts, setCourseHeadPerAssistantRateDrafts] = useState<Record<string, string>>({});
+  const [headFixedPerAssistantEnabled, setHeadFixedPerAssistantEnabled] = useState(false);
   const [bracketDrafts, setBracketDrafts] = useState<Record<string, BracketDraft>>({});
   const [officeHourOrgDefaultDraft, setOfficeHourOrgDefaultDraft] = useState<string | null>(null);
   const [officeHourRateDrafts, setOfficeHourRateDrafts] = useState<Record<string, string>>({});
@@ -262,6 +265,7 @@ export function PayCategoriesContent() {
     if (settings) {
       setCurrency(settings.currency);
       setMockExamEnabled(settings.mockExamEnabled);
+      setHeadFixedPerAssistantEnabled(settings.headFixedPerAssistantEnabled);
     }
   }
 
@@ -338,6 +342,8 @@ export function PayCategoriesContent() {
     Object.keys(courseRateDrafts).length > 0 ||
     Object.keys(courseFixedSalaryDrafts).length > 0 ||
     Object.keys(courseMockExamRateDrafts).length > 0 ||
+    Object.keys(courseHeadFixedSalaryDrafts).length > 0 ||
+    Object.keys(courseHeadPerAssistantRateDrafts).length > 0 ||
     Object.keys(bracketDrafts).length > 0 ||
     officeHourOrgDefaultDraft !== null ||
     Object.keys(officeHourRateDrafts).length > 0 ||
@@ -433,6 +439,12 @@ export function PayCategoriesContent() {
   function draftCourseMockExamRate(offeringId: string, value: string) {
     setCourseMockExamRateDrafts((prev) => ({ ...prev, [offeringId]: value }));
   }
+  function draftCourseHeadFixedSalary(offeringId: string, value: string) {
+    setCourseHeadFixedSalaryDrafts((prev) => ({ ...prev, [offeringId]: value }));
+  }
+  function draftCourseHeadPerAssistantRate(offeringId: string, value: string) {
+    setCourseHeadPerAssistantRateDrafts((prev) => ({ ...prev, [offeringId]: value }));
+  }
   function draftBracket(name: string, patch: Partial<BracketDraft>) {
     setBracketDrafts((prev) => ({ ...prev, [name]: { ...prev[name], ...patch } }));
   }
@@ -500,7 +512,13 @@ export function PayCategoriesContent() {
         ...Object.entries(categoryDrafts).map(([id, d]) => updatePayCategory(id, { label: d.label, rate: Number(d.rate) || 0 })),
         ...Object.entries(optionDrafts).map(([id, d]) => updateCategoryOption(id, { label: d.label, amount: Number(d.amount) || 0 })),
         ...Array.from(
-          new Set([...Object.keys(courseRateDrafts), ...Object.keys(courseFixedSalaryDrafts), ...Object.keys(courseMockExamRateDrafts)])
+          new Set([
+            ...Object.keys(courseRateDrafts),
+            ...Object.keys(courseFixedSalaryDrafts),
+            ...Object.keys(courseMockExamRateDrafts),
+            ...Object.keys(courseHeadFixedSalaryDrafts),
+            ...Object.keys(courseHeadPerAssistantRateDrafts),
+          ])
         ).map((offeringId) => {
           const current = courseRates?.find((c) => c.offeringId === offeringId);
           const rate = courseRateDrafts[offeringId] !== undefined ? Number(courseRateDrafts[offeringId]) || 0 : current?.rate ?? 0;
@@ -510,7 +528,15 @@ export function PayCategoriesContent() {
             courseMockExamRateDrafts[offeringId] !== undefined
               ? Number(courseMockExamRateDrafts[offeringId]) || 0
               : (current?.mockExamRate ?? null);
-          return setCourseRate(offeringId, rate, fixedSalary, mockExamRate);
+          const headFixedSalary =
+            courseHeadFixedSalaryDrafts[offeringId] !== undefined
+              ? Number(courseHeadFixedSalaryDrafts[offeringId]) || 0
+              : (current?.headFixedSalary ?? null);
+          const headPerAssistantRate =
+            courseHeadPerAssistantRateDrafts[offeringId] !== undefined
+              ? Number(courseHeadPerAssistantRateDrafts[offeringId]) || 0
+              : (current?.headPerAssistantRate ?? null);
+          return setCourseRate(offeringId, rate, fixedSalary, mockExamRate, headFixedSalary, headPerAssistantRate);
         }),
         ...Object.entries(bracketDrafts).map(([name, d]) => {
           // Only fields the user actually typed into are included in the
@@ -758,6 +784,37 @@ export function PayCategoriesContent() {
                           />
                         </div>
                       </div>
+                    )}
+                    {headFixedPerAssistantEnabled && (
+                      <>
+                        <div className="mt-[2px] text-[10.5px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Head — fixed + per assistant</div>
+                        <div className="flex items-center gap-[10px]">
+                          <span className="w-[80px] flex-none text-[11.5px] text-[var(--subtle)]">fixed salary</span>
+                          <div className="flex h-[34px] w-[88px] flex-none items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[9px]">
+                            <span className="text-[12.5px] font-semibold text-[var(--subtle)]">{sym}</span>
+                            <input
+                              value={courseHeadFixedSalaryDrafts[c.offeringId] ?? String(c.headFixedSalary ?? "")}
+                              onChange={(e) => draftCourseHeadFixedSalary(c.offeringId, e.target.value.replace(/[^0-9]/g, ""))}
+                              placeholder="—"
+                              inputMode="numeric"
+                              className="w-full border-none bg-transparent font-mono text-[13px] font-bold text-[var(--brand)] outline-none"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-[10px]">
+                          <span className="w-[80px] flex-none text-[11.5px] text-[var(--subtle)]">per assistant</span>
+                          <div className="flex h-[34px] w-[88px] flex-none items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[9px]">
+                            <span className="text-[12.5px] font-semibold text-[var(--subtle)]">{sym}</span>
+                            <input
+                              value={courseHeadPerAssistantRateDrafts[c.offeringId] ?? String(c.headPerAssistantRate ?? "")}
+                              onChange={(e) => draftCourseHeadPerAssistantRate(c.offeringId, e.target.value.replace(/[^0-9]/g, ""))}
+                              placeholder="—"
+                              inputMode="numeric"
+                              className="w-full border-none bg-transparent font-mono text-[13px] font-bold text-[var(--info)] outline-none"
+                            />
+                          </div>
+                        </div>
+                      </>
                     )}
                   </div>
                 ))}

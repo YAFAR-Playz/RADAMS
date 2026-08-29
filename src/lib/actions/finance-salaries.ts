@@ -14,7 +14,7 @@ export type SalaryLineRow = {
   officeHoursOfferingId: string | null;
   offering: string;
   method: string;
-  calcMethod: "per_paper" | "bracket" | "fixed_per_paper" | "manual" | null;
+  calcMethod: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant" | "manual" | null;
   basis: string | null;
   base: number;
   bonus: number;
@@ -28,6 +28,7 @@ export type AssistantSalary = {
   payeeId: string;
   name: string;
   initials: string;
+  role: string;
   payMethod: string;
   status: "paid" | "pending";
   // Whether this payee's breakdown is visible to them yet in My Pay — a
@@ -62,7 +63,7 @@ export async function listSalariesForPeriod(period: string): Promise<AssistantSa
   const { data: lines } = await supabase
     .from("salary_lines")
     .select(
-      "id, payee_id, offering_id, office_hours_offering_id, method, calc_method, basis, base, bonus, deduction, bonus_reason, deduction_reason, office_hours, status, released_at, pay_method, profiles(full_name, initials), course_offerings!salary_lines_offering_id_fkey(session, unit, courses(name)), office_hours_course:course_offerings!salary_lines_office_hours_offering_id_fkey(session, unit, courses(name))"
+      "id, payee_id, offering_id, office_hours_offering_id, method, calc_method, basis, base, bonus, deduction, bonus_reason, deduction_reason, office_hours, status, released_at, pay_method, profiles(full_name, initials, role), course_offerings!salary_lines_offering_id_fkey(session, unit, courses(name)), office_hours_course:course_offerings!salary_lines_office_hours_offering_id_fkey(session, unit, courses(name))"
     )
     .eq("org_id", orgId)
     .eq("period", period);
@@ -85,6 +86,7 @@ export async function listSalariesForPeriod(period: string): Promise<AssistantSa
         payeeId,
         name: payee.full_name,
         initials: payee.initials,
+        role: payee.role,
         payMethod: rows[0].pay_method,
         status: allPaid ? ("paid" as const) : ("pending" as const),
         released: allReleased,
@@ -460,7 +462,11 @@ async function countCheckedPapers(
   return { papers, assignments: regularIds.length, mockPapers };
 }
 
-function formatBasis(method: "per_paper" | "bracket" | "fixed_per_paper", count: CheckedPapersCount, prorationNote: string | null): string {
+function formatBasis(
+  method: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant",
+  count: CheckedPapersCount,
+  prorationNote: string | null
+): string {
   // Bracket ignores mock-exam papers for pay entirely, so make that explicit
   // rather than implying (like the "+" phrasing for per_paper/fixed_per_paper
   // does) that they added to the total.
@@ -552,9 +558,37 @@ async function computeBaseForMethod(
   offeringId: string,
   assistantId: string,
   period: string,
-  method: "per_paper" | "bracket" | "fixed_per_paper",
+  method: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant",
   checkedCount: CheckedPapersCount
-): Promise<{ base: number; methodLabel: string; prorationNote: string | null }> {
+): Promise<{ base: number; methodLabel: string; prorationNote: string | null; basisOverride?: string }> {
+  if (method === "fixed_per_assistant") {
+    const { data: rateRow } = await supabase
+      .from("per_paper_rates")
+      .select("head_fixed_salary, head_per_assistant_rate")
+      .eq("offering_id", offeringId)
+      .maybeSingle();
+    const fixedSalary = rateRow?.head_fixed_salary != null ? Number(rateRow.head_fixed_salary) : 0;
+    const perAssistantRate = rateRow?.head_per_assistant_rate != null ? Number(rateRow.head_per_assistant_rate) : 0;
+
+    // Currently-assigned, non-departed assistants on this course — no
+    // per-offering "joined" date exists for a head the way it does for an
+    // assistant, so proration below is based purely on the head's own
+    // org-wide leftAt, not a join date.
+    const { data: assistantRows } = await supabase
+      .from("offering_assistants")
+      .select("profiles!inner(left_at)")
+      .eq("offering_id", offeringId)
+      .is("profiles.left_at", null);
+    const assistantCount = assistantRows?.length ?? 0;
+
+    const { data: head } = await supabase.from("profiles").select("left_at").eq("id", assistantId).maybeSingle();
+    const fraction = prorationFraction(period, null, head?.left_at ?? null);
+    const prorationNote = fraction < 1 ? formatProrationNote(period, null, head?.left_at ?? null, fraction) : null;
+
+    const base = Math.round(fixedSalary * fraction) + assistantCount * perAssistantRate;
+    const basisOverride = `Fixed base + ${assistantCount} assistant${assistantCount === 1 ? "" : "s"}${prorationNote ? ` · ${prorationNote}` : ""}`;
+    return { base, methodLabel: "Fixed + per assistant", prorationNote, basisOverride };
+  }
   if (method === "fixed_per_paper") {
     const { data: rateRow } = await supabase
       .from("per_paper_rates")
@@ -629,11 +663,12 @@ async function resolveMethodForAssistant(
   supabase: Awaited<ReturnType<typeof createClient>>,
   offeringId: string,
   assistantId: string,
-  staffDefault: "paper" | "category" | "fixed" | "fixed_per_paper" | undefined
-): Promise<"per_paper" | "bracket" | "fixed_per_paper"> {
+  staffDefault: "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant" | undefined
+): Promise<"per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant"> {
   if (staffDefault === "paper") return "per_paper";
   if (staffDefault === "category") return "bracket";
   if (staffDefault === "fixed_per_paper") return "fixed_per_paper";
+  if (staffDefault === "fixed_per_assistant") return "fixed_per_assistant";
   return defaultMethodForOffering(supabase, offeringId);
 }
 
@@ -722,7 +757,7 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
 
     const { data: staffSettings } = await supabase.from("staff_pay_settings").select("profile_id, calc_method").in("profile_id", payeeIds);
     const staffDefaultByPayee = new Map(
-      (staffSettings ?? []).map((s) => [s.profile_id, s.calc_method as "paper" | "category" | "fixed" | "fixed_per_paper"])
+      (staffSettings ?? []).map((s) => [s.profile_id, s.calc_method as "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant"])
     );
 
     for (const payeeId of payeeIds) {
@@ -750,7 +785,14 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
 
       const checkedCount = await countCheckedPapers(supabase, offering.id, payeeId, period);
       const evalAmounts = evalByAssistant.get(payeeId);
-      const method = await resolveMethodForAssistant(supabase, offering.id, payeeId, staffDefaultByPayee.get(payeeId));
+      const isHead = headCandidates.has(payeeId);
+      let method = await resolveMethodForAssistant(supabase, offering.id, payeeId, staffDefaultByPayee.get(payeeId));
+      // fixed_per_assistant only makes sense for a head (it's keyed on the
+      // course's assistant count, not anything an assistant themselves
+      // produces) — a staff_pay_settings row that somehow has it set for a
+      // non-head falls back to the course's normal default instead of
+      // computing a meaningless number.
+      if (method === "fixed_per_assistant" && !isHead) method = await defaultMethodForOffering(supabase, offering.id);
       // A head essentially never has checked papers or a self-logged eval —
       // they're paid a set amount Finance decides each month, not computed
       // from either. Skipping them here (as an assistant with nothing due
@@ -759,7 +801,6 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
       // bracket/fixed_per_paper paths for them either. Heads always get a
       // $0 manual placeholder line instead, same shape as a course with no
       // per-paper rate, for Finance to fill in.
-      const isHead = headCandidates.has(payeeId);
       // Mock-exam papers are ignored entirely for Bracket, so they don't
       // rescue a bracket assistant from the skip below or trigger a compute
       // that would just come out to the same $0 anyway.
@@ -768,14 +809,14 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
 
       let base = 0;
       let methodLabel = "Manual";
-      let calcMethod: "per_paper" | "bracket" | "fixed_per_paper" | "manual" = "manual";
+      let calcMethod: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant" | "manual" = "manual";
       let basis = "No checked papers this period";
-      if (checkedCount.papers > 0 || mockCounts || method === "fixed_per_paper") {
+      if (checkedCount.papers > 0 || mockCounts || method === "fixed_per_paper" || method === "fixed_per_assistant") {
         const computed = await computeBaseForMethod(supabase, offering.id, payeeId, period, method, checkedCount);
         base = computed.base;
         methodLabel = computed.methodLabel;
         calcMethod = method;
-        basis = formatBasis(method, checkedCount, computed.prorationNote);
+        basis = computed.basisOverride ?? formatBasis(method, checkedCount, computed.prorationNote);
       }
 
       const { error } = await supabase
@@ -905,24 +946,25 @@ export async function backfillDepartedSalaryLine(payeeId: string, offeringId: st
   const isHead = person.role === "head";
 
   const checkedCount = await countCheckedPapers(supabase, offeringId, payeeId, period);
-  const method = await resolveMethodForAssistant(
+  let method = await resolveMethodForAssistant(
     supabase,
     offeringId,
     payeeId,
-    staffSetting?.calc_method as "paper" | "category" | "fixed" | "fixed_per_paper" | undefined
+    staffSetting?.calc_method as "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant" | undefined
   );
+  if (method === "fixed_per_assistant" && !isHead) method = await defaultMethodForOffering(supabase, offeringId);
 
   const mockCounts = method !== "bracket" && checkedCount.mockPapers > 0;
   let base = 0;
   let methodLabel = "Manual";
-  let calcMethod: "per_paper" | "bracket" | "fixed_per_paper" | "manual" = "manual";
+  let calcMethod: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant" | "manual" = "manual";
   let basis = isHead ? "Final month — set manually" : "No checked papers this period";
-  if (checkedCount.papers > 0 || mockCounts || method === "fixed_per_paper") {
+  if (checkedCount.papers > 0 || mockCounts || method === "fixed_per_paper" || method === "fixed_per_assistant") {
     const computed = await computeBaseForMethod(supabase, offeringId, payeeId, period, method, checkedCount);
     base = computed.base;
     methodLabel = computed.methodLabel;
     calcMethod = method;
-    basis = formatBasis(method, checkedCount, computed.prorationNote);
+    basis = computed.basisOverride ?? formatBasis(method, checkedCount, computed.prorationNote);
   }
 
   let bonus = 0;
@@ -956,7 +998,7 @@ export async function backfillDepartedSalaryLine(payeeId: string, offeringId: st
 // Finance overriding a line's calc method recomputes its base from scratch
 // using that method — "manual" leaves the existing base alone so Finance can
 // type any number directly.
-export async function setLineCalcMethod(lineId: string, method: "per_paper" | "bracket" | "fixed_per_paper" | "manual") {
+export async function setLineCalcMethod(lineId: string, method: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant" | "manual") {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org) throw new Error("Not authenticated");
   const supabase = await createClient();
@@ -971,10 +1013,23 @@ export async function setLineCalcMethod(lineId: string, method: "per_paper" | "b
   }
 
   const checkedCount = await countCheckedPapers(supabase, line.offering_id, line.payee_id, line.period);
-  const { base, methodLabel, prorationNote } = await computeBaseForMethod(supabase, line.offering_id, line.payee_id, line.period, method, checkedCount);
+  const { base, methodLabel, prorationNote, basisOverride } = await computeBaseForMethod(
+    supabase,
+    line.offering_id,
+    line.payee_id,
+    line.period,
+    method,
+    checkedCount
+  );
   const { error } = await supabase
     .from("salary_lines")
-    .update({ calc_method: method, method: methodLabel, basis: formatBasis(method, checkedCount, prorationNote), base, updated_at: new Date().toISOString() })
+    .update({
+      calc_method: method,
+      method: methodLabel,
+      basis: basisOverride ?? formatBasis(method, checkedCount, prorationNote),
+      base,
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", lineId);
   if (error) throw new Error(error.message);
 }
