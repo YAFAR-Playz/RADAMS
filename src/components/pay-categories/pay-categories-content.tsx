@@ -235,6 +235,8 @@ export function PayCategoriesContent() {
   const [optionDrafts, setOptionDrafts] = useState<Record<string, OptionDraft>>({});
   const [courseRateDrafts, setCourseRateDrafts] = useState<Record<string, string>>({});
   const [courseFixedSalaryDrafts, setCourseFixedSalaryDrafts] = useState<Record<string, string>>({});
+  const [courseMockExamRateDrafts, setCourseMockExamRateDrafts] = useState<Record<string, string>>({});
+  const [mockExamEnabled, setMockExamEnabled] = useState(false);
   const [bracketDrafts, setBracketDrafts] = useState<Record<string, BracketDraft>>({});
   const [officeHourOrgDefaultDraft, setOfficeHourOrgDefaultDraft] = useState<string | null>(null);
   const [officeHourRateDrafts, setOfficeHourRateDrafts] = useState<Record<string, string>>({});
@@ -257,7 +259,10 @@ export function PayCategoriesContent() {
     setCourseRates(rates);
     setOfficeHourOrgDefaultState(orgDefault);
     setOfficeHourRates(officeHours);
-    if (settings) setCurrency(settings.currency);
+    if (settings) {
+      setCurrency(settings.currency);
+      setMockExamEnabled(settings.mockExamEnabled);
+    }
   }
 
   async function refetchBrackets(scope: string[]) {
@@ -331,6 +336,8 @@ export function PayCategoriesContent() {
     Object.keys(categoryDrafts).length > 0 ||
     Object.keys(optionDrafts).length > 0 ||
     Object.keys(courseRateDrafts).length > 0 ||
+    Object.keys(courseFixedSalaryDrafts).length > 0 ||
+    Object.keys(courseMockExamRateDrafts).length > 0 ||
     Object.keys(bracketDrafts).length > 0 ||
     officeHourOrgDefaultDraft !== null ||
     Object.keys(officeHourRateDrafts).length > 0 ||
@@ -423,6 +430,9 @@ export function PayCategoriesContent() {
   function draftCourseFixedSalary(offeringId: string, value: string) {
     setCourseFixedSalaryDrafts((prev) => ({ ...prev, [offeringId]: value }));
   }
+  function draftCourseMockExamRate(offeringId: string, value: string) {
+    setCourseMockExamRateDrafts((prev) => ({ ...prev, [offeringId]: value }));
+  }
   function draftBracket(name: string, patch: Partial<BracketDraft>) {
     setBracketDrafts((prev) => ({ ...prev, [name]: { ...prev[name], ...patch } }));
   }
@@ -489,12 +499,18 @@ export function PayCategoriesContent() {
       await Promise.all([
         ...Object.entries(categoryDrafts).map(([id, d]) => updatePayCategory(id, { label: d.label, rate: Number(d.rate) || 0 })),
         ...Object.entries(optionDrafts).map(([id, d]) => updateCategoryOption(id, { label: d.label, amount: Number(d.amount) || 0 })),
-        ...Array.from(new Set([...Object.keys(courseRateDrafts), ...Object.keys(courseFixedSalaryDrafts)])).map((offeringId) => {
+        ...Array.from(
+          new Set([...Object.keys(courseRateDrafts), ...Object.keys(courseFixedSalaryDrafts), ...Object.keys(courseMockExamRateDrafts)])
+        ).map((offeringId) => {
           const current = courseRates?.find((c) => c.offeringId === offeringId);
           const rate = courseRateDrafts[offeringId] !== undefined ? Number(courseRateDrafts[offeringId]) || 0 : current?.rate ?? 0;
           const fixedSalary =
             courseFixedSalaryDrafts[offeringId] !== undefined ? Number(courseFixedSalaryDrafts[offeringId]) || 0 : current?.fixedSalary ?? 0;
-          return setCourseRate(offeringId, rate, fixedSalary);
+          const mockExamRate =
+            courseMockExamRateDrafts[offeringId] !== undefined
+              ? Number(courseMockExamRateDrafts[offeringId]) || 0
+              : (current?.mockExamRate ?? null);
+          return setCourseRate(offeringId, rate, fixedSalary, mockExamRate);
         }),
         ...Object.entries(bracketDrafts).map(([name, d]) => {
           // Only fields the user actually typed into are included in the
@@ -728,6 +744,21 @@ export function PayCategoriesContent() {
                         />
                       </div>
                     </div>
+                    {mockExamEnabled && (
+                      <div className="flex items-center gap-[10px]">
+                        <span className="w-[80px] flex-none text-[11.5px] text-[var(--subtle)]">mock exam</span>
+                        <div className="flex h-[34px] w-[88px] flex-none items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[9px]">
+                          <span className="text-[12.5px] font-semibold text-[var(--subtle)]">{sym}</span>
+                          <input
+                            value={courseMockExamRateDrafts[c.offeringId] ?? String(c.mockExamRate ?? "")}
+                            onChange={(e) => draftCourseMockExamRate(c.offeringId, e.target.value.replace(/[^0-9]/g, ""))}
+                            placeholder="—"
+                            inputMode="numeric"
+                            className="w-full border-none bg-transparent font-mono text-[13px] font-bold text-[var(--info)] outline-none"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

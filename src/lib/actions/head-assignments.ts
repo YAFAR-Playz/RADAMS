@@ -25,6 +25,10 @@ export type AssignmentProgress = {
   hasComment: boolean;
   defaultComment: string | null;
   countsSalary: boolean;
+  // Mock-exam assignments pay checked papers at a course's mock-exam rate
+  // (set in Pay Categories) instead of the assistant's normal per-paper
+  // rate — gated org-wide behind the mockExamEnabled feature flag.
+  mockExam: boolean;
   dueDate: string | null;
   closedAt: string | null;
   assignees: AssigneeProgress[];
@@ -38,6 +42,7 @@ export type CreateAssignmentInput = {
   templateId: string;
   gradeScheme: "numeric" | "letter";
   countsSalary: boolean;
+  mockExam?: boolean;
   defaultComment?: string;
   assistantIds: string[];
 };
@@ -63,7 +68,7 @@ export async function listAssignmentsWithProgress(offeringId: string): Promise<A
 
   const { data: assignments } = await supabase
     .from("assignments")
-    .select("id, title, max_marks, grade_scheme, template, counts_salary, due_date, closed_at, default_comment, assignment_templates(label, has_grade, has_comment)")
+    .select("id, title, max_marks, grade_scheme, template, counts_salary, mock_exam, due_date, closed_at, default_comment, assignment_templates(label, has_grade, has_comment)")
     .eq("offering_id", offeringId)
     .order("created_at", { ascending: false });
   if (!assignments || assignments.length === 0) return [];
@@ -146,6 +151,7 @@ export async function listAssignmentsWithProgress(offeringId: string): Promise<A
       hasComment,
       defaultComment: a.default_comment,
       countsSalary: a.counts_salary,
+      mockExam: a.mock_exam,
       dueDate: a.due_date,
       closedAt: a.closed_at,
       assignees,
@@ -172,6 +178,7 @@ export async function createAssignment(input: CreateAssignmentInput): Promise<{ 
       grade_scheme: input.gradeScheme,
       lettered: input.gradeScheme === "letter",
       counts_salary: input.countsSalary,
+      mock_exam: input.mockExam ?? false,
       default_comment: input.defaultComment?.trim() || null,
       created_by: profile.id,
     })
@@ -193,7 +200,7 @@ export async function createAssignment(input: CreateAssignmentInput): Promise<{ 
 
 export async function updateAssignment(
   id: string,
-  patch: { title: string; maxMarks: number; dueDate: string | null; countsSalary: boolean; defaultComment?: string }
+  patch: { title: string; maxMarks: number; dueDate: string | null; countsSalary: boolean; mockExam?: boolean; defaultComment?: string }
 ) {
   const supabase = await createClient();
   const { error } = await supabase
@@ -203,6 +210,7 @@ export async function updateAssignment(
       max_marks: patch.maxMarks,
       due_date: patch.dueDate,
       counts_salary: patch.countsSalary,
+      mock_exam: patch.mockExam ?? false,
       default_comment: patch.defaultComment?.trim() || null,
     })
     .eq("id", id);

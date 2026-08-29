@@ -405,7 +405,16 @@ export async function getSalaryReceiptUrl(payeeId: string, period: string): Prom
 // reassignment (a paper checked before a handoff still counts for whoever
 // actually checked it, not the student's new or previous assistant) and
 // excludes a head's own correction/override from counting toward pay.
-type CheckedPapersCount = { papers: number; assignments: number };
+//
+// mockPapers is counted separately from papers/assignments — a mock-exam-
+// flagged assignment (org feature-gated) pays at a different per-paper rate
+// than the course's normal one, and for Bracket specifically it's excluded
+// entirely (a mock exam shouldn't skew the average-papers-per-assignment a
+// bracket is calibrated against). When the org's mock-exam feature is off,
+// every assignment's mock_exam flag is ignored regardless of its stored
+// value, so mockPapers is always 0 and behavior is unchanged from before
+// the feature existed.
+type CheckedPapersCount = { papers: number; assignments: number; mockPapers: number };
 
 async function countCheckedPapers(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -417,45 +426,62 @@ async function countCheckedPapers(
   const monthStart = `${period}-01`;
   const monthEnd = new Date(y, m, 1).toISOString().slice(0, 10);
 
+  const { data: offering } = await supabase.from("course_offerings").select("organizations(mock_exam_enabled)").eq("id", offeringId).maybeSingle();
+  const org = Array.isArray(offering?.organizations) ? offering.organizations[0] : offering?.organizations;
+  const mockExamEnabled = !!org?.mock_exam_enabled;
+
   const { data: assignments } = await supabase
     .from("assignments")
-    .select("id, due_date, created_at")
+    .select("id, due_date, created_at, mock_exam")
     .eq("offering_id", offeringId)
     .eq("counts_salary", true);
-  const assignmentIds = (assignments ?? [])
-    .filter((a) => {
-      const d = a.due_date ?? a.created_at.slice(0, 10);
-      return d >= monthStart && d < monthEnd;
-    })
-    .map((a) => a.id);
-  if (!assignmentIds.length) return { papers: 0, assignments: 0 };
+  const dueThisMonth = (assignments ?? []).filter((a) => {
+    const d = a.due_date ?? a.created_at.slice(0, 10);
+    return d >= monthStart && d < monthEnd;
+  });
+  const regularIds = dueThisMonth.filter((a) => !mockExamEnabled || !a.mock_exam).map((a) => a.id);
+  const mockIds = mockExamEnabled ? dueThisMonth.filter((a) => a.mock_exam).map((a) => a.id) : [];
+  if (!regularIds.length && !mockIds.length) return { papers: 0, assignments: 0, mockPapers: 0 };
 
   const { data: logs } = await supabase
     .from("assignment_logs")
     .select("id, assignment_id")
-    .in("assignment_id", assignmentIds)
+    .in("assignment_id", [...regularIds, ...mockIds])
     .eq("logged_by", assistantId)
     .eq("status", "checked");
-  // The denominator is every counts-in-salary assignment due this month,
-  // not just the ones this assistant happened to check at least one paper
-  // in — an assignment they skipped entirely should still pull the average
-  // down, not disappear from the count.
-  return { papers: logs?.length ?? 0, assignments: assignmentIds.length };
+  const mockIdSet = new Set(mockIds);
+  const papers = (logs ?? []).filter((l) => !mockIdSet.has(l.assignment_id)).length;
+  const mockPapers = (logs ?? []).filter((l) => mockIdSet.has(l.assignment_id)).length;
+  // The denominator is every counts-in-salary REGULAR assignment due this
+  // month, not just the ones this assistant happened to check at least one
+  // paper in — an assignment they skipped entirely should still pull the
+  // average down, not disappear from the count. Mock-exam assignments never
+  // enter this denominator.
+  return { papers, assignments: regularIds.length, mockPapers };
 }
 
 function formatBasis(method: "per_paper" | "bracket" | "fixed_per_paper", count: CheckedPapersCount, prorationNote: string | null): string {
+  // Bracket ignores mock-exam papers for pay entirely, so make that explicit
+  // rather than implying (like the "+" phrasing for per_paper/fixed_per_paper
+  // does) that they added to the total.
+  const mockPart =
+    count.mockPapers === 0
+      ? ""
+      : method === "bracket"
+        ? ` (${count.mockPapers} mock exam, not counted)`
+        : ` (+${count.mockPapers} mock exam)`;
   // Unlike per_paper/bracket, a fixed_per_paper line still has something to
   // show (its fixed base) even with zero papers checked, so it never falls
   // into the "no papers" short-circuit below.
   if (method === "fixed_per_paper") {
-    const base = `Fixed base + ${count.papers} paper${count.papers === 1 ? "" : "s"} checked`;
+    const base = `Fixed base + ${count.papers} paper${count.papers === 1 ? "" : "s"} checked${mockPart}`;
     return prorationNote ? `${base} · ${prorationNote}` : base;
   }
-  if (count.papers === 0) return "No checked papers this period";
+  if (count.papers === 0 && count.mockPapers === 0) return "No checked papers this period";
   const base =
     method === "bracket"
-      ? `${count.papers} paper${count.papers === 1 ? "" : "s"} checked across ${count.assignments} assignment${count.assignments === 1 ? "" : "s"}`
-      : `${count.papers} papers checked`;
+      ? `${count.papers} paper${count.papers === 1 ? "" : "s"} checked across ${count.assignments} assignment${count.assignments === 1 ? "" : "s"}${mockPart}`
+      : `${count.papers} papers checked${mockPart}`;
   return prorationNote ? `${base} · ${prorationNote}` : base;
 }
 
@@ -530,9 +556,16 @@ async function computeBaseForMethod(
   checkedCount: CheckedPapersCount
 ): Promise<{ base: number; methodLabel: string; prorationNote: string | null }> {
   if (method === "fixed_per_paper") {
-    const { data: rateRow } = await supabase.from("per_paper_rates").select("rate, fixed_salary").eq("offering_id", offeringId).maybeSingle();
+    const { data: rateRow } = await supabase
+      .from("per_paper_rates")
+      .select("rate, fixed_salary, mock_exam_rate")
+      .eq("offering_id", offeringId)
+      .maybeSingle();
     const rate = rateRow ? Number(rateRow.rate) : 8;
     const fixedSalary = rateRow ? Number(rateRow.fixed_salary) : 0;
+    // No mock rate configured for this course falls back to the normal
+    // rate, rather than paying $0 for mock-exam papers by surprise.
+    const mockRate = rateRow?.mock_exam_rate != null ? Number(rateRow.mock_exam_rate) : rate;
 
     // The fixed portion is a recurring monthly amount, so it's prorated by
     // active time same as bracket pay; the per-paper portion already
@@ -542,7 +575,7 @@ async function computeBaseForMethod(
     const fraction = prorationFraction(period, joinedAt, leftAt);
     const prorationNote = fraction < 1 ? formatProrationNote(period, joinedAt, leftAt, fraction) : null;
 
-    const base = Math.round(fixedSalary * fraction) + checkedCount.papers * rate;
+    const base = Math.round(fixedSalary * fraction) + checkedCount.papers * rate + checkedCount.mockPapers * mockRate;
     return { base, methodLabel: "Fixed + per paper", prorationNote };
   }
   if (method === "bracket") {
@@ -571,9 +604,11 @@ async function computeBaseForMethod(
 
     return { base: Math.round(fullPay * fraction), methodLabel: "Bracket", prorationNote };
   }
-  const { data: rateRow } = await supabase.from("per_paper_rates").select("rate").eq("offering_id", offeringId).maybeSingle();
+  const { data: rateRow } = await supabase.from("per_paper_rates").select("rate, mock_exam_rate").eq("offering_id", offeringId).maybeSingle();
   const rate = rateRow ? Number(rateRow.rate) : 8;
-  return { base: checkedCount.papers * rate, methodLabel: "Per paper", prorationNote: null };
+  const mockRate = rateRow?.mock_exam_rate != null ? Number(rateRow.mock_exam_rate) : rate;
+  const base = checkedCount.papers * rate + checkedCount.mockPapers * mockRate;
+  return { base, methodLabel: "Per paper", prorationNote: null };
 }
 
 async function defaultMethodForOffering(supabase: Awaited<ReturnType<typeof createClient>>, offeringId: string): Promise<"per_paper" | "bracket"> {
@@ -725,13 +760,17 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
       // $0 manual placeholder line instead, same shape as a course with no
       // per-paper rate, for Finance to fill in.
       const isHead = headCandidates.has(payeeId);
-      if (!isHead && checkedCount.papers <= 0 && !evalAmounts && method !== "fixed_per_paper") continue;
+      // Mock-exam papers are ignored entirely for Bracket, so they don't
+      // rescue a bracket assistant from the skip below or trigger a compute
+      // that would just come out to the same $0 anyway.
+      const mockCounts = method !== "bracket" && checkedCount.mockPapers > 0;
+      if (!isHead && checkedCount.papers <= 0 && !mockCounts && !evalAmounts && method !== "fixed_per_paper") continue;
 
       let base = 0;
       let methodLabel = "Manual";
       let calcMethod: "per_paper" | "bracket" | "fixed_per_paper" | "manual" = "manual";
       let basis = "No checked papers this period";
-      if (checkedCount.papers > 0 || method === "fixed_per_paper") {
+      if (checkedCount.papers > 0 || mockCounts || method === "fixed_per_paper") {
         const computed = await computeBaseForMethod(supabase, offering.id, payeeId, period, method, checkedCount);
         base = computed.base;
         methodLabel = computed.methodLabel;
@@ -873,11 +912,12 @@ export async function backfillDepartedSalaryLine(payeeId: string, offeringId: st
     staffSetting?.calc_method as "paper" | "category" | "fixed" | "fixed_per_paper" | undefined
   );
 
+  const mockCounts = method !== "bracket" && checkedCount.mockPapers > 0;
   let base = 0;
   let methodLabel = "Manual";
   let calcMethod: "per_paper" | "bracket" | "fixed_per_paper" | "manual" = "manual";
   let basis = isHead ? "Final month — set manually" : "No checked papers this period";
-  if (checkedCount.papers > 0 || method === "fixed_per_paper") {
+  if (checkedCount.papers > 0 || mockCounts || method === "fixed_per_paper") {
     const computed = await computeBaseForMethod(supabase, offeringId, payeeId, period, method, checkedCount);
     base = computed.base;
     methodLabel = computed.methodLabel;
