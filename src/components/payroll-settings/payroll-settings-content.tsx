@@ -28,6 +28,7 @@ const CALC_METHOD_OPTS: { value: CalcMethod; label: string }[] = [
   { value: "category", label: "Avg-paper category" },
   { value: "fixed", label: "Fixed salary" },
   { value: "fixed_per_paper", label: "Fixed + per paper" },
+  { value: "fixed_per_assistant", label: "Fixed + per assistant" },
 ];
 
 const TOGGLE_DEFS: { key: keyof PayrollFlags; label: string; desc: string; icon: IconName; tone: Tone }[] = [
@@ -439,7 +440,11 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                         onChange={(e) => setStaffPickMethod(e.target.value as CalcMethod)}
                         className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[12.5px] font-semibold text-[var(--text)] outline-none"
                       >
-                        {CALC_METHOD_OPTS.map((m) => (
+                        {CALC_METHOD_OPTS.filter(
+                          (m) =>
+                            m.value !== "fixed_per_assistant" ||
+                            (!!settings?.headFixedPerAssistantEnabled && staffList.find((s) => s.id === staffPickId)?.role === "head")
+                        ).map((m) => (
                           <option key={m.value} value={m.value}>
                             {m.label}
                           </option>
@@ -488,7 +493,10 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                         onChange={(e) => setCoursePickMethod(e.target.value as CalcMethod)}
                         className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[12.5px] font-semibold text-[var(--text)] outline-none"
                       >
-                        {CALC_METHOD_OPTS.map((m) => (
+                        {/* Bulk-apply only ever touches offering_assistants — Heads
+                            aren't eligible here, so fixed_per_assistant never
+                            belongs in this picker regardless of the org toggle. */}
+                        {CALC_METHOD_OPTS.filter((m) => m.value !== "fixed_per_assistant").map((m) => (
                           <option key={m.value} value={m.value}>
                             {m.label}
                           </option>

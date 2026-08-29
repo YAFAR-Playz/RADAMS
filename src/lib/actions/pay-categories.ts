@@ -6,7 +6,15 @@ import { getCurrentProfile } from "@/lib/current-profile";
 export type CategoryMode = "number" | "dropdown" | "fixed";
 export type CategoryOption = { id: string; label: string; amount: number };
 export type PayCategory = { id: string; kind: "extra" | "deduction"; label: string; mode: CategoryMode; rate: number | null; options: CategoryOption[] };
-export type CourseRate = { offeringId: string; label: string; rate: number; fixedSalary: number; mockExamRate: number | null };
+export type CourseRate = {
+  offeringId: string;
+  label: string;
+  rate: number;
+  fixedSalary: number;
+  mockExamRate: number | null;
+  headFixedSalary: number | null;
+  headPerAssistantRate: number | null;
+};
 export type Bracket = { id: string; name: string; lo: number; hi: number; pay: number };
 export type BracketSlot = { name: string; lo: number | null; hi: number | null; pay: number | null };
 
@@ -143,23 +151,67 @@ export async function listCourseRates(): Promise<CourseRate[]> {
 
   const offeringIds = offerings.map((o) => o.id);
   const { data: rates } = offeringIds.length
-    ? await supabase.from("per_paper_rates").select("offering_id, rate, fixed_salary, mock_exam_rate").in("offering_id", offeringIds)
-    : { data: [] as { offering_id: string; rate: number; fixed_salary: number; mock_exam_rate: number | null }[] };
+    ? await supabase
+        .from("per_paper_rates")
+        .select("offering_id, rate, fixed_salary, mock_exam_rate, head_fixed_salary, head_per_assistant_rate")
+        .in("offering_id", offeringIds)
+    : {
+        data: [] as {
+          offering_id: string;
+          rate: number;
+          fixed_salary: number;
+          mock_exam_rate: number | null;
+          head_fixed_salary: number | null;
+          head_per_assistant_rate: number | null;
+        }[],
+      };
   const rateByOffering = new Map(
-    (rates ?? []).map((r) => [r.offering_id, { rate: Number(r.rate), fixedSalary: Number(r.fixed_salary), mockExamRate: r.mock_exam_rate != null ? Number(r.mock_exam_rate) : null }])
+    (rates ?? []).map((r) => [
+      r.offering_id,
+      {
+        rate: Number(r.rate),
+        fixedSalary: Number(r.fixed_salary),
+        mockExamRate: r.mock_exam_rate != null ? Number(r.mock_exam_rate) : null,
+        headFixedSalary: r.head_fixed_salary != null ? Number(r.head_fixed_salary) : null,
+        headPerAssistantRate: r.head_per_assistant_rate != null ? Number(r.head_per_assistant_rate) : null,
+      },
+    ])
   );
 
   return offerings.map((o) => {
     const r = rateByOffering.get(o.id);
-    return { offeringId: o.id, label: offeringLabel(o), rate: r?.rate ?? 8, fixedSalary: r?.fixedSalary ?? 0, mockExamRate: r?.mockExamRate ?? null };
+    return {
+      offeringId: o.id,
+      label: offeringLabel(o),
+      rate: r?.rate ?? 8,
+      fixedSalary: r?.fixedSalary ?? 0,
+      mockExamRate: r?.mockExamRate ?? null,
+      headFixedSalary: r?.headFixedSalary ?? null,
+      headPerAssistantRate: r?.headPerAssistantRate ?? null,
+    };
   });
 }
 
-export async function setCourseRate(offeringId: string, rate: number, fixedSalary: number, mockExamRate?: number | null) {
+export async function setCourseRate(
+  offeringId: string,
+  rate: number,
+  fixedSalary: number,
+  mockExamRate?: number | null,
+  headFixedSalary?: number | null,
+  headPerAssistantRate?: number | null
+) {
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("per_paper_rates")
-    .upsert({ offering_id: offeringId, rate, fixed_salary: fixedSalary, mock_exam_rate: mockExamRate ?? null }, { onConflict: "offering_id" });
+  const { error } = await supabase.from("per_paper_rates").upsert(
+    {
+      offering_id: offeringId,
+      rate,
+      fixed_salary: fixedSalary,
+      mock_exam_rate: mockExamRate ?? null,
+      head_fixed_salary: headFixedSalary ?? null,
+      head_per_assistant_rate: headPerAssistantRate ?? null,
+    },
+    { onConflict: "offering_id" }
+  );
   if (error) throw new Error(error.message);
 }
 

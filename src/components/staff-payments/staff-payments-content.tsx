@@ -13,6 +13,7 @@ const METHOD_OPTS: { value: CalcMethod; label: string }[] = [
   { value: "category", label: "Avg-paper category" },
   { value: "fixed", label: "Fixed salary" },
   { value: "fixed_per_paper", label: "Fixed + per paper" },
+  { value: "fixed_per_assistant", label: "Fixed + per assistant" },
 ];
 const PAY_OPTS = ["Bank transfer", "Mobile wallet", "InstaPay"];
 
@@ -32,13 +33,17 @@ export function StaffPaymentsContent() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "head" | "assistant">("all");
   const [page, setPage] = useState(0);
+  const [headFixedPerAssistantEnabled, setHeadFixedPerAssistantEnabled] = useState(false);
 
   async function reload() {
     setLoading(true);
     try {
       const [data, settings] = await Promise.all([listStaffPayments(), getPayrollSettings()]);
       setRows(data);
-      if (settings) setCurrency(settings.currency);
+      if (settings) {
+        setCurrency(settings.currency);
+        setHeadFixedPerAssistantEnabled(settings.headFixedPerAssistantEnabled);
+      }
     } catch {
       setError("Couldn't load staff payments.");
     } finally {
@@ -171,11 +176,13 @@ export function StaffPaymentsContent() {
                         onChange={(e) => patchRow(r.id, { calcMethod: e.target.value as CalcMethod }, { calcMethod: e.target.value as CalcMethod })}
                         className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[12.5px] font-semibold text-[var(--text)] outline-none"
                       >
-                        {METHOD_OPTS.map((m) => (
-                          <option key={m.value} value={m.value}>
-                            {m.label}
-                          </option>
-                        ))}
+                        {METHOD_OPTS.filter((m) => m.value !== "fixed_per_assistant" || (headFixedPerAssistantEnabled && r.role === "head")).map(
+                          (m) => (
+                            <option key={m.value} value={m.value}>
+                              {m.label}
+                            </option>
+                          )
+                        )}
                       </select>
                     </div>
                   </div>

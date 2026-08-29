@@ -331,6 +331,7 @@ export function FinanceSalariesContent() {
   const [search, setSearch] = useState("");
   const [officeHoursCourseByPayee, setOfficeHoursCourseByPayee] = useState<Record<string, string>>({});
   const [releasingAll, setReleasingAll] = useState(false);
+  const [headFixedPerAssistantEnabled, setHeadFixedPerAssistantEnabled] = useState(false);
 
   useEffect(() => {
     (() => {
@@ -341,7 +342,10 @@ export function FinanceSalariesContent() {
       const [p, settings] = await Promise.all([listPeriods(), getPayrollSettings()]);
       setPeriods(p);
       setPeriod(p[0] ?? null);
-      if (settings) setCurrency(settings.currency);
+      if (settings) {
+        setCurrency(settings.currency);
+        setHeadFixedPerAssistantEnabled(settings.headFixedPerAssistantEnabled);
+      }
     })();
   }, []);
 
@@ -504,7 +508,7 @@ export function FinanceSalariesContent() {
     }
   }
 
-  async function onChangeCalcMethod(lineId: string, method: "per_paper" | "bracket" | "fixed_per_paper" | "manual") {
+  async function onChangeCalcMethod(lineId: string, method: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant" | "manual") {
     setBusyId(lineId);
     try {
       await setLineCalcMethod(lineId, method);
@@ -853,7 +857,9 @@ export function FinanceSalariesContent() {
                           <div className="flex h-7 flex-none items-center gap-[4px] rounded-full bg-[var(--infos)] pl-[9px] pr-[4px]">
                             <select
                               value={l.calcMethod ?? "manual"}
-                              onChange={(e) => onChangeCalcMethod(l.id, e.target.value as "per_paper" | "bracket" | "fixed_per_paper" | "manual")}
+                              onChange={(e) =>
+                                onChangeCalcMethod(l.id, e.target.value as "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant" | "manual")
+                              }
                               disabled={!l.offeringId || busyId === l.id}
                               title={l.offeringId ? "Calc method" : "No course linked — manual only"}
                               className="cursor-pointer appearance-none border-none bg-transparent text-[11px] font-semibold text-[var(--info)] outline-none disabled:cursor-not-allowed"
@@ -861,6 +867,9 @@ export function FinanceSalariesContent() {
                               <option value="per_paper">Per paper</option>
                               <option value="bracket">Bracket</option>
                               <option value="fixed_per_paper">Fixed + per paper</option>
+                              {headFixedPerAssistantEnabled && a.role === "head" && (
+                                <option value="fixed_per_assistant">Fixed + per assistant</option>
+                              )}
                               <option value="manual">Manual</option>
                             </select>
                             {l.offeringId && l.calcMethod !== "manual" && (
