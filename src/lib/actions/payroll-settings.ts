@@ -10,7 +10,18 @@ export type PayrollFlags = {
   autoRelease: boolean;
 };
 
-export type PayrollSettings = PayrollFlags & { currency: string };
+// Whole-feature toggles, distinct from PayrollFlags above (routine payroll
+// behavior Finance can also adjust) — these turn entire new capabilities on
+// or off org-wide, so only Admin can touch them (enforced in
+// setOrgFeatureFlag, not just RLS, since RLS allows Finance to update
+// organizations for the PayrollFlags columns).
+export type OrgFeatureFlags = {
+  mockExamEnabled: boolean;
+  headsCanAddStudents: boolean;
+  headFixedPerAssistantEnabled: boolean;
+};
+
+export type PayrollSettings = PayrollFlags & OrgFeatureFlags & { currency: string };
 
 export async function getPayrollSettings(): Promise<PayrollSettings | null> {
   const profile = await getCurrentProfile();
@@ -19,7 +30,9 @@ export async function getPayrollSettings(): Promise<PayrollSettings | null> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("organizations")
-    .select("currency, salary_visible_to_heads, head_edit_amounts, assistant_see_breakdown, auto_release")
+    .select(
+      "currency, salary_visible_to_heads, head_edit_amounts, assistant_see_breakdown, auto_release, mock_exam_enabled, heads_can_add_students, head_fixed_per_assistant_enabled"
+    )
     .eq("id", orgId)
     .single();
   if (!data) return null;
@@ -29,6 +42,9 @@ export async function getPayrollSettings(): Promise<PayrollSettings | null> {
     headEditAmounts: data.head_edit_amounts,
     assistantSeeBreakdown: data.assistant_see_breakdown,
     autoRelease: data.auto_release,
+    mockExamEnabled: data.mock_exam_enabled,
+    headsCanAddStudents: data.heads_can_add_students,
+    headFixedPerAssistantEnabled: data.head_fixed_per_assistant_enabled,
   };
 }
 
@@ -44,6 +60,20 @@ export async function setPayrollFlag(key: keyof PayrollFlags, value: boolean) {
   };
   const supabase = await createClient();
   const { error } = await supabase.from("organizations").update({ [columnByKey[key]]: value }).eq("id", orgId);
+  if (error) throw new Error(error.message);
+}
+
+export async function setOrgFeatureFlag(key: keyof OrgFeatureFlags, value: boolean) {
+  const profile = await getCurrentProfile();
+  if (!profile?.org) throw new Error("Not authenticated");
+  if (profile.role !== "admin") throw new Error("Not authorized");
+  const columnByKey: Record<keyof OrgFeatureFlags, string> = {
+    mockExamEnabled: "mock_exam_enabled",
+    headsCanAddStudents: "heads_can_add_students",
+    headFixedPerAssistantEnabled: "head_fixed_per_assistant_enabled",
+  };
+  const supabase = await createClient();
+  const { error } = await supabase.from("organizations").update({ [columnByKey[key]]: value }).eq("id", profile.org.id);
   if (error) throw new Error(error.message);
 }
 

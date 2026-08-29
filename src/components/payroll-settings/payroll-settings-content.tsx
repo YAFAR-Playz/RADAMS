@@ -5,7 +5,15 @@ import { Icon, type IconName } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import type { Tone } from "@/lib/roles";
 import { toneColors } from "@/lib/tone";
-import { getPayrollSettings, setPayrollFlag, setCurrency, type PayrollFlags, type PayrollSettings } from "@/lib/actions/payroll-settings";
+import {
+  getPayrollSettings,
+  setPayrollFlag,
+  setOrgFeatureFlag,
+  setCurrency,
+  type PayrollFlags,
+  type OrgFeatureFlags,
+  type PayrollSettings,
+} from "@/lib/actions/payroll-settings";
 import {
   listStaffForCalcMethod,
   updatePaySettings,
@@ -53,6 +61,30 @@ const TOGGLE_DEFS: { key: keyof PayrollFlags; label: string; desc: string; icon:
   },
 ];
 
+const FEATURE_TOGGLE_DEFS: { key: keyof OrgFeatureFlags; label: string; desc: string; icon: IconName; tone: Tone }[] = [
+  {
+    key: "mockExamEnabled",
+    label: "Mock exam rate",
+    desc: "Lets Heads flag an assignment as a mock exam, paid at a separate per-paper rate set in Categories.",
+    icon: "clipboard-list",
+    tone: "info",
+  },
+  {
+    key: "headsCanAddStudents",
+    label: "Heads can add students",
+    desc: "Adds an \"Add Student\" button to the Students tab for Heads, with duplicate detection.",
+    icon: "user-plus",
+    tone: "ok",
+  },
+  {
+    key: "headFixedPerAssistantEnabled",
+    label: "\"Fixed + per assistant\" for Heads",
+    desc: "Adds a new Head salary method: a fixed base plus a rate per assistant on the course, set in Categories.",
+    icon: "wallet",
+    tone: "brand",
+  },
+];
+
 const CURRENCIES: { code: string; symbol: string; name: string }[] = [
   { code: "GBP", symbol: "£", name: "Pound" },
   { code: "USD", symbol: "$", name: "US Dollar" },
@@ -61,7 +93,7 @@ const CURRENCIES: { code: string; symbol: string; name: string }[] = [
   { code: "AED", symbol: "د.إ", name: "Dirham" },
 ];
 
-export function PayrollSettingsContent() {
+export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | "finance" } = {}) {
   const [settings, setSettings] = useState<PayrollSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -189,6 +221,21 @@ export function PayrollSettingsContent() {
     }
   }
 
+  async function onFeatureToggle(key: keyof OrgFeatureFlags) {
+    if (!settings) return;
+    const next = !settings[key];
+    setSettings({ ...settings, [key]: next });
+    setSavingKey(key);
+    try {
+      await setOrgFeatureFlag(key, next);
+    } catch {
+      setError("Couldn't save this setting — try again.");
+      setSettings((prev) => (prev ? { ...prev, [key]: !next } : prev));
+    } finally {
+      setSavingKey(null);
+    }
+  }
+
   async function onCurrency(code: string) {
     if (!settings) return;
     setSettings({ ...settings, currency: code });
@@ -268,6 +315,53 @@ export function PayrollSettingsContent() {
               </div>
             )}
           </section>
+
+          {viewerRole === "admin" && (
+            <section className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
+              <h3 className="m-0 mb-1 text-[14px] font-semibold text-[var(--text)]">Feature toggles</h3>
+              <p className="m-0 mb-[13px] text-[12px] text-[var(--subtle)]">
+                Admin-only. Off by default — nothing changes for your organization until you turn one on.
+              </p>
+              {loading || !settings ? (
+                <div className="flex flex-col gap-2">
+                  {Array.from({ length: 3 }, (_, i) => (
+                    <SkeletonRow key={i} className="h-[60px]" />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-[9px]">
+                  {FEATURE_TOGGLE_DEFS.map((t) => {
+                    const on = settings[t.key];
+                    const { bg, fg } = toneColors(t.tone);
+                    return (
+                      <div key={t.key} className="flex items-center gap-3 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[12px_13px]">
+                        <div className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[9px]" style={{ background: bg, color: fg }}>
+                          <Icon name={t.icon} size={17} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[13px] font-semibold text-[var(--text)]">{t.label}</div>
+                          <div className="text-[11.5px] leading-[1.4] text-[var(--muted)]">{t.desc}</div>
+                        </div>
+                        {savingKey === t.key && <Spinner size={13} className="flex-none text-[var(--subtle)]" />}
+                        <button
+                          onClick={() => onFeatureToggle(t.key)}
+                          role="switch"
+                          aria-checked={on}
+                          className="relative h-6 w-[42px] flex-none rounded-full transition-colors"
+                          style={{ background: on ? "var(--brand)" : "var(--border)" }}
+                        >
+                          <span
+                            className="absolute top-[2px] h-5 w-5 rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,.2)] transition-[left]"
+                            style={{ left: on ? "20px" : "2px" }}
+                          />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          )}
 
           <section className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
             <h3 className="m-0 mb-1 text-[14px] font-semibold text-[var(--text)]">Currency</h3>

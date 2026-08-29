@@ -129,7 +129,7 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
   }
 
   if (key === "payroll" && (profile.role === "admin" || profile.role === "finance")) {
-    return <PayrollSettingsContent />;
+    return <PayrollSettingsContent viewerRole={profile.role} />;
   }
 
   if (key === "templates" && profile.role === "admin") {

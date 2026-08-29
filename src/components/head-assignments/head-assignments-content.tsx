@@ -17,6 +17,7 @@ import {
   type AssignmentProgress,
 } from "@/lib/actions/head-assignments";
 import { listAssignmentTemplates, type AssignmentTemplate } from "@/lib/actions/assignment-templates";
+import { getPayrollSettings } from "@/lib/actions/payroll-settings";
 import { pickerOnlyDateProps } from "@/lib/date-input";
 
 function statusFor(a: AssignmentProgress): { text: string; icon: "check2" | "clock"; tone: Tone } {
@@ -37,6 +38,7 @@ type FormState = {
   templateId: string;
   gradeScheme: "numeric" | "letter";
   countsSalary: boolean;
+  mockExam: boolean;
   defaultComment: string;
   assistantIds: string[];
 };
@@ -49,6 +51,7 @@ function emptyForm(assistantIds: string[], templateId: string): FormState {
     templateId,
     gradeScheme: "numeric",
     countsSalary: true,
+    mockExam: false,
     defaultComment: "",
     assistantIds,
   };
@@ -71,6 +74,7 @@ export function HeadAssignmentsContent() {
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm([], ""));
   const [saving, setSaving] = useState(false);
+  const [mockExamEnabled, setMockExamEnabled] = useState(false);
 
   useEffect(() => {
     listMyOfferings().then((data) => {
@@ -78,6 +82,7 @@ export function HeadAssignmentsContent() {
       setOfferingId(data[0]?.id ?? null);
     });
     listAssignmentTemplates().then(setTemplates);
+    getPayrollSettings().then((s) => setMockExamEnabled(!!s?.mockExamEnabled));
   }, []);
 
   async function reload(id: string) {
@@ -127,6 +132,7 @@ export function HeadAssignmentsContent() {
       templateId: "",
       gradeScheme: a.gradeScheme,
       countsSalary: a.countsSalary,
+      mockExam: a.mockExam,
       defaultComment: a.defaultComment ?? "",
       assistantIds: a.assignees.map((x) => x.assistantId),
     });
@@ -162,6 +168,7 @@ export function HeadAssignmentsContent() {
           maxMarks: Number(form.marks) || 100,
           dueDate: form.due || null,
           countsSalary: form.countsSalary,
+          mockExam: mockExamEnabled && form.countsSalary && form.mockExam,
           defaultComment: form.defaultComment,
         });
       } else {
@@ -173,6 +180,7 @@ export function HeadAssignmentsContent() {
           templateId: form.templateId,
           gradeScheme: form.gradeScheme,
           countsSalary: form.countsSalary,
+          mockExam: mockExamEnabled && form.countsSalary && form.mockExam,
           defaultComment: form.defaultComment,
           assistantIds: form.assistantIds,
         });
@@ -602,6 +610,35 @@ export function HeadAssignmentsContent() {
                   />
                 </button>
               </div>
+
+              {mockExamEnabled && (
+                <div
+                  className="flex items-center gap-[11px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[12px_13px]"
+                  style={{ opacity: form.countsSalary ? 1 : 0.5 }}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] font-semibold text-[var(--text)]">Mock exam</div>
+                    <div className="text-[11.5px] leading-[1.4] text-[var(--subtle)]">
+                      {form.countsSalary
+                        ? "Papers checked here are paid at the course's mock-exam rate instead of the normal rate."
+                        : "Turn on \"Counts toward salary\" first — mock exam only affects paid papers."}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => form.countsSalary && setForm((f) => ({ ...f, mockExam: !f.mockExam }))}
+                    disabled={!form.countsSalary}
+                    role="switch"
+                    aria-checked={form.mockExam}
+                    className="relative h-[22px] w-[38px] flex-none rounded-full transition-colors disabled:cursor-not-allowed"
+                    style={{ background: form.countsSalary && form.mockExam ? "var(--brand)" : "var(--border)" }}
+                  >
+                    <span
+                      className="absolute top-[2px] h-[18px] w-[18px] rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,.2)] transition-[left]"
+                      style={{ left: form.countsSalary && form.mockExam ? "18px" : "2px" }}
+                    />
+                  </button>
+                </div>
+              )}
 
               <div className="flex items-start gap-[9px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[11px_13px]">
                 <Icon name="message" size={15} className="mt-[1px] flex-none text-[var(--subtle)]" />
