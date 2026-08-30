@@ -24,13 +24,26 @@ const RATINGS: { value: EvalRating; label: string; tone: Tone }[] = [
   { value: "below", label: "Below", tone: "danger" },
 ];
 
-// Payroll runs in arrears — releasing pay on, say, Aug 1 pays out July's
-// work, so evaluations for "this payroll" always target last calendar
-// month, not the one still in progress.
+function toPeriod(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+// Defaults to the current calendar month — a Head evaluating an assistant
+// on, say, Aug 30 almost always means August itself (it's essentially over
+// and there's real performance to judge), not July. Payroll still runs in
+// arrears (Finance won't generate August's pay until September), but that's
+// a separate concern from when a Head can start logging what they saw —
+// the period picker below lets them go back to a prior month too, e.g. to
+// finish an evaluation they didn't get to before the month rolled over.
 function currentPeriod() {
-  const d = new Date();
-  const prev = new Date(d.getFullYear(), d.getMonth() - 1, 1);
-  return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`;
+  return toPeriod(new Date());
+}
+// Current month plus the last few, for the picker — evaluations has no
+// "periods that already have data" list to draw from the way My Pay/
+// Salaries do (a fresh month has no evaluation yet by definition), so this
+// is generated rather than fetched.
+function recentPeriods(count: number): string[] {
+  const now = new Date();
+  return Array.from({ length: count }, (_, i) => toPeriod(new Date(now.getFullYear(), now.getMonth() - i, 1)));
 }
 function periodLabel(period: string) {
   const [y, m] = period.split("-").map(Number);
@@ -118,7 +131,8 @@ function CategoryRow({
 }
 
 export function EvaluationsContent() {
-  const period = currentPeriod();
+  const [period, setPeriod] = useState(currentPeriod());
+  const periodOptions = useMemo(() => recentPeriods(6), []);
 
   const [payCategories, setPayCategories] = useState<PayCategory[]>([]);
   const [offerings, setOfferings] = useState<OfferingOption[] | null>(null);
@@ -204,7 +218,7 @@ export function EvaluationsContent() {
       await loadEvaluation();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assistantId, offeringId]);
+  }, [assistantId, offeringId, period]);
 
   function addLine(kind: "extra" | "deduction") {
     const cats = kind === "extra" ? extraCats : dedCats;
@@ -291,7 +305,23 @@ export function EvaluationsContent() {
             {status === "submitted" ? "Submitted to Finance" : "Draft · not submitted"}
           </span>
         </div>
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div>
+            <label className="mb-[6px] block text-[12.5px] font-semibold text-[var(--text)]">Month</label>
+            <div className="flex h-[46px] items-center rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3">
+              <select
+                value={period}
+                onChange={(e) => setPeriod(e.target.value)}
+                className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[13.5px] font-semibold text-[var(--text)] outline-none"
+              >
+                {periodOptions.map((p) => (
+                  <option key={p} value={p}>
+                    {periodLabel(p)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
           <div>
             <label className="mb-[6px] block text-[12.5px] font-semibold text-[var(--text)]">Assistant</label>
             {assistants === null ? (
