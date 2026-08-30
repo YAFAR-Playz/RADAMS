@@ -519,7 +519,7 @@ export function AcademicReportContent() {
                         </div>
                         <div>
                           <div className="mb-[6px] text-[11.5px] font-semibold uppercase tracking-[0.03em] text-[var(--subtle)]">Assistant&apos;s overall comment</div>
-                          <div className="text-[12.5px] leading-[1.5] text-[var(--text)]">{s.assistantComment || <span className="text-[var(--muted)]">No comment left yet.</span>}</div>
+                          <div className="whitespace-pre-wrap text-[12.5px] leading-[1.5] text-[var(--text)]">{s.assistantComment || <span className="text-[var(--muted)]">No comment left yet.</span>}</div>
                         </div>
                       </div>
                     )}

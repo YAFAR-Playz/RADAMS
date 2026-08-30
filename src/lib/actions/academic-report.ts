@@ -266,8 +266,9 @@ export async function getAcademicMonthlyReport(offeringId: string, period: strin
 
   const { data: enrollments } = await supabase
     .from("enrollments")
-    .select("student_id, students(id, name, student_code)")
-    .eq("offering_id", offeringId);
+    .select("student_id, students!inner(id, name, student_code, left_at)")
+    .eq("offering_id", offeringId)
+    .is("students.left_at", null);
   if (!enrollments || enrollments.length === 0) return [];
 
   const studentIds = enrollments.map((e) => e.student_id);
@@ -393,8 +394,9 @@ export async function generateMonthlyAcademicReport(
 
   const { data: enrollments } = await supabase
     .from("enrollments")
-    .select("student_id, students(id, name, student_code)")
-    .eq("offering_id", offeringId);
+    .select("student_id, students!inner(id, name, student_code, left_at)")
+    .eq("offering_id", offeringId)
+    .is("students.left_at", null);
   if (!enrollments || enrollments.length === 0) throw new Error("No students enrolled in this course.");
 
   const studentIds = enrollments.map((e) => e.student_id);
@@ -535,10 +537,16 @@ export async function getGeneratedReport(offeringId: string, period: string): Pr
     .maybeSingle();
   if (!gen) return { meta: null, students: [] };
 
+  // Filtered here (not just at generation time) so a student who left
+  // after a report was already generated stops showing up on it too,
+  // without needing to regenerate.
   const { data: rows } = await supabase
     .from("monthly_report_students")
-    .select("student_id, avg_grade, assignments, weak_topics, assistant_comment, students(name, student_code, phone, guardian_name, guardian_phone, drive_folder_link)")
-    .eq("generation_id", gen.id);
+    .select(
+      "student_id, avg_grade, assignments, weak_topics, assistant_comment, students!inner(name, student_code, phone, guardian_name, guardian_phone, drive_folder_link, left_at)"
+    )
+    .eq("generation_id", gen.id)
+    .is("students.left_at", null);
 
   const creator = Array.isArray(gen.profiles) ? gen.profiles[0] : gen.profiles;
 

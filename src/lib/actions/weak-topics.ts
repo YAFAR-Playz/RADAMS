@@ -118,9 +118,10 @@ export async function listStudentTopicsForOffering(offeringId: string, period: s
 
   const { data: enrollments } = await supabase
     .from("enrollments")
-    .select("student_id, students(id, name)")
+    .select("student_id, students!inner(id, name, left_at)")
     .eq("offering_id", offeringId)
-    .eq("assistant_id", profile.id);
+    .eq("assistant_id", profile.id)
+    .is("students.left_at", null);
 
   const { data: submissions } = await supabase
     .from("student_topic_submissions")
@@ -157,8 +158,9 @@ export async function getAssistantFillingProgress(offeringId: string, period: st
 
   const { data: enrollments } = await supabase
     .from("enrollments")
-    .select("student_id, assistant_id, profiles(full_name)")
-    .eq("offering_id", offeringId);
+    .select("student_id, assistant_id, students!inner(left_at), profiles(full_name)")
+    .eq("offering_id", offeringId)
+    .is("students.left_at", null);
 
   const { data: submissions } = await supabase
     .from("student_topic_submissions")
@@ -249,8 +251,9 @@ export async function listAllStudentTopicsForOffering(offeringId: string, period
 
   const { data: enrollments } = await supabase
     .from("enrollments")
-    .select("student_id, students(id, name), profiles(full_name)")
-    .eq("offering_id", offeringId);
+    .select("student_id, students!inner(id, name, left_at), profiles(full_name)")
+    .eq("offering_id", offeringId)
+    .is("students.left_at", null);
 
   const { data: submissions } = await supabase
     .from("student_topic_submissions")
