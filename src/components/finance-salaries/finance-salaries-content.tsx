@@ -324,6 +324,8 @@ export function FinanceSalariesContent() {
   const [generating, setGenerating] = useState(false);
   const [receiptTarget, setReceiptTarget] = useState<AssistantSalary | null>(null);
   const [messagesTarget, setMessagesTarget] = useState<AssistantSalary | null>(null);
+  const [unreleaseTarget, setUnreleaseTarget] = useState<AssistantSalary | null>(null);
+  const [unreleasing, setUnreleasing] = useState(false);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptSaving, setReceiptSaving] = useState(false);
   const [viewingReceiptId, setViewingReceiptId] = useState<string | null>(null);
@@ -520,11 +522,13 @@ export function FinanceSalariesContent() {
     }
   }
 
-  // Deliberately one-directional, not a toggle — a button that flips back
-  // to "unreleased" on a second click is a real footgun here: clicking an
-  // already-released row again (e.g. because nothing visibly confirmed it
-  // worked) silently hid that person's pay again. Unreleasing isn't
-  // something anyone's asked for, so it's not exposed at all right now.
+  // Deliberately one-directional in this single button — a control that
+  // flips back to "unreleased" on a second click is a real footgun here:
+  // clicking an already-released row again (e.g. because nothing visibly
+  // confirmed it worked) used to silently hide that person's pay again with
+  // no warning. Unreleasing is still possible, just as its own separate,
+  // confirmation-gated action below (onConfirmUnrelease) — not this same
+  // click target flipping state on repeat clicks.
   async function onRelease(a: AssistantSalary) {
     if (!period || a.released) return;
     setBusyId(a.payeeId);
@@ -535,6 +539,20 @@ export function FinanceSalariesContent() {
       setError("Couldn't release this payee's pay — try again.");
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function onConfirmUnrelease() {
+    if (!period || !unreleaseTarget) return;
+    setUnreleasing(true);
+    try {
+      await setPayeeReleased(unreleaseTarget.payeeId, period, false);
+      setUnreleaseTarget(null);
+      await reload(period);
+    } catch {
+      setError("Couldn't unrelease this payee's pay — try again.");
+    } finally {
+      setUnreleasing(false);
     }
   }
 
@@ -776,13 +794,25 @@ export function FinanceSalariesContent() {
                   </div>
                   <div className="flex-none font-mono text-[17px] font-bold text-[var(--text)]">{fmt(t)}</div>
                   {a.released ? (
-                    <span
-                      title="Visible to them in My Pay"
-                      className="inline-flex flex-none items-center gap-[6px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 py-[7px] text-[12px] font-semibold text-[var(--muted)]"
-                    >
-                      <Icon name="eye" size={13} />
-                      Released
-                    </span>
+                    <div className="flex flex-none items-center gap-[6px]">
+                      <span
+                        title="Visible to them in My Pay"
+                        className="inline-flex items-center gap-[6px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 py-[7px] text-[12px] font-semibold text-[var(--muted)]"
+                      >
+                        <Icon name="eye" size={13} />
+                        Released
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setUnreleaseTarget(a);
+                        }}
+                        title="Unrelease — hide their pay again until you re-release it"
+                        className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--subtle)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] hover:text-[var(--danger)]"
+                      >
+                        <Icon name="eye-off" size={13} />
+                      </button>
+                    </div>
                   ) : (
                     <button
                       onClick={(e) => {
@@ -1049,6 +1079,48 @@ export function FinanceSalariesContent() {
           defaultPeriod={period}
           onClose={() => setMessagesTarget(null)}
         />
+      )}
+
+      {unreleaseTarget && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(8,12,22,0.5)] p-5">
+          <div className="w-full max-w-[420px] overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(8,12,22,.34)]">
+            <div className="flex items-center gap-3 border-b border-[var(--border2)] p-[16px_18px]">
+              <div className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] bg-[var(--dangers)] text-[var(--danger)]">
+                <Icon name="eye-off" size={16} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Unrelease {unreleaseTarget.name}&apos;s pay?</h3>
+                <div className="text-[12px] text-[var(--muted)]">{period ? periodLabel(period) : ""}</div>
+              </div>
+              <button
+                onClick={() => setUnreleaseTarget(null)}
+                className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]"
+              >
+                <Icon name="x" size={18} />
+              </button>
+            </div>
+            <div className="p-[16px_18px] text-[13.5px] leading-[1.5] text-[var(--text)]">
+              They&apos;ll stop seeing this breakdown in My Pay until you release it again — nothing about the amounts, status, or payment
+              record changes.
+            </div>
+            <div className="flex gap-[10px] border-t border-[var(--border2)] p-[14px_18px]">
+              <button
+                onClick={() => setUnreleaseTarget(null)}
+                className="h-11 flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onConfirmUnrelease}
+                disabled={unreleasing}
+                className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--danger)] text-[13.5px] font-semibold text-white disabled:opacity-60"
+              >
+                {unreleasing ? <Spinner size={15} /> : <Icon name="eye-off" size={15} />}
+                Unrelease
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
