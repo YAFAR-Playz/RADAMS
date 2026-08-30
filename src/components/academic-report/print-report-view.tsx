@@ -393,7 +393,7 @@ export function PrintReportView({
                           <td className="w-1/3 py-[7px] pr-2 align-top font-semibold text-[#2a5298]">
                             {new Date(meta.period + "-01").toLocaleDateString("en-US", { month: "long" })} Performance Comment
                           </td>
-                          <td className="py-[7px] leading-[1.5]">{s.assistantComment || <span className="text-[#777]">No comment left.</span>}</td>
+                          <td className="whitespace-pre-wrap py-[7px] leading-[1.5]">{s.assistantComment || <span className="text-[#777]">No comment left.</span>}</td>
                         </tr>
                       )}
                       <tr className="border-b border-[#ddd]">
@@ -407,7 +407,7 @@ export function PrintReportView({
                 settings.showComment && (
                   <div>
                     <div className="mb-2 text-[12px] font-bold uppercase tracking-wide text-[#555]">Assistant&apos;s comment</div>
-                    <div className="text-[13px] leading-[1.5]">{s.assistantComment || <span className="text-[#777]">No comment left.</span>}</div>
+                    <div className="whitespace-pre-wrap text-[13px] leading-[1.5]">{s.assistantComment || <span className="text-[#777]">No comment left.</span>}</div>
                   </div>
                 )
               )}
