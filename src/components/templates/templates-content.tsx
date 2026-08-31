@@ -10,6 +10,7 @@ import {
   getPlatformTemplates,
   savePlatformTemplate,
   resetPlatformTemplate,
+  getEffectiveTemplates,
 } from "@/lib/actions/templates";
 import { TEMPLATE_CATEGORY_DEFS, TEMPLATE_DEFS, type TemplateKey, type TemplateRecipient } from "@/lib/template-defs";
 import { AssignmentTypesPanel } from "@/components/templates/assignment-types-panel";
@@ -38,6 +39,15 @@ export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform"
   const isPlatform = scope === "platform";
   const [tab, setTab] = useState<"messages" | "assignment-types">("messages");
   const [overrides, setOverrides] = useState<Record<TemplateKey, string | null> | null>(null);
+  // Org scope only — what this org would actually send right now if it has
+  // no override of its own (the live platform-wide default, falling back to
+  // the built-in text). Without this, an org with no customization always
+  // showed the hardcoded built-in default here regardless of what the
+  // platform owner set, since getOrgTemplates() has no notion of the
+  // platform layer at all — a platform-wide default update was real
+  // (getEffectiveTemplate, used when actually sending messages, already
+  // picks it up), it just never became visible on this screen.
+  const [effectiveDefaults, setEffectiveDefaults] = useState<Record<TemplateKey, string> | null>(null);
   const [sel, setSel] = useState<TemplateKey>("assignment_parent");
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(true);
@@ -45,13 +55,22 @@ export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform"
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  function fallbackFor(key: TemplateKey, effective: Record<TemplateKey, string> | null) {
+    return effective?.[key] ?? TEMPLATE_DEFS.find((t) => t.key === key)!.def;
+  }
+
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
-        const data = await (isPlatform ? getPlatformTemplates() : getOrgTemplates());
+        const allKeys = TEMPLATE_DEFS.map((t) => t.key);
+        const [data, effective] = await Promise.all([
+          isPlatform ? getPlatformTemplates() : getOrgTemplates(),
+          isPlatform ? Promise.resolve(null) : getEffectiveTemplates(allKeys),
+        ]);
         setOverrides(data);
-        setDraft(data.assignment_parent ?? TEMPLATE_DEFS.find((t) => t.key === "assignment_parent")!.def);
+        setEffectiveDefaults(effective);
+        setDraft(data.assignment_parent ?? fallbackFor("assignment_parent", effective));
       } catch {
         setError("Couldn't load templates.");
       } finally {
@@ -62,7 +81,7 @@ export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform"
 
   function selectTemplate(key: TemplateKey) {
     setSel(key);
-    setDraft(overrides?.[key] ?? TEMPLATE_DEFS.find((t) => t.key === key)!.def);
+    setDraft(overrides?.[key] ?? fallbackFor(key, effectiveDefaults));
   }
 
   async function onSave() {
@@ -84,7 +103,7 @@ export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform"
     try {
       await (isPlatform ? resetPlatformTemplate(sel) : resetOrgTemplate(sel));
       setOverrides((prev) => (prev ? { ...prev, [sel]: null } : prev));
-      setDraft(TEMPLATE_DEFS.find((t) => t.key === sel)!.def);
+      setDraft(fallbackFor(sel, effectiveDefaults));
     } catch {
       setError("Couldn't reset this template — try again.");
     } finally {
