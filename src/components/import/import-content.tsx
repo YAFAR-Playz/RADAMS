@@ -36,6 +36,24 @@ function parseCsv(text: string): { headers: string[]; rows: string[][] } {
   return { headers, rows };
 }
 
+const EXCEL_EXTENSIONS = [".xlsx", ".xls", ".xlsm"];
+
+// FileReader.readAsText decodes bytes it can't map to valid UTF-8 as the
+// U+FFFD replacement character, and real binary formats (like .xlsx, which
+// is a ZIP archive) are full of raw control bytes — a genuine CSV won't have
+// either in any quantity. Catches the case where a non-CSV file slips past
+// the extension check (spoofed name, or a picker that ignores `accept`).
+function looksLikeGarbledText(text: string): boolean {
+  const sample = text.slice(0, 2000);
+  if (!sample.length) return false;
+  let bad = 0;
+  for (const ch of sample) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (ch === "�" || (code < 32 && code !== 9 && code !== 10 && code !== 13)) bad++;
+  }
+  return bad / sample.length > 0.05;
+}
+
 export function ImportContent() {
   const [offerings, setOfferings] = useState<OfferingOption[] | null>(null);
   const [offeringId, setOfferingId] = useState<string | null>(null);
@@ -64,10 +82,27 @@ export function ImportContent() {
   const offeringsLoading = offerings === null;
 
   function onFileSelected(file: File) {
+    const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+    if (EXCEL_EXTENSIONS.includes(ext)) {
+      setError("This looks like an Excel file. Open it and use File → Save As → CSV, then upload the .csv file instead.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+    if (ext !== ".csv") {
+      setError("Please upload a .csv file.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
     setFileName(file.name);
     const reader = new FileReader();
     reader.onload = () => {
       const text = String(reader.result ?? "");
+      if (looksLikeGarbledText(text)) {
+        setError("This file couldn't be read as text — it may be corrupted or not actually a CSV. Please re-export it as a plain CSV file and try again.");
+        removeFile();
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        return;
+      }
       const { headers, rows } = parseCsv(text);
       setHeaders(headers);
       setRawRows(rows);

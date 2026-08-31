@@ -5,6 +5,7 @@ import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import { registerStudent, listRegistrations, type RegistrationRow } from "@/lib/actions/registrations";
+import { findStudentByPhone, type StudentDuplicateMatch } from "@/lib/actions/students";
 import { getOfferingFees, type OfferingFees, type PlanType } from "@/lib/actions/payments";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
 import { currencySymbol } from "@/lib/currency";
@@ -26,6 +27,7 @@ export function RegistrationsContent() {
 
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
+  const [duplicateMatch, setDuplicateMatch] = useState<StudentDuplicateMatch | null>(null);
   const [fees, setFees] = useState<OfferingFees | null>(null);
   const [feesLoading, setFeesLoading] = useState(false);
 
@@ -75,10 +77,22 @@ export function RegistrationsContent() {
 
   const canSubmit = form.name.trim().length > 0 && !!offeringId;
 
+  function updateForm(patch: Partial<typeof form>) {
+    setForm((f) => ({ ...f, ...patch }));
+    setDuplicateMatch(null);
+  }
+
   async function onSubmit() {
     if (!canSubmit || !offeringId) return;
     setSubmitting(true);
     try {
+      if (form.phone.trim()) {
+        const match = await findStudentByPhone(form.phone);
+        if (match) {
+          setDuplicateMatch(match);
+          return;
+        }
+      }
       await registerStudent(offeringId, form);
       setForm(emptyForm);
       setSuccess(`${form.name.trim()} was registered.`);
@@ -89,6 +103,24 @@ export function RegistrationsContent() {
       setError("Couldn't register this student — try again.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function onConfirmDuplicate(sameStudent: boolean) {
+    if (!offeringId) return;
+    setSubmitting(true);
+    try {
+      await registerStudent(offeringId, form, sameStudent ? (duplicateMatch?.id ?? undefined) : undefined);
+      setForm(emptyForm);
+      setSuccess(`${form.name.trim()} was registered.`);
+      setPage(0);
+      await reload();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch {
+      setError("Couldn't register this student — try again.");
+    } finally {
+      setSubmitting(false);
+      setDuplicateMatch(null);
     }
   }
 
@@ -161,7 +193,7 @@ export function RegistrationsContent() {
               </label>
               <input
                 value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                onChange={(e) => updateForm({ name: e.target.value })}
                 placeholder="e.g. Liam Carter"
                 className="h-[42px] w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
               />
@@ -171,7 +203,7 @@ export function RegistrationsContent() {
                 <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Phone</label>
                 <input
                   value={form.phone}
-                  onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                  onChange={(e) => updateForm({ phone: e.target.value })}
                   placeholder="7700 900000"
                   className="h-[42px] w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 font-mono text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                 />
@@ -181,7 +213,7 @@ export function RegistrationsContent() {
                 <input
                   type="email"
                   value={form.email}
-                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                  onChange={(e) => updateForm({ email: e.target.value })}
                   placeholder="name@email.com"
                   className="h-[42px] w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                 />
@@ -192,7 +224,7 @@ export function RegistrationsContent() {
                 <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Guardian name</label>
                 <input
                   value={form.guardianName}
-                  onChange={(e) => setForm((f) => ({ ...f, guardianName: e.target.value }))}
+                  onChange={(e) => updateForm({ guardianName: e.target.value })}
                   className="h-[42px] w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                 />
               </div>
@@ -200,7 +232,7 @@ export function RegistrationsContent() {
                 <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Guardian phone</label>
                 <input
                   value={form.guardianPhone}
-                  onChange={(e) => setForm((f) => ({ ...f, guardianPhone: e.target.value }))}
+                  onChange={(e) => updateForm({ guardianPhone: e.target.value })}
                   placeholder="7700 900000"
                   className="h-[42px] w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 font-mono text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                 />
@@ -238,14 +270,45 @@ export function RegistrationsContent() {
                 </div>
               )}
             </div>
-            <button
-              onClick={onSubmit}
-              disabled={!canSubmit || submitting}
-              className="flex h-[44px] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
-            >
-              {submitting ? <Spinner size={15} /> : <Icon name="user-plus" size={16} />}
-              Register student
-            </button>
+            {duplicateMatch ? (
+              <div className="rounded-[var(--rad-sm)] border border-[var(--warn)] bg-[var(--warns)] p-[13px_14px]">
+                <div className="flex items-center gap-[7px] text-[13px] font-semibold text-[var(--warn)]">
+                  <Icon name="alert" size={15} />
+                  Possible duplicate
+                </div>
+                <p className="m-0 mt-[6px] text-[12.5px] leading-[1.5] text-[var(--text)]">
+                  A student with this phone number already exists:{" "}
+                  <span className="font-semibold">{duplicateMatch.name}</span> ({duplicateMatch.studentCode}).
+                  {duplicateMatch.guardianName ? ` Guardian: ${duplicateMatch.guardianName}.` : ""}
+                </p>
+                <div className="mt-[10px] flex gap-[8px]">
+                  <button
+                    onClick={() => onConfirmDuplicate(false)}
+                    disabled={submitting}
+                    className="flex-1 rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 py-[9px] text-[12.5px] font-semibold text-[var(--text)] disabled:opacity-60"
+                  >
+                    No, different person
+                  </button>
+                  <button
+                    onClick={() => onConfirmDuplicate(true)}
+                    disabled={submitting}
+                    className="flex flex-1 items-center justify-center gap-[6px] rounded-[8px] bg-[var(--brand)] px-3 py-[9px] text-[12.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+                  >
+                    {submitting && <Spinner size={14} />}
+                    Yes, this is them
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={onSubmit}
+                disabled={!canSubmit || submitting}
+                className="flex h-[44px] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+              >
+                {submitting ? <Spinner size={15} /> : <Icon name="user-plus" size={16} />}
+                Register student
+              </button>
+            )}
           </div>
         </section>
 
