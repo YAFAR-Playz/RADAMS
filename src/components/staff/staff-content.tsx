@@ -212,7 +212,11 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
   async function onResolve(id: string, status: "approved" | "declined") {
     setResolvingId(id);
     try {
-      await resolveStaffingRequest(id, status);
+      const result = await resolveStaffingRequest(id, status);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
       setRequests((prev) => (prev ? prev.map((r) => (r.id === id ? { ...r, status } : r)) : prev));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't update this request — try again.");

@@ -182,7 +182,20 @@ export async function createStaffMember(input: { name: string; email: string; ph
     email: input.email.trim(),
     email_confirm: true,
   });
-  if (createError || !created.user) throw new Error(createError?.message ?? "Failed to create account");
+  if (createError || !created.user) {
+    // Auth accounts are unique per email across the whole Supabase project,
+    // not just within an org — the earlier org-scoped lookup above only
+    // rules out this being the SAME org's own staff member, so this email
+    // can still collide with a completely different person in a different
+    // organization. Supabase's raw message doesn't make that distinction
+    // clear, so it's worth spelling out here.
+    if (createError?.code === "email_exists" || createError?.message?.toLowerCase().includes("already been registered")) {
+      throw new Error(
+        `${input.email.trim()} is already registered to a different account — most likely someone in another organization on this platform. Ask the candidate for a different email, or double-check this is the right address.`
+      );
+    }
+    throw new Error(createError?.message ?? "Failed to create account");
+  }
 
   const initials = input.name
     .trim()
@@ -359,60 +372,75 @@ export async function getLoginAsLink(targetProfileId: string, redirectTo: string
 // leave the outgoing assistant fully active and no incoming one ever
 // created. This now performs the real staffing change before recording the
 // approval, so the request and reality can't drift apart.
-export async function resolveStaffingRequest(id: string, status: "approved" | "declined") {
+// Returns { ok, error } instead of throwing for anything past the
+// permission check — Next.js strips a thrown Server Action error down to a
+// generic "error occurred in the Server Components render" message once it
+// crosses back to the client in production, so a real, actionable cause
+// (e.g. "this email is already registered to someone else") would never
+// actually reach the admin/HR user who needs to see it. Returning it as
+// plain data sidesteps that entirely.
+export async function resolveStaffingRequest(
+  id: string,
+  status: "approved" | "declined"
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org || (profile.role !== "admin" && profile.role !== "hr")) throw new Error("Not authorized");
   const supabase = await createClient();
 
-  const { data: request } = await supabase
-    .from("staffing_requests")
-    .select("kind, status, candidate_name, candidate_email, candidate_phone, target_assistant_id, offering_id, leave_date, gave_notice, proposed_date, requested_by")
-    .eq("id", id)
-    .single();
-  if (!request) throw new Error("Request not found");
-  if (request.status !== "pending") throw new Error("This request has already been resolved");
+  try {
+    const { data: request } = await supabase
+      .from("staffing_requests")
+      .select("kind, status, candidate_name, candidate_email, candidate_phone, target_assistant_id, offering_id, leave_date, gave_notice, proposed_date, requested_by")
+      .eq("id", id)
+      .single();
+    if (!request) return { ok: false, error: "Request not found" };
+    if (request.status !== "pending") return { ok: false, error: "This request has already been resolved" };
 
-  if (status === "approved") {
-    let newAssistantId: string | undefined;
-    if (request.kind === "add" || request.kind === "replace") {
-      if (!request.candidate_name?.trim() || !request.candidate_email?.trim()) {
-        throw new Error("This request is missing the candidate's name or email — can't add them yet.");
-      }
-      // createStaffMember already dedupes by email — reusing an existing
-      // profile (whether from a partial-retry after an earlier crash, or
-      // from re-adding someone who'd previously left) and reactivating a
-      // departed one, so it's safe to always go through it here.
-      const created = await createStaffMember({
-        name: request.candidate_name,
-        email: request.candidate_email,
-        phone: request.candidate_phone ?? "",
-        role: "assistant",
-        hireDate: request.proposed_date ?? undefined,
-      });
-      newAssistantId = created.id;
-      if (request.offering_id) await assignStaffToCourses(newAssistantId, "assistant", [request.offering_id]);
-    }
-    if ((request.kind === "remove" || request.kind === "replace") && request.target_assistant_id) {
-      if (request.offering_id) {
-        await removeAssistantFromOffering(request.target_assistant_id, request.offering_id, {
-          leaveDate: request.leave_date ?? undefined,
-          gaveNotice: request.gave_notice ?? undefined,
-          reassignEnrollmentsTo: request.kind === "replace" ? newAssistantId : undefined,
+    if (status === "approved") {
+      let newAssistantId: string | undefined;
+      if (request.kind === "add" || request.kind === "replace") {
+        if (!request.candidate_name?.trim() || !request.candidate_email?.trim()) {
+          return { ok: false, error: "This request is missing the candidate's name or email — can't add them yet." };
+        }
+        // createStaffMember already dedupes by email — reusing an existing
+        // profile (whether from a partial-retry after an earlier crash, or
+        // from re-adding someone who'd previously left) and reactivating a
+        // departed one, so it's safe to always go through it here.
+        const created = await createStaffMember({
+          name: request.candidate_name,
+          email: request.candidate_email,
+          phone: request.candidate_phone ?? "",
+          role: "assistant",
+          hireDate: request.proposed_date ?? undefined,
         });
-      } else {
-        // No specific course on record — fall back to a full deactivation
-        // since there's nothing to scope the removal to.
-        await removeStaffMember(request.target_assistant_id, request.leave_date ?? undefined, request.gave_notice ?? undefined);
+        newAssistantId = created.id;
+        if (request.offering_id) await assignStaffToCourses(newAssistantId, "assistant", [request.offering_id]);
+      }
+      if ((request.kind === "remove" || request.kind === "replace") && request.target_assistant_id) {
+        if (request.offering_id) {
+          await removeAssistantFromOffering(request.target_assistant_id, request.offering_id, {
+            leaveDate: request.leave_date ?? undefined,
+            gaveNotice: request.gave_notice ?? undefined,
+            reassignEnrollmentsTo: request.kind === "replace" ? newAssistantId : undefined,
+          });
+        } else {
+          // No specific course on record — fall back to a full deactivation
+          // since there's nothing to scope the removal to.
+          await removeStaffMember(request.target_assistant_id, request.leave_date ?? undefined, request.gave_notice ?? undefined);
+        }
       }
     }
-  }
 
-  const { error } = await supabase.from("staffing_requests").update({ status }).eq("id", id);
-  if (error) throw new Error(error.message);
-  await logActivity("requests", `${status === "approved" ? "Approved" : "Declined"} ${request.kind} request for ${request.candidate_name ?? "a staff change"}`);
+    const { error } = await supabase.from("staffing_requests").update({ status }).eq("id", id);
+    if (error) return { ok: false, error: error.message };
+    await logActivity("requests", `${status === "approved" ? "Approved" : "Declined"} ${request.kind} request for ${request.candidate_name ?? "a staff change"}`);
 
-  if (request.requested_by) {
-    await notifyRequesterOfResolution(supabase, profile.org.id, request.requested_by, status, request);
+    if (request.requested_by) {
+      await notifyRequesterOfResolution(supabase, profile.org.id, request.requested_by, status, request);
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Couldn't resolve this request — try again." };
   }
 }
 
