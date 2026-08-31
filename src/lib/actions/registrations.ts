@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { createPaymentPlan, type PlanType } from "@/lib/actions/payments";
 import { logActivity } from "@/lib/actions/activity-log";
+import { addStudentEnrollment } from "@/lib/actions/students";
 
 export type RegistrationFields = {
   name: string;
@@ -32,12 +33,23 @@ function offeringLabel(o: { session: string; unit: string | null; courses: { nam
   return [course?.name, o.session, o.unit].filter(Boolean).join(" · ");
 }
 
-export async function registerStudent(offeringId: string, fields: RegistrationFields): Promise<{ studentId: string }> {
+// `existingStudentId` is set once the caller has confirmed a phone match
+// found by `findStudentByPhone` really is the same person — skips creating
+// a new student row and just enrolls the existing one instead, so re-running
+// this form for someone already in the system doesn't leave a duplicate
+// record behind (mirrors `headAddStudent`'s pattern in students.ts).
+export async function registerStudent(offeringId: string, fields: RegistrationFields, existingStudentId?: string): Promise<{ studentId: string }> {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org) throw new Error("Not authenticated");
-  if (!fields.name.trim()) throw new Error("Name is required");
   const supabase = await createClient();
 
+  if (existingStudentId) {
+    await addStudentEnrollment(existingStudentId, offeringId);
+    await createPaymentPlan({ studentId: existingStudentId, offeringId, planType: fields.planType });
+    return { studentId: existingStudentId };
+  }
+
+  if (!fields.name.trim()) throw new Error("Name is required");
   const initials = fields.name
     .trim()
     .split(/\s+/)
