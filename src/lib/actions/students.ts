@@ -44,12 +44,20 @@ export async function getStudentsForOffering(offeringId: string): Promise<Studen
   let query = supabase
     .from("enrollments")
     .select(
-      "id, student_id, assistant_id, created_at, target_grade, students(id, name, initials, student_code, email, phone, guardian_name, guardian_phone, left_at), profiles(id, full_name, student_whatsapp_link)"
+      "id, student_id, assistant_id, created_at, target_grade, students!inner(id, name, initials, student_code, email, phone, guardian_name, guardian_phone, left_at), profiles(id, full_name, student_whatsapp_link)"
     )
     .eq("offering_id", offeringId);
 
   if (profile.role === "assistant") {
     query = query.eq("assistant_id", profile.id);
+  }
+
+  // Heads work this list day-to-day (progress, grading, messaging) — a
+  // student who's already left shouldn't clutter that view. Admin and
+  // registration still see left students here (dimmed, with a badge) since
+  // they're the ones who manage the left/restored status.
+  if (profile.role === "head") {
+    query = query.is("students.left_at", null);
   }
 
   // enrollments and assignments don't depend on each other — fetching them

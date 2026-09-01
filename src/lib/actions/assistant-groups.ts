@@ -29,7 +29,7 @@ export async function getAssistantGroups(offeringId: string): Promise<{ groups: 
 
   const { data: enrollments } = await supabase
     .from("enrollments")
-    .select("id, student_id, assistant_id, students(id, name, initials)")
+    .select("id, student_id, assistant_id, students(id, name, initials, left_at)")
     .eq("offering_id", offeringId);
 
   const groups: AssistantGroup[] = (assistantLinks ?? [])
@@ -48,11 +48,14 @@ export async function getAssistantGroups(offeringId: string): Promise<{ groups: 
     })
     .filter((x): x is AssistantGroup => !!x);
 
+  // A left student with no assistant shouldn't show up as "unassigned" to
+  // reassign manually, and definitely shouldn't get swept into an assistant's
+  // workload by auto-assign — they're gone, not waiting for staffing.
   const unassigned: UnassignedStudent[] = (enrollments ?? [])
     .filter((e) => !e.assistant_id)
     .map((e) => {
       const s = Array.isArray(e.students) ? e.students[0] : e.students;
-      return s ? { enrollmentId: e.id, studentId: s.id, name: s.name, initials: s.initials } : null;
+      return s && !s.left_at ? { enrollmentId: e.id, studentId: s.id, name: s.name, initials: s.initials } : null;
     })
     .filter((x): x is UnassignedStudent => !!x);
 
