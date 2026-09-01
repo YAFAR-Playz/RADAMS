@@ -27,16 +27,26 @@ export async function getAssistantGroups(offeringId: string): Promise<{ groups: 
     .select("profiles(id, full_name, initials, student_whatsapp_link)")
     .eq("offering_id", offeringId);
 
-  const { data: enrollments } = await supabase
+  const { data: allEnrollments } = await supabase
     .from("enrollments")
     .select("id, student_id, assistant_id, students(id, name, initials, left_at)")
     .eq("offering_id", offeringId);
+
+  // This view (the head's Assistants tab) is a working roster, not a
+  // management/history view — a left student shouldn't linger under their
+  // old assistant's group, and definitely shouldn't be counted as
+  // "unassigned" waiting to be auto-assigned. Filtering once here, before
+  // splitting into groups/unassigned, keeps both lists consistent.
+  const enrollments = (allEnrollments ?? []).filter((e) => {
+    const s = Array.isArray(e.students) ? e.students[0] : e.students;
+    return !s?.left_at;
+  });
 
   const groups: AssistantGroup[] = (assistantLinks ?? [])
     .map((row) => {
       const p = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
       if (!p) return null;
-      const students = (enrollments ?? [])
+      const students = enrollments
         .filter((e) => e.assistant_id === p.id)
         .map((e) => {
           const s = Array.isArray(e.students) ? e.students[0] : e.students;
@@ -48,14 +58,11 @@ export async function getAssistantGroups(offeringId: string): Promise<{ groups: 
     })
     .filter((x): x is AssistantGroup => !!x);
 
-  // A left student with no assistant shouldn't show up as "unassigned" to
-  // reassign manually, and definitely shouldn't get swept into an assistant's
-  // workload by auto-assign — they're gone, not waiting for staffing.
-  const unassigned: UnassignedStudent[] = (enrollments ?? [])
+  const unassigned: UnassignedStudent[] = enrollments
     .filter((e) => !e.assistant_id)
     .map((e) => {
       const s = Array.isArray(e.students) ? e.students[0] : e.students;
-      return s && !s.left_at ? { enrollmentId: e.id, studentId: s.id, name: s.name, initials: s.initials } : null;
+      return s ? { enrollmentId: e.id, studentId: s.id, name: s.name, initials: s.initials } : null;
     })
     .filter((x): x is UnassignedStudent => !!x);
 
@@ -114,10 +121,15 @@ export async function getAssistantWorkloads(offeringId: string): Promise<Assista
     .select("max_students, profiles(id, full_name, initials)")
     .eq("offering_id", offeringId);
 
-  const { data: enrollments } = await supabase.from("enrollments").select("assistant_id").eq("offering_id", offeringId);
+  const { data: enrollments } = await supabase
+    .from("enrollments")
+    .select("assistant_id, students(left_at)")
+    .eq("offering_id", offeringId);
   const counts = new Map<string, number>();
   for (const e of enrollments ?? []) {
     if (!e.assistant_id) continue;
+    const s = Array.isArray(e.students) ? e.students[0] : e.students;
+    if (s?.left_at) continue;
     counts.set(e.assistant_id, (counts.get(e.assistant_id) ?? 0) + 1);
   }
 
