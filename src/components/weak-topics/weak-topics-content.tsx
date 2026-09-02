@@ -495,7 +495,9 @@ function AssistantSubmitPanel({ offeringId, period, setError }: { offeringId: st
       ) : (
         <>
         <div className="divide-y divide-[var(--border)]">
-          {pageRows.map((s) => (
+          {pageRows.map((s) => {
+            const takenTopicIds = new Set(s.submissions.map((sub) => sub.topicId));
+            return (
             <div key={s.studentId} className="flex flex-col gap-[8px] p-[14px_18px]">
               <div className="flex flex-wrap items-center justify-between gap-[10px]">
                 <div className="text-[13.5px] font-semibold text-[var(--text)]">{s.studentName}</div>
@@ -506,11 +508,13 @@ function AssistantSubmitPanel({ offeringId, period, setError }: { offeringId: st
                     className="h-9 rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none"
                   >
                     <option value="">Add a weak topic…</option>
-                    {catalog.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.label}
-                      </option>
-                    ))}
+                    {catalog
+                      .filter((t) => !takenTopicIds.has(t.id))
+                      .map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.label}
+                        </option>
+                      ))}
                   </select>
                   <button
                     onClick={() => onSubmit(s.studentId)}
@@ -551,7 +555,8 @@ function AssistantSubmitPanel({ offeringId, period, setError }: { offeringId: st
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
         <PageNav page={safePage} setPage={setPage} pageCount={pageCount} pageStart={pageStart} total={students.length} label="students" />
         </>
