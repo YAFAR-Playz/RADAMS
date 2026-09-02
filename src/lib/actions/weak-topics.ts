@@ -123,11 +123,17 @@ export async function listStudentTopicsForOffering(offeringId: string, period: s
     .eq("assistant_id", profile.id)
     .is("students.left_at", null);
 
+  // Deliberately NOT scoped to the caller's own assistant_id: a topic tag is
+  // a fact about the student ("this topic is weak for them this month"), not
+  // something owned by whoever happened to tag it — same reasoning as monthly
+  // notes. Scoping this to the caller was hiding tags a student picked up
+  // under a previous assistant (e.g. before a reassignment), so the current
+  // assistant would pick the "same" topic from the dropdown and hit the
+  // student_id/topic_id/period unique constraint with no idea why.
   const { data: submissions } = await supabase
     .from("student_topic_submissions")
     .select("id, student_id, topic_id, topic_catalog(label)")
     .eq("offering_id", offeringId)
-    .eq("assistant_id", profile.id)
     .eq("period", period);
 
   return (enrollments ?? [])
