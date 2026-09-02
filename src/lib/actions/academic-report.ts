@@ -151,6 +151,14 @@ export async function getStudentMonthlyComment(studentId: string, offeringId: st
   return data?.comment ?? "";
 }
 
+// Not scoped to the caller's own assistant_id — a student reassigned mid-
+// period may already have a comment from their PREVIOUS assistant, and the
+// caller needs to see it before saving, since setStudentMonthlyComment
+// upserts (replaces) the single comment slot. Filtering this to "my own"
+// comments meant a new assistant could save over an existing note without
+// ever seeing it existed, silently destroying it. (The result is still only
+// ever matched against this assistant's own current roster by the caller,
+// so this doesn't expose comments for students outside their assignment.)
 export async function getMyStudentMonthlyComments(offeringId: string, period: string): Promise<Record<string, string>> {
   const profile = await getCurrentProfile();
   if (!profile || profile.role !== "assistant") return {};
@@ -159,8 +167,7 @@ export async function getMyStudentMonthlyComments(offeringId: string, period: st
     .from("student_monthly_notes")
     .select("student_id, comment")
     .eq("offering_id", offeringId)
-    .eq("period", period)
-    .eq("assistant_id", profile.id);
+    .eq("period", period);
   return Object.fromEntries((data ?? []).map((n) => [n.student_id, n.comment]));
 }
 
