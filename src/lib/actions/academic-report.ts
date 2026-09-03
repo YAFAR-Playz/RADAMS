@@ -61,7 +61,12 @@ function inferReportGroup(
   templateGroup: "homework" | "classwork" | "quiz" | "mock_exam" | "other" | undefined
 ): "homework" | "classwork" | "quiz" | "mock_exam" | "other" {
   const t = title.toLowerCase();
-  if (/mock\s*exam/.test(t)) return "mock_exam";
+  // Not just "mock exam" — in practice mocks get titled just "Mock 1" or
+  // "Retake Mock 1" with no "exam" in sight, so requiring that word left
+  // every one of those falling through to the template's generic tag
+  // (usually "homework"), hiding their grade in the status-only Homeworks
+  // table instead of the grade-showing Mock Exams section.
+  if (/\bmock\b/.test(t)) return "mock_exam";
   if (/\bquiz(zes)?\b/.test(t)) return "quiz";
   if (/class\s*work/.test(t)) return "classwork";
   if (/\bhome\s*work\b|\bhw\b/.test(t)) return "homework";
