@@ -22,6 +22,7 @@ import {
 } from "@/lib/actions/staff-payments";
 import { listAllOfferingsForOrg, type OfferingChoice } from "@/lib/actions/students";
 import { getTrafficLightBands, setTrafficLightBands, type GradeBand } from "@/lib/actions/traffic-light";
+import { getReportSettings, setReportSettings, type ReportSettings } from "@/lib/actions/report-settings";
 
 const CALC_METHOD_OPTS: { value: CalcMethod; label: string }[] = [
   { value: "paper", label: "Per paper" },
@@ -86,6 +87,37 @@ const FEATURE_TOGGLE_DEFS: { key: keyof OrgFeatureFlags; label: string; desc: st
   },
 ];
 
+const REPORT_TOGGLE_DEFS: { key: keyof ReportSettings; label: string; desc: string; icon: IconName; tone: Tone }[] = [
+  {
+    key: "groupByType",
+    label: "Group by assignment type",
+    desc: "Homeworks get a simple title + status list; each Quiz gets its own Status/Grade/Mark table — matches assignment types set in Assignment logging types.",
+    icon: "chart",
+    tone: "info",
+  },
+  {
+    key: "showWeakTopics",
+    label: "Show weak topics",
+    desc: "Include the approved weak-topics section for each student.",
+    icon: "target",
+    tone: "warn",
+  },
+  {
+    key: "showComment",
+    label: "Show performance summary",
+    desc: "Include the assistant's monthly comment alongside the average grade.",
+    icon: "message",
+    tone: "brand",
+  },
+  {
+    key: "showAverageGrade",
+    label: "Show average grade",
+    desc: "Include the computed average grade — both in PDFs viewed on the site and PDFs sent to Drive. Off hides it everywhere.",
+    icon: "trend",
+    tone: "ok",
+  },
+];
+
 const CURRENCIES: { code: string; symbol: string; name: string }[] = [
   { code: "GBP", symbol: "£", name: "Pound" },
   { code: "USD", symbol: "$", name: "US Dollar" },
@@ -115,6 +147,9 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
   const [bands, setBands] = useState<GradeBand[] | null>(null);
   const [savingBands, setSavingBands] = useState(false);
 
+  const [reportSettings, setReportSettingsState] = useState<ReportSettings | null>(null);
+  const [savingReport, setSavingReport] = useState(false);
+
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -138,7 +173,24 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
       if (data.length) setCoursePickId(data[0].id);
     });
     getTrafficLightBands().then(setBands);
+    if (viewerRole === "admin") getReportSettings().then(setReportSettingsState);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function onToggleReportSetting(key: keyof ReportSettings) {
+    if (!reportSettings) return;
+    const next = { ...reportSettings, [key]: !reportSettings[key] };
+    setReportSettingsState(next);
+    setSavingReport(true);
+    try {
+      await setReportSettings(next);
+    } catch {
+      setError("Couldn't save report settings — try again.");
+      setReportSettingsState(reportSettings);
+    } finally {
+      setSavingReport(false);
+    }
+  }
 
   function addBand() {
     setBands((prev) => [...(prev ?? []), { label: "", min: 0 }]);
@@ -266,7 +318,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
 
       <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
         <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Admin · Finance controls</div>
-        <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Payroll settings</h1>
+        <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Organization settings</h1>
         <p className="m-0 mt-[3px] max-w-[560px] text-[13px] leading-[1.5] text-[var(--muted)]">
           These controls are set by Finance and Admin. They apply org-wide and change what Heads see in evaluations.
         </p>
@@ -349,6 +401,54 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                           role="switch"
                           aria-checked={on}
                           className="relative h-6 w-[42px] flex-none rounded-full transition-colors"
+                          style={{ background: on ? "var(--brand)" : "var(--border)" }}
+                        >
+                          <span
+                            className="absolute top-[2px] h-5 w-5 rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,.2)] transition-[left]"
+                            style={{ left: on ? "20px" : "2px" }}
+                          />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          )}
+
+          {viewerRole === "admin" && (
+            <section className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
+              <h3 className="m-0 mb-1 text-[14px] font-semibold text-[var(--text)]">Monthly report look</h3>
+              <p className="m-0 mb-[13px] max-w-[560px] text-[12px] leading-[1.5] text-[var(--subtle)]">
+                Admin-only. Controls what a generated monthly report includes — PDFs viewed on the site and PDFs sent to Drive alike.
+              </p>
+              {reportSettings === null ? (
+                <div className="flex flex-col gap-2">
+                  {Array.from({ length: 4 }, (_, i) => (
+                    <SkeletonRow key={i} className="h-[60px]" />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-[9px]">
+                  {REPORT_TOGGLE_DEFS.map((t) => {
+                    const on = reportSettings[t.key];
+                    const { bg, fg } = toneColors(t.tone);
+                    return (
+                      <div key={t.key} className="flex items-center gap-3 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[12px_13px]">
+                        <div className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[9px]" style={{ background: bg, color: fg }}>
+                          <Icon name={t.icon} size={17} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[13px] font-semibold text-[var(--text)]">{t.label}</div>
+                          <div className="text-[11.5px] leading-[1.4] text-[var(--muted)]">{t.desc}</div>
+                        </div>
+                        {savingReport && <Spinner size={13} className="flex-none text-[var(--subtle)]" />}
+                        <button
+                          onClick={() => onToggleReportSetting(t.key)}
+                          disabled={savingReport}
+                          role="switch"
+                          aria-checked={on}
+                          className="relative h-6 w-[42px] flex-none rounded-full transition-colors disabled:opacity-60"
                           style={{ background: on ? "var(--brand)" : "var(--border)" }}
                         >
                           <span
