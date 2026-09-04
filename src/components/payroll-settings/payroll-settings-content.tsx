@@ -20,6 +20,7 @@ import {
   listStaffForCalcMethod,
   updatePaySettings,
   bulkSetCalcMethodForOffering,
+  setOrgDefaultCalcMethod,
   type CalcMethod,
 } from "@/lib/actions/staff-payments";
 import { listAllOfferingsForOrg, type OfferingChoice } from "@/lib/actions/students";
@@ -146,6 +147,9 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
   const [coursePickMethod, setCoursePickMethod] = useState<CalcMethod>("paper");
   const [applyingToCourse, setApplyingToCourse] = useState(false);
 
+  const [orgDefaultMethod, setOrgDefaultMethod] = useState<CalcMethod>("paper");
+  const [applyingOrgDefault, setApplyingOrgDefault] = useState(false);
+
   const [bands, setBands] = useState<GradeBand[] | null>(null);
   const [savingBands, setSavingBands] = useState(false);
 
@@ -160,7 +164,9 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
     (async () => {
       setLoading(true);
       try {
-        setSettings(await getPayrollSettings());
+        const s = await getPayrollSettings();
+        setSettings(s);
+        if (s) setOrgDefaultMethod(s.defaultAssistantCalcMethod as CalcMethod);
       } catch {
         setError("Couldn't load payroll settings.");
       } finally {
@@ -284,18 +290,37 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
     setApplyingToCourse(true);
     setError(null);
     try {
-      const { updated } = await bulkSetCalcMethodForOffering(coursePickId, coursePickMethod);
+      const { updated, skippedFixed } = await bulkSetCalcMethodForOffering(coursePickId, coursePickMethod);
       const courseName = offerings?.find((o) => o.id === coursePickId)?.label;
+      const skippedPart = skippedFixed ? ` (${skippedFixed} on a fixed salary left untouched)` : "";
       setNotice(
         updated
-          ? `Applied to ${updated} assistant${updated === 1 ? "" : "s"} on ${courseName ?? "this course"}.`
-          : `No assistants are currently assigned to ${courseName ?? "this course"}.`
+          ? `Applied to ${updated} assistant${updated === 1 ? "" : "s"} on ${courseName ?? "this course"}.${skippedPart}`
+          : skippedFixed
+            ? `Everyone on ${courseName ?? "this course"} is already on a fixed salary — nothing to change.`
+            : `No assistants are currently assigned to ${courseName ?? "this course"}.`
       );
       if (updated) listStaffForCalcMethod().then(setStaffList); // keep the per-staff picker's cached defaults in sync
     } catch {
       setError("Couldn't apply this default — try again.");
     } finally {
       setApplyingToCourse(false);
+    }
+  }
+
+  async function onApplyOrgDefault() {
+    setApplyingOrgDefault(true);
+    setError(null);
+    try {
+      const { updated, skippedFixed } = await setOrgDefaultCalcMethod(orgDefaultMethod);
+      const skippedPart = skippedFixed ? ` ${skippedFixed} on a fixed salary were left untouched.` : "";
+      setNotice(`Org default saved. Applied to ${updated} current staff member${updated === 1 ? "" : "s"}.${skippedPart}`);
+      setSettings((prev) => (prev ? { ...prev, defaultAssistantCalcMethod: orgDefaultMethod } : prev));
+      listStaffForCalcMethod().then(setStaffList);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't save the org default — try again.");
+    } finally {
+      setApplyingOrgDefault(false);
     }
   }
 
@@ -708,11 +733,51 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                   </button>
                   <p className="m-0 text-[11px] leading-[1.4] text-[var(--subtle)]">
                     Sets the default for every assistant currently assigned to this course. Doesn&apos;t change salary lines already
-                    generated — edit those individually in Salaries.
+                    generated — edit those individually in Salaries. Anyone already on a fixed salary is left untouched.
                   </p>
                 </div>
               )}
             </div>
+
+            {/* ORG-WIDE, ADMIN ONLY */}
+            {viewerRole === "admin" && (
+              <div className="mt-4 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[13px]">
+                <div className="mb-[9px] text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">
+                  Org-wide default (current &amp; future hires)
+                </div>
+                <p className="m-0 mb-[9px] text-[11.5px] leading-[1.4] text-[var(--subtle)]">
+                  Applies now to every current Head/Assistant, and becomes the automatic default for anyone hired later. Anyone
+                  already on a fixed salary is left untouched.
+                </p>
+                {loading || !settings ? (
+                  <SkeletonRow className="h-[70px]" />
+                ) : (
+                  <div className="flex flex-col gap-[9px]">
+                    <div className="flex h-9 min-w-[150px] items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px]">
+                      <select
+                        value={orgDefaultMethod}
+                        onChange={(e) => setOrgDefaultMethod(e.target.value as CalcMethod)}
+                        className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[12.5px] font-semibold text-[var(--text)] outline-none"
+                      >
+                        {CALC_METHOD_OPTS.filter((m) => m.value !== "fixed_per_assistant").map((m) => (
+                          <option key={m.value} value={m.value}>
+                            {m.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <button
+                      onClick={onApplyOrgDefault}
+                      disabled={applyingOrgDefault}
+                      className="flex h-9 items-center justify-center gap-[7px] rounded-[8px] bg-[var(--brand)] text-[12.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+                    >
+                      {applyingOrgDefault && <Spinner size={13} />}
+                      Set as org default &amp; apply now
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </section>
 
           <section className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">

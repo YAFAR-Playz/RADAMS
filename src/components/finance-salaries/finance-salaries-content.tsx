@@ -131,13 +131,17 @@ function EvaluationPanel({ payeeId, offeringId, period, sym }: { payeeId: string
                     ))}
                   </select>
                   {cfg.mode === "number" && (
-                    <input
-                      key={`qty-${l.id}-${l.qty}`}
-                      defaultValue={l.qty}
-                      onBlur={(e) => onUpdate(l.id, { qty: e.target.value.replace(/[^0-9]/g, "") })}
-                      placeholder="0"
-                      className="h-7 w-[50px] flex-none rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-2 text-center font-mono text-[12px] text-[var(--text)] outline-none"
-                    />
+                    <div className="flex h-7 flex-none items-center gap-[5px] rounded-[6px] border border-[var(--border)] bg-[var(--surface)] pr-[7px]">
+                      <input
+                        key={`qty-${l.id}-${l.qty}`}
+                        defaultValue={l.qty}
+                        onBlur={(e) => onUpdate(l.id, { qty: e.target.value.replace(/[^0-9]/g, "") })}
+                        placeholder="0"
+                        title="Quantity — this is what the amount is calculated from"
+                        className="h-full w-[36px] rounded-[6px] bg-transparent px-2 text-center font-mono text-[12px] text-[var(--text)] outline-none"
+                      />
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.03em] text-[var(--subtle)]">qty</span>
+                    </div>
                   )}
                   {cfg.mode === "dropdown" && (
                     <select
@@ -510,7 +514,7 @@ export function FinanceSalariesContent() {
     }
   }
 
-  async function onChangeCalcMethod(lineId: string, method: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant" | "manual") {
+  async function onChangeCalcMethod(lineId: string, method: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant" | "fixed" | "manual") {
     setBusyId(lineId);
     try {
       await setLineCalcMethod(lineId, method);
@@ -888,7 +892,10 @@ export function FinanceSalariesContent() {
                             <select
                               value={l.calcMethod ?? "manual"}
                               onChange={(e) =>
-                                onChangeCalcMethod(l.id, e.target.value as "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant" | "manual")
+                                onChangeCalcMethod(
+                                  l.id,
+                                  e.target.value as "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant" | "fixed" | "manual"
+                                )
                               }
                               disabled={!l.offeringId || busyId === l.id}
                               title={l.offeringId ? "Calc method" : "No course linked — manual only"}
@@ -900,6 +907,13 @@ export function FinanceSalariesContent() {
                               {headFixedPerAssistantEnabled && a.role === "head" && (
                                 <option value="fixed_per_assistant">Fixed + per assistant</option>
                               )}
+                              {/* Only rendered for a line that's already "fixed" — which only
+                                  ever happens on a flat, offering_id-null line from
+                                  generateFixedSalaryLinesForPeriod, where the select is already
+                                  disabled. Never offered as a pickable option on a real
+                                  per-course line — plain Fixed salary is a per-person amount,
+                                  not something to attach to one course. */}
+                              {l.calcMethod === "fixed" && <option value="fixed">Fixed salary</option>}
                               <option value="manual">Manual</option>
                             </select>
                             {l.offeringId && l.calcMethod !== "manual" && (

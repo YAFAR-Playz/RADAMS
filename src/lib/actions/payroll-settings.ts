@@ -21,7 +21,7 @@ export type OrgFeatureFlags = {
   headFixedPerAssistantEnabled: boolean;
 };
 
-export type PayrollSettings = PayrollFlags & OrgFeatureFlags & { currency: string };
+export type PayrollSettings = PayrollFlags & OrgFeatureFlags & { currency: string; defaultAssistantCalcMethod: string };
 
 export async function getPayrollSettings(): Promise<PayrollSettings | null> {
   const profile = await getCurrentProfile();
@@ -31,7 +31,7 @@ export async function getPayrollSettings(): Promise<PayrollSettings | null> {
   const { data } = await supabase
     .from("organizations")
     .select(
-      "currency, salary_visible_to_heads, head_edit_amounts, assistant_see_breakdown, auto_release, mock_exam_enabled, heads_can_add_students, head_fixed_per_assistant_enabled"
+      "currency, salary_visible_to_heads, head_edit_amounts, assistant_see_breakdown, auto_release, mock_exam_enabled, heads_can_add_students, head_fixed_per_assistant_enabled, default_assistant_calc_method"
     )
     .eq("id", orgId)
     .single();
@@ -45,6 +45,7 @@ export async function getPayrollSettings(): Promise<PayrollSettings | null> {
     mockExamEnabled: data.mock_exam_enabled,
     headsCanAddStudents: data.heads_can_add_students,
     headFixedPerAssistantEnabled: data.head_fixed_per_assistant_enabled,
+    defaultAssistantCalcMethod: data.default_assistant_calc_method,
   };
 }
 
