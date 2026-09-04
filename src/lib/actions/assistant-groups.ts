@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { sendEmail, renderBrandedEmail } from "@/lib/email";
+import { getStaffingNotifyEmails } from "@/lib/actions/payroll-settings";
 
 export type GroupStudent = { id: string; enrollmentId: string; name: string; initials: string };
 export type AssistantGroup = { id: string; name: string; initials: string; whatsappLink: string | null; students: GroupStudent[] };
@@ -285,12 +286,18 @@ async function notifyHrAndAdminOfPendingRequest(
   requesterName: string,
   input: { offeringId: string; kind: "add" | "remove" | "replace"; candidateName: string; reason: string }
 ) {
-  const [{ data: recipients }, { data: offering }, { data: org }] = await Promise.all([
+  const [{ data: recipients }, { data: offering }, { data: org }, extraEmails] = await Promise.all([
     supabase.from("profiles").select("email").eq("org_id", orgId).in("role", ["hr", "admin"]).is("left_at", null),
     supabase.from("course_offerings").select("session, unit, courses(name)").eq("id", input.offeringId).maybeSingle(),
     supabase.from("organizations").select("brand_name, primary_color").eq("id", orgId).maybeSingle(),
+    getStaffingNotifyEmails(),
   ]);
-  const emails = (recipients ?? []).map((r) => r.email).filter((e): e is string => !!e);
+  // Configured Organization Settings addresses are IN ADDITION to every
+  // HR/Admin profile's own email, not a replacement — a curated address
+  // (a shared ops inbox, someone with no RadAMS account) supplements the
+  // automatic role-based list rather than narrowing it.
+  const profileEmails = (recipients ?? []).map((r) => r.email).filter((e): e is string => !!e);
+  const emails = Array.from(new Set([...profileEmails, ...extraEmails]));
   if (!emails.length) return;
 
   const course = offering ? (Array.isArray(offering.courses) ? offering.courses[0] : offering.courses) : null;
