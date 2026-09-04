@@ -210,10 +210,12 @@ export function PrintReportView({
                       <div className="text-[17px] font-semibold">{s.studentName}</div>
                       <div className="text-[12px] text-[#777]">#{s.studentCode}</div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-[11px] uppercase tracking-wide text-[#777]">Average grade</div>
-                      <div className="text-[22px] font-bold">{formatGradeByScale(s.avgGrade, meta.gradeScale)}</div>
-                    </div>
+                    {settings.showAverageGrade && (
+                      <div className="text-right">
+                        <div className="text-[11px] uppercase tracking-wide text-[#777]">Average grade</div>
+                        <div className="text-[22px] font-bold">{formatGradeByScale(s.avgGrade, meta.gradeScale)}</div>
+                      </div>
+                    )}
                   </div>
                 </>
               )}
@@ -384,25 +386,29 @@ export function PrintReportView({
               )}
 
               {settings.groupByType ? (
-                <div>
-                  <div className="mb-2 border-b-2 border-[#2a5298] pb-1 text-[15px] font-bold text-[#2a5298]">Monthly Performance Summary</div>
-                  <table className="w-full border-collapse text-[12.5px]">
-                    <tbody>
-                      {settings.showComment && (
-                        <tr className="border-b border-[#ddd]">
-                          <td className="w-1/3 py-[7px] pr-2 align-top font-semibold text-[#2a5298]">
-                            {new Date(meta.period + "-01").toLocaleDateString("en-US", { month: "long" })} Performance Comment
-                          </td>
-                          <td className="whitespace-pre-wrap py-[7px] leading-[1.5]">{s.assistantComment || <span className="text-[#777]">No comment left.</span>}</td>
-                        </tr>
-                      )}
-                      <tr className="border-b border-[#ddd]">
-                        <td className="py-[7px] pr-2 font-semibold text-[#2a5298]">Average Grade</td>
-                        <td className="py-[7px]">{formatGradeByScale(s.avgGrade, meta.gradeScale)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                (settings.showComment || settings.showAverageGrade) && (
+                  <div>
+                    <div className="mb-2 border-b-2 border-[#2a5298] pb-1 text-[15px] font-bold text-[#2a5298]">Monthly Performance Summary</div>
+                    <table className="w-full border-collapse text-[12.5px]">
+                      <tbody>
+                        {settings.showComment && (
+                          <tr className="border-b border-[#ddd]">
+                            <td className="w-1/3 py-[7px] pr-2 align-top font-semibold text-[#2a5298]">
+                              {new Date(meta.period + "-01").toLocaleDateString("en-US", { month: "long" })} Performance Comment
+                            </td>
+                            <td className="whitespace-pre-wrap py-[7px] leading-[1.5]">{s.assistantComment || <span className="text-[#777]">No comment left.</span>}</td>
+                          </tr>
+                        )}
+                        {settings.showAverageGrade && (
+                          <tr className="border-b border-[#ddd]">
+                            <td className="py-[7px] pr-2 font-semibold text-[#2a5298]">Average Grade</td>
+                            <td className="py-[7px]">{formatGradeByScale(s.avgGrade, meta.gradeScale)}</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )
               ) : (
                 settings.showComment && (
                   <div>

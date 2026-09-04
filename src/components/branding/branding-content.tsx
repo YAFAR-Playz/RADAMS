@@ -15,6 +15,11 @@ const REPORT_TOGGLE_DEFS: { key: keyof ReportSettings; label: string; desc: stri
   },
   { key: "showWeakTopics", label: "Show weak topics", desc: "Include the approved weak-topics section for each student." },
   { key: "showComment", label: "Show performance summary", desc: "Include the assistant's monthly comment alongside the average grade." },
+  {
+    key: "showAverageGrade",
+    label: "Show average grade",
+    desc: "Include the computed average grade — both in PDFs viewed on the site and PDFs sent to Drive. Off hides it everywhere.",
+  },
 ];
 
 export function BrandingContent() {
