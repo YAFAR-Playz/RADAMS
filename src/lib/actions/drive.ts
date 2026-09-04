@@ -5,6 +5,7 @@ import { getCurrentProfile } from "@/lib/current-profile";
 import { getGeneratedReport } from "@/lib/actions/academic-report";
 import { shouldShowGrade } from "@/lib/report-grade";
 import { getBranding } from "@/lib/actions/branding";
+import { getReportSettings } from "@/lib/actions/report-settings";
 import { formatGradeByScale } from "@/lib/grade-scale";
 
 // Web App deployed from the RadAMS Reports Bridge Apps Script project — see
@@ -57,10 +58,11 @@ async function loadDriveDeliveryContext(offeringId: string, period: string) {
   requireHeadOrAdmin(profile.role);
   const supabase = await createClient();
 
-  const [{ meta, students }, { data: offering }, branding] = await Promise.all([
+  const [{ meta, students }, { data: offering }, branding, reportSettings] = await Promise.all([
     getGeneratedReport(offeringId, period),
     supabase.from("course_offerings").select("session, unit, courses(name)").eq("id", offeringId).maybeSingle(),
     getBranding(),
+    getReportSettings(),
   ]);
   if (!meta) throw new Error("Generate the report for this month before delivering it to Drive.");
 
@@ -76,6 +78,7 @@ async function loadDriveDeliveryContext(offeringId: string, period: string) {
     primaryColor: branding?.primary ?? "#2563eb",
     logoUrl: branding?.logoUrl ?? null,
     monthLabel: periodLabel(period),
+    showAverageGrade: reportSettings.showAverageGrade,
   };
 }
 
@@ -140,7 +143,7 @@ export async function deleteMonthlyReportsFromDriveChunk(offeringId: string, per
 // folder creation is idempotent and the script replaces (not duplicates)
 // that month's PDF.
 export async function deliverDriveReportsChunk(offeringId: string, period: string, studentIds: string[]): Promise<DriveDeliveryResult[]> {
-  const { supabase, meta, students, courseLabel, orgName, primaryColor, logoUrl, monthLabel } = await loadDriveDeliveryContext(offeringId, period);
+  const { supabase, meta, students, courseLabel, orgName, primaryColor, logoUrl, monthLabel, showAverageGrade } = await loadDriveDeliveryContext(offeringId, period);
   const wanted = new Set(studentIds);
   const scoped = students.filter((s) => wanted.has(s.studentId));
   if (scoped.length === 0) return [];
@@ -177,6 +180,11 @@ export async function deliverDriveReportsChunk(offeringId: string, period: strin
         .filter((a) => !a.reportGroup || a.reportGroup === "other")
         .map((a) => ({ title: a.title, status: a.status, grade: a.grade })),
       performanceComment: s.assistantComment,
+      // showAverageGrade is a top-level org setting (not per-student), sent
+      // per item purely because that's how deliveryScript reads the batch —
+      // the Apps Script omits the whole "Average Grade" row when this is
+      // false rather than rendering it blank/dashed.
+      showAverageGrade,
       averageGrade: formatGradeByScale(s.avgGrade, meta.gradeScale),
       weakTopics: s.weakTopics.map((t) => ({
         label: t.label,

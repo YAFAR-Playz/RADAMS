@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
-import { getGradeScale, type GradeScaleSetting } from "@/lib/actions/oversight";
+import { getGradeScale, type GradeScaleSetting, type GradeBand } from "@/lib/actions/oversight";
 import { resolveTemplateFlags } from "@/lib/assignment-template-fallback";
 
 export type ReportAssignmentOption = {
@@ -13,8 +13,34 @@ export type ReportAssignmentOption = {
   hasGrade: boolean;
 };
 
-// Grade fields are free text. Three shapes show up in practice:
+// A grade band only stores a floor (`min`) — its ceiling is implicitly the
+// next-higher band's floor, or 100 for the top band (avgGrade is always a
+// 0-100 percentage internally, regardless of the org's display scale; see
+// formatGradeByScale). Converts a letter/label grade to the MIDPOINT of its
+// band's range (e.g. a "B" spanning 80-89 becomes 84.5) rather than its
+// floor, so a typical letter grade doesn't systematically drag the average
+// down toward the bottom of its range.
+function bandMidpoint(bands: GradeBand[], label: string): number | null {
+  if (!bands.length) return null;
+  const sorted = [...bands].sort((a, b) => b.min - a.min);
+  const idx = sorted.findIndex((b) => b.label.trim().toLowerCase() === label.trim().toLowerCase());
+  if (idx === -1) return null;
+  const min = sorted[idx].min;
+  const max = idx === 0 ? 100 : sorted[idx - 1].min;
+  return (min + max) / 2;
+}
+
+// Grade fields are free text. Shapes that show up in practice:
 //   - a clean number ("47") meaning "47 out of this assignment's maxMarks"
+//   - an explicit percentage ("98%") — always 98 out of 100 regardless of
+//     this assignment's own maxMarks (e.g. maxMarks=40 but the assistant
+//     graded and wrote it as a percentage anyway); dividing that by maxMarks
+//     the way a raw number is would give a nonsense 245%
+//   - a letter/label matching one of the org's configured grade-scale bands
+//     ("B", "Distinction", whatever the org uses) — converted via
+//     bandMidpoint so it can be averaged alongside numeric grades on the
+//     same 0-100 scale, instead of being silently excluded from the average
+//     entirely (which is what happens if this returns null for it)
 //   - a compound letter/scale grade next to the raw mark, e.g. "(A*/9) 47"
 //     or "6/B - 34" — the raw mark consistently comes last
 //   - a self-contained "raw/total" fraction the assistant typed directly,
@@ -25,8 +51,15 @@ export type ReportAssignmentOption = {
 // maxMarks — otherwise the old "take the last number as the raw mark"
 // fallback reads "24/37" as raw=37 (the denominator) over a maxMarks of
 // 100, giving 37% instead of the intended 24/37 ≈ 65%.
-function gradeToPercent(grade: string, maxMarks: number | null): number | null {
+function gradeToPercent(grade: string, maxMarks: number | null, bands: GradeBand[]): number | null {
   const trimmed = grade.trim();
+
+  const percentMatch = trimmed.match(/^(\d+(?:\.\d+)?)\s*%$/);
+  if (percentMatch) return Number(percentMatch[1]);
+
+  const band = bandMidpoint(bands, trimmed);
+  if (band != null) return band;
+
   const fraction = trimmed.match(/^(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)$/);
   if (fraction) {
     const num = Number(fraction[1]);
@@ -530,7 +563,7 @@ export async function generateMonthlyAcademicReport(
     // matching downstream assumes avgGrade is already a 0-100 percentage.
     const numericGrades = assignments
       .filter((a) => a.grade != null && a.grade.trim() !== "")
-      .map((a) => gradeToPercent(a.grade as string, a.maxMarks))
+      .map((a) => gradeToPercent(a.grade as string, a.maxMarks, gradeScale.bands))
       .filter((n): n is number => n != null);
     const avgGrade = numericGrades.length ? Math.round(numericGrades.reduce((s, n) => s + n, 0) / numericGrades.length) : null;
 
