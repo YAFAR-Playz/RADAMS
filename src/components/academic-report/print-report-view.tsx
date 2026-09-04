@@ -5,6 +5,7 @@ import { Icon } from "@/components/icons";
 import { formatGradeByScale } from "@/lib/grade-scale";
 import { renderElementToPdfBlob, downloadBlob, shareOrDownloadPdf } from "@/lib/pdf-export";
 import type { GeneratedReportMeta, GeneratedStudentReport } from "@/lib/actions/academic-report";
+import { shouldShowGrade } from "@/lib/report-grade";
 import type { ReportSettings } from "@/lib/actions/report-settings";
 
 function periodLabel(period: string) {
@@ -15,6 +16,51 @@ function periodLabel(period: string) {
 function markFraction(grade: string | null, maxMarks: number | null): string | null {
   if (grade == null || grade.trim() === "") return null;
   return maxMarks ? `${grade}/${maxMarks}` : grade;
+}
+
+function StatusOnlyTable({ items }: { items: { title: string; status: string | null }[] }) {
+  if (items.length === 0) return null;
+  return (
+    <table className="w-full border-collapse text-[12.5px]">
+      <tbody>
+        {items.map((a, i) => (
+          <tr key={i} className="border-b border-[#ddd]">
+            <td className="w-1/2 py-[7px] pr-2 font-semibold text-[#2a5298]">{a.title}</td>
+            <td className="py-[7px] capitalize">{a.status ?? "not logged"}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+// Grade and Mark used to render as two separate rows, but Mark is just
+// Grade formatted as a fraction when a max score exists (or literally
+// identical to Grade when it doesn't) — never a second distinct fact.
+// One row, preferring the fraction when there's a max to show.
+function GradeBlocks({ items }: { items: { title: string; status: string | null; grade: string | null; maxMarks: number | null }[] }) {
+  if (items.length === 0) return null;
+  return (
+    <>
+      {items.map((a, i) => (
+        <div key={i} className="mb-3">
+          <div className="mb-1 text-[13px] font-bold text-[#2a5298]">{a.title}</div>
+          <table className="w-full border-collapse text-[12.5px]">
+            <tbody>
+              <tr className="border-b border-[#ddd]">
+                <td className="w-1/3 py-[6px] pr-2 font-semibold">Status</td>
+                <td className="py-[6px] capitalize">{a.status ?? "not logged"}</td>
+              </tr>
+              <tr className="border-b border-[#ddd]">
+                <td className="py-[6px] pr-2 font-semibold">Grade</td>
+                <td className="py-[6px]">{markFraction(a.grade, a.maxMarks) ?? a.grade ?? "—"}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </>
+  );
 }
 
 const MATERIAL_KIND_LABEL: Record<"video" | "notes" | "tricky_question", string> = {
@@ -225,86 +271,32 @@ export function PrintReportView({
                   {homeworks.length > 0 && (
                     <div className="mb-5">
                       <div className="mb-2 border-b-2 border-[#2a5298] pb-1 text-[15px] font-bold text-[#2a5298]">Homeworks</div>
-                      <table className="w-full border-collapse text-[12.5px]">
-                        <tbody>
-                          {homeworks.map((a, i) => (
-                            <tr key={i} className="border-b border-[#ddd]">
-                              <td className="w-1/2 py-[7px] pr-2 font-semibold text-[#2a5298]">{a.title}</td>
-                              <td className="py-[7px] capitalize">{a.status ?? "not logged"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                      <StatusOnlyTable items={homeworks.filter((a) => !shouldShowGrade(a))} />
+                      <GradeBlocks items={homeworks.filter(shouldShowGrade)} />
                     </div>
                   )}
 
                   {classwork.length > 0 && (
                     <div className="mb-5">
                       <div className="mb-2 border-b-2 border-[#2a5298] pb-1 text-[15px] font-bold text-[#2a5298]">Classwork</div>
-                      <table className="w-full border-collapse text-[12.5px]">
-                        <tbody>
-                          {classwork.map((a, i) => (
-                            <tr key={i} className="border-b border-[#ddd]">
-                              <td className="w-1/2 py-[7px] pr-2 font-semibold text-[#2a5298]">{a.title}</td>
-                              <td className="py-[7px] capitalize">{a.status ?? "not logged"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                      <StatusOnlyTable items={classwork.filter((a) => !shouldShowGrade(a))} />
+                      <GradeBlocks items={classwork.filter(shouldShowGrade)} />
                     </div>
                   )}
 
                   {quizzes.length > 0 && (
                     <div className="mb-5">
                       <div className="mb-2 border-b-2 border-[#2a5298] pb-1 text-[15px] font-bold text-[#2a5298]">Quizzes</div>
-                      {quizzes.map((a, i) => (
-                        <div key={i} className="mb-3">
-                          <div className="mb-1 text-[13px] font-bold text-[#2a5298]">{a.title}</div>
-                          <table className="w-full border-collapse text-[12.5px]">
-                            <tbody>
-                              <tr className="border-b border-[#ddd]">
-                                <td className="w-1/3 py-[6px] pr-2 font-semibold">Status</td>
-                                <td className="py-[6px] capitalize">{a.status ?? "not logged"}</td>
-                              </tr>
-                              <tr className="border-b border-[#ddd]">
-                                <td className="py-[6px] pr-2 font-semibold">Grade</td>
-                                <td className="py-[6px]">{a.grade ?? "—"}</td>
-                              </tr>
-                              <tr className="border-b border-[#ddd]">
-                                <td className="py-[6px] pr-2 font-semibold">Mark</td>
-                                <td className="py-[6px]">{markFraction(a.grade, a.maxMarks) ?? "—"}</td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
-                      ))}
+                      <StatusOnlyTable items={quizzes.filter((a) => !shouldShowGrade(a))} />
+                      <GradeBlocks items={quizzes.filter(shouldShowGrade)} />
                     </div>
                   )}
 
                   {mockExams.length > 0 && (
                     <div className="mb-5">
                       <div className="mb-2 border-b-2 border-[#2a5298] pb-1 text-[15px] font-bold text-[#2a5298]">Mock Exams</div>
-                      {mockExams.map((a, i) => (
-                        <div key={i} className="mb-3">
-                          <div className="mb-1 text-[13px] font-bold text-[#2a5298]">{a.title}</div>
-                          <table className="w-full border-collapse text-[12.5px]">
-                            <tbody>
-                              <tr className="border-b border-[#ddd]">
-                                <td className="w-1/3 py-[6px] pr-2 font-semibold">Status</td>
-                                <td className="py-[6px] capitalize">{a.status ?? "not logged"}</td>
-                              </tr>
-                              <tr className="border-b border-[#ddd]">
-                                <td className="py-[6px] pr-2 font-semibold">Grade</td>
-                                <td className="py-[6px]">{a.grade ?? "—"}</td>
-                              </tr>
-                              <tr className="border-b border-[#ddd]">
-                                <td className="py-[6px] pr-2 font-semibold">Mark</td>
-                                <td className="py-[6px]">{markFraction(a.grade, a.maxMarks) ?? "—"}</td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
-                      ))}
+                      <StatusOnlyTable items={mockExams.filter((a) => !shouldShowGrade(a))} />
+                      <GradeBlocks items={mockExams.filter(shouldShowGrade)} />
                     </div>
                   )}
 

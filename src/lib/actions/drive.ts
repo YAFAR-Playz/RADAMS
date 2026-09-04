@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { getGeneratedReport } from "@/lib/actions/academic-report";
+import { shouldShowGrade } from "@/lib/report-grade";
 import { getBranding } from "@/lib/actions/branding";
 import { formatGradeByScale } from "@/lib/grade-scale";
 
@@ -97,6 +98,40 @@ export async function getDriveDeliveryStudentIds(offeringId: string, period: str
 
 export type DriveDeliveryResult = { studentId: string; ok: boolean; folderUrl?: string; fileUrl?: string; error?: string };
 
+export type DriveDeletionResult = { studentId: string; ok: boolean; deleted: boolean; error?: string };
+
+// Admin-only — deletes just this course+month's PDF from each student's
+// Drive folder (via Apps Script's Trash, so it's recoverable there for the
+// usual ~30 days), leaving the Org > Course > Assistant > Student folder
+// structure itself untouched. Chunked for the same reason as delivery: a
+// large course means many folder lookups + file operations inside Apps
+// Script, which risks its own execution-time limit in one call.
+export async function deleteMonthlyReportsFromDriveChunk(offeringId: string, period: string, studentIds: string[]): Promise<DriveDeletionResult[]> {
+  const profile = await getCurrentProfile();
+  if (!profile || profile.role !== "admin") throw new Error("Not authorized");
+
+  const { students, courseLabel, orgName, monthLabel } = await loadDriveDeliveryContext(offeringId, period);
+  const wanted = new Set(studentIds);
+  const scoped = students.filter((s) => wanted.has(s.studentId));
+  if (scoped.length === 0) return [];
+
+  const payload = {
+    rootFolderId: DRIVE_ROOT_FOLDER_ID,
+    orgName,
+    courseLabel,
+    monthLabel,
+    students: scoped.map((s) => ({
+      studentId: s.studentId,
+      studentCode: s.studentCode,
+      studentName: s.studentName,
+      assistantName: s.assistantName ?? "Unassigned",
+    })),
+  };
+
+  const { results } = await callDriveBridge<{ results: DriveDeletionResult[] }>("deleteReportsBatch", payload);
+  return results;
+}
+
 // Delivers one chunk of students' already-generated monthly report data
 // (same source the on-screen/print view uses — no duplicated logic) into
 // their Drive folder as a branded PDF, creating any missing folder in the
@@ -122,8 +157,16 @@ export async function deliverDriveReportsChunk(offeringId: string, period: strin
       studentCode: s.studentCode,
       studentName: s.studentName,
       assistantName: s.assistantName ?? "Unassigned",
-      homeworks: s.assignments.filter((a) => a.reportGroup === "homework").map((a) => ({ title: a.title, status: a.status })),
-      classwork: s.assignments.filter((a) => a.reportGroup === "classwork").map((a) => ({ title: a.title, status: a.status })),
+      // hasGrade is sent explicitly (not inferred from grade being non-null)
+      // so an ungraded-so-far assignment that's still meant to carry a grade
+      // shows "Grade: —" instead of silently falling back to a plain status
+      // row — same distinction the print view makes via shouldShowGrade.
+      homeworks: s.assignments
+        .filter((a) => a.reportGroup === "homework")
+        .map((a) => ({ title: a.title, status: a.status, grade: a.grade, mark: markFraction(a.grade, a.maxMarks), hasGrade: shouldShowGrade(a) })),
+      classwork: s.assignments
+        .filter((a) => a.reportGroup === "classwork")
+        .map((a) => ({ title: a.title, status: a.status, grade: a.grade, mark: markFraction(a.grade, a.maxMarks), hasGrade: shouldShowGrade(a) })),
       quizzes: s.assignments
         .filter((a) => a.reportGroup === "quiz")
         .map((a) => ({ title: a.title, status: a.status, grade: a.grade, mark: markFraction(a.grade, a.maxMarks) })),
