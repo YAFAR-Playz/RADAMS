@@ -244,7 +244,14 @@ export type ReportAssignmentDetail = {
   grade: string | null;
   maxMarks: number | null;
   reportGroup: "homework" | "classwork" | "quiz" | "mock_exam" | "other";
+  // Whether THIS assignment actually carries a grade in this report, independent
+  // of reportGroup — a title-keyword miss (e.g. a gradable "Homework 3") must not
+  // silently drop into the status-only Homeworks layout and hide its grade.
+  // Optional because rows generated before this field existed have no value
+  // stored; readers fall back to the old reportGroup-based guess for those.
+  hasGrade?: boolean;
 };
+
 export type ReportWeakTopicMaterial = { kind: "video" | "notes" | "tricky_question"; label: string | null; link: string; duration: string | null };
 export type ReportWeakTopic = { label: string; materials: ReportWeakTopicMaterial[] };
 
@@ -266,13 +273,27 @@ export async function getAcademicMonthlyReport(offeringId: string, period: strin
   const assignmentIds = includedAssignments.map((a) => a.id);
 
   const { data: assignmentMeta } = assignmentIds.length
-    ? await supabase.from("assignments").select("id, title, max_marks, assignment_templates(report_group)").in("id", assignmentIds)
-    : { data: [] as { id: string; title: string; max_marks: number | null; assignment_templates: { report_group: string } | { report_group: string }[] | null }[] };
+    ? await supabase.from("assignments").select("id, title, max_marks, template, assignment_templates(report_group, has_grade, has_comment)").in("id", assignmentIds)
+    : {
+        data: [] as {
+          id: string;
+          title: string;
+          max_marks: number | null;
+          template: string | null;
+          assignment_templates: { report_group: string; has_grade: boolean; has_comment: boolean } | { report_group: string; has_grade: boolean; has_comment: boolean }[] | null;
+        }[],
+      };
   const maxMarksByAssignment = new Map((assignmentMeta ?? []).map((a) => [a.id, a.max_marks]));
   const reportGroupByAssignment = new Map(
     (assignmentMeta ?? []).map((a) => {
       const tpl = Array.isArray(a.assignment_templates) ? a.assignment_templates[0] : a.assignment_templates;
       return [a.id, inferReportGroup(a.title, tpl?.report_group as "homework" | "classwork" | "quiz" | "mock_exam" | "other" | undefined)];
+    })
+  );
+  const hasGradeByAssignment = new Map(
+    (assignmentMeta ?? []).map((a) => {
+      const tpl = Array.isArray(a.assignment_templates) ? a.assignment_templates[0] : a.assignment_templates;
+      return [a.id, resolveTemplateFlags(a.template, tpl).hasGrade];
     })
   );
 
@@ -316,6 +337,7 @@ export async function getAcademicMonthlyReport(offeringId: string, period: strin
           grade: log?.grade ?? null,
           maxMarks: maxMarksByAssignment.get(a.id) ?? null,
           reportGroup: reportGroupByAssignment.get(a.id) ?? "homework",
+          hasGrade: hasGradeByAssignment.get(a.id) ?? false,
         };
       });
 
@@ -489,6 +511,11 @@ export async function generateMonthlyAcademicReport(
         grade: mode === "grade" ? log?.grade ?? null : null,
         maxMarks: maxMarksByAssignment.get(s.assignmentId) ?? null,
         reportGroup: reportGroupByAssignment.get(s.assignmentId) ?? "homework",
+        // The mode the head picked for THIS generation is the authoritative
+        // signal for whether to show a grade — not the title-inferred
+        // reportGroup, which a gradable "Homework 3" or a status-only "Quiz 2"
+        // would get wrong.
+        hasGrade: mode === "grade",
       };
     });
 

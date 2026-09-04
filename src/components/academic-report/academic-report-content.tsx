@@ -15,7 +15,13 @@ import {
   type GeneratedStudentReport,
 } from "@/lib/actions/academic-report";
 import { getGradeScale, setGradeScale, type GradeBand, type GradeScaleSetting } from "@/lib/actions/oversight";
-import { getDriveDeliveryStudentIds, deliverDriveReportsChunk, type DriveDeliveryResult } from "@/lib/actions/drive";
+import {
+  getDriveDeliveryStudentIds,
+  deliverDriveReportsChunk,
+  deleteMonthlyReportsFromDriveChunk,
+  type DriveDeliveryResult,
+  type DriveDeletionResult,
+} from "@/lib/actions/drive";
 import { formatGradeByScale } from "@/lib/grade-scale";
 import { downloadCsv } from "@/lib/csv-export";
 import { pickerOnlyDateProps } from "@/lib/date-input";
@@ -54,7 +60,7 @@ function periodLabel(period: string) {
 
 const SCALE_OPTIONS = ["percentage", "letter", "numeric"] as const;
 
-export function AcademicReportContent() {
+export function AcademicReportContent({ viewerRole }: { viewerRole: "admin" | "head" }) {
   const [offerings, setOfferings] = useState<OfferingOption[] | null>(null);
   const [offeringId, setOfferingId] = useState("");
   const [period, setPeriod] = useState(currentPeriod());
@@ -76,6 +82,10 @@ export function AcademicReportContent() {
   const [driveProgress, setDriveProgress] = useState<{ done: number; total: number } | null>(null);
   const [driveResult, setDriveResult] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
+
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deletingFromDrive, setDeletingFromDrive] = useState(false);
+  const [deleteProgress, setDeleteProgress] = useState<{ done: number; total: number } | null>(null);
 
   const [scaleOpen, setScaleOpen] = useState(false);
   const [scaleDraft, setScaleDraft] = useState<GradeScaleSetting>({ scale: "percentage", bands: [] });
@@ -219,6 +229,43 @@ export function AcademicReportContent() {
     }
   }
 
+  // Admin-only, and deliberately separate from "Send to Drive" above — this
+  // removes the PDFs Drive already has for this course+month (via Apps
+  // Script's Trash, so it's recoverable there), without touching the
+  // Org > Course > Assistant > Student folders themselves. Chunked the same
+  // way delivery is, since a large course means a lot of Drive lookups
+  // inside one Apps Script call.
+  async function onDeleteFromDrive() {
+    if (!offeringId || !meta || !students) return;
+    setDeleteConfirmOpen(false);
+    setDeletingFromDrive(true);
+    setDriveResult(null);
+    setError(null);
+    try {
+      const studentIds = students.map((s) => s.studentId);
+      const allResults: DriveDeletionResult[] = [];
+      setDeleteProgress({ done: 0, total: studentIds.length });
+      for (let i = 0; i < studentIds.length; i += DRIVE_DELIVERY_CHUNK_SIZE) {
+        const chunk = studentIds.slice(i, i + DRIVE_DELIVERY_CHUNK_SIZE);
+        const chunkResults = await deleteMonthlyReportsFromDriveChunk(offeringId, period, chunk);
+        allResults.push(...chunkResults);
+        setDeleteProgress({ done: allResults.length, total: studentIds.length });
+      }
+      const failed = allResults.filter((r) => !r.ok);
+      const deletedCount = allResults.filter((r) => r.ok && r.deleted).length;
+      setDriveResult(
+        failed.length === 0
+          ? `Deleted ${deletedCount} PDF${deletedCount === 1 ? "" : "s"} from Drive for ${periodLabel(period)}.`
+          : `Deleted ${deletedCount} — ${failed.length} failed. Click Delete from Drive again to retry.`
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't delete reports from Drive — try again.");
+    } finally {
+      setDeletingFromDrive(false);
+      setDeleteProgress(null);
+    }
+  }
+
   function openScale() {
     if (!offeringId) return;
     setScaleOpen(true);
@@ -334,6 +381,17 @@ export function AcademicReportContent() {
               {sendingToDrive ? <Spinner size={14} /> : <Icon name="upload" size={16} />}
               {sendingToDrive && driveProgress ? `Sending ${driveProgress.done}/${driveProgress.total}…` : "Send to Drive"}
             </button>
+            {viewerRole === "admin" && (
+              <button
+                onClick={() => setDeleteConfirmOpen(true)}
+                disabled={!meta || !students || students.length === 0 || deletingFromDrive}
+                title="Delete this course's PDFs for this month from Drive — folders are left in place"
+                className="flex h-10 flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--danger)] bg-[var(--surface)] px-[14px] text-[13px] font-semibold text-[var(--danger)] hover:bg-[var(--dangers)] disabled:opacity-60"
+              >
+                {deletingFromDrive ? <Spinner size={14} /> : <Icon name="trash" size={16} />}
+                {deletingFromDrive && deleteProgress ? `Deleting ${deleteProgress.done}/${deleteProgress.total}…` : "Delete from Drive"}
+              </button>
+            )}
             <button
               onClick={openGenerate}
               disabled={!offeringId || assignments === null}
@@ -616,6 +674,41 @@ export function AcademicReportContent() {
               >
                 {generating ? <Spinner size={15} /> : <Icon name="check" size={15} />}
                 Generate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE FROM DRIVE CONFIRMATION */}
+      {deleteConfirmOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(8,12,22,0.5)] p-5">
+          <div className="flex w-full max-w-[440px] flex-col overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(8,12,22,.34)]">
+            <div className="flex items-center gap-[11px] border-b border-[var(--border2)] p-[16px_18px]">
+              <div className="min-w-0 flex-1">
+                <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Delete from Drive · {periodLabel(period)}</h3>
+                <div className="text-[12px] text-[var(--muted)]">This cannot be undone from here</div>
+              </div>
+              <button onClick={() => setDeleteConfirmOpen(false)} className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]">
+                <Icon name="x" size={18} />
+              </button>
+            </div>
+            <div className="p-[16px_18px] text-[13px] leading-[1.6] text-[var(--text)]">
+              This deletes every {periodLabel(period)} monthly report PDF Drive has for{" "}
+              <span className="font-semibold">{offerings?.find((o) => o.id === offeringId)?.label ?? "this course"}</span> — one per
+              student, wherever &quot;Send to Drive&quot; already put it. Student and assistant folders themselves are left in place;
+              only that month&apos;s PDF files are removed.
+            </div>
+            <div className="flex gap-[10px] border-t border-[var(--border2)] p-[14px_18px]">
+              <button onClick={() => setDeleteConfirmOpen(false)} className="h-11 flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]">
+                Cancel
+              </button>
+              <button
+                onClick={onDeleteFromDrive}
+                className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--danger)] text-[13.5px] font-semibold text-white"
+              >
+                <Icon name="trash" size={15} />
+                Delete PDFs
               </button>
             </div>
           </div>
