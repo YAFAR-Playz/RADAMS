@@ -153,7 +153,7 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
   }
 
   if (key === "report" && (profile.role === "admin" || profile.role === "head")) {
-    return <AcademicReportContent />;
+    return <AcademicReportContent viewerRole={profile.role} />;
   }
 
   if (key === "report" && profile.role === "assistant") {
