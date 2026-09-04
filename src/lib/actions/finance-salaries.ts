@@ -14,7 +14,7 @@ export type SalaryLineRow = {
   officeHoursOfferingId: string | null;
   offering: string;
   method: string;
-  calcMethod: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant" | "manual" | null;
+  calcMethod: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant" | "fixed" | "manual" | null;
   basis: string | null;
   base: number;
   bonus: number;
@@ -558,9 +558,26 @@ async function computeBaseForMethod(
   offeringId: string,
   assistantId: string,
   period: string,
-  method: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant",
+  method: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant" | "fixed",
   checkedCount: CheckedPapersCount
 ): Promise<{ base: number; methodLabel: string; prorationNote: string | null; basisOverride?: string }> {
+  // Plain "fixed" is one flat monthly amount for the whole person (stored
+  // once on staff_pay_settings, not per course) — unlike fixed_per_paper/
+  // fixed_per_assistant below, it never reads per_paper_rates and doesn't
+  // depend on offeringId at all. Callers only reach this branch from the
+  // dedicated generateFixedSalaryLinesForPeriod path, never from the normal
+  // per-offering loop, so a fixed-salary person assigned to multiple courses
+  // is never paid this amount more than once.
+  if (method === "fixed") {
+    const { data: setting } = await supabase.from("staff_pay_settings").select("fixed_salary").eq("profile_id", assistantId).maybeSingle();
+    const fixedSalary = setting?.fixed_salary != null ? Number(setting.fixed_salary) : 0;
+    const { data: person } = await supabase.from("profiles").select("left_at").eq("id", assistantId).maybeSingle();
+    const fraction = prorationFraction(period, null, person?.left_at ?? null);
+    const prorationNote = fraction < 1 ? formatProrationNote(period, null, person?.left_at ?? null, fraction) : null;
+    const base = Math.round(fixedSalary * fraction);
+    const basisOverride = `Fixed monthly salary${prorationNote ? ` · ${prorationNote}` : ""}`;
+    return { base, methodLabel: "Fixed salary", prorationNote, basisOverride };
+  }
   if (method === "fixed_per_assistant") {
     const { data: rateRow } = await supabase
       .from("per_paper_rates")
@@ -651,25 +668,94 @@ async function defaultMethodForOffering(supabase: Awaited<ReturnType<typeof crea
 }
 
 // A staff member's own default (set in Payroll Settings, or bulk-applied to
-// a whole course) takes priority over the offering's bracket-presence-based
-// default — that offering-level default only exists as a fallback for staff
-// who've never had a personal preference set. Plain "fixed" (a flat
-// recurring salary with no course/paper basis at all) still isn't wired
-// into this engine, so it's treated the same as no preference set: fall
-// through and let the line stay "manual" unless they have checked papers.
-// "fixed_per_paper" IS wired in, since — unlike plain "fixed" — it's still
-// anchored to a specific course's own rates.
+// a whole course) takes priority over the org-wide default, which in turn
+// takes priority over the offering's bracket-presence-based default — that
+// offering-level default only exists as a last-resort fallback for an org
+// that's never set one either. Plain "fixed" (a flat recurring salary with
+// no course/paper basis at all) is handled entirely OUTSIDE this function —
+// see generateFixedSalaryLinesForPeriod and the isFixedSalaryPerson guard in
+// generateSalariesForPeriod/backfillDepartedSalaryLine — since it produces
+// one line per person per period, not one per course the way every method
+// this function resolves to does. When the effective default resolves to
+// "fixed", this function still returns a per-course fallback (so a caller
+// that doesn't check isFixedSalaryPerson gets a sane label), but that return
+// value is never actually used for base computation in that case.
+// "fixed_per_paper" IS wired in as a real per-course method, since — unlike
+// plain "fixed" — it's still anchored to a specific course's own rates.
 async function resolveMethodForAssistant(
   supabase: Awaited<ReturnType<typeof createClient>>,
   offeringId: string,
   assistantId: string,
-  staffDefault: "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant" | undefined
+  staffDefault: "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant" | undefined,
+  orgDefault: "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant" = "paper"
 ): Promise<"per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant"> {
-  if (staffDefault === "paper") return "per_paper";
-  if (staffDefault === "category") return "bracket";
-  if (staffDefault === "fixed_per_paper") return "fixed_per_paper";
-  if (staffDefault === "fixed_per_assistant") return "fixed_per_assistant";
+  const effective = staffDefault ?? orgDefault;
+  if (effective === "paper") return "per_paper";
+  if (effective === "category") return "bracket";
+  if (effective === "fixed_per_paper") return "fixed_per_paper";
+  if (effective === "fixed_per_assistant") return "fixed_per_assistant";
   return defaultMethodForOffering(supabase, offeringId);
+}
+
+// One flat salary_line per (org, payee, period) for anyone whose effective
+// calc method is plain "fixed" — offering_id stays null, same pattern as an
+// office-hours line, since a fixed salary is a per-person amount, not tied
+// to any one course (a Head running two offerings must not get it twice).
+// Only ever creates the line if one doesn't already exist for this exact
+// (payee, period) — like every other line generateSalariesForPeriod
+// produces, an existing row (Finance already reviewed/hand-edited it, or it
+// was already generated this run) is left completely untouched.
+async function generateFixedSalaryLinesForPeriod(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  orgId: string,
+  period: string,
+  autoReleasedAt: string | null
+): Promise<number> {
+  const { data: staff } = await supabase.from("profiles").select("id").eq("org_id", orgId).is("left_at", null).in("role", ["head", "assistant"]);
+  const staffIds = (staff ?? []).map((s) => s.id);
+  if (!staffIds.length) return 0;
+
+  const [{ data: settings }, { data: org }] = await Promise.all([
+    supabase.from("staff_pay_settings").select("profile_id, calc_method, fixed_salary").in("profile_id", staffIds),
+    supabase.from("organizations").select("default_assistant_calc_method").eq("id", orgId).single(),
+  ]);
+  const orgDefault = (org?.default_assistant_calc_method as "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant") ?? "paper";
+  const settingByProfile = new Map((settings ?? []).map((s) => [s.profile_id, s]));
+
+  let created = 0;
+  for (const profileId of staffIds) {
+    const setting = settingByProfile.get(profileId);
+    const effective = (setting?.calc_method as typeof orgDefault | undefined) ?? orgDefault;
+    if (effective !== "fixed") continue;
+    const fixedSalary = setting?.fixed_salary != null ? Number(setting.fixed_salary) : 0;
+    if (fixedSalary <= 0) continue; // nothing to pay until Finance sets an amount in Staff payments
+
+    const { data: existing } = await supabase
+      .from("salary_lines")
+      .select("id")
+      .eq("org_id", orgId)
+      .eq("payee_id", profileId)
+      .eq("period", period)
+      .is("offering_id", null)
+      .eq("method", "Fixed salary")
+      .maybeSingle();
+    if (existing) continue;
+
+    const computed = await computeBaseForMethod(supabase, "", profileId, period, "fixed", { papers: 0, assignments: 0, mockPapers: 0 });
+    const { error } = await supabase.from("salary_lines").insert({
+      org_id: orgId,
+      payee_id: profileId,
+      offering_id: null,
+      period,
+      method: computed.methodLabel,
+      calc_method: "fixed",
+      basis: computed.basisOverride,
+      base: computed.base,
+      released_at: autoReleasedAt,
+    });
+    if (!error) created++;
+  }
+  return created;
 }
 
 // Generates one salary_line per (staff member, offering) that has at least
@@ -712,6 +798,12 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
     .eq("period", period)
     .maybeSingle();
   const autoReleasedAt = periodRelease?.released_at ?? null;
+
+  const { data: orgRow } = await supabase.from("organizations").select("default_assistant_calc_method").eq("id", orgId).single();
+  const orgDefault =
+    (orgRow?.default_assistant_calc_method as "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant") ?? "paper";
+
+  created += await generateFixedSalaryLinesForPeriod(supabase, orgId, period, autoReleasedAt);
 
   for (const offering of offerings ?? []) {
     const [{ data: enrollments }, { data: assigned }, { data: headRows }] = await Promise.all([
@@ -786,7 +878,14 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
       const checkedCount = await countCheckedPapers(supabase, offering.id, payeeId, period);
       const evalAmounts = evalByAssistant.get(payeeId);
       const isHead = headCandidates.has(payeeId);
-      let method = await resolveMethodForAssistant(supabase, offering.id, payeeId, staffDefaultByPayee.get(payeeId));
+      // A fixed-salary person's real pay comes entirely from the flat line
+      // generateFixedSalaryLinesForPeriod already created above — their
+      // per-course line here (if any) only ever exists to carry that
+      // course's own evaluation bonus/deduction, never an auto-computed
+      // per_paper/bracket base, so their fixed amount can never be paid
+      // twice just for being assigned to more than one course.
+      const isFixedSalaryPerson = (staffDefaultByPayee.get(payeeId) ?? orgDefault) === "fixed";
+      let method = await resolveMethodForAssistant(supabase, offering.id, payeeId, staffDefaultByPayee.get(payeeId), orgDefault);
       // fixed_per_assistant only makes sense for a head (it's keyed on the
       // course's assistant count, not anything an assistant themselves
       // produces) — a staff_pay_settings row that somehow has it set for a
@@ -809,9 +908,9 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
 
       let base = 0;
       let methodLabel = "Manual";
-      let calcMethod: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant" | "manual" = "manual";
+      let calcMethod: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant" | "fixed" | "manual" = "manual";
       let basis = "No checked papers this period";
-      if (checkedCount.papers > 0 || mockCounts || method === "fixed_per_paper" || method === "fixed_per_assistant") {
+      if (!isFixedSalaryPerson && (checkedCount.papers > 0 || mockCounts || method === "fixed_per_paper" || method === "fixed_per_assistant")) {
         const computed = await computeBaseForMethod(supabase, offering.id, payeeId, period, method, checkedCount);
         base = computed.base;
         methodLabel = computed.methodLabel;
@@ -946,6 +1045,13 @@ export async function backfillDepartedSalaryLine(payeeId: string, offeringId: st
   const isHead = person.role === "head";
 
   const checkedCount = await countCheckedPapers(supabase, offeringId, payeeId, period);
+  // A departed fixed-salary person's final prorated month is a manual call
+  // for Finance here (this function only ever produces a per-course line,
+  // and a flat fixed salary isn't tied to one course) — same as any other
+  // fixed-salary person's per-course line, this must never get an
+  // auto-computed per_paper/bracket number just because resolveMethodForAssistant
+  // falls back to the course default for "fixed".
+  const isFixedSalaryPerson = staffSetting?.calc_method === "fixed";
   let method = await resolveMethodForAssistant(
     supabase,
     offeringId,
@@ -957,9 +1063,9 @@ export async function backfillDepartedSalaryLine(payeeId: string, offeringId: st
   const mockCounts = method !== "bracket" && checkedCount.mockPapers > 0;
   let base = 0;
   let methodLabel = "Manual";
-  let calcMethod: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant" | "manual" = "manual";
+  let calcMethod: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant" | "fixed" | "manual" = "manual";
   let basis = isHead ? "Final month — set manually" : "No checked papers this period";
-  if (checkedCount.papers > 0 || mockCounts || method === "fixed_per_paper" || method === "fixed_per_assistant") {
+  if (!isFixedSalaryPerson && (checkedCount.papers > 0 || mockCounts || method === "fixed_per_paper" || method === "fixed_per_assistant")) {
     const computed = await computeBaseForMethod(supabase, offeringId, payeeId, period, method, checkedCount);
     base = computed.base;
     methodLabel = computed.methodLabel;
@@ -997,8 +1103,15 @@ export async function backfillDepartedSalaryLine(payeeId: string, offeringId: st
 
 // Finance overriding a line's calc method recomputes its base from scratch
 // using that method — "manual" leaves the existing base alone so Finance can
-// type any number directly.
-export async function setLineCalcMethod(lineId: string, method: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant" | "manual") {
+// type any number directly. "fixed" is never actually reachable through the
+// UI here (the per-line dropdown is disabled whenever offering_id is null,
+// which is always true for a fixed-salary line — see
+// generateFixedSalaryLinesForPeriod), but the type still needs to accept it
+// since SalaryLineRow.calcMethod (read back from the DB) includes it.
+export async function setLineCalcMethod(
+  lineId: string,
+  method: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant" | "fixed" | "manual"
+) {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org) throw new Error("Not authenticated");
   const supabase = await createClient();
@@ -1006,7 +1119,7 @@ export async function setLineCalcMethod(lineId: string, method: "per_paper" | "b
   const { data: line } = await supabase.from("salary_lines").select("offering_id, payee_id, period").eq("id", lineId).single();
   if (!line) throw new Error("Salary line not found");
 
-  if (method === "manual" || !line.offering_id) {
+  if (method === "manual" || method === "fixed" || !line.offering_id) {
     const { error } = await supabase.from("salary_lines").update({ calc_method: "manual", method: "Manual" }).eq("id", lineId);
     if (error) throw new Error(error.message);
     return;

@@ -5,6 +5,23 @@ import { getCurrentProfile } from "@/lib/current-profile";
 
 export type CalcMethod = "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant";
 
+async function getOrgDefaultCalcMethod(supabase: Awaited<ReturnType<typeof createClient>>, orgId: string): Promise<CalcMethod> {
+  const { data } = await supabase.from("organizations").select("default_assistant_calc_method").eq("id", orgId).single();
+  return (data?.default_assistant_calc_method as CalcMethod) ?? "paper";
+}
+
+// A person is "protected" once they're actually on a fixed salary with a
+// real amount set — a bulk default apply (whole course, or the whole org)
+// must never silently switch them onto a computed method and strand their
+// pay at whatever that method happens to produce, since Finance set that
+// fixed number deliberately. Someone whose calc_method merely SAYS "fixed"
+// but has no fixed_salary entered yet isn't protected — there's nothing for
+// them to lose by picking up the new default instead of sitting on an
+// unconfigured fixed method that can never pay them anything.
+function isProtectedFixedSalary(setting: { calc_method: string | null; fixed_salary: number | string | null } | undefined): boolean {
+  return setting?.calc_method === "fixed" && setting?.fixed_salary != null && Number(setting.fixed_salary) > 0;
+}
+
 export type StaffPaymentRow = {
   id: string;
   name: string;
@@ -35,7 +52,10 @@ export async function listStaffPayments(): Promise<StaffPaymentRow[]> {
   if (!staff || staff.length === 0) return [];
 
   const staffIds = staff.map((s) => s.id);
-  const { data: settings } = await supabase.from("staff_pay_settings").select("*").in("profile_id", staffIds);
+  const [{ data: settings }, orgDefault] = await Promise.all([
+    supabase.from("staff_pay_settings").select("*").in("profile_id", staffIds),
+    getOrgDefaultCalcMethod(supabase, orgId),
+  ]);
   const settingsByProfile = new Map((settings ?? []).map((s) => [s.profile_id, s]));
 
   const { data: lines } = await supabase
@@ -76,7 +96,7 @@ export async function listStaffPayments(): Promise<StaffPaymentRow[]> {
         initials: s.initials,
         role: s.role as "head" | "assistant",
         tenureMonths: months,
-        calcMethod: (setting?.calc_method as CalcMethod) ?? "paper",
+        calcMethod: (setting?.calc_method as CalcMethod) ?? orgDefault,
         payMethod: setting?.pay_method ?? "Bank transfer",
         fixedSalary: setting?.fixed_salary != null ? Number(setting.fixed_salary) : null,
         bonusPct: setting?.bonus_pct != null ? Number(setting.bonus_pct) : 0,
@@ -125,20 +145,23 @@ export async function listStaffForCalcMethod(): Promise<{ id: string; name: stri
     .order("full_name", { ascending: true });
   if (!staff?.length) return [];
 
-  const { data: settings } = await supabase
-    .from("staff_pay_settings")
-    .select("profile_id, calc_method")
-    .in(
-      "profile_id",
-      staff.map((s) => s.id)
-    );
+  const [{ data: settings }, orgDefault] = await Promise.all([
+    supabase
+      .from("staff_pay_settings")
+      .select("profile_id, calc_method")
+      .in(
+        "profile_id",
+        staff.map((s) => s.id)
+      ),
+    getOrgDefaultCalcMethod(supabase, orgId),
+  ]);
   const methodByProfile = new Map((settings ?? []).map((s) => [s.profile_id, s.calc_method as CalcMethod]));
 
   return staff.map((s) => ({
     id: s.id,
     name: s.full_name,
     role: s.role as "head" | "assistant",
-    calcMethod: methodByProfile.get(s.id) ?? "paper",
+    calcMethod: methodByProfile.get(s.id) ?? orgDefault,
   }));
 }
 
@@ -146,8 +169,11 @@ export async function listStaffForCalcMethod(): Promise<{ id: string; name: stri
 // course offering — the one-at-a-time picker (here and on the Staff payments
 // page) is fine for occasional exceptions, but reassigning a whole course's
 // worth of assistants to a new default (e.g. after switching that course to
-// bracket-based pay) shouldn't take N separate clicks.
-export async function bulkSetCalcMethodForOffering(offeringId: string, calcMethod: CalcMethod): Promise<{ updated: number }> {
+// bracket-based pay) shouldn't take N separate clicks. Anyone already on a
+// real fixed salary (calc_method "fixed" with a nonzero fixed_salary) is
+// skipped entirely — Finance set that number deliberately, and a bulk
+// default apply must never silently knock them off it.
+export async function bulkSetCalcMethodForOffering(offeringId: string, calcMethod: CalcMethod): Promise<{ updated: number; skippedFixed: number }> {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");
   const supabase = await createClient();
@@ -157,14 +183,56 @@ export async function bulkSetCalcMethodForOffering(offeringId: string, calcMetho
 
   const { data: assistants } = await supabase.from("offering_assistants").select("assistant_id").eq("offering_id", offeringId);
   const assistantIds = (assistants ?? []).map((a) => a.assistant_id);
-  if (!assistantIds.length) return { updated: 0 };
+  if (!assistantIds.length) return { updated: 0, skippedFixed: 0 };
+
+  const { data: settings } = await supabase.from("staff_pay_settings").select("profile_id, calc_method, fixed_salary").in("profile_id", assistantIds);
+  const settingByProfile = new Map((settings ?? []).map((s) => [s.profile_id, s]));
+  const targetIds = assistantIds.filter((id) => !isProtectedFixedSalary(settingByProfile.get(id)));
+  const skippedFixed = assistantIds.length - targetIds.length;
+  if (!targetIds.length) return { updated: 0, skippedFixed };
 
   const now = new Date().toISOString();
   const { error } = await supabase.from("staff_pay_settings").upsert(
-    assistantIds.map((profile_id) => ({ profile_id, org_id: profile.org!.id, calc_method: calcMethod, updated_at: now })),
+    targetIds.map((profile_id) => ({ profile_id, org_id: profile.org!.id, calc_method: calcMethod, updated_at: now })),
     { onConflict: "profile_id", ignoreDuplicates: false }
   );
   if (error) throw new Error(error.message);
 
-  return { updated: assistantIds.length };
+  return { updated: targetIds.length, skippedFixed };
+}
+
+// Sets the org-wide fallback calc method (new hires, and anyone who's never
+// had a personal preference set, pick this up automatically — see
+// resolveMethodForAssistant in finance-salaries.ts) AND applies it right now
+// to every current head/assistant, same fixed-salary protection as the
+// per-course bulk apply above. Admin-only, matching every other org-wide
+// payroll-behavior toggle in Payroll Settings.
+export async function setOrgDefaultCalcMethod(calcMethod: CalcMethod): Promise<{ updated: number; skippedFixed: number }> {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org) throw new Error("Not authenticated");
+  if (profile.role !== "admin") throw new Error("Not authorized");
+  const supabase = await createClient();
+  const orgId = profile.org.id;
+
+  const { error: orgError } = await supabase.from("organizations").update({ default_assistant_calc_method: calcMethod }).eq("id", orgId);
+  if (orgError) throw new Error(orgError.message);
+
+  const { data: staff } = await supabase.from("profiles").select("id").eq("org_id", orgId).is("left_at", null).in("role", ["head", "assistant"]);
+  const staffIds = (staff ?? []).map((s) => s.id);
+  if (!staffIds.length) return { updated: 0, skippedFixed: 0 };
+
+  const { data: settings } = await supabase.from("staff_pay_settings").select("profile_id, calc_method, fixed_salary").in("profile_id", staffIds);
+  const settingByProfile = new Map((settings ?? []).map((s) => [s.profile_id, s]));
+  const targetIds = staffIds.filter((id) => !isProtectedFixedSalary(settingByProfile.get(id)));
+  const skippedFixed = staffIds.length - targetIds.length;
+  if (!targetIds.length) return { updated: 0, skippedFixed };
+
+  const now = new Date().toISOString();
+  const { error } = await supabase.from("staff_pay_settings").upsert(
+    targetIds.map((profile_id) => ({ profile_id, org_id: orgId, calc_method: calcMethod, updated_at: now })),
+    { onConflict: "profile_id", ignoreDuplicates: false }
+  );
+  if (error) throw new Error(error.message);
+
+  return { updated: targetIds.length, skippedFixed };
 }
