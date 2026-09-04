@@ -85,3 +85,26 @@ export async function setCurrency(currency: string) {
   const { error } = await supabase.from("organizations").update({ currency }).eq("id", orgId);
   if (error) throw new Error(error.message);
 }
+
+// Extra recipients for the staffing-request (add/remove/replace) email
+// notification, on top of every HR/Admin profile's own email (which stays
+// automatic) — for reaching an inbox that isn't tied to a RadAMS account
+// (a shared ops address, someone who needs visibility but no app access).
+export async function getStaffingNotifyEmails(): Promise<string[]> {
+  const profile = await getCurrentProfile();
+  const orgId = profile?.org?.id;
+  if (!orgId) return [];
+  const supabase = await createClient();
+  const { data } = await supabase.from("organizations").select("staffing_notify_emails").eq("id", orgId).single();
+  return data?.staffing_notify_emails ?? [];
+}
+
+export async function setStaffingNotifyEmails(emails: string[]) {
+  const profile = await getCurrentProfile();
+  if (!profile?.org) throw new Error("Not authenticated");
+  if (profile.role !== "admin") throw new Error("Not authorized");
+  const cleaned = Array.from(new Set(emails.map((e) => e.trim().toLowerCase()).filter(Boolean)));
+  const supabase = await createClient();
+  const { error } = await supabase.from("organizations").update({ staffing_notify_emails: cleaned }).eq("id", profile.org.id);
+  if (error) throw new Error(error.message);
+}

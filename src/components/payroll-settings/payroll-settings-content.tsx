@@ -10,6 +10,8 @@ import {
   setPayrollFlag,
   setOrgFeatureFlag,
   setCurrency,
+  getStaffingNotifyEmails,
+  setStaffingNotifyEmails,
   type PayrollFlags,
   type OrgFeatureFlags,
   type PayrollSettings,
@@ -150,6 +152,10 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
   const [reportSettings, setReportSettingsState] = useState<ReportSettings | null>(null);
   const [savingReport, setSavingReport] = useState(false);
 
+  const [notifyEmails, setNotifyEmails] = useState<string[] | null>(null);
+  const [newNotifyEmail, setNewNotifyEmail] = useState("");
+  const [savingNotifyEmails, setSavingNotifyEmails] = useState(false);
+
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -173,9 +179,43 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
       if (data.length) setCoursePickId(data[0].id);
     });
     getTrafficLightBands().then(setBands);
-    if (viewerRole === "admin") getReportSettings().then(setReportSettingsState);
+    if (viewerRole === "admin") {
+      getReportSettings().then(setReportSettingsState);
+      getStaffingNotifyEmails().then(setNotifyEmails);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function saveNotifyEmails(next: string[]) {
+    setNotifyEmails(next);
+    setSavingNotifyEmails(true);
+    try {
+      await setStaffingNotifyEmails(next);
+    } catch {
+      setError("Couldn't save notification emails — try again.");
+      setNotifyEmails(notifyEmails);
+    } finally {
+      setSavingNotifyEmails(false);
+    }
+  }
+
+  function onAddNotifyEmail() {
+    const email = newNotifyEmail.trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError("Enter a valid email address.");
+      return;
+    }
+    if (notifyEmails?.includes(email)) {
+      setNewNotifyEmail("");
+      return;
+    }
+    setNewNotifyEmail("");
+    saveNotifyEmails([...(notifyEmails ?? []), email]);
+  }
+
+  function onRemoveNotifyEmail(email: string) {
+    saveNotifyEmails((notifyEmails ?? []).filter((e) => e !== email));
+  }
 
   async function onToggleReportSetting(key: keyof ReportSettings) {
     if (!reportSettings) return;
@@ -459,6 +499,60 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                       </div>
                     );
                   })}
+                </div>
+              )}
+            </section>
+          )}
+
+          {viewerRole === "admin" && (
+            <section className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
+              <h3 className="m-0 mb-1 text-[14px] font-semibold text-[var(--text)]">Staffing request notifications</h3>
+              <p className="m-0 mb-[13px] max-w-[560px] text-[12px] leading-[1.5] text-[var(--subtle)]">
+                Admin-only. Add/remove/replace requests already email every HR and Admin account automatically — addresses added
+                here get included on that same email too, for anyone who needs visibility without a RadAMS account.
+              </p>
+              <div className="mb-[11px] flex gap-[8px]">
+                <input
+                  value={newNotifyEmail}
+                  onChange={(e) => setNewNotifyEmail(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      onAddNotifyEmail();
+                    }
+                  }}
+                  type="email"
+                  placeholder="ops@example.com"
+                  className="h-10 flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[12px] text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                />
+                <button
+                  onClick={onAddNotifyEmail}
+                  disabled={!newNotifyEmail.trim() || savingNotifyEmails}
+                  className="flex h-10 flex-none items-center gap-[6px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[14px] text-[13px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+                >
+                  <Icon name="plus" size={15} />
+                  Add
+                </button>
+              </div>
+              {notifyEmails === null ? (
+                <SkeletonRow className="h-[42px]" />
+              ) : notifyEmails.length === 0 ? (
+                <p className="m-0 text-[12.5px] text-[var(--subtle)]">No extra addresses yet — only HR/Admin accounts are notified.</p>
+              ) : (
+                <div className="flex flex-col gap-[7px]">
+                  {notifyEmails.map((email) => (
+                    <div key={email} className="flex items-center gap-3 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[10px_13px]">
+                      <Icon name="mail" size={15} className="flex-none text-[var(--subtle)]" />
+                      <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--text)]">{email}</span>
+                      <button
+                        onClick={() => onRemoveNotifyEmail(email)}
+                        disabled={savingNotifyEmails}
+                        className="flex h-7 w-7 flex-none items-center justify-center rounded-[7px] text-[var(--subtle)] hover:bg-[var(--surface)] hover:text-[var(--danger)] disabled:opacity-60"
+                      >
+                        <Icon name="x" size={14} />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
             </section>
