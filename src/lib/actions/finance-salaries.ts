@@ -701,17 +701,31 @@ async function resolveMethodForAssistant(
 // calc method is plain "fixed" — offering_id stays null, same pattern as an
 // office-hours line, since a fixed salary is a per-person amount, not tied
 // to any one course (a Head running two offerings must not get it twice).
-// Only ever creates the line if one doesn't already exist for this exact
-// (payee, period) — like every other line generateSalariesForPeriod
-// produces, an existing row (Finance already reviewed/hand-edited it, or it
-// was already generated this run) is left completely untouched.
+// Always recomputed from current data on every call, same as
+// generateSalariesForPeriod below — a released line, one marked paid, or a
+// real deliberate nonzero "manual" override, is the only thing that stays
+// frozen. Anyone no longer effectively "fixed" (or with the amount cleared)
+// has their line cleared too, rather than left showing a stale amount.
 async function generateFixedSalaryLinesForPeriod(
   supabase: Awaited<ReturnType<typeof createClient>>,
   orgId: string,
   period: string,
   autoReleasedAt: string | null
 ): Promise<number> {
-  const { data: staff } = await supabase.from("profiles").select("id").eq("org_id", orgId).is("left_at", null).in("role", ["head", "assistant"]);
+  // Anyone still active, OR who left partway through this exact period —
+  // someone who left before this period even started never worked any of
+  // it and gets no line; someone who left mid-period still worked (and is
+  // owed) a prorated slice of it, same as backfillDepartedSalaryLine does
+  // for a per-course line. A departed person's line here still gets
+  // recomputed on a later Generate the same as anyone else's (see the
+  // existing-row handling below) — they're not excluded just for having
+  // left, only once genuinely outside the period entirely.
+  const { data: staff } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("org_id", orgId)
+    .or(`left_at.is.null,left_at.gte.${period}-01`)
+    .in("role", ["head", "assistant"]);
   const staffIds = (staff ?? []).map((s) => s.id);
   if (!staffIds.length) return 0;
 
@@ -726,58 +740,94 @@ async function generateFixedSalaryLinesForPeriod(
   for (const profileId of staffIds) {
     const setting = settingByProfile.get(profileId);
     const effective = (setting?.calc_method as typeof orgDefault | undefined) ?? orgDefault;
-    if (effective !== "fixed") continue;
     const fixedSalary = setting?.fixed_salary != null ? Number(setting.fixed_salary) : 0;
-    if (fixedSalary <= 0) continue; // nothing to pay until Finance sets an amount in Staff payments
 
     const { data: existing } = await supabase
       .from("salary_lines")
-      .select("id")
+      .select("id, base, calc_method, released_at, status")
       .eq("org_id", orgId)
       .eq("payee_id", profileId)
       .eq("period", period)
       .is("offering_id", null)
       .eq("method", "Fixed salary")
       .maybeSingle();
-    if (existing) continue;
+
+    // Same protection as everywhere else: released, marked paid (money
+    // already sent — these are independent flags, so both are checked; a
+    // row can be paid without being released), or a real deliberate manual
+    // override, stays frozen.
+    if (existing?.released_at || existing?.status === "paid") continue;
+    if (existing?.calc_method === "manual" && Number(existing.base) !== 0) continue;
+
+    if (effective !== "fixed" || fixedSalary <= 0) {
+      // No longer fixed-salary (or the amount was cleared) — this line no
+      // longer has anything justifying it, so it's cleared rather than left
+      // sitting around showing a stale amount.
+      if (existing) {
+        const { error: delError } = await supabase.from("salary_lines").delete().eq("id", existing.id);
+        if (!delError) created++;
+      }
+      continue;
+    }
 
     const computed = await computeBaseForMethod(supabase, "", profileId, period, "fixed", { papers: 0, assignments: 0, mockPapers: 0 });
-    const { error } = await supabase.from("salary_lines").insert({
-      org_id: orgId,
-      payee_id: profileId,
-      offering_id: null,
-      period,
-      method: computed.methodLabel,
-      calc_method: "fixed",
-      basis: computed.basisOverride,
-      base: computed.base,
-      released_at: autoReleasedAt,
-    });
+    // Not an upsert with onConflict — offering_id is null here, and a
+    // unique constraint that includes a null column never treats two nulls
+    // as conflicting, so onConflict would silently insert a duplicate
+    // instead of matching the existing row (the same reason
+    // upsertOfficeHoursLine above does a manual select-then-branch too).
+    const { error } = existing
+      ? await supabase
+          .from("salary_lines")
+          .update({
+            method: computed.methodLabel,
+            calc_method: "fixed",
+            basis: computed.basisOverride,
+            base: computed.base,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existing.id)
+      : await supabase.from("salary_lines").insert({
+          org_id: orgId,
+          payee_id: profileId,
+          offering_id: null,
+          period,
+          method: computed.methodLabel,
+          calc_method: "fixed",
+          basis: computed.basisOverride,
+          base: computed.base,
+          released_at: autoReleasedAt,
+        });
     if (!error) created++;
   }
   return created;
 }
 
-// Generates one salary_line per (staff member, offering) that has at least
-// one checked paper in this period, an evaluation with a nonzero extra/
-// deduction logged by a head for this period, or "fixed_per_paper" as their
-// resolved calc method (a fixed_per_paper line is owed its fixed base
-// regardless of papers checked, so it's never skipped just for having none).
+// Always recomputes every non-released, non-deliberately-manual line for
+// this period from today's data — papers checked, evaluations, rates,
+// calc-method defaults — rather than only filling gaps. A previous version
+// of this only ever created brand-new lines and left every existing one
+// untouched; that made a stale number impossible to fix except by hand, one
+// line at a time, which is exactly the situation a bug in the calc-method
+// engine (or a changed default) needs NOT to require. Frozen regardless: a
+// released line, one already marked paid (these are independent flags — a
+// line can be paid without being released, so both are checked; only a
+// manual edit or explicit Unrelease touches either again), and a line
+// already sitting on "manual" with a real nonzero base (that's Finance's
+// own deliberate override — there's no formula to regenerate it from).
+// Everything else — a brand-new
+// candidate, an existing per_paper/bracket/fixed_.../fixed line, or a
+// still-$0 manual placeholder — is written fresh every time, and a line
+// that no longer has anything justifying it (no papers, no eval, method
+// doesn't apply) is deleted rather than left sitting around mislabeled.
 // Covers both assistants (via enrollments, offering_assistants, or an eval)
-// and heads (via offering_heads) — heads previously never got a line at
-// all here, even though papers they personally check already tally the same
-// way (assignment_logs.logged_by is whoever actually checked it, not
-// assistant-specific). Also creates that period's office-hours line for any
-// assistant with a standing default_office_hours set on this course (Pay
-// categories → Fixed office hours per assistant) — heads have no such
-// setting. Existing lines for that exact (org, payee, offering, period) —
-// or (payee, office_hours_offering_id, period) for office hours — are left
-// completely untouched, so it's safe to re-run without clobbering anything
-// Finance has already reviewed or hand-edited. A brand-new line picks up
-// the period's release state from salary_period_releases (set by "Release
-// all") so it's immediately visible if the rest of the period already is;
-// a recomputed stale-zero-bracket line keeps whatever release state it
-// already had instead.
+// and heads (via offering_heads). Also creates that period's office-hours
+// line for any assistant with a standing default_office_hours set on this
+// course (Pay categories → Fixed office hours per assistant) — heads have
+// no such setting. A brand-new line picks up the period's release state
+// from salary_period_releases (set by "Release all") so it's immediately
+// visible if the rest of the period already is; a recomputed line keeps
+// whatever release state it already had instead.
 export async function generateSalariesForPeriod(period: string): Promise<{ created: number }> {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");
@@ -847,44 +897,53 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
     const payeeIds = Array.from(new Set([...assistantCandidates, ...headCandidates]));
     if (!payeeIds.length) continue;
 
-    const { data: staffSettings } = await supabase.from("staff_pay_settings").select("profile_id, calc_method").in("profile_id", payeeIds);
+    const { data: staffSettings } = await supabase.from("staff_pay_settings").select("profile_id, calc_method, fixed_salary").in("profile_id", payeeIds);
     const staffDefaultByPayee = new Map(
       (staffSettings ?? []).map((s) => [s.profile_id, s.calc_method as "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant"])
     );
+    // Someone whose fixed_salary is unset can never actually get paid
+    // through the flat Fixed-salary line (generateFixedSalaryLinesForPeriod
+    // requires a positive amount, same check here) — treating them as
+    // "fixed" anyway would suppress their per-course fallback below with
+    // nothing to replace it, making them silently unpayable and invisible
+    // in Salaries. Only someone with a real amount set counts as fixed here.
+    const fixedSalaryByPayee = new Map((staffSettings ?? []).map((s) => [s.profile_id, s.fixed_salary != null ? Number(s.fixed_salary) : 0]));
 
     for (const payeeId of payeeIds) {
-      // A bracket-method line stuck at $0 is unambiguously the
-      // unmatched-bracket bug, not a value Finance reviewed and meant to
-      // leave at zero — recompute it on every re-generate until it
-      // resolves. Anything else with an existing line (any nonzero base, or
-      // a manual/per-paper line) is left completely untouched, so it's
-      // still safe to re-run without clobbering hand edits.
       const { data: existing } = await supabase
         .from("salary_lines")
-        .select("id, base, calc_method, released_at")
+        .select("id, base, calc_method, released_at, status")
         .eq("org_id", orgId)
         .eq("payee_id", payeeId)
         .eq("offering_id", offering.id)
         .eq("period", period)
         .maybeSingle();
-      const staleZeroBracket = existing?.calc_method === "bracket" && Number(existing.base) === 0;
-      if (existing && !staleZeroBracket) continue;
-      // A stale-zero-bracket recompute keeps whatever release state that row
-      // already had (it existed, so it went through the normal release flow
-      // already) — only a genuinely brand-new row picks up the period's
-      // auto-release timestamp.
-      const releasedAtForRow = existing ? existing.released_at : autoReleasedAt;
+
+      // Released, or marked paid, lines are frozen — only a manual edit or
+      // (for released) an explicit Unrelease touches them again. released_at
+      // and status are independent flags — a row can be paid without ever
+      // being released, so both are checked.
+      if (existing?.released_at || existing?.status === "paid") continue;
+      // "Manual" is never something the system defaults to going forward —
+      // it only ever means Finance deliberately picked it from the dropdown
+      // and typed a real number. A line already sitting at "manual" with a
+      // nonzero base IS that deliberate override, so it's frozen too. A
+      // still-$0 manual row is NOT protected here — nothing below creates
+      // $0-manual rows anymore (see shouldHaveRow), so any that still exist
+      // predate this and are safe to correct or clear out.
+      if (existing?.calc_method === "manual" && Number(existing.base) !== 0) continue;
 
       const checkedCount = await countCheckedPapers(supabase, offering.id, payeeId, period);
       const evalAmounts = evalByAssistant.get(payeeId);
       const isHead = headCandidates.has(payeeId);
       // A fixed-salary person's real pay comes entirely from the flat line
       // generateFixedSalaryLinesForPeriod already created above — their
-      // per-course line here (if any) only ever exists to carry that
-      // course's own evaluation bonus/deduction, never an auto-computed
-      // per_paper/bracket base, so their fixed amount can never be paid
-      // twice just for being assigned to more than one course.
-      const isFixedSalaryPerson = (staffDefaultByPayee.get(payeeId) ?? orgDefault) === "fixed";
+      // per-course line here only ever exists to carry that course's own
+      // evaluation bonus/deduction, never an auto-computed per_paper/bracket
+      // base (so their fixed amount can never be paid twice just for being
+      // assigned to more than one course), and never a bare "Manual $0"
+      // placeholder either — see needsHeadFallback below.
+      const isFixedSalaryPerson = (staffDefaultByPayee.get(payeeId) ?? orgDefault) === "fixed" && (fixedSalaryByPayee.get(payeeId) ?? 0) > 0;
       let method = await resolveMethodForAssistant(supabase, offering.id, payeeId, staffDefaultByPayee.get(payeeId), orgDefault);
       // fixed_per_assistant only makes sense for a head (it's keyed on the
       // course's assistant count, not anything an assistant themselves
@@ -892,25 +951,45 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
       // non-head falls back to the course's normal default instead of
       // computing a meaningless number.
       if (method === "fixed_per_assistant" && !isHead) method = await defaultMethodForOffering(supabase, offering.id);
-      // A head essentially never has checked papers or a self-logged eval —
-      // they're paid a set amount Finance decides each month, not computed
-      // from either. Skipping them here (as an assistant with nothing due
-      // would be) meant a head could never get a line to even review or
-      // pay, since nothing would ever trigger the automatic per_paper/
-      // bracket/fixed_per_paper paths for them either. Heads always get a
-      // $0 manual placeholder line instead, same shape as a course with no
-      // per-paper rate, for Finance to fill in.
       // Mock-exam papers are ignored entirely for Bracket, so they don't
-      // rescue a bracket assistant from the skip below or trigger a compute
-      // that would just come out to the same $0 anyway.
+      // rescue a bracket assistant from shouldHaveRow below or trigger a
+      // compute that would just come out to the same $0 anyway.
       const mockCounts = method !== "bracket" && checkedCount.mockPapers > 0;
-      if (!isHead && checkedCount.papers <= 0 && !mockCounts && !evalAmounts && method !== "fixed_per_paper") continue;
+      const wouldComputeSomething =
+        !isFixedSalaryPerson && (checkedCount.papers > 0 || mockCounts || method === "fixed_per_paper" || method === "fixed_per_assistant");
+      // A head NOT on a fixed salary is paid a set amount Finance decides
+      // each month with no formula behind it at all — they need some row to
+      // type that number into, or they could never be paid through this
+      // course, so they always get a $0 manual placeholder same shape as a
+      // course with no per-paper rate. A fixed-salary head's real pay
+      // already comes from the flat Fixed-salary line, so they don't need
+      // (and shouldn't get) that placeholder.
+      const needsHeadFallback = isHead && !isFixedSalaryPerson;
+      const shouldHaveRow = !!evalAmounts || wouldComputeSomething || needsHeadFallback;
+
+      if (!shouldHaveRow) {
+        // Nothing justifies a row here. A brand-new candidate never gets
+        // one; an existing row that predates this logic (an old $0
+        // placeholder, or the unmatched-bracket bug) is cleared out instead
+        // of sitting around mislabeled as something Finance chose.
+        if (existing) {
+          const { error: delError } = await supabase.from("salary_lines").delete().eq("id", existing.id);
+          if (!delError) created++;
+        }
+        continue;
+      }
+
+      // A recomputed row keeps whatever release state it already had (it
+      // existed, so it already went through the normal release flow) —
+      // only a genuinely brand-new row picks up the period's auto-release
+      // timestamp.
+      const releasedAtForRow = existing ? existing.released_at : autoReleasedAt;
 
       let base = 0;
       let methodLabel = "Manual";
       let calcMethod: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant" | "fixed" | "manual" = "manual";
       let basis = "No checked papers this period";
-      if (!isFixedSalaryPerson && (checkedCount.papers > 0 || mockCounts || method === "fixed_per_paper" || method === "fixed_per_assistant")) {
+      if (wouldComputeSomething) {
         const computed = await computeBaseForMethod(supabase, offering.id, payeeId, period, method, checkedCount);
         base = computed.base;
         methodLabel = computed.methodLabel;
@@ -1019,6 +1098,11 @@ export async function getDepartedStaffFinalMonthDetail(payeeId: string): Promise
 // considers people currently linked via enrollments/offering_assistants/
 // offering_heads, none of which a departed assistant is in anymore, so
 // their final (possibly prorated) month never gets generated on its own.
+// A departed person isn't going anywhere further, so — same as
+// generateSalariesForPeriod — clicking this again always recomputes from
+// current data rather than being a one-shot that then freezes forever;
+// the only things that stay frozen are a released/paid line, or one
+// already sitting on a deliberate nonzero "manual" override.
 export async function backfillDepartedSalaryLine(payeeId: string, offeringId: string, period: string): Promise<{ created: boolean }> {
   const profile = await getCurrentProfile();
   requireAdminOrHr(profile?.role);
@@ -1028,13 +1112,16 @@ export async function backfillDepartedSalaryLine(payeeId: string, offeringId: st
 
   const { data: existing } = await supabase
     .from("salary_lines")
-    .select("id")
+    .select("id, base, calc_method, released_at, status")
     .eq("org_id", orgId)
     .eq("payee_id", payeeId)
     .eq("offering_id", offeringId)
     .eq("period", period)
     .maybeSingle();
-  if (existing) return { created: false };
+  // released_at and status are independent flags — a row can be marked paid
+  // without ever being released, so both are checked.
+  if (existing?.released_at || existing?.status === "paid") return { created: false };
+  if (existing?.calc_method === "manual" && Number(existing.base) !== 0) return { created: false };
 
   const [{ data: person }, { data: staffSetting }, { data: evalRows }] = await Promise.all([
     supabase.from("profiles").select("full_name, role").eq("id", payeeId).single(),
@@ -1081,23 +1168,26 @@ export async function backfillDepartedSalaryLine(payeeId: string, offeringId: st
     deduction += lines.filter((l) => l.kind === "deduction").reduce((sum, l) => sum + Number(l.amount), 0);
   }
 
-  const { error } = await supabase.from("salary_lines").insert({
-    org_id: orgId,
-    payee_id: payeeId,
-    offering_id: offeringId,
-    period,
-    method: methodLabel,
-    calc_method: calcMethod,
-    basis,
-    base,
-    bonus,
-    deduction,
-    bonus_reason: bonus ? "From head evaluation" : null,
-    deduction_reason: deduction ? "From head evaluation" : null,
-    released_at: null,
-  });
+  const { error } = await supabase.from("salary_lines").upsert(
+    {
+      org_id: orgId,
+      payee_id: payeeId,
+      offering_id: offeringId,
+      period,
+      method: methodLabel,
+      calc_method: calcMethod,
+      basis,
+      base,
+      bonus,
+      deduction,
+      bonus_reason: bonus ? "From head evaluation" : null,
+      deduction_reason: deduction ? "From head evaluation" : null,
+      released_at: existing?.released_at ?? null,
+    },
+    { onConflict: "org_id,payee_id,offering_id,period" }
+  );
   if (error) throw new Error(error.message);
-  await logActivity("payments", `Added final-month salary line for ${person.full_name} (${period})`);
+  await logActivity("payments", `${existing ? "Recalculated" : "Added"} final-month salary line for ${person.full_name} (${period})`);
   return { created: true };
 }
 
