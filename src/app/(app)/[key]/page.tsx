@@ -18,6 +18,7 @@ import { PayrollSettingsContent } from "@/components/payroll-settings/payroll-se
 import { TemplatesContent } from "@/components/templates/templates-content";
 import { BrandingContent } from "@/components/branding/branding-content";
 import { EvaluationsContent } from "@/components/evaluations/evaluations-content";
+import { EvaluationSubmissionsContent } from "@/components/evaluation-submissions/evaluation-submissions-content";
 import { InstallmentsContent } from "@/components/installments/installments-content";
 import { StaffPaymentsContent } from "@/components/staff-payments/staff-payments-content";
 import { PayCategoriesContent } from "@/components/pay-categories/pay-categories-content";
@@ -162,6 +163,10 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
 
   if (key === "evaluations" && profile.role === "head") {
     return <EvaluationsContent />;
+  }
+
+  if (key === "evaluations" && (profile.role === "admin" || profile.role === "finance")) {
+    return <EvaluationSubmissionsContent />;
   }
 
   if (key === "weak-topics" && (profile.role === "head" || profile.role === "assistant")) {

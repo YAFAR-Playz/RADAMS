@@ -303,3 +303,82 @@ export async function deleteFinanceEvaluationLine(lineId: string) {
   const { error } = await supabase.from("evaluation_lines").delete().eq("id", lineId);
   if (error) throw new Error(error.message);
 }
+
+// A read-only, org-wide browse of every evaluation a head has submitted —
+// filterable by month/course/assistant — for Admin and Finance to review
+// what heads are actually submitting, separate from Finance's own
+// per-payee editing view embedded in Salaries.
+export type EvaluationSubmissionLine = { kind: "extra" | "deduction"; category: string; amount: number; note: string };
+export type EvaluationSubmission = {
+  id: string;
+  period: string;
+  headName: string;
+  assistantName: string;
+  offeringLabel: string;
+  rating: EvalRating | null;
+  notes: string;
+  status: "draft" | "submitted";
+  extraTotal: number;
+  deductionTotal: number;
+  lines: EvaluationSubmissionLine[];
+};
+
+export async function listEvaluationPeriods(): Promise<string[]> {
+  const profile = await getCurrentProfile();
+  requireFinanceOrAdmin(profile?.role);
+  if (!profile?.org) return [];
+  const supabase = await createClient();
+  const { data } = await supabase.from("evaluations").select("period").eq("org_id", profile.org.id);
+  return Array.from(new Set((data ?? []).map((d) => d.period))).sort((a, b) => (a < b ? 1 : -1));
+}
+
+export async function listEvaluationSubmissions(filters: {
+  period?: string;
+  offeringId?: string;
+  assistantId?: string;
+}): Promise<EvaluationSubmission[]> {
+  const profile = await getCurrentProfile();
+  requireFinanceOrAdmin(profile?.role);
+  if (!profile?.org) return [];
+  const supabase = await createClient();
+
+  let query = supabase
+    .from("evaluations")
+    .select(
+      "id, period, notes, rating, status, head:profiles!evaluations_head_id_fkey(full_name), assistant:profiles!evaluations_assistant_id_fkey(full_name), course_offerings(session, unit, courses(name)), evaluation_lines(kind, category, amount, note)"
+    )
+    .eq("org_id", profile.org.id)
+    .order("period", { ascending: false });
+
+  if (filters.period) query = query.eq("period", filters.period);
+  if (filters.offeringId) query = query.eq("offering_id", filters.offeringId);
+  if (filters.assistantId) query = query.eq("assistant_id", filters.assistantId);
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  return (data ?? [])
+    .map((e) => {
+      const head = Array.isArray(e.head) ? e.head[0] : e.head;
+      const assistant = Array.isArray(e.assistant) ? e.assistant[0] : e.assistant;
+      const offering = Array.isArray(e.course_offerings) ? e.course_offerings[0] : e.course_offerings;
+      const course = offering ? (Array.isArray(offering.courses) ? offering.courses[0] : offering.courses) : null;
+      const lines = Array.isArray(e.evaluation_lines) ? e.evaluation_lines : [];
+      const extraTotal = lines.filter((l) => l.kind === "extra").reduce((sum, l) => sum + Number(l.amount), 0);
+      const deductionTotal = lines.filter((l) => l.kind === "deduction").reduce((sum, l) => sum + Number(l.amount), 0);
+      return {
+        id: e.id,
+        period: e.period,
+        headName: head?.full_name ?? "—",
+        assistantName: assistant?.full_name ?? "—",
+        offeringLabel: offering ? [course?.name, offering.session, offering.unit].filter(Boolean).join(" · ") : "—",
+        rating: e.rating as EvalRating | null,
+        notes: e.notes ?? "",
+        status: e.status as "draft" | "submitted",
+        extraTotal,
+        deductionTotal,
+        lines: lines.map((l) => ({ kind: l.kind as "extra" | "deduction", category: l.category, amount: Number(l.amount), note: l.note ?? "" })),
+      };
+    })
+    .sort((a, b) => a.assistantName.localeCompare(b.assistantName) || b.period.localeCompare(a.period));
+}
