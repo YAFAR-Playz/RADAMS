@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
 import type { Kpi } from "@/lib/roles";
+import { getStaffCountTrend } from "@/lib/actions/dashboard-charts";
 
 export type StaffingRequestDetail = {
   id: string;
@@ -96,8 +97,9 @@ export async function getHrDashboard(): Promise<HrDashboard> {
   const approvedThisMonth = allRequests.filter((r) => r.status === "approved" && new Date(r.createdAt) >= monthStart).length;
 
   const totalStaff = (profiles ?? []).filter((p) => p.role !== "owner").length;
+  const staffTrend = await getStaffCountTrend();
   const kpis: Kpi[] = [
-    { icon: "users", value: String(totalStaff), label: "Total staff", tone: "neutral" },
+    { icon: "users", value: String(totalStaff), label: "Total staff", tone: "neutral", trend: staffTrend },
     { icon: "inbox", value: String(pendingRequests.length), label: "Pending requests", tone: pendingRequests.length > 0 ? "warn" : "ok" },
     { icon: "user-plus", value: String(allRequests.filter((r) => r.kind === "add").length), label: "Add requests", tone: "brand" },
     { icon: "check", value: String(approvedThisMonth), label: "Approved this month", tone: "ok" },

@@ -5,6 +5,7 @@ import { getCurrentProfile } from "@/lib/current-profile";
 import type { Kpi, Tone } from "@/lib/roles";
 import { trackInfo } from "@/lib/oversight-data";
 import { currencySymbol } from "@/lib/currency";
+import { getStudentCountTrend, getStaffCountTrend, getFinancePayrollTrend } from "@/lib/actions/dashboard-charts";
 
 export type BarRow = { label: string; n: number; barWPct: number };
 export type OfferingSummary = { id: string; label: string; students: number; pending: number };
@@ -103,9 +104,11 @@ export async function getAdminDashboard(): Promise<AdminDashboard> {
     pending: (assignmentRows ?? []).filter((a) => a.offering_id === o.id && !a.closed_at).length,
   }));
 
+  const [studentTrend, staffTrend] = await Promise.all([getStudentCountTrend(), getStaffCountTrend()]);
+
   const kpis: Kpi[] = [
-    { icon: "grad", value: String(studentsCount ?? 0), label: "Students", tone: "brand" },
-    { icon: "users", value: String((staff ?? []).length), label: "Staff members", tone: "neutral" },
+    { icon: "grad", value: String(studentsCount ?? 0), label: "Students", tone: "brand", trend: studentTrend },
+    { icon: "users", value: String((staff ?? []).length), label: "Staff members", tone: "neutral", trend: staffTrend },
     { icon: "clipboard-list", value: String(offeringIds.length), label: "Active courses", tone: "neutral" },
     { icon: "alert", value: String(pendingTasks), label: "Pending tasks", tone: pendingTasks > 0 ? "warn" : "ok" },
   ];
@@ -425,13 +428,16 @@ export async function getRegistrationDashboard(): Promise<RegistrationDashboard>
   const offeringIds = (offeringRows ?? []).map((o) => o.id);
   const labelById = new Map((offeringRows ?? []).map((o) => [o.id, offeringLabelOf(o)]));
 
-  const { count: studentsCount } = await supabase.from("students").select("id", { count: "exact", head: true }).eq("org_id", orgId);
+  const [{ count: studentsCount }, studentTrend] = await Promise.all([
+    supabase.from("students").select("id", { count: "exact", head: true }).eq("org_id", orgId),
+    getStudentCountTrend(),
+  ]);
 
   if (!offeringIds.length) {
     return {
       kpis: [
         { icon: "user-plus", value: "0", label: "New this week", tone: "brand" },
-        { icon: "grad", value: String(studentsCount ?? 0), label: "Total students", tone: "neutral" },
+        { icon: "grad", value: String(studentsCount ?? 0), label: "Total students", tone: "neutral", trend: studentTrend },
         { icon: "clipboard-list", value: "0", label: "Active courses", tone: "neutral" },
         { icon: "alert", value: "0", label: "Unassigned students", tone: "ok" },
       ],
@@ -483,7 +489,7 @@ export async function getRegistrationDashboard(): Promise<RegistrationDashboard>
 
   const kpis: Kpi[] = [
     { icon: "user-plus", value: String(newThisWeek ?? 0), label: "New this week", tone: "brand" },
-    { icon: "grad", value: String(studentsCount ?? 0), label: "Total students", tone: "neutral" },
+    { icon: "grad", value: String(studentsCount ?? 0), label: "Total students", tone: "neutral", trend: studentTrend },
     { icon: "clipboard-list", value: String(offeringIds.length), label: "Active courses", tone: "neutral" },
     { icon: "alert", value: String(unassignedCount), label: "Unassigned students", tone: unassignedCount > 0 ? "warn" : "ok" },
   ];
@@ -561,11 +567,10 @@ export async function getFinanceDashboard(): Promise<FinanceDashboard> {
   const assistants = Array.from(byPayee.values());
   const paidCount = assistants.filter((a) => a.status === "paid").length;
 
-  const { count: pendingEvaluations } = await supabase
-    .from("evaluations")
-    .select("id", { count: "exact", head: true })
-    .eq("org_id", orgId)
-    .eq("status", "submitted");
+  const [{ count: pendingEvaluations }, payrollTrend] = await Promise.all([
+    supabase.from("evaluations").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("status", "submitted"),
+    getFinancePayrollTrend(),
+  ]);
 
   const totalMethodCount = Array.from(methodCounts.values()).reduce((s, n) => s + n, 0);
   const paymentMethods: PaymentMethodSlice[] = Array.from(methodCounts.entries())
@@ -578,7 +583,13 @@ export async function getFinanceDashboard(): Promise<FinanceDashboard> {
     .slice(0, 6);
 
   const kpis: Kpi[] = [
-    { icon: "wallet", value: `${sym}${Math.round(totalPayroll).toLocaleString()}`, label: "Payroll this month", tone: "brand" },
+    {
+      icon: "wallet",
+      value: `${sym}${Math.round(totalPayroll).toLocaleString()}`,
+      label: "Payroll this month",
+      tone: "brand",
+      trend: payrollTrend.points.map((p) => p.total),
+    },
     { icon: "card", value: `${paidCount}/${assistants.length}`, label: "Assistants paid", tone: "neutral" },
     { icon: "clock", value: String(pendingEvaluations ?? 0), label: "Pending approvals", tone: (pendingEvaluations ?? 0) > 0 ? "warn" : "ok" },
     { icon: "trend", value: String(bonusCount), label: "Bonuses issued", tone: "ok" },
