@@ -131,16 +131,19 @@ function EvaluationPanel({ payeeId, offeringId, period, sym }: { payeeId: string
                     ))}
                   </select>
                   {cfg.mode === "number" && (
-                    <div className="flex h-7 flex-none items-center gap-[5px] rounded-[6px] border border-[var(--border)] bg-[var(--surface)] pr-[7px]">
+                    <div
+                      className="flex h-7 flex-none items-center gap-[5px] rounded-[6px] border bg-[var(--surface)] pr-[7px]"
+                      style={!(Number(l.qty) > 0) ? { borderColor: "var(--danger)", background: "var(--dangers)" } : { borderColor: "var(--border)" }}
+                    >
                       <input
                         key={`qty-${l.id}-${l.qty}`}
                         defaultValue={l.qty}
                         onBlur={(e) => onUpdate(l.id, { qty: e.target.value.replace(/[^0-9]/g, "") })}
                         placeholder="0"
-                        title="Quantity — this is what the amount is calculated from"
+                        title="Quantity — required, this is what the amount is calculated from. A blank qty means this line pays $0."
                         className="h-full w-[36px] rounded-[6px] bg-transparent px-2 text-center font-mono text-[12px] text-[var(--text)] outline-none"
                       />
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.03em] text-[var(--subtle)]">qty</span>
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.03em] text-[var(--subtle)]">qty · required</span>
                     </div>
                   )}
                   {cfg.mode === "dropdown" && (

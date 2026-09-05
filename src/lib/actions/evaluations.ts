@@ -117,6 +117,26 @@ export async function saveEvaluation(input: {
   if (!profile || !profile.org) throw new Error("Not authenticated");
   const supabase = await createClient();
 
+  const payCategories = await listPayCategories(input.offeringId);
+  const cats = (kind: "extra" | "deduction") => resolveCategoryDefs(payCategories, kind);
+
+  // A "number" category (qty × rate) with no qty filled in silently computes
+  // to $0 — indistinguishable from a real zero, and the single most common
+  // way a real extra/deduction ends up paying nothing (the head types the
+  // actual count into the note field instead, right next to the qty box).
+  // Only enforced on a real submission, not a draft — a draft is allowed to
+  // be incomplete by definition, and the head may not have decided the
+  // count yet while still sketching it out.
+  if (input.status === "submitted") {
+    const missing = input.lines.filter((l) => {
+      const cfg = cats(l.kind).find((c) => c.label === l.category);
+      return cfg?.mode === "number" && !(Number(l.qty) > 0);
+    });
+    if (missing.length) {
+      throw new Error(`Enter a quantity for: ${missing.map((l) => l.category).join(", ")} before submitting.`);
+    }
+  }
+
   const payload = {
     org_id: profile.org.id,
     head_id: profile.id,
@@ -143,8 +163,6 @@ export async function saveEvaluation(input: {
   }
 
   if (input.lines.length) {
-    const payCategories = await listPayCategories(input.offeringId);
-    const cats = (kind: "extra" | "deduction") => resolveCategoryDefs(payCategories, kind);
     const { error } = await supabase.from("evaluation_lines").insert(
       input.lines.map((l) => {
         const cfg = cats(l.kind).find((c) => c.label === l.category) ?? cats(l.kind)[0];

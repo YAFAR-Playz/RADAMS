@@ -55,13 +55,16 @@ function CategoryRow({
   cats,
   onChange,
   onRemove,
+  showMissingQty,
 }: {
   line: EvalLine;
   cats: CategoryDef[];
   onChange: (patch: Partial<EvalLine>) => void;
   onRemove: () => void;
+  showMissingQty: boolean;
 }) {
   const cfg = cats.find((c) => c.label === line.category) ?? cats[0];
+  const qtyMissing = showMissingQty && cfg.mode === "number" && !(Number(line.qty) > 0);
   return (
     <div className="flex flex-wrap items-center gap-[10px] rounded-[9px] p-[9px_10px] hover:bg-[var(--surface2)]">
       <div className="min-w-[150px] flex-1">
@@ -89,14 +92,20 @@ function CategoryRow({
         className="h-10 min-w-[140px] flex-[1.4] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
       />
       {cfg.mode === "number" && (
-        <div className="flex h-10 w-[150px] flex-none items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[11px]">
-          <input
-            value={line.qty}
-            onChange={(e) => onChange({ qty: e.target.value.replace(/[^0-9]/g, "") })}
-            placeholder="0"
-            className="w-[46px] border-none bg-transparent text-center font-mono text-[13px] font-semibold text-[var(--text)] outline-none"
-          />
-          <span className="ml-[6px] text-[11.5px] font-medium text-[var(--subtle)]">count</span>
+        <div className="flex flex-col gap-[3px]">
+          <div
+            className="flex h-10 w-[150px] flex-none items-center rounded-[8px] border bg-[var(--surface2)] px-[11px]"
+            style={qtyMissing ? { borderColor: "var(--danger)", background: "var(--dangers)" } : { borderColor: "var(--border)" }}
+          >
+            <input
+              value={line.qty}
+              onChange={(e) => onChange({ qty: e.target.value.replace(/[^0-9]/g, "") })}
+              placeholder="0"
+              className="w-[46px] border-none bg-transparent text-center font-mono text-[13px] font-semibold text-[var(--text)] outline-none"
+            />
+            <span className="ml-[6px] text-[11.5px] font-medium text-[var(--subtle)]">count · required</span>
+          </div>
+          {qtyMissing && <span className="text-[11px] font-medium text-[var(--danger)]">Enter a quantity to submit</span>}
         </div>
       )}
       {cfg.mode === "dropdown" && (
@@ -153,6 +162,11 @@ export function EvaluationsContent() {
   const [checkedPapers, setCheckedPapers] = useState<number | null>(null);
   const [saving, setSaving] = useState<"draft" | "submit" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Only starts flagging empty-qty "number" lines with a red border after
+  // the head actually tries to submit — showing it from the very first
+  // render would make every fresh line look like an error before they've
+  // had a chance to fill anything in.
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
 
   useEffect(() => {
     listMyOfferings().then((data) => {
@@ -251,6 +265,17 @@ export function EvaluationsContent() {
 
   async function onSubmit(next: "draft" | "submitted") {
     if (!assistantId || !offeringId) return;
+    if (next === "submitted") {
+      const missing = [...extras, ...deductions].filter((l) => {
+        const cfg = (l.kind === "extra" ? extraCats : dedCats).find((c) => c.label === l.category);
+        return cfg?.mode === "number" && !(Number(l.qty) > 0);
+      });
+      if (missing.length) {
+        setAttemptedSubmit(true);
+        setError(`Enter a quantity for: ${missing.map((l) => l.category).join(", ")} before submitting.`);
+        return;
+      }
+    }
     setSaving(next === "draft" ? "draft" : "submit");
     try {
       const { id } = await saveEvaluation({
@@ -266,8 +291,10 @@ export function EvaluationsContent() {
       });
       setEvalId(id);
       setStatus(next);
-    } catch {
-      setError("Couldn't save this evaluation — try again.");
+      setAttemptedSubmit(false);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't save this evaluation — try again.");
     } finally {
       setSaving(null);
     }
@@ -418,6 +445,7 @@ export function EvaluationsContent() {
                         cats={extraCats}
                         onChange={(patch) => updateLine("extra", l.id, patch)}
                         onRemove={() => removeLine("extra", l.id)}
+                        showMissingQty={attemptedSubmit}
                       />
                     ))
                   )}
@@ -461,6 +489,7 @@ export function EvaluationsContent() {
                         cats={dedCats}
                         onChange={(patch) => updateLine("deduction", l.id, patch)}
                         onRemove={() => removeLine("deduction", l.id)}
+                        showMissingQty={attemptedSubmit}
                       />
                     ))
                   )}
