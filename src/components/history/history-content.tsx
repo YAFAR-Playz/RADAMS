@@ -4,25 +4,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { SkeletonRow } from "@/components/ui/spinner";
 import { listActivityLog, type ActivityLogRow } from "@/lib/actions/activity-log";
-import { ACTIVITY_CATEGORIES, type ActivityCategory } from "@/lib/activity-categories";
-
-const CATEGORY_LABEL: Record<ActivityCategory, string> = {
-  staff: "Staff",
-  students: "Students",
-  payments: "Payments",
-  assignments: "Assignments",
-  attendance: "Attendance",
-  requests: "Requests",
-};
-
-const CATEGORY_ICON: Record<ActivityCategory, "users" | "grad" | "wallet" | "clipboard-list" | "cal-check" | "inbox"> = {
-  staff: "users",
-  students: "grad",
-  payments: "wallet",
-  assignments: "clipboard-list",
-  attendance: "cal-check",
-  requests: "inbox",
-};
+import { ACTIVITY_CATEGORIES, CATEGORY_LABEL, CATEGORY_ICON, type ActivityCategory } from "@/lib/activity-categories";
 
 const PAGE_SIZE = 20;
 

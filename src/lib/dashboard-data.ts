@@ -1,19 +1,9 @@
-import type { Role, Tone } from "@/lib/roles";
+import type { Role } from "@/lib/roles";
 
-// Head, Assistant, Registration, Finance, HR and Owner dashboards are
-// backed by real data — see src/lib/actions/dashboard.ts,
-// src/lib/actions/hr.ts and src/lib/actions/owner.ts.
-
-const ACT_DEFS: [string, string, string, Tone][] = [
-  ["New course created: Nov · Unit 2", "12m ago", "clipboard-list", "brand"],
-  ["Sara Mensah updated org branding", "1h ago", "palette", "neutral"],
-  ["14 students imported successfully", "3h ago", "file-up", "ok"],
-  ["Assistant request approved by HR", "5h ago", "user-check", "ok"],
-];
-export const ACTIVITY = ACT_DEFS.map(([text, time, icon, tone]) => ({ text, time, icon, tone }));
-
-// Registration dashboard is backed by real data — see
-// src/lib/actions/dashboard.ts (getRegistrationDashboard).
+// Every dashboard (Admin, Head, Assistant, Registration, Finance, HR, Owner)
+// is backed by real data — see src/lib/actions/dashboard.ts,
+// src/lib/actions/dashboard-charts.ts, src/lib/actions/hr.ts,
+// src/lib/actions/owner.ts and src/lib/actions/activity-log.ts.
 
 export function dashboardSubtitle(role: Role, orgName: string | null): string {
   const map: Record<Role, string> = {
