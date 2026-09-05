@@ -85,12 +85,22 @@ export async function getHrDashboard(): Promise<HrDashboard> {
   const allRequests = await listAllStaffingRequests();
   const pendingRequests = allRequests.filter((r) => r.status === "pending");
 
+  // staffing_requests has no approved_at/updated_at column, so created_at is
+  // the only timestamp available — this approximates "approved this month"
+  // as "created this month AND currently approved," which undercounts a
+  // request created last month but only approved this month. Good enough
+  // until the schema grows an actual approval timestamp.
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const approvedThisMonth = allRequests.filter((r) => r.status === "approved" && new Date(r.createdAt) >= monthStart).length;
+
   const totalStaff = (profiles ?? []).filter((p) => p.role !== "owner").length;
   const kpis: Kpi[] = [
     { icon: "users", value: String(totalStaff), label: "Total staff", tone: "neutral" },
     { icon: "inbox", value: String(pendingRequests.length), label: "Pending requests", tone: pendingRequests.length > 0 ? "warn" : "ok" },
     { icon: "user-plus", value: String(allRequests.filter((r) => r.kind === "add").length), label: "Add requests", tone: "brand" },
-    { icon: "check", value: String(allRequests.filter((r) => r.status === "approved").length), label: "Approved this month", tone: "ok" },
+    { icon: "check", value: String(approvedThisMonth), label: "Approved this month", tone: "ok" },
   ];
 
   return { kpis, pendingRequests: pendingRequests.slice(0, 5), staffByRole };

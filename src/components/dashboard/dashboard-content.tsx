@@ -6,7 +6,7 @@ import { Icon, type IconName } from "@/components/icons";
 import { SkeletonRow } from "@/components/ui/spinner";
 import { toneColors } from "@/lib/tone";
 import { mockKpisForRole, type Kpi, type Role, type Tone } from "@/lib/roles";
-import { ACTIVITY, dashboardSubtitle, greetingFor, dateLabel } from "@/lib/dashboard-data";
+import { dashboardSubtitle, greetingFor, dateLabel } from "@/lib/dashboard-data";
 import {
   getAdminDashboard,
   getAssistantDashboard,
@@ -19,8 +19,22 @@ import {
   type RegistrationDashboard,
   type FinanceDashboard,
 } from "@/lib/actions/dashboard";
+import {
+  getFinancePayrollTrend,
+  getRegistrationEnrollmentTrend,
+  getStaffingTrend,
+  getMyRatingDistribution,
+  getOrgRatingDistribution,
+  type PayrollTrendPoint,
+  type EnrollmentTrendPoint,
+  type StaffingTrendPoint,
+  type RatingSlice,
+} from "@/lib/actions/dashboard-charts";
 import { getHrDashboard, type HrDashboard } from "@/lib/actions/hr";
 import { getOwnerDashboard, listOrgsOverview, type OrgOverview } from "@/lib/actions/owner";
+import { listRecentActivityAcrossOrgs, type PlatformActivityRow } from "@/lib/actions/activity-log";
+import { CATEGORY_ICON } from "@/lib/activity-categories";
+import { TrendAreaChart, GroupedBarChart, RatingDonut } from "./charts";
 
 function Badge({ text, tone, icon }: { text: string; tone: Tone; icon?: IconName }) {
   const { bg, fg } = toneColors(tone);
@@ -407,33 +421,43 @@ function StaffByRoleCard({ rows }: { rows: HrDashboard["staffByRole"] }) {
   );
 }
 
-function ActivityCard() {
+function timeAgo(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+function ActivityCard({ rows }: { rows: PlatformActivityRow[] }) {
   return (
-    <Card title="Recent activity">
+    <Card title="Recent activity" subtitle="Across every organization">
       <div className="px-2 py-[7px]">
-        {ACTIVITY.map((a) => {
-          const { bg, fg } = toneColors(a.tone);
-          return (
-            <div key={a.text} className="flex gap-[11px] p-[10px_11px]">
-              <div
-                className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-[8px]"
-                style={{ background: bg, color: fg }}
-              >
-                <Icon name={a.icon as IconName} size={15} />
+        {rows.length === 0 ? (
+          <EmptyRow>No recent activity.</EmptyRow>
+        ) : (
+          rows.map((a) => (
+            <div key={a.id} className="flex gap-[11px] p-[10px_11px]">
+              <div className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-[8px] bg-[var(--surface2)] text-[var(--muted)]">
+                <Icon name={CATEGORY_ICON[a.category]} size={15} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-[13px] leading-[1.35] text-[var(--text)]">{a.text}</div>
-                <div className="mt-[2px] text-[11.5px] text-[var(--subtle)]">{a.time}</div>
+                <div className="text-[13px] leading-[1.35] text-[var(--text)]">{a.summary}</div>
+                <div className="mt-[2px] text-[11.5px] text-[var(--subtle)]">
+                  {a.orgName} · {a.actorName} · {timeAgo(a.createdAt)}
+                </div>
               </div>
             </div>
-          );
-        })}
+          ))
+        )}
       </div>
     </Card>
   );
 }
 
-function OwnerPanels({ orgs }: { orgs: OrgOverview[] }) {
+function OwnerPanels({ orgs, activity }: { orgs: OrgOverview[]; activity: PlatformActivityRow[] }) {
   return (
     <>
       <Card title="Organizations" action={<ViewAllButton href="/orgs">Manage</ViewAllButton>}>
@@ -461,7 +485,7 @@ function OwnerPanels({ orgs }: { orgs: OrgOverview[] }) {
           )}
         </div>
       </Card>
-      <ActivityCard />
+      <ActivityCard rows={activity} />
     </>
   );
 }
@@ -590,22 +614,46 @@ export function DashboardContent({
   const [hrData, setHrData] = useState<HrDashboard | null>(null);
   const [ownerKpis, setOwnerKpis] = useState<Kpi[] | null>(null);
   const [ownerOrgs, setOwnerOrgs] = useState<OrgOverview[]>([]);
+  const [ownerActivity, setOwnerActivity] = useState<PlatformActivityRow[]>([]);
   const [loading, setLoading] = useState(!isMock);
+
+  const [payrollTrend, setPayrollTrend] = useState<{ points: PayrollTrendPoint[]; currencySymbol: string } | null>(null);
+  const [enrollmentTrend, setEnrollmentTrend] = useState<EnrollmentTrendPoint[] | null>(null);
+  const [staffingTrend, setStaffingTrend] = useState<StaffingTrendPoint[] | null>(null);
+  const [ratingDistribution, setRatingDistribution] = useState<RatingSlice[] | null>(null);
 
   useEffect(() => {
     (async () => {
       if (isMock) return;
       setLoading(true);
-      if (role === "admin") setAdminData(await getAdminDashboard());
-      else if (role === "assistant") setAssistantData(await getAssistantDashboard());
-      else if (role === "head") setHeadData(await getHeadDashboard());
-      else if (role === "registration") setRegistrationData(await getRegistrationDashboard());
-      else if (role === "finance") setFinanceData(await getFinanceDashboard());
-      else if (role === "hr") setHrData(await getHrDashboard());
-      else if (role === "owner") {
-        const [dash, orgs] = await Promise.all([getOwnerDashboard(), listOrgsOverview()]);
+      if (role === "admin") {
+        const [dash, staffing] = await Promise.all([getAdminDashboard(), getStaffingTrend()]);
+        setAdminData(dash);
+        setStaffingTrend(staffing);
+      } else if (role === "assistant") setAssistantData(await getAssistantDashboard());
+      else if (role === "head") {
+        const [dash, ratings] = await Promise.all([getHeadDashboard(), getMyRatingDistribution()]);
+        setHeadData(dash);
+        setRatingDistribution(ratings);
+      } else if (role === "registration") {
+        const [dash, trend] = await Promise.all([getRegistrationDashboard(), getRegistrationEnrollmentTrend()]);
+        setRegistrationData(dash);
+        setEnrollmentTrend(trend);
+      } else if (role === "finance") {
+        const [dash, trend, ratings] = await Promise.all([getFinanceDashboard(), getFinancePayrollTrend(), getOrgRatingDistribution()]);
+        setFinanceData(dash);
+        setPayrollTrend(trend);
+        setRatingDistribution(ratings);
+      } else if (role === "hr") {
+        const [dash, staffing, ratings] = await Promise.all([getHrDashboard(), getStaffingTrend(), getOrgRatingDistribution()]);
+        setHrData(dash);
+        setStaffingTrend(staffing);
+        setRatingDistribution(ratings);
+      } else if (role === "owner") {
+        const [dash, orgs, activity] = await Promise.all([getOwnerDashboard(), listOrgsOverview(), listRecentActivityAcrossOrgs()]);
         setOwnerKpis(dash.kpis);
         setOwnerOrgs(orgs);
+        setOwnerActivity(activity);
       }
       setLoading(false);
     })();
@@ -644,7 +692,7 @@ export function DashboardContent({
       <KpiRow kpis={kpis} />
 
       <div className="mt-[18px] grid items-start gap-4 lg:grid-cols-[1.7fr_1fr]">
-        {role === "owner" && (loading ? <PanelSkeleton /> : <OwnerPanels orgs={ownerOrgs} />)}
+        {role === "owner" && (loading ? <PanelSkeleton /> : <OwnerPanels orgs={ownerOrgs} activity={ownerActivity} />)}
         {role === "admin" && (loading || !adminData ? <PanelSkeleton /> : <AdminPanels data={adminData} />)}
         {role === "hr" && (loading || !hrData ? <PanelSkeleton /> : <HrPanels data={hrData} />)}
         {role === "head" && (loading || !headData ? <PanelSkeleton /> : <HeadPanels data={headData} />)}
@@ -652,6 +700,90 @@ export function DashboardContent({
         {role === "registration" && (loading || !registrationData ? <PanelSkeleton /> : <RegistrationPanels data={registrationData} />)}
         {role === "finance" && (loading || !financeData ? <PanelSkeleton /> : <FinancePanels data={financeData} />)}
       </div>
+
+      {!loading && role === "admin" && staffingTrend && staffingTrend.some((p) => p.added || p.removed) && (
+        <div className="mt-4">
+          <Card title="Staffing trend" subtitle="Hires vs. departures, last 6 months">
+            <div className="p-[18px]">
+              <GroupedBarChart
+                data={staffingTrend}
+                series={[
+                  { key: "added", label: "Added", color: "var(--ok)" },
+                  { key: "removed", label: "Departed", color: "var(--danger)" },
+                ]}
+              />
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {!loading && role === "head" && ratingDistribution && ratingDistribution.length > 0 && (
+        <div className="mt-4">
+          <Card title="Evaluation ratings" subtitle="Every rating you've given, all-time">
+            <div className="p-[18px]">
+              <RatingDonut data={ratingDistribution} />
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {!loading && role === "registration" && enrollmentTrend && (
+        <div className="mt-4">
+          <Card title="Enrollment trend" subtitle="New students per day, last 14 days">
+            <div className="p-[18px]">
+              <TrendAreaChart data={enrollmentTrend.map((p) => ({ label: p.label, value: p.count }))} color="var(--brand)" />
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {!loading && role === "finance" && (payrollTrend || ratingDistribution) && (
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          {payrollTrend && (
+            <Card title="Payroll over time" subtitle="Total payout per month">
+              <div className="p-[18px]">
+                <TrendAreaChart
+                  data={payrollTrend.points.map((p) => ({ label: p.label, value: p.total }))}
+                  color="var(--brand)"
+                  valueFormatter={(v) => `${payrollTrend.currencySymbol}${Math.round(v / 1000)}k`}
+                />
+              </div>
+            </Card>
+          )}
+          {ratingDistribution && ratingDistribution.length > 0 && (
+            <Card title="Evaluation ratings" subtitle="Org-wide, all heads">
+              <div className="p-[18px]">
+                <RatingDonut data={ratingDistribution} />
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {!loading && role === "hr" && (staffingTrend || ratingDistribution) && (
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          {staffingTrend && staffingTrend.some((p) => p.added || p.removed) && (
+            <Card title="Staffing trend" subtitle="Hires vs. departures, last 6 months">
+              <div className="p-[18px]">
+                <GroupedBarChart
+                  data={staffingTrend}
+                  series={[
+                    { key: "added", label: "Added", color: "var(--ok)" },
+                    { key: "removed", label: "Departed", color: "var(--danger)" },
+                  ]}
+                />
+              </div>
+            </Card>
+          )}
+          {ratingDistribution && ratingDistribution.length > 0 && (
+            <Card title="Evaluation ratings" subtitle="Org-wide, all heads">
+              <div className="p-[18px]">
+                <RatingDonut data={ratingDistribution} />
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
     </div>
   );
 }
