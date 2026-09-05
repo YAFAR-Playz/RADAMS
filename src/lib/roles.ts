@@ -119,6 +119,10 @@ export type Kpi = {
   tone: Tone;
   delta?: string;
   dir?: "up" | "down";
+  // Optional recent-history series for a small sparkline under the tile —
+  // only ever set from real historical data (see dashboard-charts.ts);
+  // never fabricated, so most KPIs simply don't have one.
+  trend?: number[];
 };
 
 // Mock KPIs from the design, used until each module (courses, assignments,

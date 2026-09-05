@@ -19,6 +19,39 @@ function lastNPeriods(n: number, endingAt?: Date): string[] {
   return periods;
 }
 
+// Point-in-time headcount reconstructed from created_at/left_at — a real
+// historical trend, not a fabricated one, even though nothing snapshots
+// headcount directly: "how many existed as of month-end X" is just a count
+// with a date filter.
+function monthEnds(months: number): Date[] {
+  const now = new Date();
+  const ends: Date[] = [];
+  for (let i = months - 1; i >= 0; i--) {
+    ends.push(new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59));
+  }
+  return ends;
+}
+
+export async function getStudentCountTrend(months = 6): Promise<number[]> {
+  const profile = await getCurrentProfile();
+  const orgId = profile?.org?.id;
+  if (!orgId) return [];
+  const supabase = await createClient();
+  const { data } = await supabase.from("students").select("created_at").eq("org_id", orgId);
+  const createdDates = (data ?? []).map((s) => new Date(s.created_at).getTime());
+  return monthEnds(months).map((end) => createdDates.filter((t) => t <= end.getTime()).length);
+}
+
+export async function getStaffCountTrend(months = 6): Promise<number[]> {
+  const profile = await getCurrentProfile();
+  const orgId = profile?.org?.id;
+  if (!orgId) return [];
+  const supabase = await createClient();
+  const { data } = await supabase.from("profiles").select("created_at, left_at").eq("org_id", orgId).neq("role", "owner");
+  const rows = (data ?? []).map((p) => ({ created: new Date(p.created_at).getTime(), left: p.left_at ? new Date(p.left_at).getTime() : null }));
+  return monthEnds(months).map((end) => rows.filter((r) => r.created <= end.getTime() && (r.left === null || r.left > end.getTime())).length);
+}
+
 export type PayrollTrendPoint = { period: string; label: string; total: number };
 
 // Payroll runs in arrears (see currentPeriod() in dashboard.ts), so the most

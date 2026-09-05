@@ -14,9 +14,29 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
+  LineChart,
+  Line,
 } from "recharts";
 import { toneColors } from "@/lib/tone";
 import type { Tone } from "@/lib/roles";
+
+// Tiny inline trend line for a KPI tile — no axes/grid/tooltip, just a shape.
+// Only ever rendered when the Kpi carries real historical data (see
+// dashboard-charts.ts) — most KPIs have no natural trend and simply don't
+// pass a `trend` array, so this never draws a fabricated line.
+export function Sparkline({ data, color }: { data: number[]; color: string }) {
+  if (data.length < 2) return null;
+  const points = data.map((value, i) => ({ i, value }));
+  return (
+    <div className="h-[28px] w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={points} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
+          <Line type="monotone" dataKey="value" stroke={color} strokeWidth={2} dot={false} isAnimationActive={false} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
 
 const AXIS_STYLE = { fontSize: 11, fill: "var(--subtle)" };
 
