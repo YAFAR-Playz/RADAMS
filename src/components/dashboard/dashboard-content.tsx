@@ -18,6 +18,7 @@ import {
   type HeadDashboard,
   type RegistrationDashboard,
   type FinanceDashboard,
+  type CourseAverageRow,
 } from "@/lib/actions/dashboard";
 import {
   getFinancePayrollTrend,
@@ -362,6 +363,9 @@ function FinancePanels({ data }: { data: FinanceDashboard }) {
           )}
         </div>
       </Card>
+      <div className="lg:col-span-2">
+        <SalaryByCourseCard rows={data.salaryByCourse} sym={data.currencySymbol} />
+      </div>
     </>
   );
 }
@@ -495,6 +499,57 @@ function OwnerPanels({ orgs, activity }: { orgs: OrgOverview[]; activity: Platfo
   );
 }
 
+// Shared by Admin and Finance — lets either role flip between "which
+// courses pay the most per person on average" and "which courses have the
+// most people actually getting paid," rather than only ever showing one
+// fixed view of the same per-course breakdown.
+function SalaryByCourseCard({ rows, sym }: { rows: CourseAverageRow[]; sym: string }) {
+  const [mode, setMode] = useState<"average" | "count">("average");
+  const sorted = [...rows].sort((a, b) => (mode === "average" ? b.average - a.average : b.count - a.count));
+  const max = Math.max(1, ...sorted.map((r) => (mode === "average" ? r.average : r.count)));
+
+  return (
+    <Card
+      title="Salaries by course"
+      subtitle="Last completed payroll period"
+      action={
+        <select
+          value={mode}
+          onChange={(e) => setMode(e.target.value as "average" | "count")}
+          className="cursor-pointer appearance-none rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] py-[6px] text-[12px] font-semibold text-[var(--text)] outline-none"
+        >
+          <option value="average">Average per person</option>
+          <option value="count">Staff paid</option>
+        </select>
+      }
+    >
+      <div className="p-[18px]">
+        {sorted.length === 0 ? (
+          <EmptyRow>No paid salary lines for this period yet.</EmptyRow>
+        ) : (
+          sorted.map((r) => {
+            const value = mode === "average" ? r.average : r.count;
+            const barPct = Math.round((value / max) * 100);
+            return (
+              <div key={r.label} className="mb-[14px] last:mb-0">
+                <div className="mb-[6px] flex justify-between gap-2">
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--text)]">{r.label}</span>
+                  <span className="flex-none text-[13px] font-semibold text-[var(--muted)]">
+                    {mode === "average" ? `${sym}${value.toLocaleString()}` : value}
+                  </span>
+                </div>
+                <div className="h-[7px] overflow-hidden rounded-full bg-[var(--surface2)]">
+                  <div className="h-full rounded-full bg-[var(--brand)] transition-[width]" style={{ width: `${barPct}%` }} />
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </Card>
+  );
+}
+
 function AdminPanels({ data }: { data: AdminDashboard }) {
   return (
     <>
@@ -537,6 +592,9 @@ function AdminPanels({ data }: { data: AdminDashboard }) {
           )}
         </div>
       </Card>
+      <div className="lg:col-span-2">
+        <SalaryByCourseCard rows={data.salaryByCourse} sym={data.currencySymbol} />
+      </div>
     </>
   );
 }
