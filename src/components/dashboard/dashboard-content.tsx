@@ -650,10 +650,14 @@ export function DashboardContent({
         setPayrollTrend(trend);
         setRatingDistribution(ratings);
       } else if (role === "hr") {
-        const [dash, staffing, ratings] = await Promise.all([getHrDashboard(), getStaffingTrend(), getOrgRatingDistribution()]);
+        // No ratings chart here — evaluations' RLS never grants HR read
+        // access at all (only head-own, admin, finance, owner), so
+        // getOrgRatingDistribution would always come back empty for HR.
+        // That would render as "no ratings exist," which is misleading —
+        // real ratings exist, HR just can't see them under current policy.
+        const [dash, staffing] = await Promise.all([getHrDashboard(), getStaffingTrend()]);
         setHrData(dash);
         setStaffingTrend(staffing);
-        setRatingDistribution(ratings);
       } else if (role === "owner") {
         const [dash, orgs, activity] = await Promise.all([getOwnerDashboard(), listOrgsOverview(), listRecentActivityAcrossOrgs()]);
         setOwnerKpis(dash.kpis);
@@ -765,28 +769,19 @@ export function DashboardContent({
         </div>
       )}
 
-      {!loading && role === "hr" && (staffingTrend || ratingDistribution) && (
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          {staffingTrend && staffingTrend.some((p) => p.added || p.removed) && (
-            <Card title="Staffing trend" subtitle="Hires vs. departures, last 6 months">
-              <div className="p-[18px]">
-                <GroupedBarChart
-                  data={staffingTrend}
-                  series={[
-                    { key: "added", label: "Added", color: "var(--ok)" },
-                    { key: "removed", label: "Departed", color: "var(--danger)" },
-                  ]}
-                />
-              </div>
-            </Card>
-          )}
-          {ratingDistribution && ratingDistribution.length > 0 && (
-            <Card title="Evaluation ratings" subtitle="Org-wide, all heads">
-              <div className="p-[18px]">
-                <RatingDonut data={ratingDistribution} />
-              </div>
-            </Card>
-          )}
+      {!loading && role === "hr" && staffingTrend && staffingTrend.some((p) => p.added || p.removed) && (
+        <div className="mt-4">
+          <Card title="Staffing trend" subtitle="Hires vs. departures, last 6 months">
+            <div className="p-[18px]">
+              <GroupedBarChart
+                data={staffingTrend}
+                series={[
+                  { key: "added", label: "Added", color: "var(--ok)" },
+                  { key: "removed", label: "Departed", color: "var(--danger)" },
+                ]}
+              />
+            </div>
+          </Card>
         </div>
       )}
     </div>
