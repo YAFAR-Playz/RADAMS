@@ -105,6 +105,18 @@ export function AttendanceContent({ role }: { role: Role }) {
     setSessionId(selectId ?? data[0]?.id ?? null);
   }
 
+  // Refreshes the sidebar's per-session present/total counts WITHOUT ever
+  // touching which session is selected. onMark/onAllPresent used to call
+  // reloadSessions(offeringId, sessionId) for this, but that closes over
+  // whatever sessionId was current when marking started — if the user
+  // switches to a different session before that async call resolves, its
+  // stale setSessionId(oldSessionId) fires afterward and snaps the UI back
+  // to the old session, making attendance look like it "reset" when really
+  // the user was just yanked between two real sessions.
+  async function refreshSessionCounts(id: string) {
+    setSessions(await listSessions(id));
+  }
+
   useEffect(() => {
     (async () => {
       setSessionPage(0);
@@ -117,25 +129,29 @@ export function AttendanceContent({ role }: { role: Role }) {
     })();
   }, [offeringId]);
 
-  async function reloadRoster(id: string) {
-    setRosterLoading(true);
-    try {
-      setRoster(await getSessionRoster(id));
-    } catch {
-      setError("Couldn't load this session's roster.");
-    } finally {
-      setRosterLoading(false);
-    }
-  }
-
   useEffect(() => {
-    (() => {
+    // Guards against a slower-resolving fetch for a PREVIOUS sessionId
+    // landing after a newer one already started — without this, quickly
+    // switching sessions could let a stale roster overwrite the correct one.
+    let cancelled = false;
+    (async () => {
       if (!sessionId) {
         setRoster(null);
         return;
       }
-      reloadRoster(sessionId);
+      setRosterLoading(true);
+      try {
+        const data = await getSessionRoster(sessionId);
+        if (!cancelled) setRoster(data);
+      } catch {
+        if (!cancelled) setError("Couldn't load this session's roster.");
+      } finally {
+        if (!cancelled) setRosterLoading(false);
+      }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [sessionId]);
 
   const offeringsLoading = offerings === null;
@@ -169,12 +185,7 @@ export function AttendanceContent({ role }: { role: Role }) {
     setSavingId(studentId);
     try {
       await markAttendance(sessionId, studentId, status);
-      setSessions((prev) =>
-        prev
-          ? prev.map((s) => (s.id === sessionId ? { ...s } : s))
-          : prev
-      );
-      if (sessionId) reloadSessions(offeringId!, sessionId);
+      await refreshSessionCounts(offeringId!);
     } catch {
       setError("Couldn't save attendance — try again.");
     } finally {
@@ -188,7 +199,7 @@ export function AttendanceContent({ role }: { role: Role }) {
     setRoster((prev) => (prev ? prev.map((r) => ({ ...r, status: "present" as AttendanceStatus })) : prev));
     try {
       await markAllPresent(sessionId);
-      reloadSessions(offeringId!, sessionId);
+      await refreshSessionCounts(offeringId!);
     } catch {
       setError("Couldn't mark all present — try again.");
     } finally {

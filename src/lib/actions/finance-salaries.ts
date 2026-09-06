@@ -606,6 +606,26 @@ async function computeBaseForMethod(
     const basisOverride = `Fixed base + ${assistantCount} assistant${assistantCount === 1 ? "" : "s"}${prorationNote ? ` · ${prorationNote}` : ""}`;
     return { base, methodLabel: "Fixed + per assistant", prorationNote, basisOverride };
   }
+  // per_paper / bracket / fixed_per_paper are all scoped to this specific
+  // offering via offering_assistants.joined_at + the assistant's own
+  // left_at — computed once here rather than separately per branch below.
+  const { joinedAt, leftAt } = await getActivityWindow(supabase, offeringId, assistantId);
+  const fraction = prorationFraction(period, joinedAt, leftAt);
+  const prorationNote = fraction < 1 && fraction > 0 ? formatProrationNote(period, joinedAt, leftAt, fraction) : null;
+
+  // Zero overlap with this period at all — joined after it ended, or left
+  // before it began — means nothing computed below can be legitimately
+  // owed for it. Without this, an assistant who joined in September but
+  // then checked an August-due assignment as backlog would get paid for
+  // August despite never having worked it: the per-paper/bracket amount
+  // isn't otherwise prorated at all (see the comment on fixed_per_paper
+  // below for why), so it doesn't naturally zero out the way the fixed
+  // portion does.
+  if (fraction === 0) {
+    const methodLabel = method === "fixed_per_paper" ? "Fixed + per paper" : method === "bracket" ? "Bracket" : "Per paper";
+    return { base: 0, methodLabel, prorationNote: null, basisOverride: "Not active during this period" };
+  }
+
   if (method === "fixed_per_paper") {
     const { data: rateRow } = await supabase
       .from("per_paper_rates")
@@ -621,20 +641,13 @@ async function computeBaseForMethod(
     // The fixed portion is a recurring monthly amount, so it's prorated by
     // active time same as bracket pay; the per-paper portion already
     // self-scales with a partial period (fewer papers were even checkable),
-    // so it's added on top unprorated.
-    const { joinedAt, leftAt } = await getActivityWindow(supabase, offeringId, assistantId);
-    const fraction = prorationFraction(period, joinedAt, leftAt);
-    const prorationNote = fraction < 1 ? formatProrationNote(period, joinedAt, leftAt, fraction) : null;
-
+    // so it's added on top unprorated — safe now that the zero-overlap case
+    // above is handled separately.
     const base = Math.round(fixedSalary * fraction) + checkedCount.papers * rate + checkedCount.mockPapers * mockRate;
     return { base, methodLabel: "Fixed + per paper", prorationNote };
   }
   if (method === "bracket") {
     const { data: brackets } = await supabase.from("pay_brackets").select("lo, hi, pay").eq("offering_id", offeringId);
-
-    const { joinedAt, leftAt } = await getActivityWindow(supabase, offeringId, assistantId);
-    const fraction = prorationFraction(period, joinedAt, leftAt);
-    const prorationNote = fraction < 1 ? formatProrationNote(period, joinedAt, leftAt, fraction) : null;
 
     // Brackets are calibrated against average papers checked PER ASSIGNMENT,
     // not a raw cumulative total across the whole period — a course with
@@ -659,7 +672,7 @@ async function computeBaseForMethod(
   const rate = rateRow ? Number(rateRow.rate) : 8;
   const mockRate = rateRow?.mock_exam_rate != null ? Number(rateRow.mock_exam_rate) : rate;
   const base = checkedCount.papers * rate + checkedCount.mockPapers * mockRate;
-  return { base, methodLabel: "Per paper", prorationNote: null };
+  return { base, methodLabel: "Per paper", prorationNote };
 }
 
 async function defaultMethodForOffering(supabase: Awaited<ReturnType<typeof createClient>>, offeringId: string): Promise<"per_paper" | "bracket"> {
@@ -1031,6 +1044,7 @@ function requireAdminOrHr(role: string | undefined) {
 export type DepartedStaffOffering = {
   offeringId: string;
   courseLabel: string;
+  period: string;
   papers: number;
   assignments: number;
   hasSalaryLine: boolean;
@@ -1055,6 +1069,16 @@ export async function getDepartedStaffFinalMonthDetail(payeeId: string): Promise
   const { data: person } = await supabase.from("profiles").select("left_at").eq("id", payeeId).maybeSingle();
   if (!person?.left_at) return { finalPeriod: null, offerings: [] };
   const finalPeriod = String(person.left_at).slice(0, 7);
+  // A leave date early in its month (e.g. the 1st) can mean essentially all
+  // of a person's real final-month activity actually happened the CALENDAR
+  // MONTH BEFORE finalPeriod — that month is checked too so real, unbilled
+  // work isn't silently skipped just because it isn't the exact month
+  // left_at falls in (see: a person who worked all of August but left
+  // 2026-09-01 — finalPeriod alone is "2026-09", which they were never
+  // active during at all).
+  const [fy, fm] = finalPeriod.split("-").map(Number);
+  const priorDate = new Date(Date.UTC(fy, fm - 2, 1));
+  const priorPeriod = `${priorDate.getUTCFullYear()}-${String(priorDate.getUTCMonth() + 1).padStart(2, "0")}`;
 
   const { data: logs } = await supabase
     .from("assignment_logs")
@@ -1073,24 +1097,50 @@ export async function getDepartedStaffFinalMonthDetail(payeeId: string): Promise
       .select("id, session, unit, courses(name)")
       .eq("org_id", orgId)
       .in("id", Array.from(offeringIds)),
-    supabase.from("salary_lines").select("offering_id").eq("org_id", orgId).eq("payee_id", payeeId).eq("period", finalPeriod),
+    supabase
+      .from("salary_lines")
+      .select("offering_id, period")
+      .eq("org_id", orgId)
+      .eq("payee_id", payeeId)
+      .in("period", [finalPeriod, priorPeriod]),
   ]);
-  const linedOfferingIds = new Set((existingLines ?? []).map((l) => l.offering_id));
+  const linedKey = new Set((existingLines ?? []).map((l) => `${l.offering_id}:${l.period}`));
 
-  const offerings = await Promise.all(
+  const offeringsPerRow = await Promise.all(
     (offeringRows ?? []).map(async (o) => {
-      const checked = await countCheckedPapers(supabase, o.id, payeeId, finalPeriod);
-      return {
-        offeringId: o.id,
-        courseLabel: offeringLabel(o),
-        papers: checked.papers,
-        assignments: checked.assignments,
-        hasSalaryLine: linedOfferingIds.has(o.id),
-      };
+      const [finalChecked, priorChecked] = await Promise.all([
+        countCheckedPapers(supabase, o.id, payeeId, finalPeriod),
+        countCheckedPapers(supabase, o.id, payeeId, priorPeriod),
+      ]);
+      const rows: DepartedStaffOffering[] = [
+        {
+          offeringId: o.id,
+          courseLabel: offeringLabel(o),
+          period: finalPeriod,
+          papers: finalChecked.papers,
+          assignments: finalChecked.assignments,
+          hasSalaryLine: linedKey.has(`${o.id}:${finalPeriod}`),
+        },
+      ];
+      // Only surface the prior month as its own row when there's real
+      // signal it was missed (papers actually checked or assignments due)
+      // and nothing is already recorded for it — otherwise every normal,
+      // on-time departure would grow a redundant zero-activity row here.
+      if (!linedKey.has(`${o.id}:${priorPeriod}`) && (priorChecked.papers > 0 || priorChecked.assignments > 0)) {
+        rows.push({
+          offeringId: o.id,
+          courseLabel: offeringLabel(o),
+          period: priorPeriod,
+          papers: priorChecked.papers,
+          assignments: priorChecked.assignments,
+          hasSalaryLine: false,
+        });
+      }
+      return rows;
     })
   );
 
-  return { finalPeriod, offerings };
+  return { finalPeriod, offerings: offeringsPerRow.flat() };
 }
 
 // Manually creates a salary_line for one specific (payee, offering, period)

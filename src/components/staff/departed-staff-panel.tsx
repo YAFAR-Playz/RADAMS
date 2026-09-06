@@ -38,11 +38,11 @@ function DepartedRow({ person }: { person: DepartedStaffMember }) {
     if (!detail) getDepartedStaffFinalMonthDetail(person.id).then(setDetail);
   }
 
-  async function onAdd(offeringId: string) {
-    if (!detail?.finalPeriod) return;
-    setAddingId(offeringId);
+  async function onAdd(offering: DepartedStaffOffering) {
+    const key = `${offering.offeringId}:${offering.period}`;
+    setAddingId(key);
     try {
-      await backfillDepartedSalaryLine(person.id, offeringId, detail.finalPeriod);
+      await backfillDepartedSalaryLine(person.id, offering.offeringId, offering.period);
       setDetail(await getDepartedStaffFinalMonthDetail(person.id));
     } finally {
       setAddingId(null);
@@ -90,35 +90,38 @@ function DepartedRow({ person }: { person: DepartedStaffMember }) {
             </div>
           ) : (
             <div className="flex flex-col gap-[8px]">
-              <div className="text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">
-                Final month · {periodLabel(detail.finalPeriod)}
-              </div>
-              {detail.offerings.map((o) => (
-                <div
-                  key={o.offeringId}
-                  className="flex flex-wrap items-center gap-[10px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] p-[9px_11px]"
-                >
-                  <span className="min-w-[140px] flex-1 text-[12.5px] font-semibold text-[var(--text)]">{o.courseLabel}</span>
-                  <span className="flex-none text-[12px] text-[var(--muted)]">
-                    {o.papers} paper{o.papers === 1 ? "" : "s"} checked · {o.assignments} assignment{o.assignments === 1 ? "" : "s"} due
-                  </span>
-                  {o.hasSalaryLine ? (
-                    <span className="flex flex-none items-center gap-[5px] rounded-[7px] bg-[var(--oks)] px-[9px] py-[6px] text-[11.5px] font-semibold text-[var(--ok)]">
-                      <Icon name="check2" size={12} />
-                      Already in Salaries
+              {detail.offerings.map((o) => {
+                const key = `${o.offeringId}:${o.period}`;
+                return (
+                  <div
+                    key={key}
+                    className="flex flex-wrap items-center gap-[10px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] p-[9px_11px]"
+                  >
+                    <div className="min-w-[140px] flex-1">
+                      <div className="text-[12.5px] font-semibold text-[var(--text)]">{o.courseLabel}</div>
+                      <div className="text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">{periodLabel(o.period)}</div>
+                    </div>
+                    <span className="flex-none text-[12px] text-[var(--muted)]">
+                      {o.papers} paper{o.papers === 1 ? "" : "s"} checked · {o.assignments} assignment{o.assignments === 1 ? "" : "s"} due
                     </span>
-                  ) : (
-                    <button
-                      onClick={() => onAdd(o.offeringId)}
-                      disabled={addingId === o.offeringId}
-                      className="flex flex-none items-center gap-[6px] rounded-[7px] bg-[var(--brand)] px-[10px] py-[6px] text-[11.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
-                    >
-                      {addingId === o.offeringId ? <Spinner size={12} /> : <Icon name="plus" size={12} />}
-                      Add to Salaries
-                    </button>
-                  )}
-                </div>
-              ))}
+                    {o.hasSalaryLine ? (
+                      <span className="flex flex-none items-center gap-[5px] rounded-[7px] bg-[var(--oks)] px-[9px] py-[6px] text-[11.5px] font-semibold text-[var(--ok)]">
+                        <Icon name="check2" size={12} />
+                        Already in Salaries
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => onAdd(o)}
+                        disabled={addingId === key}
+                        className="flex flex-none items-center gap-[6px] rounded-[7px] bg-[var(--brand)] px-[10px] py-[6px] text-[11.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+                      >
+                        {addingId === key ? <Spinner size={12} /> : <Icon name="plus" size={12} />}
+                        Add to Salaries
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

@@ -156,10 +156,14 @@ export async function getOversightSummary(
   const { data: assignmentRows } = await supabase.from("assignments").select("id").eq("offering_id", offeringId);
   const assignmentIds = (assignmentRows ?? []).map((a) => a.id);
 
+  // Left students must not count toward a course's tracking totals — same
+  // rule as the Students/Assistants tabs. students!inner + the left_at
+  // filter drops them at the query level rather than after the fact.
   const { data: enrollments } = await supabase
     .from("enrollments")
-    .select("student_id, assistant_id")
-    .eq("offering_id", offeringId);
+    .select("student_id, assistant_id, students!inner(left_at)")
+    .eq("offering_id", offeringId)
+    .is("students.left_at", null);
 
   const { data: logs } = assignmentIds.length
     ? await supabase.from("assignment_logs").select("student_id, sent_at").in("assignment_id", assignmentIds)
