@@ -349,6 +349,124 @@ export async function releaseAllForPeriod(period: string): Promise<{ released: n
   return { released: data?.length ?? 0 };
 }
 
+// Admin-only correction for someone who shouldn't be on this period's list
+// at all (e.g. added by mistake, or covered manually outside the system) —
+// deletes every one of their lines for the period. Refuses if any of those
+// lines are already paid or released, so a real payment record can't be
+// silently wiped; unmark those first.
+export async function removePayeeFromPeriod(payeeId: string, period: string) {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org || profile.role !== "admin") throw new Error("Not authorized");
+  const orgId = profile.org.id;
+  const supabase = await createClient();
+
+  const { data: lines } = await supabase
+    .from("salary_lines")
+    .select("id, status, released_at")
+    .eq("org_id", orgId)
+    .eq("payee_id", payeeId)
+    .eq("period", period);
+  if (!lines || !lines.length) return;
+  if (lines.some((l) => l.status === "paid" || l.released_at)) {
+    throw new Error("Can't remove — some lines are already paid or released. Unmark those first.");
+  }
+
+  const { data: payee } = await supabase.from("profiles").select("full_name").eq("id", payeeId).maybeSingle();
+  const { error } = await supabase.from("salary_lines").delete().eq("org_id", orgId).eq("payee_id", payeeId).eq("period", period);
+  if (error) throw new Error(error.message);
+  await logActivity("payments", `Removed ${payee?.full_name ?? "a payee"} from ${period} salaries`);
+}
+
+export type MissingPayeeOffering = { id: string; label: string };
+export type MissingPayee = { id: string; name: string; initials: string; role: string; offerings: MissingPayeeOffering[] };
+
+// Staff who normally could appear on a period's salary list (active
+// assistants/heads) but don't yet have any line for it — usually because
+// they had nothing generateSalariesForPeriod would auto-create a line for
+// (e.g. zero papers checked and no fixed base), but Admin still wants to
+// add them manually for a one-off bonus/adjustment.
+export async function listMissingPayeesForPeriod(period: string): Promise<MissingPayee[]> {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org || profile.role !== "admin") return [];
+  const orgId = profile.org.id;
+  const supabase = await createClient();
+
+  const [{ data: existingLines }, { data: staff }] = await Promise.all([
+    supabase.from("salary_lines").select("payee_id").eq("org_id", orgId).eq("period", period),
+    supabase.from("profiles").select("id, full_name, initials, role").eq("org_id", orgId).in("role", ["assistant", "head"]).is("left_at", null),
+  ]);
+  const existingIds = new Set((existingLines ?? []).map((l) => l.payee_id));
+  const candidates = (staff ?? []).filter((s) => !existingIds.has(s.id));
+  if (!candidates.length) return [];
+
+  const candidateIds = candidates.map((c) => c.id);
+  const [{ data: asstLinks }, { data: headLinks }] = await Promise.all([
+    supabase.from("offering_assistants").select("assistant_id, course_offerings(id, session, unit, courses(name))").in("assistant_id", candidateIds),
+    supabase.from("offering_heads").select("head_id, course_offerings(id, session, unit, courses(name))").in("head_id", candidateIds),
+  ]);
+
+  const offeringsByPayee = new Map<string, MissingPayeeOffering[]>();
+  const addOffering = (payeeId: string, o: { id: string; session: string; unit: string | null; courses: { name: string } | { name: string }[] | null } | null) => {
+    if (!o) return;
+    const list = offeringsByPayee.get(payeeId) ?? [];
+    if (!list.some((x) => x.id === o.id)) list.push({ id: o.id, label: offeringLabel(o) });
+    offeringsByPayee.set(payeeId, list);
+  };
+  for (const row of asstLinks ?? []) addOffering(row.assistant_id, Array.isArray(row.course_offerings) ? row.course_offerings[0] : row.course_offerings);
+  for (const row of headLinks ?? []) addOffering(row.head_id, Array.isArray(row.course_offerings) ? row.course_offerings[0] : row.course_offerings);
+
+  return candidates
+    .map((c) => ({ id: c.id, name: c.full_name, initials: c.initials, role: c.role, offerings: offeringsByPayee.get(c.id) ?? [] }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Creates a blank manual line for a payee Admin picked from
+// listMissingPayeesForPeriod's "not included" list — starts at zero and is
+// edited afterward the same way any other line is (updateSalaryLine), same
+// as a departed-staff backfill line starts before Finance fills in specifics.
+export async function addManualSalaryLine(payeeId: string, offeringId: string | null, period: string): Promise<{ lineId: string }> {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org || profile.role !== "admin") throw new Error("Not authorized");
+  const orgId = profile.org.id;
+  const supabase = await createClient();
+
+  let existingQuery = supabase.from("salary_lines").select("id").eq("org_id", orgId).eq("payee_id", payeeId).eq("period", period);
+  existingQuery = offeringId ? existingQuery.eq("offering_id", offeringId) : existingQuery.is("offering_id", null);
+  const { data: existing } = await existingQuery.maybeSingle();
+  if (existing) return { lineId: existing.id };
+
+  const [{ data: payee }, { data: offering }] = await Promise.all([
+    supabase.from("profiles").select("full_name").eq("id", payeeId).maybeSingle(),
+    offeringId
+      ? supabase.from("course_offerings").select("session, unit, courses(name)").eq("id", offeringId).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+
+  const { data, error } = await supabase
+    .from("salary_lines")
+    .insert({
+      org_id: orgId,
+      payee_id: payeeId,
+      offering_id: offeringId,
+      period,
+      method: "Manual",
+      calc_method: "manual",
+      basis: "Added manually by Admin",
+      base: 0,
+      bonus: 0,
+      deduction: 0,
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Failed to add");
+
+  await logActivity(
+    "payments",
+    `Manually added ${payee?.full_name ?? "a payee"} to ${period} salaries${offering ? ` (${offeringLabel(offering)})` : ""}`
+  );
+  return { lineId: data.id };
+}
+
 // Optional proof-of-payment attached when marking a payee paid. Storage lives
 // in a private bucket — only ever accessed through the admin client, gated
 // by the salary_receipts RLS policy (finance/admin, or the payee themself).

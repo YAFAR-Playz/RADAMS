@@ -19,8 +19,12 @@ import {
   setAssistantOfficeHours,
   listMessagesForPayee,
   replyToPayee,
+  removePayeeFromPeriod,
+  listMissingPayeesForPeriod,
+  addManualSalaryLine,
   type AssistantSalary,
   type SalaryMessage,
+  type MissingPayee,
 } from "@/lib/actions/finance-salaries";
 import {
   getEvaluationForFinance,
@@ -310,7 +314,8 @@ function periodLabel(period: string) {
   return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
-export function FinanceSalariesContent() {
+export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) {
+  const isAdmin = role === "admin";
   const [periods, setPeriods] = useState<string[] | null>(null);
   const [period, setPeriod] = useState<string | null>(null);
   const [assistants, setAssistants] = useState<AssistantSalary[] | null>(null);
@@ -341,6 +346,13 @@ export function FinanceSalariesContent() {
   const [officeHoursCourseByPayee, setOfficeHoursCourseByPayee] = useState<Record<string, string>>({});
   const [releasingAll, setReleasingAll] = useState(false);
   const [headFixedPerAssistantEnabled, setHeadFixedPerAssistantEnabled] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<AssistantSalary | null>(null);
+  const [removing, setRemoving] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [missingPayees, setMissingPayees] = useState<MissingPayee[] | null>(null);
+  const [addPayeeId, setAddPayeeId] = useState("");
+  const [addOfferingId, setAddOfferingId] = useState("");
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     (() => {
@@ -563,6 +575,46 @@ export function FinanceSalariesContent() {
     }
   }
 
+  async function onConfirmRemove() {
+    if (!period || !removeTarget) return;
+    setRemoving(true);
+    try {
+      await removePayeeFromPeriod(removeTarget.payeeId, period);
+      setRemoveTarget(null);
+      await reload(period);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't remove this payee — try again.");
+    } finally {
+      setRemoving(false);
+    }
+  }
+
+  function openAdd() {
+    setAddOpen(true);
+    setAddPayeeId("");
+    setAddOfferingId("");
+    if (period) {
+      setMissingPayees(null);
+      listMissingPayeesForPeriod(period).then(setMissingPayees);
+    }
+  }
+
+  const addCandidate = missingPayees?.find((p) => p.id === addPayeeId) ?? null;
+
+  async function onConfirmAdd() {
+    if (!period || !addCandidate) return;
+    setAdding(true);
+    try {
+      await addManualSalaryLine(addCandidate.id, addOfferingId || null, period);
+      setAddOpen(false);
+      await reload(period);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't add this payee — try again.");
+    } finally {
+      setAdding(false);
+    }
+  }
+
   async function onReleaseAll() {
     if (!period) return;
     setReleasingAll(true);
@@ -736,11 +788,24 @@ export function FinanceSalariesContent() {
       </div>
 
       <section className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
-        <header className="flex items-center justify-between border-b border-[var(--border2)] p-[15px_18px]">
+        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border2)] p-[15px_18px]">
           <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">
             Staff salaries {period ? `· ${periodLabel(period)}` : ""}
           </h3>
-          <span className="text-[12px] text-[var(--subtle)]">Tap a row to edit adjustments</span>
+          <div className="flex items-center gap-3">
+            <span className="text-[12px] text-[var(--subtle)]">Tap a row to edit adjustments</span>
+            {isAdmin && (
+              <button
+                onClick={openAdd}
+                disabled={!period}
+                title="Add someone not currently in this period's list"
+                className="flex flex-none items-center gap-[6px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 py-[7px] text-[12px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
+              >
+                <Icon name="user-plus" size={13} />
+                Add
+              </button>
+            )}
+          </div>
         </header>
         <div className="flex items-start gap-[10px] border-b border-[var(--border2)] bg-[var(--infos)] p-[11px_18px]">
           <Icon name="trend" size={16} className="mt-[1px] flex-none text-[var(--info)]" />
@@ -882,6 +947,18 @@ export function FinanceSalariesContent() {
                     <Icon name="message" size={13} />
                     Messages
                   </button>
+                  {isAdmin && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRemoveTarget(a);
+                      }}
+                      title="Remove from this period's list"
+                      className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--subtle)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] hover:text-[var(--danger)]"
+                    >
+                      <Icon name="trash" size={13} />
+                    </button>
+                  )}
                   <Icon name="chevron-down" size={18} className="flex-none text-[var(--subtle)]" style={{ transform: expanded ? "rotate(180deg)" : "none" }} />
                 </div>
 
@@ -1134,6 +1211,136 @@ export function FinanceSalariesContent() {
               >
                 {unreleasing ? <Spinner size={15} /> : <Icon name="eye-off" size={15} />}
                 Unrelease
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {removeTarget && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(8,12,22,0.5)] p-5">
+          <div className="w-full max-w-[420px] overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(8,12,22,.34)]">
+            <div className="flex items-center gap-3 border-b border-[var(--border2)] p-[16px_18px]">
+              <div className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] bg-[var(--dangers)] text-[var(--danger)]">
+                <Icon name="trash" size={16} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Remove {removeTarget.name} from this period?</h3>
+                <div className="text-[12px] text-[var(--muted)]">{period ? periodLabel(period) : ""}</div>
+              </div>
+              <button
+                onClick={() => setRemoveTarget(null)}
+                className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]"
+              >
+                <Icon name="x" size={18} />
+              </button>
+            </div>
+            <div className="p-[16px_18px] text-[13.5px] leading-[1.5] text-[var(--text)]">
+              Deletes every one of their salary lines for {period ? periodLabel(period) : "this period"} — they&apos;ll show up in &quot;Add&quot;
+              again if regenerated or added back later. Blocked if any of their lines are already paid or released.
+            </div>
+            <div className="flex gap-[10px] border-t border-[var(--border2)] p-[14px_18px]">
+              <button
+                onClick={() => setRemoveTarget(null)}
+                className="h-11 flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onConfirmRemove}
+                disabled={removing}
+                className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--danger)] text-[13.5px] font-semibold text-white disabled:opacity-60"
+              >
+                {removing ? <Spinner size={15} /> : <Icon name="trash" size={15} />}
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {addOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(8,12,22,0.5)] p-5">
+          <div className="w-full max-w-[440px] overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(8,12,22,.34)]">
+            <div className="flex items-center gap-3 border-b border-[var(--border2)] p-[16px_18px]">
+              <div className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] bg-[var(--brands)] text-[var(--brand)]">
+                <Icon name="user-plus" size={16} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Add to {period ? periodLabel(period) : "this period"}</h3>
+                <div className="text-[12px] text-[var(--muted)]">Staff not currently in this period&apos;s list</div>
+              </div>
+              <button
+                onClick={() => setAddOpen(false)}
+                className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]"
+              >
+                <Icon name="x" size={18} />
+              </button>
+            </div>
+            <div className="flex flex-col gap-3 p-[16px_18px]">
+              {missingPayees === null ? (
+                <SkeletonRow className="h-[38px]" />
+              ) : missingPayees.length === 0 ? (
+                <div className="text-[13px] text-[var(--muted)]">
+                  Everyone active is already on this period&apos;s list.
+                </div>
+              ) : (
+                <>
+                  <label className="flex flex-col gap-[6px]">
+                    <span className="text-[12px] font-semibold text-[var(--muted)]">Person</span>
+                    <select
+                      value={addPayeeId}
+                      onChange={(e) => {
+                        setAddPayeeId(e.target.value);
+                        setAddOfferingId("");
+                      }}
+                      className="h-10 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13.5px] text-[var(--text)] outline-none"
+                    >
+                      <option value="">Select…</option>
+                      {missingPayees.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} · {p.role}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {addCandidate && addCandidate.offerings.length > 0 && (
+                    <label className="flex flex-col gap-[6px]">
+                      <span className="text-[12px] font-semibold text-[var(--muted)]">Course (optional)</span>
+                      <select
+                        value={addOfferingId}
+                        onChange={(e) => setAddOfferingId(e.target.value)}
+                        className="h-10 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13.5px] text-[var(--text)] outline-none"
+                      >
+                        <option value="">No course — flat line</option>
+                        {addCandidate.offerings.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  <p className="m-0 text-[12px] leading-[1.5] text-[var(--muted)]">
+                    Adds a blank line starting at {sym}0 — edit the base/bonus/deduction afterward like any other line.
+                  </p>
+                </>
+              )}
+            </div>
+            <div className="flex gap-[10px] border-t border-[var(--border2)] p-[14px_18px]">
+              <button
+                onClick={() => setAddOpen(false)}
+                className="h-11 flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onConfirmAdd}
+                disabled={adding || !addCandidate}
+                className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+              >
+                {adding ? <Spinner size={15} /> : <Icon name="user-plus" size={15} />}
+                Add
               </button>
             </div>
           </div>
