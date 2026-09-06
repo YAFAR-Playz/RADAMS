@@ -30,18 +30,16 @@ export async function getAssistantGroups(offeringId: string): Promise<{ groups: 
 
   const { data: allEnrollments } = await supabase
     .from("enrollments")
-    .select("id, student_id, assistant_id, students(id, name, initials, left_at)")
+    .select("id, student_id, assistant_id, left_at, students(id, name, initials)")
     .eq("offering_id", offeringId);
 
   // This view (the head's Assistants tab) is a working roster, not a
-  // management/history view — a left student shouldn't linger under their
-  // old assistant's group, and definitely shouldn't be counted as
-  // "unassigned" waiting to be auto-assigned. Filtering once here, before
-  // splitting into groups/unassigned, keeps both lists consistent.
-  const enrollments = (allEnrollments ?? []).filter((e) => {
-    const s = Array.isArray(e.students) ? e.students[0] : e.students;
-    return !s?.left_at;
-  });
+  // management/history view — a student who left THIS course shouldn't
+  // linger under their old assistant's group, and definitely shouldn't be
+  // counted as "unassigned" waiting to be auto-assigned. Filtering once
+  // here, before splitting into groups/unassigned, keeps both lists
+  // consistent.
+  const enrollments = (allEnrollments ?? []).filter((e) => !e.left_at);
 
   const groups: AssistantGroup[] = (assistantLinks ?? [])
     .map((row) => {
@@ -124,13 +122,11 @@ export async function getAssistantWorkloads(offeringId: string): Promise<Assista
 
   const { data: enrollments } = await supabase
     .from("enrollments")
-    .select("assistant_id, students(left_at)")
+    .select("assistant_id, left_at")
     .eq("offering_id", offeringId);
   const counts = new Map<string, number>();
   for (const e of enrollments ?? []) {
-    if (!e.assistant_id) continue;
-    const s = Array.isArray(e.students) ? e.students[0] : e.students;
-    if (s?.left_at) continue;
+    if (!e.assistant_id || e.left_at) continue;
     counts.set(e.assistant_id, (counts.get(e.assistant_id) ?? 0) + 1);
   }
 

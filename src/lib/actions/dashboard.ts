@@ -278,15 +278,16 @@ export async function getHeadDashboard(): Promise<HeadDashboard> {
     };
   }
 
-  // Left students must not count toward the tracking totals below — same
-  // rule as the Students/Assistants tabs and the Oversight page's own copy
-  // of this same tracking concept.
+  // A student who left THAT course must not count toward the tracking
+  // totals below — same rule as the Students/Assistants tabs and the
+  // Oversight page's own copy of this same tracking concept. "Left" is
+  // tracked per enrollment, so this filters directly on the enrollment row.
   const [{ data: enrollments }, { data: assistantLinksRaw }, { data: assignmentRows }] = await Promise.all([
     supabase
       .from("enrollments")
-      .select("offering_id, student_id, assistant_id, students!inner(left_at)")
+      .select("offering_id, student_id, assistant_id")
       .in("offering_id", offeringIds)
-      .is("students.left_at", null),
+      .is("left_at", null),
     supabase.from("offering_assistants").select("offering_id, profiles(id, full_name, initials)").in("offering_id", offeringIds),
     supabase.from("assignments").select("id, offering_id").in("offering_id", offeringIds),
   ]);

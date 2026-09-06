@@ -66,17 +66,14 @@ export async function listCourses(): Promise<CoursesOverview> {
     .from("offering_heads")
     .select("offering_id, profiles(full_name)")
     .in("offering_id", offeringIds);
-  // A student who left still keeps their enrollment row, and one enrolled
-  // in several offerings shows up once per offering — neither should count
-  // toward "currently enrolled" totals.
+  // A student who left this specific course still keeps their enrollment
+  // row, and one enrolled in several offerings shows up once per offering —
+  // neither should count toward "currently enrolled" totals.
   const { data: enrollments } = await supabase
     .from("enrollments")
-    .select("offering_id, student_id, students(left_at)")
+    .select("offering_id, student_id, left_at")
     .in("offering_id", offeringIds);
-  const activeEnrollments = (enrollments ?? []).filter((e) => {
-    const student = Array.isArray(e.students) ? e.students[0] : e.students;
-    return !student?.left_at;
-  });
+  const activeEnrollments = (enrollments ?? []).filter((e) => !e.left_at);
 
   const headsByOffering = new Map<string, string[]>();
   for (const row of headLinks ?? []) {

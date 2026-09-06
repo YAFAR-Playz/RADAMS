@@ -44,7 +44,7 @@ export async function getStudentsForOffering(offeringId: string): Promise<Studen
   let query = supabase
     .from("enrollments")
     .select(
-      "id, student_id, assistant_id, created_at, target_grade, students!inner(id, name, initials, student_code, email, phone, guardian_name, guardian_phone, left_at), profiles(id, full_name, student_whatsapp_link)"
+      "id, student_id, assistant_id, created_at, target_grade, left_at, students!inner(id, name, initials, student_code, email, phone, guardian_name, guardian_phone), profiles(id, full_name, student_whatsapp_link)"
     )
     .eq("offering_id", offeringId);
 
@@ -52,12 +52,14 @@ export async function getStudentsForOffering(offeringId: string): Promise<Studen
     query = query.eq("assistant_id", profile.id);
   }
 
-  // Heads and assistants work this list day-to-day (progress, grading,
-  // messaging) — a student who's already left shouldn't clutter that view.
-  // Admin and registration still see left students here (dimmed, with a
-  // badge) since they're the ones who manage the left/restored status.
+  // "Left" is per-enrollment (a student can leave one course and stay
+  // active in another) — see setEnrollmentLeftStatus. Heads and assistants
+  // work this list day-to-day (progress, grading, messaging) — a student
+  // who's already left THIS course shouldn't clutter that view. Admin and
+  // registration still see left students here (dimmed, with a badge) since
+  // they're the ones who manage the left/restored status.
   if (profile.role === "head" || profile.role === "assistant") {
-    query = query.is("students.left_at", null);
+    query = query.is("left_at", null);
   }
 
   // enrollments and assignments don't depend on each other — fetching them
@@ -120,7 +122,7 @@ export async function getStudentsForOffering(offeringId: string): Promise<Studen
         assistantName: assistant?.full_name ?? null,
         assistantWhatsappLink: assistant?.student_whatsapp_link ?? null,
         enrolledAt: e.created_at,
-        leftAt: student.left_at,
+        leftAt: e.left_at,
         avgGrade,
         targetGrade: e.target_grade != null ? Number(e.target_grade) : null,
         cells,
@@ -278,12 +280,32 @@ export async function listAllOfferingsForOrg(): Promise<OfferingChoice[]> {
 
 export async function addStudentEnrollment(studentId: string, offeringId: string): Promise<{ enrollmentId: string }> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+
+  // (student_id, offering_id) is unique, so a student who left this course
+  // still holds that slot via their old (left) enrollment row — blindly
+  // INSERTing would hit the unique constraint and surface as a raw "failed
+  // to enroll" error. Restoring the existing row instead makes "add them
+  // back to a course they left" work the same way "add them to a course
+  // they were never in" does.
+  const { data: existing } = await supabase
     .from("enrollments")
-    .insert({ student_id: studentId, offering_id: offeringId })
-    .select("id")
-    .single();
-  if (error || !data) throw new Error(error?.message ?? "Failed to enroll student");
+    .select("id, left_at")
+    .eq("student_id", studentId)
+    .eq("offering_id", offeringId)
+    .maybeSingle();
+
+  let enrollmentId: string;
+  if (existing) {
+    if (existing.left_at) {
+      const { error } = await supabase.from("enrollments").update({ left_at: null }).eq("id", existing.id);
+      if (error) throw new Error(error.message);
+    }
+    enrollmentId = existing.id;
+  } else {
+    const { data, error } = await supabase.from("enrollments").insert({ student_id: studentId, offering_id: offeringId }).select("id").single();
+    if (error || !data) throw new Error(error?.message ?? "Failed to enroll student");
+    enrollmentId = data.id;
+  }
 
   const [{ data: student }, { data: offering }] = await Promise.all([
     supabase.from("students").select("name").eq("id", studentId).maybeSingle(),
@@ -291,7 +313,7 @@ export async function addStudentEnrollment(studentId: string, offeringId: string
   ]);
   await logActivity("students", `Enrolled ${student?.name ?? "a student"} into ${offeringLabel(offering ?? null)}`);
 
-  return { enrollmentId: data.id };
+  return { enrollmentId };
 }
 
 export type StudentDuplicateMatch = {
@@ -452,13 +474,12 @@ export async function updateStudent(
     phone: string;
     guardianName: string;
     guardianPhone: string;
-    left: boolean;
   }
 ) {
   const supabase = await createClient();
   const { data: before } = await supabase
     .from("students")
-    .select("name, email, phone, guardian_name, guardian_phone, left_at")
+    .select("name, email, phone, guardian_name, guardian_phone")
     .eq("id", studentId)
     .maybeSingle();
 
@@ -470,7 +491,6 @@ export async function updateStudent(
       phone: patch.phone || null,
       guardian_name: patch.guardianName || null,
       guardian_phone: patch.guardianPhone || null,
-      left_at: patch.left ? new Date().toISOString() : null,
     })
     .eq("id", studentId);
   if (error) throw new Error(error.message);
@@ -482,10 +502,38 @@ export async function updateStudent(
         fieldChange("phone", before.phone, patch.phone),
         fieldChange("guardian name", before.guardian_name, patch.guardianName),
         fieldChange("guardian phone", before.guardian_phone, patch.guardianPhone),
-        !!before.left_at !== patch.left ? (patch.left ? "marked as left" : "restored (no longer marked as left)") : null,
       ].filter((x): x is string => !!x)
     : [];
   await logActivity("students", `Updated ${patch.name}${changes.length ? ` — ${changes.join(", ")}` : ""}`);
+}
+
+// "Left" is tracked per enrollment, not per student — a student can leave
+// one course while staying active in another, and marking them left here
+// must never block re-adding them to a completely different course (see
+// addStudentEnrollment, which restores rather than re-inserts when the
+// target enrollment already exists but was left).
+export async function setEnrollmentLeftStatus(enrollmentId: string, left: boolean) {
+  const supabase = await createClient();
+  const { data: before } = await supabase
+    .from("enrollments")
+    .select("left_at, students(name), course_offerings(session, unit, courses(name))")
+    .eq("id", enrollmentId)
+    .maybeSingle();
+
+  const { error } = await supabase
+    .from("enrollments")
+    .update({ left_at: left ? new Date().toISOString() : null })
+    .eq("id", enrollmentId);
+  if (error) throw new Error(error.message);
+
+  if (before && !!before.left_at !== left) {
+    const student = Array.isArray(before.students) ? before.students[0] : before.students;
+    const offering = Array.isArray(before.course_offerings) ? before.course_offerings[0] : before.course_offerings;
+    await logActivity(
+      "students",
+      `${student?.name ?? "A student"} ${left ? "marked as left" : "restored (no longer marked as left)"} — ${offeringLabel(offering ?? null)}`
+    );
+  }
 }
 
 export type StudentDetailAssignment = {
@@ -595,7 +643,7 @@ export async function getStudentDetailedExport(offeringId: string): Promise<Stud
 
   const { data: enrollments } = await supabase
     .from("enrollments")
-    .select("student_id, created_at, students(name, initials, student_code, email, phone, guardian_name, guardian_phone, left_at), profiles(full_name)")
+    .select("student_id, created_at, left_at, students(name, initials, student_code, email, phone, guardian_name, guardian_phone), profiles(full_name)")
     .eq("offering_id", offeringId);
   if (!enrollments || enrollments.length === 0) return { columns: [], rows: [] };
 
@@ -667,7 +715,7 @@ export async function getStudentDetailedExport(offeringId: string): Promise<Stud
       guardianPhone: student.guardian_phone,
       assistantName: assistant?.full_name ?? null,
       enrolledAt: e.created_at,
-      leftAt: student.left_at,
+      leftAt: e.left_at,
       cells,
     });
   }

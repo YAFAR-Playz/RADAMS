@@ -51,7 +51,7 @@ export async function getFullExport(offeringId: string): Promise<FullExportRow[]
 
   const { data: enrollments } = await supabase
     .from("enrollments")
-    .select("student_id, created_at, students(student_code, name, left_at), profiles(full_name)")
+    .select("student_id, created_at, left_at, students(student_code, name), profiles(full_name)")
     .eq("offering_id", offeringId);
   if (!enrollments || enrollments.length === 0) return [];
 
@@ -91,7 +91,7 @@ export async function getFullExport(offeringId: string): Promise<FullExportRow[]
         studentName: student.name,
         assistantName: assistant?.full_name ?? "—",
         enrolledAt: e.created_at,
-        leftAt: student.left_at,
+        leftAt: e.left_at,
         assignmentsChecked: checkedByStudent.get(e.student_id) ?? 0,
         assignmentsTotal: assignmentIds.length,
         attendancePct: total ? Math.round((present / total) * 100) : 0,
@@ -156,14 +156,15 @@ export async function getOversightSummary(
   const { data: assignmentRows } = await supabase.from("assignments").select("id").eq("offering_id", offeringId);
   const assignmentIds = (assignmentRows ?? []).map((a) => a.id);
 
-  // Left students must not count toward a course's tracking totals — same
-  // rule as the Students/Assistants tabs. students!inner + the left_at
-  // filter drops them at the query level rather than after the fact.
+  // A student who left THIS course must not count toward its tracking
+  // totals — same rule as the Students/Assistants tabs. "Left" is tracked
+  // per enrollment (see setEnrollmentLeftStatus in students.ts), so this
+  // filters straight on the enrollment row rather than needing a join.
   const { data: enrollments } = await supabase
     .from("enrollments")
-    .select("student_id, assistant_id, students!inner(left_at)")
+    .select("student_id, assistant_id")
     .eq("offering_id", offeringId)
-    .is("students.left_at", null);
+    .is("left_at", null);
 
   const { data: logs } = assignmentIds.length
     ? await supabase.from("assignment_logs").select("student_id, sent_at").in("assignment_id", assignmentIds)
