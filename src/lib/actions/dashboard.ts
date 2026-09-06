@@ -111,15 +111,16 @@ export async function getAdminDashboard(): Promise<AdminDashboard> {
   const [studentTrend, staffTrend, salaryStats] = await Promise.all([
     getStudentCountTrend(),
     getStaffCountTrend(),
-    getSalaryStatsForPeriod(supabase, orgId, currentPeriod()),
+    getSalaryStatsForPeriod(supabase, orgId),
   ]);
+  const salaryPeriodLabel = salaryStats.period ? periodLabel(salaryStats.period) : "—";
 
   const kpis: Kpi[] = [
     { icon: "grad", value: String(studentsCount ?? 0), label: "Students", tone: "brand", trend: studentTrend },
     { icon: "users", value: String((staff ?? []).length), label: "Staff members", tone: "neutral", trend: staffTrend },
     { icon: "clipboard-list", value: String(offeringIds.length), label: "Active courses", tone: "neutral" },
     { icon: "alert", value: String(pendingTasks), label: "Pending tasks", tone: pendingTasks > 0 ? "warn" : "ok" },
-    { icon: "wallet", value: `${sym}${salaryStats.totalPaid.toLocaleString()}`, label: "Salaries paid last period", tone: "ok" },
+    { icon: "wallet", value: `${sym}${salaryStats.totalPaid.toLocaleString()}`, label: `Salaries paid (${salaryPeriodLabel})`, tone: "ok" },
     { icon: "user-check", value: String(salaryStats.paidNonZeroCount), label: "Staff paid (non-zero)", tone: "neutral" },
     { icon: "trend", value: `${sym}${salaryStats.avgPerEmployee.toLocaleString()}`, label: "Avg. paid per employee", tone: "brand" },
   ];
@@ -528,14 +529,36 @@ export type FinanceDashboard = {
   currencySymbol: string;
 };
 
-type SalaryStats = { totalPaid: number; paidNonZeroCount: number; avgPerEmployee: number; byCourse: CourseAverageRow[] };
+type SalaryStats = { period: string | null; totalPaid: number; paidNonZeroCount: number; avgPerEmployee: number; byCourse: CourseAverageRow[] };
+
+function periodLabel(period: string) {
+  const [y, m] = period.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
 
 // Shared by the Admin and Finance dashboards — "paid" here means the
 // salary_lines.status flag Finance sets via "Mark as paid" in the Salaries
 // tab, not just released/visible. byCourse only considers lines with a real
 // offeringId (skips flat/office-hours lines), same scoping the Salaries tab
 // itself uses for "which courses does this person have a line for."
-async function getSalaryStatsForPeriod(supabase: Awaited<ReturnType<typeof createClient>>, orgId: string, period: string): Promise<SalaryStats> {
+//
+// Uses the most recent period with anything actually marked paid, rather
+// than always "last calendar month" — payroll for the most recent month is
+// routinely still all-pending for days/weeks after it ends (Finance hasn't
+// run "Mark as paid" yet), which would otherwise show 0 here even right
+// after a real payroll run for the prior month.
+async function getSalaryStatsForPeriod(supabase: Awaited<ReturnType<typeof createClient>>, orgId: string): Promise<SalaryStats> {
+  const { data: latestPaid } = await supabase
+    .from("salary_lines")
+    .select("period")
+    .eq("org_id", orgId)
+    .eq("status", "paid")
+    .order("period", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const period = latestPaid?.period ?? null;
+  if (!period) return { period: null, totalPaid: 0, paidNonZeroCount: 0, avgPerEmployee: 0, byCourse: [] };
+
   const { data: lines } = await supabase
     .from("salary_lines")
     .select("payee_id, offering_id, base, bonus, deduction, course_offerings!salary_lines_offering_id_fkey(session, unit, courses(name))")
@@ -573,7 +596,7 @@ async function getSalaryStatsForPeriod(supabase: Awaited<ReturnType<typeof creat
     .filter((c) => c.count > 0)
     .sort((a, b) => b.average - a.average);
 
-  return { totalPaid: Math.round(totalPaid), paidNonZeroCount, avgPerEmployee, byCourse };
+  return { period, totalPaid: Math.round(totalPaid), paidNonZeroCount, avgPerEmployee, byCourse };
 }
 
 // Payroll runs in arrears — releasing pay on, say, Aug 1 pays out July's
@@ -639,8 +662,9 @@ export async function getFinanceDashboard(): Promise<FinanceDashboard> {
   const [{ count: pendingEvaluations }, payrollTrend, salaryStats] = await Promise.all([
     supabase.from("evaluations").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("status", "submitted"),
     getFinancePayrollTrend(),
-    getSalaryStatsForPeriod(supabase, orgId, period),
+    getSalaryStatsForPeriod(supabase, orgId),
   ]);
+  const salaryPeriodLabel = salaryStats.period ? periodLabel(salaryStats.period) : "—";
 
   const totalMethodCount = Array.from(methodCounts.values()).reduce((s, n) => s + n, 0);
   const paymentMethods: PaymentMethodSlice[] = Array.from(methodCounts.entries())
@@ -663,7 +687,7 @@ export async function getFinanceDashboard(): Promise<FinanceDashboard> {
     { icon: "card", value: `${paidCount}/${assistants.length}`, label: "Assistants paid", tone: "neutral" },
     { icon: "clock", value: String(pendingEvaluations ?? 0), label: "Pending approvals", tone: (pendingEvaluations ?? 0) > 0 ? "warn" : "ok" },
     { icon: "trend", value: String(bonusCount), label: "Bonuses issued", tone: "ok" },
-    { icon: "wallet", value: `${sym}${salaryStats.totalPaid.toLocaleString()}`, label: "Salaries paid", tone: "ok" },
+    { icon: "wallet", value: `${sym}${salaryStats.totalPaid.toLocaleString()}`, label: `Salaries paid (${salaryPeriodLabel})`, tone: "ok" },
     { icon: "user-check", value: String(salaryStats.paidNonZeroCount), label: "Staff paid (non-zero)", tone: "neutral" },
     { icon: "trend", value: `${sym}${salaryStats.avgPerEmployee.toLocaleString()}`, label: "Avg. paid per employee", tone: "brand" },
   ];
