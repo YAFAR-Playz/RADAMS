@@ -500,8 +500,17 @@ export function AttendanceContent({ role }: { role: Role }) {
           <header className="flex flex-wrap items-center justify-between gap-[10px] border-b border-[var(--border2)] p-[14px_18px]">
             <div>
               <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">{activeSession?.title ?? "—"}</h3>
-              <p className="m-0 mt-[2px] text-[12px] text-[var(--subtle)]">
-                {activeSession ? `${activeSession.date} · ${presentCount}/${activeSession.total} present` : ""}
+              <p className="m-0 mt-[2px] flex items-center gap-[6px] text-[12px] text-[var(--subtle)]">
+                {rosterLoading ? (
+                  <>
+                    <Spinner size={11} />
+                    Loading…
+                  </>
+                ) : activeSession ? (
+                  `${activeSession.date} · ${presentCount}/${activeSession.total} present`
+                ) : (
+                  ""
+                )}
               </p>
             </div>
             {canEdit ? (
@@ -537,20 +546,21 @@ export function AttendanceContent({ role }: { role: Role }) {
               />
             </div>
             <div className="ml-auto flex flex-wrap items-center gap-[6px]">
-              {summary.map((s) => {
-                const { bg, fg } = toneColors(s.tone);
-                return (
-                  <span key={s.key} className="inline-flex items-center gap-[5px] rounded-full px-[10px] py-[4px] text-[12px] font-semibold" style={{ background: bg, color: fg }}>
-                    <Icon name={s.icon} size={12} />
-                    {s.n} {s.label}
-                  </span>
-                );
-              })}
+              {!rosterLoading &&
+                summary.map((s) => {
+                  const { bg, fg } = toneColors(s.tone);
+                  return (
+                    <span key={s.key} className="inline-flex items-center gap-[5px] rounded-full px-[10px] py-[4px] text-[12px] font-semibold" style={{ background: bg, color: fg }}>
+                      <Icon name={s.icon} size={12} />
+                      {s.n} {s.label}
+                    </span>
+                  );
+                })}
             </div>
           </div>
 
           <div className="p-[7px_8px]">
-            {rosterLoading && !roster ? (
+            {rosterLoading ? (
               <div className="flex flex-col gap-2 p-2">
                 {Array.from({ length: 5 }, (_, i) => (
                   <SkeletonRow key={i} className="h-[52px]" />
