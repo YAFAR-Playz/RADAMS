@@ -26,6 +26,7 @@ export type AttendanceRosterRow = {
 };
 
 export async function listSessions(offeringId: string): Promise<SessionSummary[]> {
+  const profile = await getCurrentProfile();
   const supabase = await createClient();
   const { data: sessions } = await supabase
     .from("attendance_sessions")
@@ -35,15 +36,24 @@ export async function listSessions(offeringId: string): Promise<SessionSummary[]
   if (!sessions || sessions.length === 0) return [];
 
   const sessionIds = sessions.map((s) => s.id);
-  const { data: records } = await supabase
-    .from("attendance_records")
-    .select("session_id, status")
-    .in("session_id", sessionIds);
+  // "Total" reflects who's CURRENTLY enrolled (scoped the same way
+  // getSessionRoster is, so the sidebar and the open roster always agree)
+  // — not however many attendance_record rows happen to exist for a
+  // session, which undercounts once a student enrolls after the session
+  // was first created and taken (they show up in the live roster with no
+  // record yet, correctly defaulted to absent, but were invisible here).
+  let enrollmentCountQuery = supabase
+    .from("enrollments")
+    .select("student_id", { count: "exact", head: true })
+    .eq("offering_id", offeringId);
+  if (profile?.role === "assistant") enrollmentCountQuery = enrollmentCountQuery.eq("assistant_id", profile.id);
+  const [{ data: records }, { count: total }] = await Promise.all([
+    supabase.from("attendance_records").select("session_id, status").in("session_id", sessionIds),
+    enrollmentCountQuery,
+  ]);
 
   const presentBySession = new Map<string, number>();
-  const totalBySession = new Map<string, number>();
   for (const r of records ?? []) {
-    totalBySession.set(r.session_id, (totalBySession.get(r.session_id) ?? 0) + 1);
     if (r.status === "present" || r.status === "late") {
       presentBySession.set(r.session_id, (presentBySession.get(r.session_id) ?? 0) + 1);
     }
@@ -55,7 +65,7 @@ export async function listSessions(offeringId: string): Promise<SessionSummary[]
     date: s.session_date,
     time: s.session_time,
     present: presentBySession.get(s.id) ?? 0,
-    total: totalBySession.get(s.id) ?? 0,
+    total: total ?? 0,
   }));
 }
 
@@ -77,11 +87,30 @@ export async function getSessionRoster(sessionId: string): Promise<AttendanceRos
   const { data: enrollments } = await enrollmentQuery;
   if (!enrollments) return [];
 
-  const studentIds = enrollments.map((e) => e.student_id);
-  const { data: records } = studentIds.length
-    ? await supabase.from("attendance_records").select("student_id, status").eq("session_id", sessionId).in("student_id", studentIds)
-    : { data: [] as { student_id: string; status: AttendanceStatus }[] };
-  const statusByStudent = new Map((records ?? []).map((r) => [r.student_id, r.status]));
+  // Scoping to session_id alone is already exact — the .map() below only
+  // ever looks up students present in `enrollments`, so records for anyone
+  // else are simply never read. Adding `.in("student_id", studentIds)` on
+  // top used to build a URL filter with one UUID per enrolled student —
+  // for a large course (900+ students here) that's tens of thousands of
+  // characters, well past what a GET request's URL can carry, so the
+  // query silently failed and came back empty. Every student then fell
+  // through to the "absent" default below, making a session that already
+  // had real attendance recorded look completely reset. Paginated in
+  // batches since a single unbounded select silently truncates at
+  // PostgREST's default 1000-row cap once a course passes that size.
+  const records: { student_id: string; status: AttendanceStatus }[] = [];
+  const ATTENDANCE_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += ATTENDANCE_PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("attendance_records")
+      .select("student_id, status")
+      .eq("session_id", sessionId)
+      .range(from, from + ATTENDANCE_PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    records.push(...page);
+    if (page.length < ATTENDANCE_PAGE_SIZE) break;
+  }
+  const statusByStudent = new Map(records.map((r) => [r.student_id, r.status]));
 
   return enrollments
     .map((e) => {
