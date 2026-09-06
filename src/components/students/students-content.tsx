@@ -14,6 +14,7 @@ import {
   getStudentsRegistrationExtras,
   reassignStudentAssistant,
   updateStudent,
+  setEnrollmentLeftStatus,
   getStudentEnrollments,
   listAllOfferingsForOrg,
   addStudentEnrollment,
@@ -48,6 +49,7 @@ const PAGE_SIZE = 20;
 
 type EditDraft = {
   studentId: string;
+  enrollmentId: string;
   initials: string;
   name: string;
   email: string;
@@ -358,6 +360,7 @@ export function StudentsContent({ role }: { role: Role }) {
   function openEdit(s: StudentRow) {
     setEditDraft({
       studentId: s.studentId,
+      enrollmentId: s.enrollmentId,
       initials: s.initials,
       name: s.name,
       email: s.email ?? "",
@@ -452,14 +455,19 @@ export function StudentsContent({ role }: { role: Role }) {
     if (!editDraft || !offeringId) return;
     setSavingEdit(true);
     try {
-      await updateStudent(editDraft.studentId, {
-        name: editDraft.name,
-        email: editDraft.email,
-        phone: editDraft.phone,
-        guardianName: editDraft.guardianName,
-        guardianPhone: editDraft.guardianPhone,
-        left: editDraft.left,
-      });
+      await Promise.all([
+        updateStudent(editDraft.studentId, {
+          name: editDraft.name,
+          email: editDraft.email,
+          phone: editDraft.phone,
+          guardianName: editDraft.guardianName,
+          guardianPhone: editDraft.guardianPhone,
+        }),
+        // "Left" belongs to this specific course's enrollment, not the
+        // student record — marking someone left here must never affect
+        // any other course they're enrolled in.
+        setEnrollmentLeftStatus(editDraft.enrollmentId, editDraft.left),
+      ]);
       setEditDraft(null);
       await reload(offeringId);
     } catch {
@@ -1163,9 +1171,10 @@ export function StudentsContent({ role }: { role: Role }) {
                 style={{ background: editDraft.left ? "var(--dangers)" : "var(--surface2)", borderColor: editDraft.left ? "var(--danger)" : "var(--border)" }}
               >
                 <div className="min-w-0 flex-1">
-                  <div className="text-[13px] font-semibold text-[var(--text)]">Mark as left</div>
+                  <div className="text-[13px] font-semibold text-[var(--text)]">Mark as left — {current?.label ?? "this course"}</div>
                   <div className="text-[11.5px] leading-[1.4] text-[var(--subtle)]">
-                    Stops new assignments and removes them from active rosters. History is kept.
+                    Applies to this course only — they stay active in any other course they&apos;re enrolled in. Stops new
+                    assignments and removes them from this course&apos;s active roster. History is kept.
                   </div>
                 </div>
                 <button

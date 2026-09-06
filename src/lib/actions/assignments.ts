@@ -132,7 +132,7 @@ export async function getRoster(assignmentId: string): Promise<RosterStudent[]> 
     .from("enrollments")
     .select("id, student_id, assistant_id, students!inner(id, name, student_code, initials, phone, guardian_name, guardian_phone), profiles(full_name)")
     .eq("offering_id", assignment.offering_id)
-    .is("students.left_at", null);
+    .is("left_at", null);
 
   if (profile.role === "assistant") {
     enrollmentQuery = enrollmentQuery.eq("assistant_id", profile.id);

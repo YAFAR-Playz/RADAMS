@@ -332,9 +332,9 @@ export async function getAcademicMonthlyReport(offeringId: string, period: strin
 
   const { data: enrollments } = await supabase
     .from("enrollments")
-    .select("student_id, students!inner(id, name, student_code, left_at)")
+    .select("student_id, students!inner(id, name, student_code)")
     .eq("offering_id", offeringId)
-    .is("students.left_at", null);
+    .is("left_at", null);
   if (!enrollments || enrollments.length === 0) return [];
 
   const studentIds = enrollments.map((e) => e.student_id);
@@ -461,9 +461,9 @@ export async function generateMonthlyAcademicReport(
 
   const { data: enrollments } = await supabase
     .from("enrollments")
-    .select("student_id, students!inner(id, name, student_code, left_at)")
+    .select("student_id, students!inner(id, name, student_code)")
     .eq("offering_id", offeringId)
-    .is("students.left_at", null);
+    .is("left_at", null);
   if (!enrollments || enrollments.length === 0) throw new Error("No students enrolled in this course.");
 
   const studentIds = enrollments.map((e) => e.student_id);
@@ -609,34 +609,35 @@ export async function getGeneratedReport(offeringId: string, period: string): Pr
     .maybeSingle();
   if (!gen) return { meta: null, students: [] };
 
-  // Filtered here (not just at generation time) so a student who left
-  // after a report was already generated stops showing up on it too,
-  // without needing to regenerate.
   const { data: rows } = await supabase
     .from("monthly_report_students")
     .select(
-      "student_id, avg_grade, assignments, weak_topics, assistant_comment, students!inner(name, student_code, phone, guardian_name, guardian_phone, drive_folder_link, left_at)"
+      "student_id, avg_grade, assignments, weak_topics, assistant_comment, students!inner(name, student_code, phone, guardian_name, guardian_phone, drive_folder_link)"
     )
-    .eq("generation_id", gen.id)
-    .is("students.left_at", null);
+    .eq("generation_id", gen.id);
 
   const creator = Array.isArray(gen.profiles) ? gen.profiles[0] : gen.profiles;
 
   // Current assistant, not the one at generation time — enrollments.assistant_id
   // can change (reassignment) after a report was generated, and showing who's
   // actually on the course now is more useful than freezing a stale name.
+  // Also carries this offering's own left_at so a student who left THIS
+  // course after the report was already generated stops showing up on it
+  // too, without needing to regenerate.
   const studentIds = (rows ?? []).map((r) => r.student_id);
   const { data: enrollmentRows } = studentIds.length
-    ? await supabase.from("enrollments").select("student_id, profiles(full_name)").eq("offering_id", offeringId).in("student_id", studentIds)
-    : { data: [] as { student_id: string; profiles: { full_name: string } | { full_name: string }[] | null }[] };
+    ? await supabase.from("enrollments").select("student_id, left_at, profiles(full_name)").eq("offering_id", offeringId).in("student_id", studentIds)
+    : { data: [] as { student_id: string; left_at: string | null; profiles: { full_name: string } | { full_name: string }[] | null }[] };
   const assistantNameByStudent = new Map(
     (enrollmentRows ?? []).map((e) => {
       const assistant = Array.isArray(e.profiles) ? e.profiles[0] : e.profiles;
       return [e.student_id, assistant?.full_name ?? null];
     })
   );
+  const leftByStudent = new Map((enrollmentRows ?? []).map((e) => [e.student_id, !!e.left_at]));
 
   const students: GeneratedStudentReport[] = (rows ?? [])
+    .filter((r) => !leftByStudent.get(r.student_id))
     .map((r) => {
       const student = Array.isArray(r.students) ? r.students[0] : r.students;
       if (!student) return null;
