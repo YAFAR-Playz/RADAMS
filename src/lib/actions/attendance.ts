@@ -47,16 +47,36 @@ export async function listSessions(offeringId: string): Promise<SessionSummary[]
     .select("student_id", { count: "exact", head: true })
     .eq("offering_id", offeringId);
   if (profile?.role === "assistant") enrollmentCountQuery = enrollmentCountQuery.eq("assistant_id", profile.id);
-  const [{ data: records }, { count: total }] = await Promise.all([
-    supabase.from("attendance_records").select("session_id, status").in("session_id", sessionIds),
+
+  // Filtering to present/late at the DB level (rather than fetching every
+  // record, including "absent" ones, and filtering in JS) keeps this well
+  // under Postgrest's default 1000-row cap for the common case — a course
+  // with several thousand-student sessions was pulling all of their rows
+  // combined, silently truncating and undercounting whichever session's
+  // rows happened to sort past the cutoff. Still paginated as a backstop
+  // for a course with a genuinely huge number of people marked present.
+  const presentRecords: { session_id: string }[] = [];
+  const PRESENT_PAGE_SIZE = 1000;
+  const [, { count: total }] = await Promise.all([
+    (async () => {
+      for (let from = 0; ; from += PRESENT_PAGE_SIZE) {
+        const { data: page } = await supabase
+          .from("attendance_records")
+          .select("session_id")
+          .in("session_id", sessionIds)
+          .in("status", ["present", "late"])
+          .range(from, from + PRESENT_PAGE_SIZE - 1);
+        if (!page || page.length === 0) break;
+        presentRecords.push(...page);
+        if (page.length < PRESENT_PAGE_SIZE) break;
+      }
+    })(),
     enrollmentCountQuery,
   ]);
 
   const presentBySession = new Map<string, number>();
-  for (const r of records ?? []) {
-    if (r.status === "present" || r.status === "late") {
-      presentBySession.set(r.session_id, (presentBySession.get(r.session_id) ?? 0) + 1);
-    }
+  for (const r of presentRecords) {
+    presentBySession.set(r.session_id, (presentBySession.get(r.session_id) ?? 0) + 1);
   }
 
   return sessions.map((s) => ({
