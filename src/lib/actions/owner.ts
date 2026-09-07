@@ -203,7 +203,24 @@ export async function getOwnerLoginAsLink(targetProfileId: string, redirectTo: s
   return { url: data.properties.action_link };
 }
 
-export type OwnerDashboard = { kpis: Kpi[] };
+export type OrgSizeRow = { label: string; students: number; courses: number; assignments: number };
+export type TrendPoint = { label: string; value: number };
+export type OwnerDashboard = {
+  kpis: Kpi[];
+  orgSizeByMetric: OrgSizeRow[];
+  studentGrowth: TrendPoint[];
+  staffGrowth: TrendPoint[];
+};
+
+function monthEndsPlatform(months: number): Date[] {
+  const now = new Date();
+  const ends: Date[] = [];
+  for (let i = months - 1; i >= 0; i--) {
+    ends.push(new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59));
+  }
+  return ends;
+}
+const monthLabelPlatform = (d: Date) => d.toLocaleDateString("en-US", { month: "short" });
 
 export async function getOwnerDashboard(): Promise<OwnerDashboard> {
   const orgs = await listOrgsOverview();
@@ -211,14 +228,57 @@ export async function getOwnerDashboard(): Promise<OwnerDashboard> {
   const totalCourses = orgs.reduce((s, o) => s + o.metrics.courses, 0);
   const activeOrgs = orgs.filter((o) => o.status === "active").length;
 
+  const supabase = await createClient();
+  const months = 6;
+  const ends = monthEndsPlatform(months);
+  const labels = ends.map(monthLabelPlatform);
+
+  // Point-in-time headcounts reconstructed from created_at/left_at across
+  // the WHOLE platform — one count-only (head: true) query per month-end
+  // per metric rather than fetching every row and filtering in JS. A
+  // platform-wide unbounded select here (thousands of students/staff/
+  // offerings across every org combined) would silently truncate at
+  // Postgrest's default 1000-row cap; a head:true count never transfers
+  // rows at all, so it's both correct and fast regardless of platform size.
+  const [orgTrend, studentTrend, courseTrend, staffTrend] = await Promise.all([
+    Promise.all(ends.map((end) => supabase.from("organizations").select("id", { count: "exact", head: true }).lte("created_at", end.toISOString()))),
+    Promise.all(ends.map((end) => supabase.from("students").select("id", { count: "exact", head: true }).lte("created_at", end.toISOString()))),
+    Promise.all(
+      ends.map((end) => supabase.from("course_offerings").select("id", { count: "exact", head: true }).lte("created_at", end.toISOString()))
+    ),
+    Promise.all(
+      ends.map((end) =>
+        supabase
+          .from("profiles")
+          .select("id", { count: "exact", head: true })
+          .neq("role", "owner")
+          .lte("created_at", end.toISOString())
+          .or(`left_at.is.null,left_at.gt.${end.toISOString()}`)
+      )
+    ),
+  ]);
+
+  const studentPoints = labels.map((label, i) => ({ label, value: studentTrend[i].count ?? 0 }));
+  const staffPoints = labels.map((label, i) => ({ label, value: staffTrend[i].count ?? 0 }));
+
   const kpis: Kpi[] = [
-    { icon: "building", value: String(orgs.length), label: "Organizations", tone: "brand" },
+    { icon: "building", value: String(orgs.length), label: "Organizations", tone: "brand", trend: orgTrend.map((r) => r.count ?? 0) },
+    // No historical status-change log exists for organizations.status, so
+    // there's no genuine way to reconstruct "how many were active as of
+    // month X" — left flat rather than fabricating a trend.
     { icon: "check", value: String(activeOrgs), label: "Active organizations", tone: "ok" },
-    { icon: "grad", value: totalStudents.toLocaleString(), label: "Total students", tone: "neutral" },
-    { icon: "clipboard-list", value: String(totalCourses), label: "Total courses", tone: "neutral" },
+    { icon: "grad", value: totalStudents.toLocaleString(), label: "Total students", tone: "neutral", trend: studentTrend.map((r) => r.count ?? 0) },
+    { icon: "clipboard-list", value: String(totalCourses), label: "Total courses", tone: "neutral", trend: courseTrend.map((r) => r.count ?? 0) },
   ];
 
-  return { kpis };
+  const orgSizeByMetric: OrgSizeRow[] = orgs.map((o) => ({
+    label: o.name,
+    students: o.metrics.students,
+    courses: o.metrics.courses,
+    assignments: o.metrics.assignments,
+  }));
+
+  return { kpis, orgSizeByMetric, studentGrowth: studentPoints, staffGrowth: staffPoints };
 }
 
 export type PlatformStaffMember = {
