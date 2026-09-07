@@ -188,9 +188,17 @@ async function upsertLog(
   const row: Record<string, unknown> = {
     assignment_id: assignmentId,
     student_id: studentId,
-    logged_by: profile.id,
     updated_at: new Date().toISOString(),
   };
+  // logged_by is who actually performed the check, and payroll pays by it
+  // specifically so a mid-month reassignment doesn't move credit between
+  // assistants (see the comment on countCheckedPapers in finance-salaries.ts).
+  // Only a call that sets/changes status is a checking action — stamping it
+  // on every save meant a later grade fix, comment edit, or "mark sent" by
+  // whoever the student's CURRENT assistant happens to be (after a
+  // reassignment) silently reassigned credit for a paper someone else
+  // already checked, undermining that exact guarantee.
+  if (patch.status !== undefined) row.logged_by = profile.id;
   if (patch.status !== undefined) row.status = patch.status;
   if (patch.grade !== undefined) row.grade = patch.grade;
   if (patch.comment !== undefined) row.comment = patch.comment;
