@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Icon, type IconName } from "@/components/icons";
 import { SkeletonRow } from "@/components/ui/spinner";
@@ -19,6 +19,8 @@ import {
   type RegistrationDashboard,
   type FinanceDashboard,
   type CourseAverageRow,
+  getAssistantCheckRates,
+  type AssistantCheckRateRow,
 } from "@/lib/actions/dashboard";
 import {
   getFinancePayrollTrend,
@@ -503,6 +505,89 @@ function OwnerPanels({ orgs, activity }: { orgs: OrgOverview[]; activity: Platfo
 // courses pay the most per person on average" and "which courses have the
 // most people actually getting paid," rather than only ever showing one
 // fixed view of the same per-course breakdown.
+// Shared by Admin and Head — one row per (course, assistant) subgroup, so
+// an assistant on two courses shows up twice, ranked separately on each,
+// rather than one blended number that could hide a course they're behind
+// on. Admin gets a course filter (defaults to every active course); Head
+// only ever sees their own courses, so a filter would just be one option.
+function AssistantCheckRateCard({ rows, showCourseFilter }: { rows: AssistantCheckRateRow[]; showCourseFilter: boolean }) {
+  const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
+  const [courseFilter, setCourseFilter] = useState("");
+
+  const courses = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of rows) map.set(r.offeringId, r.courseLabel);
+    return Array.from(map.entries())
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [rows]);
+
+  const sorted = useMemo(() => {
+    const filtered = courseFilter ? rows.filter((r) => r.offeringId === courseFilter) : rows;
+    return [...filtered].sort((a, b) => (sortDir === "desc" ? b.ratePct - a.ratePct : a.ratePct - b.ratePct));
+  }, [rows, courseFilter, sortDir]);
+
+  return (
+    <Card
+      title="Assistant checking rates"
+      subtitle="Papers checked vs. expected, per assistant subgroup — higher is better"
+      action={
+        <div className="flex flex-wrap items-center gap-[8px]">
+          {showCourseFilter && courses.length > 1 && (
+            <select
+              value={courseFilter}
+              onChange={(e) => setCourseFilter(e.target.value)}
+              className="cursor-pointer appearance-none rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] py-[6px] text-[12px] font-semibold text-[var(--text)] outline-none"
+            >
+              <option value="">All courses</option>
+              {courses.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          )}
+          <select
+            value={sortDir}
+            onChange={(e) => setSortDir(e.target.value as "desc" | "asc")}
+            className="cursor-pointer appearance-none rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] py-[6px] text-[12px] font-semibold text-[var(--text)] outline-none"
+          >
+            <option value="desc">Highest first</option>
+            <option value="asc">Lowest first</option>
+          </select>
+        </div>
+      }
+    >
+      <div className="px-2 py-[7px]">
+        {sorted.length === 0 ? (
+          <EmptyRow>No assistant subgroups with students yet.</EmptyRow>
+        ) : (
+          sorted.map((r) => (
+            <div key={`${r.offeringId}:${r.assistantId}`} className="flex items-center gap-3 rounded-[10px] p-[10px_11px] hover:bg-[var(--surface2)]">
+              <Avatar initials={r.assistantInitials} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[13.5px] font-semibold text-[var(--text)]">{r.assistantName}</span>
+                  <span className="text-[12px] font-medium text-[var(--muted)]">
+                    {r.checked}/{r.total}
+                  </span>
+                </div>
+                <div className="mt-[1px] text-[11.5px] text-[var(--subtle)]">
+                  {r.courseLabel} · {r.studentCount} student{r.studentCount === 1 ? "" : "s"}
+                </div>
+                <div className="mt-[7px]">
+                  <ProgressBar pct={r.ratePct} color={r.ratePct >= 70 ? "var(--ok)" : r.ratePct >= 40 ? "var(--warn)" : "var(--danger)"} />
+                </div>
+              </div>
+              <span className="flex-none text-[15px] font-bold text-[var(--text)]">{r.ratePct}%</span>
+            </div>
+          ))
+        )}
+      </div>
+    </Card>
+  );
+}
+
 function SalaryByCourseCard({ rows, sym }: { rows: CourseAverageRow[]; sym: string }) {
   const [mode, setMode] = useState<"average" | "count">("average");
   const sorted = [...rows].sort((a, b) => (mode === "average" ? b.average - a.average : b.count - a.count));
@@ -684,20 +769,23 @@ export function DashboardContent({
   const [enrollmentTrend, setEnrollmentTrend] = useState<EnrollmentTrendPoint[] | null>(null);
   const [staffingTrend, setStaffingTrend] = useState<StaffingTrendPoint[] | null>(null);
   const [ratingDistribution, setRatingDistribution] = useState<RatingSlice[] | null>(null);
+  const [checkRates, setCheckRates] = useState<AssistantCheckRateRow[] | null>(null);
 
   useEffect(() => {
     (async () => {
       if (isMock) return;
       setLoading(true);
       if (role === "admin") {
-        const [dash, staffing] = await Promise.all([getAdminDashboard(), getStaffingTrend()]);
+        const [dash, staffing, rates] = await Promise.all([getAdminDashboard(), getStaffingTrend(), getAssistantCheckRates()]);
         setAdminData(dash);
         setStaffingTrend(staffing);
+        setCheckRates(rates);
       } else if (role === "assistant") setAssistantData(await getAssistantDashboard());
       else if (role === "head") {
-        const [dash, ratings] = await Promise.all([getHeadDashboard(), getMyRatingDistribution()]);
+        const [dash, ratings, rates] = await Promise.all([getHeadDashboard(), getMyRatingDistribution(), getAssistantCheckRates()]);
         setHeadData(dash);
         setRatingDistribution(ratings);
+        setCheckRates(rates);
       } else if (role === "registration") {
         const [dash, trend] = await Promise.all([getRegistrationDashboard(), getRegistrationEnrollmentTrend()]);
         setRegistrationData(dash);
@@ -767,6 +855,12 @@ export function DashboardContent({
         {role === "registration" && (loading || !registrationData ? <PanelSkeleton /> : <RegistrationPanels data={registrationData} />)}
         {role === "finance" && (loading || !financeData ? <PanelSkeleton /> : <FinancePanels data={financeData} />)}
       </div>
+
+      {!loading && (role === "admin" || role === "head") && checkRates && checkRates.length > 0 && (
+        <div className="mt-4">
+          <AssistantCheckRateCard rows={checkRates} showCourseFilter={role === "admin"} />
+        </div>
+      )}
 
       {!loading && role === "admin" && staffingTrend && staffingTrend.some((p) => p.added || p.removed) && (
         <div className="mt-4">
