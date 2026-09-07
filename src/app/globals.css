@@ -27,6 +27,16 @@
   --rad-sm: 9px;
   --shadow: 0 1px 2px rgba(16, 23, 41, 0.05), 0 1px 3px rgba(16, 23, 41, 0.04);
   --workspace: #e7e9ee;
+  /* Categorical palette for multi-slice charts (donuts, pies) — distinct
+     hues rather than reused semantic tone colors, since --brand and --info
+     are both blue and become indistinguishable sitting next to each other
+     in a chart even though they're fine as separate, unrelated UI accents. */
+  --chart-1: #2563eb;
+  --chart-2: #d97706;
+  --chart-3: #7c3aed;
+  --chart-4: #0d9488;
+  --chart-5: #db2777;
+  --chart-6: #64748b;
 }
 
 [data-theme="dark"] {
@@ -51,6 +61,12 @@
   --neutral: #9aa6b5;
   --workspace: #05080d;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --chart-1: #60a5fa;
+  --chart-2: #fb923c;
+  --chart-3: #a78bfa;
+  --chart-4: #2dd4bf;
+  --chart-5: #f472b6;
+  --chart-6: #94a3b8;
 }
 
 * {

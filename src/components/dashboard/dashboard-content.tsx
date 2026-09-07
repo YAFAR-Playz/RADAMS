@@ -316,7 +316,10 @@ function AssistantPanels({ data }: { data: AssistantDashboard }) {
   );
 }
 
-const METHOD_COLORS = ["var(--brand)", "var(--info)", "var(--subtle)", "var(--ok)", "var(--warn)"];
+// --chart-N are a purpose-built categorical palette (see charts.tsx) —
+// --brand/--info are both blue and became indistinguishable sitting next
+// to each other in this same list before.
+const METHOD_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"];
 
 function FinancePanels({ data }: { data: FinanceDashboard }) {
   return (
