@@ -694,3 +694,118 @@ export async function getFinanceDashboard(): Promise<FinanceDashboard> {
 
   return { kpis, salaryOverview, paymentMethods, salaryByCourse: salaryStats.byCourse, currencySymbol: sym };
 }
+
+export type AssistantCheckRateRow = {
+  assistantId: string;
+  assistantName: string;
+  assistantInitials: string;
+  offeringId: string;
+  courseLabel: string;
+  studentCount: number;
+  checked: number;
+  total: number;
+  ratePct: number;
+};
+
+// One row per (course, assistant) subgroup — an assistant teaching two
+// courses gets two separate rows, each ranked on its own, rather than one
+// blended number that would hide a course where they're falling behind.
+// Admin sees every active course in the org; Head sees only their own.
+// Course filtering and sort direction (high-to-low vs low-to-high) are both
+// handled client-side over this one fetch — the dataset is bounded by
+// course-assistant pairs, not students, so there's no need to round-trip
+// the server for either.
+export async function getAssistantCheckRates(): Promise<AssistantCheckRateRow[]> {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org) return [];
+  const supabase = await createClient();
+  const orgId = profile.org.id;
+
+  let offeringIds: string[];
+  if (profile.role === "admin") {
+    const { data: offerings } = await supabase.from("course_offerings").select("id").eq("org_id", orgId).eq("active", true);
+    offeringIds = (offerings ?? []).map((o) => o.id);
+  } else if (profile.role === "head") {
+    const { data: headLinks } = await supabase.from("offering_heads").select("offering_id").eq("head_id", profile.id);
+    offeringIds = (headLinks ?? []).map((h) => h.offering_id);
+  } else {
+    return [];
+  }
+  if (!offeringIds.length) return [];
+
+  const [{ data: offeringRows }, { data: assistantLinks }, { data: assignmentRows }, { data: enrollments }] = await Promise.all([
+    supabase.from("course_offerings").select("id, session, unit, courses(name)").in("id", offeringIds),
+    supabase.from("offering_assistants").select("offering_id, assistant_id, profiles(id, full_name, initials)").in("offering_id", offeringIds),
+    supabase.from("assignments").select("id, offering_id").in("offering_id", offeringIds),
+    // "Checked" here mirrors the Oversight page's own tracking concept — a
+    // student who left this course shouldn't drag down (or artificially
+    // inflate, if they'd never have been checked) their former assistant's
+    // rate, so left students are excluded the same way everywhere else is.
+    supabase.from("enrollments").select("offering_id, student_id, assistant_id").in("offering_id", offeringIds).is("left_at", null),
+  ]);
+
+  const labelById = new Map((offeringRows ?? []).map((o) => [o.id, offeringLabelOf(o)]));
+
+  const assignmentCountByOffering = new Map<string, number>();
+  const assignmentOfferingById = new Map<string, string>();
+  for (const a of assignmentRows ?? []) {
+    assignmentCountByOffering.set(a.offering_id, (assignmentCountByOffering.get(a.offering_id) ?? 0) + 1);
+    assignmentOfferingById.set(a.id, a.offering_id);
+  }
+
+  const studentCountByKey = new Map<string, number>();
+  const assistantByOfferingStudent = new Map<string, Map<string, string>>();
+  for (const e of enrollments ?? []) {
+    if (!e.assistant_id) continue;
+    const key = `${e.offering_id}:${e.assistant_id}`;
+    studentCountByKey.set(key, (studentCountByKey.get(key) ?? 0) + 1);
+    const m = assistantByOfferingStudent.get(e.offering_id) ?? new Map<string, string>();
+    m.set(e.student_id, e.assistant_id);
+    assistantByOfferingStudent.set(e.offering_id, m);
+  }
+
+  const assignmentIds = Array.from(assignmentOfferingById.keys());
+  const { data: logs } = assignmentIds.length
+    ? await supabase.from("assignment_logs").select("assignment_id, student_id").in("assignment_id", assignmentIds).eq("status", "checked")
+    : { data: [] as { assignment_id: string; student_id: string }[] };
+
+  const checkedCountByKey = new Map<string, number>();
+  for (const l of logs ?? []) {
+    const offeringId = assignmentOfferingById.get(l.assignment_id);
+    if (!offeringId) continue;
+    const assistantId = assistantByOfferingStudent.get(offeringId)?.get(l.student_id);
+    if (!assistantId) continue;
+    const key = `${offeringId}:${assistantId}`;
+    checkedCountByKey.set(key, (checkedCountByKey.get(key) ?? 0) + 1);
+  }
+
+  const rows: AssistantCheckRateRow[] = [];
+  const seen = new Set<string>();
+  for (const link of assistantLinks ?? []) {
+    const assistant = Array.isArray(link.profiles) ? link.profiles[0] : link.profiles;
+    if (!assistant) continue;
+    const key = `${link.offering_id}:${link.assistant_id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const studentCount = studentCountByKey.get(key) ?? 0;
+    if (!studentCount) continue; // no subgroup (no current students) — nothing to rank
+
+    const assignmentCount = assignmentCountByOffering.get(link.offering_id) ?? 0;
+    const total = studentCount * assignmentCount;
+    const checked = checkedCountByKey.get(key) ?? 0;
+    rows.push({
+      assistantId: link.assistant_id,
+      assistantName: assistant.full_name,
+      assistantInitials: assistant.initials,
+      offeringId: link.offering_id,
+      courseLabel: labelById.get(link.offering_id) ?? "—",
+      studentCount,
+      checked,
+      total,
+      ratePct: total ? Math.round((checked / total) * 100) : 0,
+    });
+  }
+
+  return rows.sort((a, b) => b.ratePct - a.ratePct);
+}
