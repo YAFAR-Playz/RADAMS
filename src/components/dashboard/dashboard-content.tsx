@@ -594,14 +594,22 @@ function AssistantCheckRateCard({ rows, showCourseFilter }: { rows: AssistantChe
                 <span className="flex-none text-[15px] font-bold text-[var(--text)]">{r.ratePct}%</span>
               </div>
             ))}
-            {!showAll && sorted.length > CHECK_RATE_PAGE && (
-              <button
-                onClick={() => setShowAll(true)}
-                className="mt-1 w-full rounded-[10px] p-[10px_11px] text-center text-[12.5px] font-semibold text-[var(--brand)] hover:bg-[var(--surface2)]"
-              >
-                Show {sorted.length - CHECK_RATE_PAGE} more
-              </button>
-            )}
+            {sorted.length > CHECK_RATE_PAGE &&
+              (showAll ? (
+                <button
+                  onClick={() => setShowAll(false)}
+                  className="mt-1 w-full rounded-[10px] p-[10px_11px] text-center text-[12.5px] font-semibold text-[var(--brand)] hover:bg-[var(--surface2)]"
+                >
+                  Show less
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowAll(true)}
+                  className="mt-1 w-full rounded-[10px] p-[10px_11px] text-center text-[12.5px] font-semibold text-[var(--brand)] hover:bg-[var(--surface2)]"
+                >
+                  Show {sorted.length - CHECK_RATE_PAGE} more
+                </button>
+              ))}
           </>
         )}
       </div>
@@ -791,22 +799,21 @@ export function DashboardContent({
   const [staffingTrend, setStaffingTrend] = useState<StaffingTrendPoint[] | null>(null);
   const [ratingDistribution, setRatingDistribution] = useState<RatingSlice[] | null>(null);
   const [checkRates, setCheckRates] = useState<AssistantCheckRateRow[] | null>(null);
+  const [checkRatesLoading, setCheckRatesLoading] = useState(false);
 
   useEffect(() => {
     (async () => {
       if (isMock) return;
       setLoading(true);
       if (role === "admin") {
-        const [dash, staffing, rates] = await Promise.all([getAdminDashboard(), getStaffingTrend(), getAssistantCheckRates()]);
+        const [dash, staffing] = await Promise.all([getAdminDashboard(), getStaffingTrend()]);
         setAdminData(dash);
         setStaffingTrend(staffing);
-        setCheckRates(rates);
       } else if (role === "assistant") setAssistantData(await getAssistantDashboard());
       else if (role === "head") {
-        const [dash, ratings, rates] = await Promise.all([getHeadDashboard(), getMyRatingDistribution(), getAssistantCheckRates()]);
+        const [dash, ratings] = await Promise.all([getHeadDashboard(), getMyRatingDistribution()]);
         setHeadData(dash);
         setRatingDistribution(ratings);
-        setCheckRates(rates);
       } else if (role === "registration") {
         const [dash, trend] = await Promise.all([getRegistrationDashboard(), getRegistrationEnrollmentTrend()]);
         setRegistrationData(dash);
@@ -832,6 +839,24 @@ export function DashboardContent({
         setOwnerActivity(activity);
       }
       setLoading(false);
+    })();
+  }, [role, isMock]);
+
+  // Split from the effect above on purpose — ranking every assistant
+  // subgroup to find the top/bottom N is inherently a full-scan computation
+  // (there's no way to know who's "highest" without rating everyone first),
+  // so it can be the slowest thing on this page. Fetching it independently
+  // means the KPIs and other panels render as soon as they're ready instead
+  // of all waiting on this one card.
+  useEffect(() => {
+    (async () => {
+      if (isMock || (role !== "admin" && role !== "head")) return;
+      setCheckRatesLoading(true);
+      try {
+        setCheckRates(await getAssistantCheckRates());
+      } finally {
+        setCheckRatesLoading(false);
+      }
     })();
   }, [role, isMock]);
 
@@ -877,11 +902,23 @@ export function DashboardContent({
         {role === "finance" && (loading || !financeData ? <PanelSkeleton /> : <FinancePanels data={financeData} />)}
       </div>
 
-      {!loading && (role === "admin" || role === "head") && checkRates && checkRates.length > 0 && (
-        <div className="mt-4">
-          <AssistantCheckRateCard rows={checkRates} showCourseFilter={role === "admin"} />
-        </div>
-      )}
+      {(role === "admin" || role === "head") &&
+        (checkRatesLoading ? (
+          <div className="mt-4 overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[18px] shadow-[var(--shadow)]">
+            <div className="flex flex-col gap-3">
+              {Array.from({ length: 4 }, (_, i) => (
+                <SkeletonRow key={i} className="h-[48px]" />
+              ))}
+            </div>
+          </div>
+        ) : (
+          checkRates &&
+          checkRates.length > 0 && (
+            <div className="mt-4">
+              <AssistantCheckRateCard rows={checkRates} showCourseFilter={role === "admin"} />
+            </div>
+          )
+        ))}
 
       {!loading && role === "admin" && staffingTrend && staffingTrend.some((p) => p.added || p.removed) && (
         <div className="mt-4">
