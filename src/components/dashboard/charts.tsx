@@ -167,3 +167,43 @@ export function RatingDonut({ data }: { data: { rating: string; label: string; c
     </div>
   );
 }
+
+const CATEGORY_PALETTE = ["var(--brand)", "var(--info)", "var(--ok)", "var(--warn)", "var(--danger)", "var(--subtle)"];
+
+// Generic donut for "how big is each X" breakdowns (e.g. org size by
+// students/courses/assignments) — unlike RatingDonut, colors and labels
+// aren't tied to a fixed rating vocabulary, so this cycles a shared palette
+// over however many categories the caller passes in.
+export function CategoryDonut({ data, valueSuffix = "" }: { data: { label: string; value: number }[]; valueSuffix?: string }) {
+  const total = data.reduce((s, d) => s + d.value, 0);
+  if (!total) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-[18px]">
+      <div className="h-[150px] w-[150px] flex-none">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie data={data} dataKey="value" nameKey="label" innerRadius={44} outerRadius={68} paddingAngle={2} strokeWidth={0}>
+              {data.map((d, i) => (
+                <Cell key={d.label} fill={CATEGORY_PALETTE[i % CATEGORY_PALETTE.length]} />
+              ))}
+            </Pie>
+            <Tooltip content={<ChartTooltip />} />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-[9px]">
+        {data.map((d, i) => (
+          <div key={d.label} className="flex items-center gap-[8px]">
+            <span className="h-[9px] w-[9px] flex-none rounded-full" style={{ background: CATEGORY_PALETTE[i % CATEGORY_PALETTE.length] }} />
+            <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--muted)]">{d.label}</span>
+            <span className="flex-none text-[13px] font-bold text-[var(--text)]">
+              {d.value.toLocaleString()}
+              {valueSuffix}
+            </span>
+            <span className="w-[38px] flex-none text-right text-[11.5px] text-[var(--subtle)]">{Math.round((d.value / total) * 100)}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

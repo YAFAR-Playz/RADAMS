@@ -34,10 +34,10 @@ import {
   type RatingSlice,
 } from "@/lib/actions/dashboard-charts";
 import { getHrDashboard, type HrDashboard } from "@/lib/actions/hr";
-import { getOwnerDashboard, listOrgsOverview, type OrgOverview } from "@/lib/actions/owner";
+import { getOwnerDashboard, listOrgsOverview, type OrgOverview, type OrgSizeRow, type TrendPoint } from "@/lib/actions/owner";
 import { listRecentActivityAcrossOrgs, type PlatformActivityRow } from "@/lib/actions/activity-log";
 import { CATEGORY_ICON } from "@/lib/activity-categories";
-import { TrendAreaChart, GroupedBarChart, RatingDonut, Sparkline } from "./charts";
+import { TrendAreaChart, GroupedBarChart, RatingDonut, CategoryDonut, Sparkline } from "./charts";
 
 function Badge({ text, tone, icon }: { text: string; tone: Tone; icon?: IconName }) {
   const { bg, fg } = toneColors(tone);
@@ -468,7 +468,48 @@ function ActivityCard({ rows }: { rows: PlatformActivityRow[] }) {
   );
 }
 
-function OwnerPanels({ orgs, activity }: { orgs: OrgOverview[]; activity: PlatformActivityRow[] }) {
+// Lets Owner flip which metric decides "how big" an org is — headcount and
+// workload don't always agree (a small course-count org can still have the
+// most students, or the most assignments issued) — rather than only ever
+// showing one fixed ranking.
+function OrgSizeCard({ rows }: { rows: OrgSizeRow[] }) {
+  const [metric, setMetric] = useState<"students" | "courses" | "assignments">("students");
+  const data = useMemo(() => rows.map((r) => ({ label: r.label, value: r[metric] })).sort((a, b) => b.value - a.value), [rows, metric]);
+
+  return (
+    <Card
+      title="Organization size"
+      subtitle="Share of the platform by organization"
+      action={
+        <select
+          value={metric}
+          onChange={(e) => setMetric(e.target.value as typeof metric)}
+          className="cursor-pointer appearance-none rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] py-[6px] text-[12px] font-semibold text-[var(--text)] outline-none"
+        >
+          <option value="students">Students</option>
+          <option value="courses">Courses</option>
+          <option value="assignments">Assignments</option>
+        </select>
+      }
+    >
+      <div className="p-[18px]">{data.length === 0 ? <EmptyRow>No organizations yet.</EmptyRow> : <CategoryDonut data={data} />}</div>
+    </Card>
+  );
+}
+
+function OwnerPanels({
+  orgs,
+  activity,
+  orgSize,
+  studentGrowth,
+  staffGrowth,
+}: {
+  orgs: OrgOverview[];
+  activity: PlatformActivityRow[];
+  orgSize: OrgSizeRow[];
+  studentGrowth: TrendPoint[];
+  staffGrowth: TrendPoint[];
+}) {
   return (
     <>
       <Card title="Organizations" action={<ViewAllButton href="/orgs">Manage</ViewAllButton>}>
@@ -497,6 +538,21 @@ function OwnerPanels({ orgs, activity }: { orgs: OrgOverview[]; activity: Platfo
         </div>
       </Card>
       <ActivityCard rows={activity} />
+      <div className="lg:col-span-2">
+        <OrgSizeCard rows={orgSize} />
+      </div>
+      <div className="lg:col-span-2 grid gap-4 lg:grid-cols-2">
+        <Card title="Platform students" subtitle="Total across every organization, last 6 months">
+          <div className="p-[18px]">
+            {studentGrowth.length > 1 ? <TrendAreaChart data={studentGrowth} color="var(--brand)" /> : <EmptyRow>Not enough history yet.</EmptyRow>}
+          </div>
+        </Card>
+        <Card title="Platform staff" subtitle="Total across every organization, last 6 months">
+          <div className="p-[18px]">
+            {staffGrowth.length > 1 ? <TrendAreaChart data={staffGrowth} color="var(--info)" /> : <EmptyRow>Not enough history yet.</EmptyRow>}
+          </div>
+        </Card>
+      </div>
     </>
   );
 }
@@ -792,6 +848,9 @@ export function DashboardContent({
   const [ownerKpis, setOwnerKpis] = useState<Kpi[] | null>(null);
   const [ownerOrgs, setOwnerOrgs] = useState<OrgOverview[]>([]);
   const [ownerActivity, setOwnerActivity] = useState<PlatformActivityRow[]>([]);
+  const [ownerOrgSize, setOwnerOrgSize] = useState<OrgSizeRow[]>([]);
+  const [ownerStudentGrowth, setOwnerStudentGrowth] = useState<TrendPoint[]>([]);
+  const [ownerStaffGrowth, setOwnerStaffGrowth] = useState<TrendPoint[]>([]);
   const [loading, setLoading] = useState(!isMock);
 
   const [payrollTrend, setPayrollTrend] = useState<{ points: PayrollTrendPoint[]; currencySymbol: string } | null>(null);
@@ -837,6 +896,9 @@ export function DashboardContent({
         setOwnerKpis(dash.kpis);
         setOwnerOrgs(orgs);
         setOwnerActivity(activity);
+        setOwnerOrgSize(dash.orgSizeByMetric);
+        setOwnerStudentGrowth(dash.studentGrowth);
+        setOwnerStaffGrowth(dash.staffGrowth);
       }
       setLoading(false);
     })();
@@ -893,7 +955,18 @@ export function DashboardContent({
       <KpiRow kpis={kpis} />
 
       <div className="mt-[18px] grid items-start gap-4 lg:grid-cols-[1.7fr_1fr]">
-        {role === "owner" && (loading ? <PanelSkeleton /> : <OwnerPanels orgs={ownerOrgs} activity={ownerActivity} />)}
+        {role === "owner" &&
+          (loading ? (
+            <PanelSkeleton />
+          ) : (
+            <OwnerPanels
+              orgs={ownerOrgs}
+              activity={ownerActivity}
+              orgSize={ownerOrgSize}
+              studentGrowth={ownerStudentGrowth}
+              staffGrowth={ownerStaffGrowth}
+            />
+          ))}
         {role === "admin" && (loading || !adminData ? <PanelSkeleton /> : <AdminPanels data={adminData} />)}
         {role === "hr" && (loading || !hrData ? <PanelSkeleton /> : <HrPanels data={hrData} />)}
         {role === "head" && (loading || !headData ? <PanelSkeleton /> : <HeadPanels data={headData} />)}
