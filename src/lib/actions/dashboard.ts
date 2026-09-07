@@ -737,32 +737,42 @@ export async function getAssistantCheckRates(): Promise<AssistantCheckRateRow[]>
   // every active course easily clears Postgrest's default 1000-row cap —
   // an unbounded select here silently truncates rather than erroring, which
   // undercounts both a subgroup's student count and its checked total
-  // (whichever rows happen to sort past the cutoff just vanish). Paginated
-  // the same way getSessionRoster/getStudentDetailedExport already are.
+  // (whichever rows happen to sort past the cutoff just vanish). Paginating
+  // with a sequential from/to loop (as getSessionRoster/getStudentDetailedExport
+  // do) is correct but slow here — a large org's assignment_logs alone can be
+  // a dozen+ pages, and awaiting them one at a time serializes that many
+  // round trips. Getting the row count first (near-instant: head:true never
+  // transfers rows) lets every page after that fire in parallel instead.
   const CHECK_RATE_PAGE_SIZE = 1000;
-  async function fetchAllRows<T>(fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null }>): Promise<T[]> {
-    const rows: T[] = [];
-    for (let from = 0; ; from += CHECK_RATE_PAGE_SIZE) {
-      const { data: page } = await fetchPage(from, from + CHECK_RATE_PAGE_SIZE - 1);
-      if (!page || page.length === 0) break;
-      rows.push(...page);
-      if (page.length < CHECK_RATE_PAGE_SIZE) break;
-    }
-    return rows;
+  async function fetchAllRowsFast<T>(
+    countQuery: PromiseLike<{ count: number | null }>,
+    fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null }>
+  ): Promise<T[]> {
+    const { count } = await countQuery;
+    const total = count ?? 0;
+    if (total === 0) return [];
+    const pageCount = Math.ceil(total / CHECK_RATE_PAGE_SIZE);
+    const pages = await Promise.all(
+      Array.from({ length: pageCount }, (_, i) => fetchPage(i * CHECK_RATE_PAGE_SIZE, i * CHECK_RATE_PAGE_SIZE + CHECK_RATE_PAGE_SIZE - 1))
+    );
+    return pages.flatMap((p) => p.data ?? []);
   }
 
   const [{ data: offeringRows }, { data: assistantLinks }, assignmentRows, enrollments] = await Promise.all([
     supabase.from("course_offerings").select("id, session, unit, courses(name)").in("id", offeringIds),
     supabase.from("offering_assistants").select("offering_id, assistant_id, profiles(id, full_name, initials)").in("offering_id", offeringIds),
-    fetchAllRows<{ id: string; offering_id: string }>((from, to) =>
-      supabase.from("assignments").select("id, offering_id").in("offering_id", offeringIds).range(from, to)
+    fetchAllRowsFast<{ id: string; offering_id: string }>(
+      supabase.from("assignments").select("*", { count: "exact", head: true }).in("offering_id", offeringIds),
+      (from, to) => supabase.from("assignments").select("id, offering_id").in("offering_id", offeringIds).range(from, to)
     ),
     // "Checked" here mirrors the Oversight page's own tracking concept — a
     // student who left this course shouldn't drag down (or artificially
     // inflate, if they'd never have been checked) their former assistant's
     // rate, so left students are excluded the same way everywhere else is.
-    fetchAllRows<{ offering_id: string; student_id: string; assistant_id: string | null }>((from, to) =>
-      supabase.from("enrollments").select("offering_id, student_id, assistant_id").in("offering_id", offeringIds).is("left_at", null).range(from, to)
+    fetchAllRowsFast<{ offering_id: string; student_id: string; assistant_id: string | null }>(
+      supabase.from("enrollments").select("*", { count: "exact", head: true }).in("offering_id", offeringIds).is("left_at", null),
+      (from, to) =>
+        supabase.from("enrollments").select("offering_id, student_id, assistant_id").in("offering_id", offeringIds).is("left_at", null).range(from, to)
     ),
   ]);
 
@@ -788,8 +798,10 @@ export async function getAssistantCheckRates(): Promise<AssistantCheckRateRow[]>
 
   const assignmentIds = Array.from(assignmentOfferingById.keys());
   const logs = assignmentIds.length
-    ? await fetchAllRows<{ assignment_id: string; student_id: string }>((from, to) =>
-        supabase.from("assignment_logs").select("assignment_id, student_id").in("assignment_id", assignmentIds).eq("status", "checked").range(from, to)
+    ? await fetchAllRowsFast<{ assignment_id: string; student_id: string }>(
+        supabase.from("assignment_logs").select("*", { count: "exact", head: true }).in("assignment_id", assignmentIds).eq("status", "checked"),
+        (from, to) =>
+          supabase.from("assignment_logs").select("assignment_id, student_id").in("assignment_id", assignmentIds).eq("status", "checked").range(from, to)
       )
     : [];
 

@@ -510,9 +510,12 @@ function OwnerPanels({ orgs, activity }: { orgs: OrgOverview[]; activity: Platfo
 // rather than one blended number that could hide a course they're behind
 // on. Admin gets a course filter (defaults to every active course); Head
 // only ever sees their own courses, so a filter would just be one option.
+const CHECK_RATE_PAGE = 10;
+
 function AssistantCheckRateCard({ rows, showCourseFilter }: { rows: AssistantCheckRateRow[]; showCourseFilter: boolean }) {
   const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
   const [courseFilter, setCourseFilter] = useState("");
+  const [showAll, setShowAll] = useState(false);
 
   const courses = useMemo(() => {
     const map = new Map<string, string>();
@@ -527,6 +530,8 @@ function AssistantCheckRateCard({ rows, showCourseFilter }: { rows: AssistantChe
     return [...filtered].sort((a, b) => (sortDir === "desc" ? b.ratePct - a.ratePct : a.ratePct - b.ratePct));
   }, [rows, courseFilter, sortDir]);
 
+  const visible = showAll ? sorted : sorted.slice(0, CHECK_RATE_PAGE);
+
   return (
     <Card
       title="Assistant checking rates"
@@ -536,7 +541,10 @@ function AssistantCheckRateCard({ rows, showCourseFilter }: { rows: AssistantChe
           {showCourseFilter && courses.length > 1 && (
             <select
               value={courseFilter}
-              onChange={(e) => setCourseFilter(e.target.value)}
+              onChange={(e) => {
+                setCourseFilter(e.target.value);
+                setShowAll(false);
+              }}
               className="cursor-pointer appearance-none rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] py-[6px] text-[12px] font-semibold text-[var(--text)] outline-none"
             >
               <option value="">All courses</option>
@@ -549,7 +557,10 @@ function AssistantCheckRateCard({ rows, showCourseFilter }: { rows: AssistantChe
           )}
           <select
             value={sortDir}
-            onChange={(e) => setSortDir(e.target.value as "desc" | "asc")}
+            onChange={(e) => {
+              setSortDir(e.target.value as "desc" | "asc");
+              setShowAll(false);
+            }}
             className="cursor-pointer appearance-none rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] py-[6px] text-[12px] font-semibold text-[var(--text)] outline-none"
           >
             <option value="desc">Highest first</option>
@@ -562,26 +573,36 @@ function AssistantCheckRateCard({ rows, showCourseFilter }: { rows: AssistantChe
         {sorted.length === 0 ? (
           <EmptyRow>No assistant subgroups with students yet.</EmptyRow>
         ) : (
-          sorted.map((r) => (
-            <div key={`${r.offeringId}:${r.assistantId}`} className="flex items-center gap-3 rounded-[10px] p-[10px_11px] hover:bg-[var(--surface2)]">
-              <Avatar initials={r.assistantInitials} />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[13.5px] font-semibold text-[var(--text)]">{r.assistantName}</span>
-                  <span className="text-[12px] font-medium text-[var(--muted)]">
-                    {r.checked}/{r.total}
-                  </span>
+          <>
+            {visible.map((r) => (
+              <div key={`${r.offeringId}:${r.assistantId}`} className="flex items-center gap-3 rounded-[10px] p-[10px_11px] hover:bg-[var(--surface2)]">
+                <Avatar initials={r.assistantInitials} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[13.5px] font-semibold text-[var(--text)]">{r.assistantName}</span>
+                    <span className="text-[12px] font-medium text-[var(--muted)]">
+                      {r.checked}/{r.total}
+                    </span>
+                  </div>
+                  <div className="mt-[1px] text-[11.5px] text-[var(--subtle)]">
+                    {r.courseLabel} · {r.studentCount} student{r.studentCount === 1 ? "" : "s"}
+                  </div>
+                  <div className="mt-[7px]">
+                    <ProgressBar pct={r.ratePct} color={r.ratePct >= 70 ? "var(--ok)" : r.ratePct >= 40 ? "var(--warn)" : "var(--danger)"} />
+                  </div>
                 </div>
-                <div className="mt-[1px] text-[11.5px] text-[var(--subtle)]">
-                  {r.courseLabel} · {r.studentCount} student{r.studentCount === 1 ? "" : "s"}
-                </div>
-                <div className="mt-[7px]">
-                  <ProgressBar pct={r.ratePct} color={r.ratePct >= 70 ? "var(--ok)" : r.ratePct >= 40 ? "var(--warn)" : "var(--danger)"} />
-                </div>
+                <span className="flex-none text-[15px] font-bold text-[var(--text)]">{r.ratePct}%</span>
               </div>
-              <span className="flex-none text-[15px] font-bold text-[var(--text)]">{r.ratePct}%</span>
-            </div>
-          ))
+            ))}
+            {!showAll && sorted.length > CHECK_RATE_PAGE && (
+              <button
+                onClick={() => setShowAll(true)}
+                className="mt-1 w-full rounded-[10px] p-[10px_11px] text-center text-[12.5px] font-semibold text-[var(--brand)] hover:bg-[var(--surface2)]"
+              >
+                Show {sorted.length - CHECK_RATE_PAGE} more
+              </button>
+            )}
+          </>
         )}
       </div>
     </Card>
