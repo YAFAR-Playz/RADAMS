@@ -168,7 +168,17 @@ export function RatingDonut({ data }: { data: { rating: string; label: string; c
   );
 }
 
-const CATEGORY_PALETTE = ["var(--brand)", "var(--info)", "var(--ok)", "var(--warn)", "var(--danger)", "var(--subtle)"];
+// Purpose-built for sitting several slices next to each other — semantic
+// tone tokens like --brand/--info are both blue and become indistinguishable
+// in a chart even though they read fine as separate, unrelated UI accents.
+const CATEGORY_PALETTE = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+  "var(--chart-6)",
+];
 
 // Generic donut for "how big is each X" breakdowns (e.g. org size by
 // students/courses/assignments) — unlike RatingDonut, colors and labels
