@@ -28,8 +28,25 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  const { data } = await supabase.auth.getUser();
-  const isAuthed = !!data.user;
+  // A stale/already-rotated refresh token (racing tabs, a long-idle
+  // session, etc.) makes getUser() throw an AuthApiError instead of
+  // returning a clean "no user" result — confirmed happening in
+  // production (Vercel runtime errors: "Invalid Refresh Token: Refresh
+  // Token Not Found" at /middleware, affecting multiple users over time).
+  // Left uncaught, that crashes this request instead of just treating it
+  // as logged-out, which is what a broken session actually is — the
+  // crash is what shows up to the user as being abruptly logged out or a
+  // page/action suddenly failing outright rather than a clean redirect to
+  // /login. Signing out clears the bad cookies so the next request
+  // doesn't immediately hit the same throw again.
+  let isAuthed = false;
+  try {
+    const { data } = await supabase.auth.getUser();
+    isAuthed = !!data.user;
+  } catch {
+    await supabase.auth.signOut();
+    isAuthed = false;
+  }
   const path = request.nextUrl.pathname;
   const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(p + "/"));
 
