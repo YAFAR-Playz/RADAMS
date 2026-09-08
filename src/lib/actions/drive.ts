@@ -229,6 +229,13 @@ export async function uploadStaffReportToDrive(input: {
   staffName: string;
   fileName: string;
   pdfBase64: string;
+  // The org's admin(s) get Viewer access to the org folder (and everything
+  // under it) so they can browse it directly in Drive — every other folder
+  // in the tree (the shared root, and other orgs' folders) stays restricted
+  // to whoever the Apps Script itself runs as. The PDF file is separately
+  // set to "anyone with the link can view" so it can be shared/opened
+  // without a Drive account.
+  adminEmails: string[];
 }): Promise<StaffReportDriveResult> {
   try {
     const { file } = await callDriveBridge<{ file: { id: string; url: string; folderId: string; folderUrl: string } }>("uploadStaffReport", {
@@ -238,6 +245,7 @@ export async function uploadStaffReportToDrive(input: {
       staffName: input.staffName,
       fileName: input.fileName,
       pdfBase64: input.pdfBase64,
+      adminEmails: input.adminEmails,
     });
     return { ok: true, folderUrl: file.folderUrl, fileUrl: file.url };
   } catch (e) {

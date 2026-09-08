@@ -3,7 +3,15 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
-import { getBranding, saveBranding, uploadOrgLogo, removeOrgLogo, type BrandingDraft } from "@/lib/actions/branding";
+import {
+  getBranding,
+  saveBranding,
+  uploadOrgLogo,
+  removeOrgLogo,
+  getStaffReportBrandingPreference,
+  setStaffReportBrandingPreference,
+  type BrandingDraft,
+} from "@/lib/actions/branding";
 import { PRIMARIES, SECONDARIES, FONTS, CORNERS, mixHex } from "@/lib/branding-options";
 
 export function BrandingContent() {
@@ -13,14 +21,17 @@ export function BrandingContent() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [staffReportUsesPlatform, setStaffReportUsesPlatform] = useState(false);
+  const [staffReportPrefSaving, setStaffReportPrefSaving] = useState(false);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
-        const data = await getBranding();
+        const [data, staffReportPref] = await Promise.all([getBranding(), getStaffReportBrandingPreference()]);
         setSaved(data);
         setDraft(data);
+        setStaffReportUsesPlatform(staffReportPref);
       } catch {
         setError("Couldn't load branding settings.");
       } finally {
@@ -28,6 +39,19 @@ export function BrandingContent() {
       }
     })();
   }, []);
+
+  async function onToggleStaffReportBranding(usePlatform: boolean) {
+    setStaffReportPrefSaving(true);
+    setError(null);
+    try {
+      await setStaffReportBrandingPreference(usePlatform);
+      setStaffReportUsesPlatform(usePlatform);
+    } catch {
+      setError("Couldn't save this preference — try again.");
+    } finally {
+      setStaffReportPrefSaving(false);
+    }
+  }
 
   async function onSave() {
     if (!draft) return;
@@ -284,6 +308,54 @@ export function BrandingContent() {
                   </button>
                 );
               })}
+            </div>
+          </section>
+
+          {/* STAFF REPORT BRANDING */}
+          <section className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
+            <h3 className="m-0 mb-1 text-[14px] font-semibold text-[var(--text)]">Staff report branding</h3>
+            <p className="m-0 mb-[15px] text-[12px] leading-[1.5] text-[var(--subtle)]">
+              Choose whose logo and colors appear on generated staff pay/workload report PDFs.
+            </p>
+            <div className="flex flex-col gap-[8px]">
+              <button
+                onClick={() => onToggleStaffReportBranding(false)}
+                disabled={staffReportPrefSaving}
+                className="flex items-center justify-between gap-[10px] rounded-[var(--rad-sm)] border-[1.5px] p-[11px_14px] text-left disabled:opacity-60"
+                style={{
+                  borderColor: !staffReportUsesPlatform ? "var(--brand)" : "var(--border)",
+                  background: !staffReportUsesPlatform ? "var(--brands)" : "var(--surface)",
+                }}
+              >
+                <div>
+                  <div className="text-[13px] font-semibold text-[var(--text)]">This organization&apos;s branding</div>
+                  <div className="text-[11.5px] text-[var(--subtle)]">Your logo, name, and colors above.</div>
+                </div>
+                {!staffReportUsesPlatform && (
+                  <div className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-[var(--brand)] text-[var(--brandfg)]">
+                    <Icon name="check" size={12} />
+                  </div>
+                )}
+              </button>
+              <button
+                onClick={() => onToggleStaffReportBranding(true)}
+                disabled={staffReportPrefSaving}
+                className="flex items-center justify-between gap-[10px] rounded-[var(--rad-sm)] border-[1.5px] p-[11px_14px] text-left disabled:opacity-60"
+                style={{
+                  borderColor: staffReportUsesPlatform ? "var(--brand)" : "var(--border)",
+                  background: staffReportUsesPlatform ? "var(--brands)" : "var(--surface)",
+                }}
+              >
+                <div>
+                  <div className="text-[13px] font-semibold text-[var(--text)]">Default platform branding</div>
+                  <div className="text-[11.5px] text-[var(--subtle)]">Use the platform owner&apos;s default logo and colors instead.</div>
+                </div>
+                {staffReportUsesPlatform && (
+                  <div className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-[var(--brand)] text-[var(--brandfg)]">
+                    <Icon name="check" size={12} />
+                  </div>
+                )}
+              </button>
             </div>
           </section>
         </div>
