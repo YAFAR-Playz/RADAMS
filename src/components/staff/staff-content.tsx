@@ -18,6 +18,9 @@ import {
 } from "@/lib/actions/staff";
 import { listAllStaffingRequests, type StaffingRequestDetail } from "@/lib/actions/hr";
 import { DepartedStaffPanel } from "@/components/staff/departed-staff-panel";
+import { StaffContractModal } from "@/components/staff/staff-contract-modal";
+import { StaffReportModal } from "@/components/staff/staff-report-modal";
+import { listStaffForBulkReport, generateStaffReport } from "@/lib/actions/staff-reports";
 import { listAllOfferingsForOrg, type OfferingChoice } from "@/lib/actions/students";
 import { downloadCsv } from "@/lib/csv-export";
 import { consumeSearchHandoff } from "@/lib/search-handoff";
@@ -72,6 +75,11 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
   const [loginAsId, setLoginAsId] = useState<string | null>(null);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
 
+  const [contractTarget, setContractTarget] = useState<StaffMember | null>(null);
+  const [reportTarget, setReportTarget] = useState<StaffMember | null>(null);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number; name: string } | null>(null);
+  const [bulkResult, setBulkResult] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<StaffMember | null>(null);
   const [removeLeaveDate, setRemoveLeaveDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [removeGaveNotice, setRemoveGaveNotice] = useState(false);
@@ -197,6 +205,46 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
     }
   }
 
+  // One person at a time (not a single server call looping over everyone)
+  // so a large org's run doesn't risk one serverless function's execution
+  // time limit — mirrors the chunked Drive-delivery loop in
+  // academic-report-content.tsx, just one staff member per "chunk" instead
+  // of 25 students. Each person's report is a combined PDF covering every
+  // course they've ever worked (no per-person course picker in bulk mode).
+  async function onGenerateAll() {
+    setBulkRunning(true);
+    setBulkResult(null);
+    setError(null);
+    try {
+      const candidates = await listStaffForBulkReport();
+      if (candidates.length === 0) {
+        setBulkResult("No staff with salary history to report on.");
+        return;
+      }
+      const failures: string[] = [];
+      for (let i = 0; i < candidates.length; i++) {
+        const c = candidates[i];
+        setBulkProgress({ done: i, total: candidates.length, name: c.name });
+        try {
+          await generateStaffReport(c.staffId, c.offeringIds);
+        } catch (e) {
+          failures.push(`${c.name}: ${e instanceof Error ? e.message : "failed"}`);
+        }
+      }
+      setBulkProgress({ done: candidates.length, total: candidates.length, name: "" });
+      setBulkResult(
+        failures.length === 0
+          ? `Generated ${candidates.length} report${candidates.length === 1 ? "" : "s"} and sent them to Drive.`
+          : `Generated ${candidates.length - failures.length}/${candidates.length} — ${failures.length} failed: ${failures.join("; ")}`
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't generate reports — try again.");
+    } finally {
+      setBulkRunning(false);
+      setBulkProgress(null);
+    }
+  }
+
   async function onLoginAs(id: string) {
     setLoginAsId(id);
     try {
@@ -253,6 +301,15 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
         </div>
       )}
 
+      {bulkResult && (
+        <div className="flex items-center justify-between gap-3 rounded-[var(--rad-sm)] border border-[var(--ok)] bg-[var(--oks)] px-4 py-3 text-[13px] font-medium text-[var(--ok)]">
+          {bulkResult}
+          <button onClick={() => setBulkResult(null)} className="flex-none">
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+      )}
+
       {/* HEADER */}
       <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -272,6 +329,14 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
             >
               <Icon name="logout" size={16} />
               Departed staff
+            </button>
+            <button
+              onClick={onGenerateAll}
+              disabled={bulkRunning}
+              className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-[14px] py-[10px] text-[13px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
+            >
+              {bulkRunning ? <Spinner size={14} /> : <Icon name="printer" size={16} />}
+              {bulkProgress ? `Generating ${bulkProgress.done}/${bulkProgress.total}…` : "Generate all reports"}
             </button>
             <button
               onClick={onExport}
@@ -465,6 +530,24 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
                     >
                       <Icon name="settings" size={15} />
                     </button>
+                    {(u.role === "assistant" || u.role === "head") && (
+                      <>
+                        <button
+                          onClick={() => setContractTarget(u)}
+                          title="Contract"
+                          className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]"
+                        >
+                          <Icon name="file-up" size={15} />
+                        </button>
+                        <button
+                          onClick={() => setReportTarget(u)}
+                          title="Generate report"
+                          className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]"
+                        >
+                          <Icon name="printer" size={15} />
+                        </button>
+                      </>
+                    )}
                     {!isHr && u.role !== "owner" && (
                       <button
                         onClick={() => onLoginAs(u.id)}
@@ -811,6 +894,12 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
       )}
 
       {departedOpen && <DepartedStaffPanel onClose={() => setDepartedOpen(false)} />}
+
+      {contractTarget && (
+        <StaffContractModal staffId={contractTarget.id} staffName={contractTarget.name} onClose={() => setContractTarget(null)} />
+      )}
+
+      {reportTarget && <StaffReportModal staffId={reportTarget.id} staffName={reportTarget.name} onClose={() => setReportTarget(null)} />}
     </div>
   );
 }
