@@ -476,25 +476,29 @@ class ReportCanvas {
   }
 
   // Cover header — a thin brand bar (same rule every other page gets) then a
-  // plain bordered card holding the logo, a title, and a subtitle line.
-  // Mirrors the org's existing "Salary Details" PDF style (thin top bar,
-  // white card with logo + title) rather than a big solid color band.
-  coverHeader(title: string, subtitle: string) {
-    title = sanitizePdfText(title);
+  // plain bordered card holding the logo and the staff member's name as the
+  // dominant element (this document is fundamentally about that one
+  // person, so the name — not the generic "Staff Report" label — is what
+  // should read first), with the doc label as a small eyebrow above it and
+  // role as a subtitle below.
+  coverHeader(eyebrow: string, name: string, subtitle: string) {
+    eyebrow = sanitizePdfText(eyebrow);
+    name = sanitizePdfText(name);
     subtitle = sanitizePdfText(subtitle);
     this.page.drawRectangle({ x: 0, y: PAGE_HEIGHT - 6, width: PAGE_WIDTH, height: 6, color: rgb(...this.accent) });
     const top = PAGE_HEIGHT - 22;
-    const height = 92;
+    const height = 108;
     this.page.drawRectangle({ x: MARGIN, y: top - height, width: PAGE_WIDTH - MARGIN * 2, height, color: rgb(...WHITE), borderColor: rgb(...BORDER), borderWidth: 1 });
     let textX = MARGIN + 22;
     if (this.logo) {
-      const logoH = 52;
+      const logoH = 56;
       const logoW = logoH / this.logo.ratio;
       this.page.drawImage(this.logo.image, { x: MARGIN + 18, y: top - height / 2 - logoH / 2, width: logoW, height: logoH });
       textX = MARGIN + 18 + logoW + 18;
     }
-    this.page.drawText(title, { x: textX, y: top - 40, size: 18, font: this.bold, color: rgb(...this.accent) });
-    this.page.drawText(subtitle, { x: textX, y: top - 60, size: 10, font: this.font, color: rgb(...TEXT_MUTED) });
+    this.page.drawText(eyebrow.toUpperCase(), { x: textX, y: top - 28, size: 8.5, font: this.bold, color: rgb(...TEXT_MUTED) });
+    this.page.drawText(name, { x: textX, y: top - 54, size: 23, font: this.bold, color: rgb(...this.accent) });
+    this.page.drawText(subtitle, { x: textX, y: top - 76, size: 10.5, font: this.font, color: rgb(...TEXT_MUTED) });
     this.y = top - height - 20;
   }
 
@@ -516,29 +520,34 @@ class ReportCanvas {
     });
   }
 
-  // A fully-rounded "stadium" pill — the salary-breakdown value chips.
-  pill(x: number, y: number, width: number, height: number, fill: Color, borderColor?: Color) {
-    this.roundedRect(x, y, width, height, height / 2, { fill, borderColor, borderWidth: borderColor ? 1 : undefined });
-  }
-
   // A bold heading with a colored underline (this org's own existing PDF
   // style for section breaks — h3{color; border-bottom} — rather than a
   // heavy full-width color band, which read as too "webpage-y" next to the
   // rest of this document's plain white background).
   heading(text: string, size = 14) {
     text = sanitizePdfText(text);
-    this.ensureSpace(size + 10);
+    // drawText's y is the text BASELINE, not its visual top — a bold 14-15pt
+    // heading's ascent (~70-75% of size) reaches well above that baseline,
+    // so without its own top padding a heading eats into whatever gap the
+    // element before it left, landing almost flush against it instead of
+    // visibly separated (confirmed by rendering and comparing against real
+    // output, not assumed from the numbers alone).
+    const topPad = 8;
+    this.ensureSpace(size + topPad + 16);
+    this.y -= topPad;
     this.page.drawText(text, { x: MARGIN, y: this.y, size, font: this.bold, color: rgb(...this.accent) });
-    this.y -= 5;
+    this.y -= 6;
     this.page.drawLine({ start: { x: MARGIN, y: this.y }, end: { x: PAGE_WIDTH - MARGIN, y: this.y }, thickness: 1.5, color: rgb(...this.accent) });
-    this.y -= 14;
+    this.y -= 18;
   }
 
   // Small accent-colored uppercase label used above every card/section,
   // matching the reference sheet's blue "SALARY BREAKDOWN" / "ASSISTANT
   // DETAILS" style headings.
   sectionLabel(text: string, gap = 8) {
-    this.ensureSpace(11 + gap);
+    const topPad = 4;
+    this.ensureSpace(11 + gap + topPad);
+    this.y -= topPad;
     this.page.drawText(sanitizePdfText(text).toUpperCase(), { x: MARGIN, y: this.y, size: 9.5, font: this.bold, color: rgb(...this.accent) });
     this.y -= 11 + gap;
   }
@@ -550,20 +559,34 @@ class ReportCanvas {
   // normal row, or a solid accent pill with white text for the Total row
   // (matching the org's existing salary PDF: pale pill values, solid pill
   // only for the grand total).
-  breakdownRow(label: string, value: string, opts: { solid?: boolean } = {}) {
-    label = sanitizePdfText(label);
-    value = sanitizePdfText(value);
-    const rowHeight = 28;
-    const pillWidth = 130;
-    this.ensureSpace(rowHeight + 6);
-    const pillX = PAGE_WIDTH - MARGIN - pillWidth;
-    this.page.drawText(label, { x: MARGIN, y: this.y - rowHeight / 2 - 4, size: opts.solid ? 11 : 10, font: this.bold, color: rgb(...TEXT_DARK) });
-    this.pill(pillX, this.y - rowHeight, pillWidth, rowHeight, opts.solid ? this.accent : this.accentTint, opts.solid ? undefined : BORDER);
-    const valueSize = opts.solid ? 11.5 : 10.5;
-    const valueColor = opts.solid ? WHITE : TEXT_DARK;
-    const w = this.bold.widthOfTextAtSize(value, valueSize);
-    this.page.drawText(value, { x: pillX + (pillWidth - w) / 2, y: this.y - rowHeight / 2 - valueSize / 2.8, size: valueSize, font: this.bold, color: rgb(...valueColor) });
-    this.y -= rowHeight + 6;
+  // A compact 4-column table (Base / Bonus / Deductions / Total) — one
+  // header row, one value row, with the Total column visually emphasized.
+  // Flat (not rounded) borders on purpose: a header-row background that
+  // has to sit flush against an outer rounded corner risks its own sharp
+  // corners poking out past the curve, which rounded shapes elsewhere in
+  // this file avoid entirely by construction.
+  salaryTable(cells: { label: string; value: string; emphasize?: boolean }[]) {
+    const colWidth = (PAGE_WIDTH - MARGIN * 2) / cells.length;
+    const headerH = 22;
+    const rowH = 34;
+    const totalH = headerH + rowH;
+    this.ensureSpace(totalH + 10);
+    const top = this.y;
+    this.page.drawRectangle({ x: MARGIN, y: top - totalH, width: PAGE_WIDTH - MARGIN * 2, height: totalH, color: rgb(...WHITE), borderColor: rgb(...BORDER), borderWidth: 1 });
+    this.page.drawRectangle({ x: MARGIN, y: top - headerH, width: PAGE_WIDTH - MARGIN * 2, height: headerH, color: rgb(...this.accentTint) });
+    cells.forEach((cell, i) => {
+      const label = sanitizePdfText(cell.label).toUpperCase();
+      const value = sanitizePdfText(cell.value);
+      const cx = MARGIN + i * colWidth;
+      const hw = this.bold.widthOfTextAtSize(label, 8.5);
+      this.page.drawText(label, { x: cx + (colWidth - hw) / 2, y: top - headerH + 7, size: 8.5, font: this.bold, color: rgb(...this.accent) });
+      const valueSize = cell.emphasize ? 13.5 : 11.5;
+      const valueColor = cell.emphasize ? this.accent : TEXT_DARK;
+      const vw = this.bold.widthOfTextAtSize(value, valueSize);
+      this.page.drawText(value, { x: cx + (colWidth - vw) / 2, y: top - headerH - rowH / 2 - valueSize / 2.8, size: valueSize, font: this.bold, color: rgb(...valueColor) });
+      if (i > 0) this.page.drawLine({ start: { x: cx, y: top - totalH }, end: { x: cx, y: top }, thickness: 0.75, color: rgb(...BORDER) });
+    });
+    this.y = top - totalH - 10;
   }
 
   // A labeled note box for free text that can run long (basis strings,
@@ -688,11 +711,12 @@ class ReportCanvas {
     return lines;
   }
 
-  text(value: string, opts: { size?: number; bold?: boolean; gap?: number; color?: Color; indent?: number } = {}) {
+  text(value: string, opts: { size?: number; bold?: boolean; gap?: number; topPad?: number; color?: Color; indent?: number } = {}) {
     const size = opts.size ?? 10.5;
     const font = opts.bold ? this.bold : this.font;
     const color = rgb(...(opts.color ?? TEXT_DARK));
     const x = MARGIN + (opts.indent ?? 0);
+    if (opts.topPad) this.y -= opts.topPad;
     for (const line of this.wrap(value, size, opts.bold, PAGE_WIDTH - MARGIN * 2 - (opts.indent ?? 0))) {
       this.ensureSpace(size + 4);
       this.page.drawText(line, { x, y: this.y, size, font, color });
@@ -761,7 +785,7 @@ async function buildStaffReportPdf(
 ): Promise<Uint8Array> {
   const money = (n: number) => `${currency}${n.toLocaleString()}`;
   const canvas = await ReportCanvas.create(orgName, accentHex, logo);
-  canvas.coverHeader("Staff Report", `${data.name} · ${data.role.charAt(0).toUpperCase() + data.role.slice(1)}`);
+  canvas.coverHeader("Staff Report", data.name, data.role.charAt(0).toUpperCase() + data.role.slice(1));
 
   canvas.sectionLabel("Staff details");
   const details: { label: string; value: string; full?: boolean }[] = [
@@ -782,14 +806,14 @@ async function buildStaffReportPdf(
     canvas.heading(periodLabel(p.period), 15);
 
     for (const c of p.courses) {
-      canvas.text(c.course, { size: 12.5, bold: true, color: TEXT_DARK, gap: 8 });
+      canvas.text(c.course, { size: 13.5, bold: true, color: TEXT_DARK, topPad: 4, gap: 8 });
       canvas.sectionLabel("Salary breakdown", 6);
-      canvas.breakdownRow("Base Salary", money(c.base));
-      canvas.breakdownRow("Bonus", money(c.bonus));
-      canvas.breakdownRow("Deductions", money(c.deduction));
-      canvas.y -= 2;
-      canvas.breakdownRow("Total Salary", money(c.subtotal), { solid: true });
-      canvas.y -= 6;
+      canvas.salaryTable([
+        { label: "Base", value: money(c.base) },
+        { label: "Bonus", value: money(c.bonus) },
+        { label: "Deductions", value: money(c.deduction) },
+        { label: "Total", value: money(c.subtotal), emphasize: true },
+      ]);
 
       if (c.basis) canvas.noteBox("Basis", c.basis);
       if (c.bonusReason) canvas.noteBox("Bonus reason", c.bonusReason);
