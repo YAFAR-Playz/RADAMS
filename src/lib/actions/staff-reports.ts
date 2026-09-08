@@ -1,6 +1,6 @@
 "use server";
 
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type PDFImage } from "pdf-lib";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/current-profile";
@@ -153,7 +153,11 @@ export async function getStaffCoursesForReport(staffId: string): Promise<StaffRe
 
   const [{ data: target }, { data: lines }] = await Promise.all([
     supabase.from("profiles").select("role").eq("id", staffId).maybeSingle(),
-    admin.from("salary_lines").select("offering_id, period").eq("payee_id", staffId).not("offering_id", "is", null),
+    // Unreleased salary is still provisional/editable by Finance — only
+    // released periods count toward what this report can show, so the
+    // picker's period range never promises a course/month the PDF won't
+    // actually include.
+    admin.from("salary_lines").select("offering_id, period").eq("payee_id", staffId).not("offering_id", "is", null).not("released_at", "is", null),
   ]);
   if (!target) return [];
 
@@ -243,7 +247,10 @@ export async function getStaffReportData(staffId: string, offeringIds: string[])
 
   // salary_lines/evaluations RLS only allows finance/admin (plus the
   // person themself) to read — not HR — so these go through the admin
-  // client, same reasoning as getStaffCoursesForReport above.
+  // client, same reasoning as getStaffCoursesForReport above. Only
+  // released rows: unreleased salary is still provisional/editable by
+  // Finance and shouldn't appear in a document handed to/about the
+  // staff member.
   const [{ data: lines }, { data: evalRows }, { data: offeringRows }] = await Promise.all([
     admin
       .from("salary_lines")
@@ -252,6 +259,7 @@ export async function getStaffReportData(staffId: string, offeringIds: string[])
       )
       .eq("payee_id", staffId)
       .in("offering_id", offeringIds)
+      .not("released_at", "is", null)
       .order("period", { ascending: true }),
     admin.from("evaluations").select("offering_id, period, evaluation_lines(kind, category, note, amount)").eq("assistant_id", staffId).in("offering_id", offeringIds),
     supabase.from("course_offerings").select("id, session, unit, courses(name)").in("id", offeringIds),
@@ -347,33 +355,103 @@ const PAGE_WIDTH = 595.28; // A4 points
 const PAGE_HEIGHT = 841.89;
 const MARGIN = 48;
 
-// Small stateful cursor over a growing pdf-lib document — keeps the report
-// assembly code below readable (draw calls just say what to draw, this
-// handles wrapping to a new page once the cursor runs out of room).
+type Color = [number, number, number];
+const WHITE: Color = [1, 1, 1];
+const TEXT_DARK: Color = [0.09, 0.11, 0.16];
+const TEXT_MUTED: Color = [0.42, 0.46, 0.53];
+const BORDER: Color = [0.88, 0.9, 0.93];
+const ROW_ALT: Color = [0.975, 0.98, 0.985];
+const OK: Color = [0.09, 0.5, 0.24];
+const DANGER: Color = [0.72, 0.11, 0.11];
+const DEFAULT_ACCENT: Color = [0.145, 0.388, 0.922];
+
+function hexToColor(hex: string | null | undefined): Color {
+  const clean = (hex ?? "").replace("#", "");
+  const full = clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean;
+  if (full.length !== 6 || Number.isNaN(parseInt(full, 16))) return DEFAULT_ACCENT;
+  const num = parseInt(full, 16);
+  return [((num >> 16) & 255) / 255, ((num >> 8) & 255) / 255, (num & 255) / 255];
+}
+
+function mix(a: Color, b: Color, t: number): Color {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+}
+
+// A logo URL comes from branding (Supabase Storage or wherever it's
+// hosted) — fetched here rather than passed in as bytes since the caller
+// only has the URL, and a broken/unreachable logo shouldn't fail report
+// generation, just render without one.
+async function fetchLogoBytes(logoUrl: string | null): Promise<{ bytes: Uint8Array; mime: "image/png" | "image/jpeg" } | null> {
+  if (!logoUrl) return null;
+  try {
+    const res = await fetch(logoUrl);
+    if (!res.ok) return null;
+    const contentType = res.headers.get("content-type") ?? "";
+    const mime = contentType.includes("png") ? "image/png" : contentType.includes("jpg") || contentType.includes("jpeg") ? "image/jpeg" : null;
+    if (!mime) return null;
+    return { bytes: new Uint8Array(await res.arrayBuffer()), mime };
+  } catch {
+    return null;
+  }
+}
+
+type TableColumn = { header: string; width: number; align?: "left" | "right" };
+
+// Small stateful cursor over a growing pdf-lib document, themed with the
+// org's brand color and logo — keeps the report assembly code below
+// readable (draw calls just say what to draw structurally: a banner, a
+// table, a line of text; this handles paginating and re-drawing table
+// headers once the cursor runs out of room).
 class ReportCanvas {
   doc: PDFDocument;
   page: PDFPage;
   y: number;
   font: PDFFont;
   bold: PDFFont;
+  accent: Color;
+  accentTint: Color;
+  logo: { image: PDFImage; ratio: number } | null;
+  orgName: string;
+  // Only pages this canvas itself drew — an appended contract/receipt's own
+  // copied-in pages must never get a footer stamped over their own content.
+  ownPages: PDFPage[] = [];
 
-  private constructor(doc: PDFDocument, font: PDFFont, bold: PDFFont) {
+  private constructor(doc: PDFDocument, font: PDFFont, bold: PDFFont, accent: Color, logo: { image: PDFImage; ratio: number } | null, orgName: string) {
     this.doc = doc;
     this.font = font;
     this.bold = bold;
+    this.accent = accent;
+    this.accentTint = mix(accent, WHITE, 0.88);
+    this.logo = logo;
+    this.orgName = orgName;
     this.page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+    this.ownPages.push(this.page);
     this.y = PAGE_HEIGHT - MARGIN;
   }
 
-  static async create(): Promise<ReportCanvas> {
+  static async create(orgName: string, accentHex: string, logoFile: { bytes: Uint8Array; mime: "image/png" | "image/jpeg" } | null): Promise<ReportCanvas> {
     const doc = await PDFDocument.create();
     const font = await doc.embedFont(StandardFonts.Helvetica);
     const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-    return new ReportCanvas(doc, font, bold);
+    let logo: { image: PDFImage; ratio: number } | null = null;
+    if (logoFile) {
+      try {
+        const image = logoFile.mime === "image/png" ? await doc.embedPng(logoFile.bytes) : await doc.embedJpg(logoFile.bytes);
+        logo = { image, ratio: image.height / image.width };
+      } catch {
+        logo = null;
+      }
+    }
+    return new ReportCanvas(doc, font, bold, hexToColor(accentHex), logo, orgName);
   }
 
+  // A slim brand-colored rule at the top of every page after the cover —
+  // a light, consistent "this document is themed" touch without repeating
+  // the full cover band on every page.
   newPage() {
     this.page = this.doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+    this.ownPages.push(this.page);
+    this.page.drawRectangle({ x: 0, y: PAGE_HEIGHT - 5, width: PAGE_WIDTH, height: 5, color: rgb(...this.accent) });
     this.y = PAGE_HEIGHT - MARGIN;
   }
 
@@ -381,9 +459,34 @@ class ReportCanvas {
     if (this.y - needed < MARGIN) this.newPage();
   }
 
-  wrap(text: string, size: number, bold = false): string[] {
+  // The big brand band at the top of the cover page — logo + org name.
+  coverBand() {
+    const height = 92;
+    this.page.drawRectangle({ x: 0, y: PAGE_HEIGHT - height, width: PAGE_WIDTH, height, color: rgb(...this.accent) });
+    let textX = MARGIN;
+    if (this.logo) {
+      const logoH = 36;
+      const logoW = logoH / this.logo.ratio;
+      this.page.drawImage(this.logo.image, { x: MARGIN, y: PAGE_HEIGHT - height / 2 - logoH / 2, width: logoW, height: logoH });
+      textX = MARGIN + logoW + 16;
+    }
+    this.page.drawText(this.orgName, { x: textX, y: PAGE_HEIGHT - 42, size: 17, font: this.bold, color: rgb(...WHITE) });
+    this.page.drawText("STAFF REPORT", { x: textX, y: PAGE_HEIGHT - 62, size: 10, font: this.bold, color: rgb(...WHITE) });
+    this.y = PAGE_HEIGHT - height - 28;
+  }
+
+  // A full-width colored banner — period headers and the Contract/Receipt
+  // section dividers all use this for a consistent, clearly-branded break.
+  banner(text: string, size = 12.5) {
+    const height = 30;
+    this.ensureSpace(height + 16);
+    this.page.drawRectangle({ x: 0, y: this.y - height, width: PAGE_WIDTH, height, color: rgb(...this.accent) });
+    this.page.drawText(text, { x: MARGIN, y: this.y - height + 9, size, font: this.bold, color: rgb(...WHITE) });
+    this.y -= height + 16;
+  }
+
+  wrap(text: string, size: number, bold = false, maxWidth = PAGE_WIDTH - MARGIN * 2): string[] {
     const font = bold ? this.bold : this.font;
-    const maxWidth = PAGE_WIDTH - MARGIN * 2;
     const words = text.split(" ");
     const lines: string[] = [];
     let current = "";
@@ -400,49 +503,119 @@ class ReportCanvas {
     return lines;
   }
 
-  text(value: string, opts: { size?: number; bold?: boolean; gap?: number; color?: [number, number, number] } = {}) {
+  text(value: string, opts: { size?: number; bold?: boolean; gap?: number; color?: Color; indent?: number } = {}) {
     const size = opts.size ?? 10.5;
     const font = opts.bold ? this.bold : this.font;
-    const color = opts.color ? rgb(...opts.color) : rgb(0.06, 0.09, 0.16);
-    for (const line of this.wrap(value, size, opts.bold)) {
+    const color = rgb(...(opts.color ?? TEXT_DARK));
+    const x = MARGIN + (opts.indent ?? 0);
+    for (const line of this.wrap(value, size, opts.bold, PAGE_WIDTH - MARGIN * 2 - (opts.indent ?? 0))) {
       this.ensureSpace(size + 4);
-      this.page.drawText(line, { x: MARGIN, y: this.y, size, font, color });
+      this.page.drawText(line, { x, y: this.y, size, font, color });
       this.y -= size + 4;
     }
     this.y -= opts.gap ?? 0;
   }
 
-  row(cells: { text: string; x: number; bold?: boolean; size?: number; color?: [number, number, number] }[], gap = 4) {
-    const height = Math.max(...cells.map((c) => c.size ?? 10.5));
-    this.ensureSpace(height + gap);
-    for (const c of cells) {
-      const size = c.size ?? 10.5;
-      const font = c.bold ? this.bold : this.font;
-      const color = c.color ? rgb(...c.color) : rgb(0.06, 0.09, 0.16);
-      this.page.drawText(c.text, { x: c.x, y: this.y, size, font, color });
-    }
-    this.y -= height + gap;
+  // A small colored square bullet before a line — used for the extra-work
+  // (green) / deduction (red) line items under a course's table row.
+  bulletLine(value: string, color: Color, size = 9.5) {
+    this.ensureSpace(size + 4);
+    this.page.drawRectangle({ x: MARGIN + 2, y: this.y + 1.5, width: 6, height: 6, color: rgb(...color) });
+    this.page.drawText(value, { x: MARGIN + 14, y: this.y, size, font: this.font, color: rgb(...TEXT_DARK) });
+    this.y -= size + 4;
   }
 
-  divider(gap = 10) {
-    this.ensureSpace(gap + 2);
-    this.page.drawLine({
-      start: { x: MARGIN, y: this.y },
-      end: { x: PAGE_WIDTH - MARGIN, y: this.y },
-      thickness: 0.75,
-      color: rgb(0.85, 0.87, 0.91),
+  // A light card — used for the cover page's staff-details block.
+  card(lines: { label: string; value: string; color?: Color }[]) {
+    const rowHeight = 20;
+    const padding = 14;
+    const valueX = MARGIN + 150;
+    const valueSize = 10.5;
+    const valueWidth = PAGE_WIDTH - MARGIN - padding - valueX;
+    // A long value (e.g. several course names joined together) wraps onto
+    // extra lines within its own row rather than running off the page edge.
+    const wrapped = lines.map((l) => ({ ...l, valueLines: this.wrap(l.value, valueSize, false, valueWidth) }));
+    const totalRows = wrapped.reduce((s, l) => s + Math.max(1, l.valueLines.length), 0);
+    const height = totalRows * rowHeight + padding * 2 - 4;
+    this.ensureSpace(height + 16);
+    const top = this.y;
+    this.page.drawRectangle({ x: MARGIN, y: top - height, width: PAGE_WIDTH - MARGIN * 2, height, color: rgb(0.98, 0.98, 0.99), borderColor: rgb(...BORDER), borderWidth: 1 });
+    this.page.drawRectangle({ x: MARGIN, y: top - height, width: 4, height, color: rgb(...this.accent) });
+    let ly = top - padding - 9;
+    for (const l of wrapped) {
+      this.page.drawText(l.label, { x: MARGIN + padding + 8, y: ly, size: 9, font: this.bold, color: rgb(...TEXT_MUTED) });
+      l.valueLines.forEach((vLine, i) => {
+        this.page.drawText(vLine, { x: valueX, y: ly - i * rowHeight, size: valueSize, font: this.font, color: rgb(...(l.color ?? TEXT_DARK)) });
+      });
+      ly -= rowHeight * Math.max(1, l.valueLines.length);
+    }
+    this.y = top - height - 16;
+  }
+
+  // A themed table with a tinted header row and alternating row shading,
+  // re-drawing the header on any page it has to spill onto.
+  table(columns: TableColumn[], rows: string[][]) {
+    const tableWidth = columns.reduce((s, c) => s + c.width, 0);
+    const headerHeight = 24;
+    const rowHeight = 22;
+
+    const drawHeader = () => {
+      this.ensureSpace(headerHeight);
+      this.page.drawRectangle({ x: MARGIN, y: this.y - headerHeight, width: tableWidth, height: headerHeight, color: rgb(...this.accentTint) });
+      let cx = MARGIN;
+      for (const col of columns) {
+        const w = this.bold.widthOfTextAtSize(col.header, 9);
+        const tx = col.align === "right" ? cx + col.width - 10 - w : cx + 8;
+        this.page.drawText(col.header, { x: tx, y: this.y - headerHeight + 8.5, size: 9, font: this.bold, color: rgb(...this.accent) });
+        cx += col.width;
+      }
+      this.y -= headerHeight;
+    };
+
+    drawHeader();
+    rows.forEach((row, i) => {
+      if (this.y - rowHeight < MARGIN) {
+        this.newPage();
+        drawHeader();
+      }
+      this.page.drawRectangle({
+        x: MARGIN,
+        y: this.y - rowHeight,
+        width: tableWidth,
+        height: rowHeight,
+        color: rgb(...(i % 2 === 1 ? ROW_ALT : WHITE)),
+        borderColor: rgb(...BORDER),
+        borderWidth: 0.5,
+      });
+      let cx = MARGIN;
+      row.forEach((cell, ci) => {
+        const col = columns[ci];
+        const size = 9.5;
+        const w = this.font.widthOfTextAtSize(cell, size);
+        const tx = col.align === "right" ? cx + col.width - 10 - w : cx + 8;
+        this.page.drawText(cell, { x: tx, y: this.y - rowHeight + 7, size, font: this.font, color: rgb(...TEXT_DARK) });
+        cx += col.width;
+      });
+      this.y -= rowHeight;
     });
-    this.y -= gap;
+    this.y -= 8;
+  }
+
+  finalizeFooters() {
+    const total = this.ownPages.length;
+    this.ownPages.forEach((p, i) => {
+      p.drawText(`${this.orgName}  ·  Page ${i + 1} of ${total}`, { x: MARGIN, y: 24, size: 8.5, font: this.font, color: rgb(...TEXT_MUTED) });
+    });
   }
 }
 
 // Appends `file`'s content as its own page(s): real pages copied in if it's
-// a PDF, or a single full-bleed page if it's an image. A labeled divider
+// a PDF, or a single full-bleed page if it's an image. A branded banner
 // page comes first so it's clear what the following pages are.
 async function appendFileSection(canvas: ReportCanvas, label: string, file: EmbeddableFile) {
   canvas.newPage();
-  canvas.text(label, { size: 15, bold: true, gap: 10 });
-  canvas.text(file.fileName, { size: 10, color: [0.4, 0.44, 0.51] });
+  canvas.banner(label);
+  canvas.text(file.fileName, { size: 10, color: TEXT_MUTED, gap: 8 });
 
   if (file.mimeType === "application/pdf") {
     try {
@@ -450,7 +623,7 @@ async function appendFileSection(canvas: ReportCanvas, label: string, file: Embe
       const pages = await canvas.doc.copyPages(src, src.getPageIndices());
       for (const p of pages) canvas.doc.addPage(p);
     } catch {
-      canvas.text("(Couldn't read this PDF file to embed it here — it's still on file in the app.)", { color: [0.72, 0.11, 0.11] });
+      canvas.text("(Couldn't read this PDF file to embed it here — it's still on file in the app.)", { color: DANGER });
     }
     return;
   }
@@ -465,65 +638,72 @@ async function appendFileSection(canvas: ReportCanvas, label: string, file: Embe
       const h = image.height * scale;
       page.drawImage(image, { x: (PAGE_WIDTH - w) / 2, y: (PAGE_HEIGHT - h) / 2, width: w, height: h });
     } catch {
-      canvas.text("(Couldn't read this image file to embed it here — it's still on file in the app.)", { color: [0.72, 0.11, 0.11] });
+      canvas.text("(Couldn't read this image file to embed it here — it's still on file in the app.)", { color: DANGER });
     }
     return;
   }
-  canvas.text("(This file type can't be embedded in the PDF — it's still on file in the app.)", { color: [0.4, 0.44, 0.51] });
+  canvas.text("(This file type can't be embedded in the PDF — it's still on file in the app.)", { color: TEXT_MUTED });
 }
 
-async function buildStaffReportPdf(data: StaffReportData, orgName: string, generatedByName: string): Promise<Uint8Array> {
-  const canvas = await ReportCanvas.create();
+const TABLE_COLUMNS: TableColumn[] = [
+  { header: "COURSE", width: 148 },
+  { header: "BASIS", width: 106 },
+  { header: "BASE", width: 55, align: "right" },
+  { header: "BONUS", width: 55, align: "right" },
+  { header: "DEDUCT.", width: 57, align: "right" },
+  { header: "SUBTOTAL", width: 62, align: "right" },
+];
 
-  canvas.text(orgName, { size: 12, color: [0.4, 0.44, 0.51], gap: 2 });
-  canvas.text("Staff Report", { size: 20, bold: true, gap: 14 });
+async function buildStaffReportPdf(
+  data: StaffReportData,
+  orgName: string,
+  accentHex: string,
+  logo: { bytes: Uint8Array; mime: "image/png" | "image/jpeg" } | null,
+  generatedByName: string
+): Promise<Uint8Array> {
+  const canvas = await ReportCanvas.create(orgName, accentHex, logo);
+  canvas.coverBand();
 
-  canvas.text(data.name, { size: 14, bold: true, gap: 2 });
-  canvas.text(data.role.charAt(0).toUpperCase() + data.role.slice(1), { size: 11, color: [0.4, 0.44, 0.51], gap: 8 });
-  canvas.text(`Email: ${data.email}`, { size: 10.5 });
-  if (data.phone) canvas.text(`Phone: ${data.phone}`, { size: 10.5 });
-  if (data.hiredAt) canvas.text(`Hired: ${new Date(data.hiredAt).toLocaleDateString()}`, { size: 10.5 });
-  if (data.leftAt) canvas.text(`Left: ${new Date(data.leftAt).toLocaleDateString()}`, { size: 10.5, color: [0.72, 0.11, 0.11] });
-  canvas.text(`Courses covered: ${data.offeringLabels.join(", ")}`, { size: 10.5, gap: 4 });
-  canvas.text(`Generated by ${generatedByName} on ${new Date().toLocaleDateString()}`, { size: 9.5, color: [0.4, 0.44, 0.51] });
+  canvas.text(data.name, { size: 19, bold: true, gap: 2 });
+  canvas.text(data.role.charAt(0).toUpperCase() + data.role.slice(1), { size: 11, color: TEXT_MUTED, gap: 14 });
+
+  const cardLines: { label: string; value: string; color?: Color }[] = [
+    { label: "EMAIL", value: data.email },
+    ...(data.phone ? [{ label: "PHONE", value: data.phone }] : []),
+    ...(data.hiredAt ? [{ label: "HIRED", value: new Date(data.hiredAt).toLocaleDateString() }] : []),
+    ...(data.leftAt ? [{ label: "LEFT", value: new Date(data.leftAt).toLocaleDateString(), color: DANGER }] : []),
+    { label: "COURSES", value: data.offeringLabels.join(", ") },
+    { label: "GENERATED", value: `${generatedByName} · ${new Date().toLocaleDateString()}` },
+  ];
+  canvas.card(cardLines);
 
   if (data.periods.length === 0) {
-    canvas.divider(14);
-    canvas.text("No salary history found for the selected course(s).", { color: [0.4, 0.44, 0.51] });
+    canvas.text("No released salary history found for the selected course(s).", { color: TEXT_MUTED });
   }
 
   for (const p of data.periods) {
-    canvas.divider(14);
-    canvas.text(periodLabel(p.period), { size: 14, bold: true, gap: 8 });
+    canvas.banner(periodLabel(p.period));
+    canvas.table(
+      TABLE_COLUMNS,
+      p.courses.map((c) => [c.course, c.basis ?? "—", c.base.toLocaleString(), c.bonus.toLocaleString(), c.deduction.toLocaleString(), c.subtotal.toLocaleString()])
+    );
 
     for (const c of p.courses) {
-      canvas.text(c.course, { size: 11.5, bold: true, gap: 2 });
-      if (c.basis) canvas.text(c.basis, { size: 10, color: [0.4, 0.44, 0.51] });
-      canvas.row(
-        [
-          { text: `Base: ${c.base.toLocaleString()}`, x: MARGIN },
-          { text: `Bonus: ${c.bonus.toLocaleString()}`, x: MARGIN + 130 },
-          { text: `Deduction: ${c.deduction.toLocaleString()}`, x: MARGIN + 260 },
-          { text: `Subtotal: ${c.subtotal.toLocaleString()}`, x: MARGIN + 400, bold: true },
-        ],
-        6
-      );
-      if (c.bonusReason) canvas.text(`Bonus reason: ${c.bonusReason}`, { size: 9.5, color: [0.4, 0.44, 0.51] });
-      if (c.deductionReason) canvas.text(`Deduction reason: ${c.deductionReason}`, { size: 9.5, color: [0.4, 0.44, 0.51] });
+      if (c.bonusReason) canvas.text(`Bonus reason (${c.course}): ${c.bonusReason}`, { size: 9, color: TEXT_MUTED, indent: 4 });
+      if (c.deductionReason) canvas.text(`Deduction reason (${c.course}): ${c.deductionReason}`, { size: 9, color: TEXT_MUTED, indent: 4 });
       for (const item of c.extraItems) {
-        canvas.text(`+ ${item.category ?? "Extra"}${item.note ? ` — ${item.note}` : ""} (${item.amount.toLocaleString()})`, { size: 9.5, color: [0.09, 0.5, 0.24] });
+        canvas.bulletLine(`${item.category ?? "Extra"}${item.note ? ` — ${item.note}` : ""}  (+${item.amount.toLocaleString()})`, OK);
       }
       for (const item of c.deductionItems) {
-        canvas.text(`- ${item.category ?? "Deduction"}${item.note ? ` — ${item.note}` : ""} (${item.amount.toLocaleString()})`, { size: 9.5, color: [0.72, 0.11, 0.11] });
+        canvas.bulletLine(`${item.category ?? "Deduction"}${item.note ? ` — ${item.note}` : ""}  (−${item.amount.toLocaleString()})`, DANGER);
       }
-      canvas.y -= 6;
     }
 
     const receipt = data.receiptsByPeriod[p.period];
     canvas.text(receipt ? "Receipt on file for this period (attached later in this document)." : "No receipt uploaded for this period.", {
-      size: 9.5,
-      color: [0.4, 0.44, 0.51],
-      gap: 4,
+      size: 9,
+      color: TEXT_MUTED,
+      gap: 6,
     });
   }
 
@@ -531,8 +711,8 @@ async function buildStaffReportPdf(data: StaffReportData, orgName: string, gener
     await appendFileSection(canvas, "Contract", data.contract);
   } else {
     canvas.newPage();
-    canvas.text("Contract", { size: 15, bold: true, gap: 8 });
-    canvas.text("No contract has been uploaded for this staff member yet.", { color: [0.4, 0.44, 0.51] });
+    canvas.banner("Contract");
+    canvas.text("No contract has been uploaded for this staff member yet.", { color: TEXT_MUTED });
   }
 
   for (const p of data.periods) {
@@ -540,6 +720,7 @@ async function buildStaffReportPdf(data: StaffReportData, orgName: string, gener
     if (receipt) await appendFileSection(canvas, `Receipt — ${periodLabel(p.period)}`, receipt);
   }
 
+  canvas.finalizeFooters();
   return canvas.doc.save();
 }
 
@@ -571,7 +752,8 @@ export async function generateStaffReport(staffId: string, offeringIds: string[]
 
   const [data, branding] = await Promise.all([getStaffReportData(staffId, offeringIds), getBranding()]);
   const orgName = branding?.name ?? profile.org.name ?? "RadAMS";
-  const pdfBytes = await buildStaffReportPdf(data, orgName, profile.fullName);
+  const logo = await fetchLogoBytes(branding?.logoUrl ?? null);
+  const pdfBytes = await buildStaffReportPdf(data, orgName, branding?.primary ?? "#2563eb", logo, profile.fullName);
 
   const admin = createAdminClient();
   const path = `${profile.org.id}/${staffId}/${Date.now()}.pdf`;
