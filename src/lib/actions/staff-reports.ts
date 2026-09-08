@@ -141,11 +141,19 @@ export async function getStaffCoursesForReport(staffId: string): Promise<StaffRe
   const profile = await getCurrentProfile();
   if (!profile || !profile.org) return [];
   requireHrOrAdmin(profile.role);
+  // salary_lines' own RLS only allows finance/admin (plus the payee
+  // themself) to read it — HR was never granted that, since payroll detail
+  // is normally Finance's domain. This action already enforces its own
+  // hr-or-admin check above, so it deliberately reads via the admin client
+  // rather than hitting that RLS wall and silently coming back empty for
+  // HR (which looked exactly like "no salary history" for a real staff
+  // member who genuinely has salary lines).
+  const admin = createAdminClient();
   const supabase = await createClient();
 
   const [{ data: target }, { data: lines }] = await Promise.all([
     supabase.from("profiles").select("role").eq("id", staffId).maybeSingle(),
-    supabase.from("salary_lines").select("offering_id, period").eq("payee_id", staffId).not("offering_id", "is", null),
+    admin.from("salary_lines").select("offering_id, period").eq("payee_id", staffId).not("offering_id", "is", null),
   ]);
   if (!target) return [];
 
@@ -233,8 +241,11 @@ export async function getStaffReportData(staffId: string, offeringIds: string[])
     .maybeSingle();
   if (!staffProfile) throw new Error("Staff member not found");
 
+  // salary_lines/evaluations RLS only allows finance/admin (plus the
+  // person themself) to read — not HR — so these go through the admin
+  // client, same reasoning as getStaffCoursesForReport above.
   const [{ data: lines }, { data: evalRows }, { data: offeringRows }] = await Promise.all([
-    supabase
+    admin
       .from("salary_lines")
       .select(
         "period, offering_id, method, basis, base, bonus, deduction, bonus_reason, deduction_reason, course_offerings!salary_lines_offering_id_fkey(session, unit, courses(name))"
@@ -242,7 +253,7 @@ export async function getStaffReportData(staffId: string, offeringIds: string[])
       .eq("payee_id", staffId)
       .in("offering_id", offeringIds)
       .order("period", { ascending: true }),
-    supabase.from("evaluations").select("offering_id, period, evaluation_lines(kind, category, note, amount)").eq("assistant_id", staffId).in("offering_id", offeringIds),
+    admin.from("evaluations").select("offering_id, period, evaluation_lines(kind, category, note, amount)").eq("assistant_id", staffId).in("offering_id", offeringIds),
     supabase.from("course_offerings").select("id, session, unit, courses(name)").in("id", offeringIds),
   ]);
 
@@ -286,7 +297,7 @@ export async function getStaffReportData(staffId: string, offeringIds: string[])
 
   const periodList = Array.from(periodsMap.keys());
   const { data: receiptRows } = periodList.length
-    ? await supabase.from("salary_receipts").select("period, path").eq("payee_id", staffId).in("period", periodList)
+    ? await admin.from("salary_receipts").select("period, path").eq("payee_id", staffId).in("period", periodList)
     : { data: [] as { period: string; path: string }[] };
 
   const receiptsByPeriod: Record<string, EmbeddableFile> = {};
