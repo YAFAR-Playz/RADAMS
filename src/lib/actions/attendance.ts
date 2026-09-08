@@ -36,17 +36,25 @@ export async function listSessions(offeringId: string): Promise<SessionSummary[]
   if (!sessions || sessions.length === 0) return [];
 
   const sessionIds = sessions.map((s) => s.id);
-  // "Total" reflects who's CURRENTLY enrolled (scoped the same way
-  // getSessionRoster is, so the sidebar and the open roster always agree)
-  // — not however many attendance_record rows happen to exist for a
-  // session, which undercounts once a student enrolls after the session
-  // was first created and taken (they show up in the live roster with no
-  // record yet, correctly defaulted to absent, but were invisible here).
+  // "Total" reflects who's CURRENTLY enrolled and hasn't left THIS course
+  // (scoped the same way getSessionRoster is, so the sidebar and the open
+  // roster always agree) — not however many attendance_record rows happen
+  // to exist for a session, which undercounts once a student enrolls after
+  // the session was first created and taken (they show up in the live
+  // roster with no record yet, correctly defaulted to absent, but were
+  // invisible here).
   let enrollmentCountQuery = supabase
     .from("enrollments")
     .select("student_id", { count: "exact", head: true })
-    .eq("offering_id", offeringId);
+    .eq("offering_id", offeringId)
+    .is("left_at", null);
   if (profile?.role === "assistant") enrollmentCountQuery = enrollmentCountQuery.eq("assistant_id", profile.id);
+
+  // Fetched separately (rather than joining) so excluding left students'
+  // present records below doesn't need a per-record join — this is only
+  // ever the (typically small) set of people who've left, not the whole
+  // roster, regardless of course size.
+  const leftStudentsQuery = supabase.from("enrollments").select("student_id").eq("offering_id", offeringId).not("left_at", "is", null);
 
   // Filtering to present/late at the DB level (rather than fetching every
   // record, including "absent" ones, and filtering in JS) keeps this well
@@ -55,14 +63,14 @@ export async function listSessions(offeringId: string): Promise<SessionSummary[]
   // combined, silently truncating and undercounting whichever session's
   // rows happened to sort past the cutoff. Still paginated as a backstop
   // for a course with a genuinely huge number of people marked present.
-  const presentRecords: { session_id: string }[] = [];
+  const presentRecords: { session_id: string; student_id: string }[] = [];
   const PRESENT_PAGE_SIZE = 1000;
-  const [, { count: total }] = await Promise.all([
+  const [, { count: total }, { data: leftStudentRows }] = await Promise.all([
     (async () => {
       for (let from = 0; ; from += PRESENT_PAGE_SIZE) {
         const { data: page } = await supabase
           .from("attendance_records")
-          .select("session_id")
+          .select("session_id, student_id")
           .in("session_id", sessionIds)
           .in("status", ["present", "late"])
           .range(from, from + PRESENT_PAGE_SIZE - 1);
@@ -72,10 +80,13 @@ export async function listSessions(offeringId: string): Promise<SessionSummary[]
       }
     })(),
     enrollmentCountQuery,
+    leftStudentsQuery,
   ]);
+  const leftStudentIds = new Set((leftStudentRows ?? []).map((r) => r.student_id));
 
   const presentBySession = new Map<string, number>();
   for (const r of presentRecords) {
+    if (leftStudentIds.has(r.student_id)) continue;
     presentBySession.set(r.session_id, (presentBySession.get(r.session_id) ?? 0) + 1);
   }
 
@@ -97,10 +108,15 @@ export async function getSessionRoster(sessionId: string): Promise<AttendanceRos
   const { data: session } = await supabase.from("attendance_sessions").select("offering_id").eq("id", sessionId).single();
   if (!session) return [];
 
+  // A student who left THIS course shouldn't show up to take attendance
+  // against — same rule as the Students tab and everywhere else "left" is
+  // checked. "Left" is tracked per enrollment (setEnrollmentLeftStatus in
+  // students.ts), so this filters directly on the enrollment row.
   let enrollmentQuery = supabase
     .from("enrollments")
     .select("student_id, assistant_id, students(id, name, student_code, initials, phone, guardian_phone)")
-    .eq("offering_id", session.offering_id);
+    .eq("offering_id", session.offering_id)
+    .is("left_at", null);
   if (profile.role === "assistant") {
     enrollmentQuery = enrollmentQuery.eq("assistant_id", profile.id);
   }
@@ -273,7 +289,13 @@ export async function getFullAttendanceExport(offeringId: string): Promise<Atten
   if (!profile) return [];
   const supabase = await createClient();
 
-  let enrollmentQuery = supabase.from("enrollments").select("student_id, assistant_id, students(id, name, guardian_phone)").eq("offering_id", offeringId);
+  // A student who left THIS course is excluded — same rule as the live
+  // roster (getSessionRoster) and everywhere else "left" is checked.
+  let enrollmentQuery = supabase
+    .from("enrollments")
+    .select("student_id, assistant_id, students(id, name, guardian_phone)")
+    .eq("offering_id", offeringId)
+    .is("left_at", null);
   if (profile.role === "assistant") enrollmentQuery = enrollmentQuery.eq("assistant_id", profile.id);
   const { data: enrollments } = await enrollmentQuery;
   if (!enrollments || !enrollments.length) return [];
@@ -285,14 +307,29 @@ export async function getFullAttendanceExport(offeringId: string): Promise<Atten
     .order("session_date", { ascending: true });
   if (!sessionsData || !sessionsData.length) return [];
 
-  const studentIds = enrollments.map((e) => e.student_id);
   const sessionIds = sessionsData.map((s) => s.id);
-  const { data: records } = await supabase
-    .from("attendance_records")
-    .select("session_id, student_id, status")
-    .in("session_id", sessionIds)
-    .in("student_id", studentIds);
-  const statusByKey = new Map((records ?? []).map((r) => [`${r.session_id}::${r.student_id}`, r.status]));
+  // Scoping to session_id alone is already exact — the loop below only
+  // ever reads students present in `enrollments`, so records for anyone
+  // else are simply never used. Adding .in("student_id", studentIds) on
+  // top (as this used to) builds a URL filter with one UUID per enrolled
+  // student — for a large course that's tens of thousands of characters,
+  // past what a GET request's URL can carry, silently failing the whole
+  // query (see the identical fix in getSessionRoster). Paginated in
+  // batches since a large course's full session history can also clear
+  // Postgrest's default 1000-row cap on its own.
+  const records: { session_id: string; student_id: string; status: AttendanceStatus }[] = [];
+  const EXPORT_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += EXPORT_PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("attendance_records")
+      .select("session_id, student_id, status")
+      .in("session_id", sessionIds)
+      .range(from, from + EXPORT_PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    records.push(...page);
+    if (page.length < EXPORT_PAGE_SIZE) break;
+  }
+  const statusByKey = new Map(records.map((r) => [`${r.session_id}::${r.student_id}`, r.status]));
 
   const rows: AttendanceExportRow[] = [];
   for (const s of sessionsData) {
