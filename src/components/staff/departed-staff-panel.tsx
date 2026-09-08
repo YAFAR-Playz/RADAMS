@@ -5,6 +5,8 @@ import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { listDepartedStaff, type DepartedStaffMember } from "@/lib/actions/staff";
 import { getDepartedStaffFinalMonthDetail, backfillDepartedSalaryLine, type DepartedStaffOffering } from "@/lib/actions/finance-salaries";
+import { StaffContractModal } from "@/components/staff/staff-contract-modal";
+import { StaffReportModal } from "@/components/staff/staff-report-modal";
 
 const ROLE_LABEL: Record<string, string> = {
   admin: "Admin",
@@ -32,6 +34,8 @@ function DepartedRow({ person }: { person: DepartedStaffMember }) {
   const [expanded, setExpanded] = useState(false);
   const [detail, setDetail] = useState<{ finalPeriod: string | null; offerings: DepartedStaffOffering[] } | null>(null);
   const [addingId, setAddingId] = useState<string | null>(null);
+  const [contractOpen, setContractOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   function toggle() {
     setExpanded((v) => !v);
@@ -75,8 +79,34 @@ function DepartedRow({ person }: { person: DepartedStaffMember }) {
         >
           {person.gaveNotice ? "Gave notice" : "No notice"}
         </span>
+        {(person.role === "assistant" || person.role === "head") && (
+          <>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setContractOpen(true);
+              }}
+              title="Contract"
+              className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]"
+            >
+              <Icon name="file-up" size={14} />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setReportOpen(true);
+              }}
+              title="Generate report"
+              className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]"
+            >
+              <Icon name="printer" size={14} />
+            </button>
+          </>
+        )}
         <Icon name="chevron-down" size={16} className="flex-none text-[var(--subtle)]" style={{ transform: expanded ? "rotate(180deg)" : "none" }} />
       </div>
+      {contractOpen && <StaffContractModal staffId={person.id} staffName={person.name} onClose={() => setContractOpen(false)} />}
+      {reportOpen && <StaffReportModal staffId={person.id} staffName={person.name} onClose={() => setReportOpen(false)} />}
 
       {expanded && (
         <div className="border-t border-[var(--border2)] bg-[var(--surface2)] p-[13px_16px]">

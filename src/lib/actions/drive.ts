@@ -16,6 +16,11 @@ import { formatGradeByScale } from "@/lib/grade-scale";
 const DRIVE_BRIDGE_URL = process.env.DRIVE_BRIDGE_URL;
 const DRIVE_BRIDGE_SECRET = process.env.DRIVE_BRIDGE_SECRET;
 const DRIVE_ROOT_FOLDER_ID = process.env.DRIVE_ROOT_FOLDER_ID || "1VmTbvucuiK7-2NF0OTusD5rhB3c7yEnB";
+// Separate root for staff reports (Org > current Month-Year > file) — a
+// different shape from the student reports' Org > Course > Assistant >
+// Student tree above, so it gets its own top-level folder rather than
+// living under the same root.
+const STAFF_REPORTS_ROOT_FOLDER_ID = process.env.STAFF_REPORTS_ROOT_FOLDER_ID || "1OOH179yRlxhEqov6ZcZN_b_j6Rl6VOGz";
 
 async function callDriveBridge<T>(action: string, params: Record<string, unknown>): Promise<T> {
   if (!DRIVE_BRIDGE_URL || !DRIVE_BRIDGE_SECRET) {
@@ -208,4 +213,34 @@ export async function deliverDriveReportsChunk(offeringId: string, period: strin
   );
 
   return results;
+}
+
+export type StaffReportDriveResult = { ok: boolean; folderUrl?: string; fileUrl?: string; error?: string };
+
+// Places an already-built PDF (this app renders it server-side via pdf-lib —
+// contract + receipts already merged in, unlike the student reports above
+// which are built as HTML/CSS and rendered to PDF by the bridge itself) into
+// root > OrgName > current Month-Year, replacing any existing file of the
+// same name so re-generating a report for the same person in the same month
+// replaces it rather than duplicating.
+export async function uploadStaffReportToDrive(input: {
+  orgName: string;
+  monthYearFolder: string;
+  staffName: string;
+  fileName: string;
+  pdfBase64: string;
+}): Promise<StaffReportDriveResult> {
+  try {
+    const { file } = await callDriveBridge<{ file: { id: string; url: string; folderId: string; folderUrl: string } }>("uploadStaffReport", {
+      rootFolderId: STAFF_REPORTS_ROOT_FOLDER_ID,
+      orgName: input.orgName,
+      monthYearFolder: input.monthYearFolder,
+      staffName: input.staffName,
+      fileName: input.fileName,
+      pdfBase64: input.pdfBase64,
+    });
+    return { ok: true, folderUrl: file.folderUrl, fileUrl: file.url };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn't deliver the report to Drive" };
+  }
 }
