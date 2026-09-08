@@ -965,7 +965,18 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
   const orgId = profile.org.id;
   const supabase = await createClient();
 
-  const { data: offerings } = await supabase.from("course_offerings").select("id").eq("org_id", orgId);
+  // Paginated: an org that's accumulated 1,000+ course offerings over its
+  // lifetime would otherwise silently stop generating salary lines for the
+  // rest once a single unbounded select truncated at Postgrest's default
+  // 1000-row cap.
+  const offerings: { id: string }[] = [];
+  const OFFERING_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += OFFERING_PAGE_SIZE) {
+    const { data: page } = await supabase.from("course_offerings").select("id").eq("org_id", orgId).range(from, from + OFFERING_PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    offerings.push(...page);
+    if (page.length < OFFERING_PAGE_SIZE) break;
+  }
   let created = 0;
 
   // If Finance already clicked "Release all" for this period, any line
@@ -1198,12 +1209,24 @@ export async function getDepartedStaffFinalMonthDetail(payeeId: string): Promise
   const priorDate = new Date(Date.UTC(fy, fm - 2, 1));
   const priorPeriod = `${priorDate.getUTCFullYear()}-${String(priorDate.getUTCMonth() + 1).padStart(2, "0")}`;
 
-  const { data: logs } = await supabase
-    .from("assignment_logs")
-    .select("assignments(offering_id)")
-    .eq("logged_by", payeeId);
+  // All-time, unbounded by date — a long-tenured assistant/head can easily
+  // clear Postgrest's default 1000-row cap on their own logged checks over
+  // several years, which silently dropped their earliest offerings from
+  // consideration here.
+  const logs: { assignments: { offering_id: string } | { offering_id: string }[] | null }[] = [];
+  const LOGS_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += LOGS_PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("assignment_logs")
+      .select("assignments(offering_id)")
+      .eq("logged_by", payeeId)
+      .range(from, from + LOGS_PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    logs.push(...page);
+    if (page.length < LOGS_PAGE_SIZE) break;
+  }
   const offeringIds = new Set<string>();
-  for (const l of logs ?? []) {
+  for (const l of logs) {
     const a = Array.isArray(l.assignments) ? l.assignments[0] : l.assignments;
     if (a?.offering_id) offeringIds.add(a.offering_id);
   }

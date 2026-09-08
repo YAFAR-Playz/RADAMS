@@ -49,11 +49,35 @@ export async function listOrgsOverview(): Promise<OrgOverview[]> {
     defaultPrimaryColor = platformSettings?.default_primary_color ?? defaultPrimaryColor;
   }
 
-  const [{ data: admins }, { data: profiles }, { data: offerings }, { data: assignments }] = await Promise.all([
+  // Platform-wide, across every org combined — an unbounded select on any
+  // of these silently truncated at Postgrest's default 1000-row cap once
+  // the platform's total profiles/offerings/assignments passed that count
+  // (the sibling `students` count below was already fixed for the same
+  // reason; these three were missed). Paginated via the same `.range()`
+  // loop pattern used elsewhere in this codebase.
+  async function fetchAllRows<T>(fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null }>): Promise<T[]> {
+    const PAGE_SIZE = 1000;
+    const rows: T[] = [];
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data } = await fetchPage(from, from + PAGE_SIZE - 1);
+      if (!data || data.length === 0) break;
+      rows.push(...data);
+      if (data.length < PAGE_SIZE) break;
+    }
+    return rows;
+  }
+
+  const [{ data: admins }, profiles, offerings, assignments] = await Promise.all([
     supabase.from("profiles").select("id, org_id, full_name, phone, email, is_main_admin").eq("role", "admin").in("org_id", orgIds),
-    supabase.from("profiles").select("org_id, role").in("org_id", orgIds),
-    supabase.from("course_offerings").select("id, org_id").in("org_id", orgIds),
-    supabase.from("assignments").select("id, offering_id"),
+    fetchAllRows<{ org_id: string; role: string }>((from, to) =>
+      supabase.from("profiles").select("org_id, role").in("org_id", orgIds).range(from, to)
+    ),
+    fetchAllRows<{ id: string; org_id: string }>((from, to) =>
+      supabase.from("course_offerings").select("id, org_id").in("org_id", orgIds).range(from, to)
+    ),
+    fetchAllRows<{ id: string; offering_id: string }>((from, to) =>
+      supabase.from("assignments").select("id, offering_id").range(from, to)
+    ),
   ]);
 
   const adminByOrg = new Map<string, NonNullable<typeof admins>[number]>();

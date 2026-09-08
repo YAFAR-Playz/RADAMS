@@ -35,41 +35,69 @@ export async function getCourseExport(offeringId: string): Promise<CourseExportD
     return { id: a.id, title: a.title, hasGrade, maxMarks: a.max_marks };
   });
 
-  const { data: enrollments } = await supabase
-    .from("enrollments")
-    .select("student_id, students(name, student_code), profiles(full_name)")
-    .eq("offering_id", offeringId);
+  // Paginated: a course's enrollments can clear Postgrest's default
+  // 1000-row cap on their own (one offering in this org has 1,039 active
+  // enrollments), which a single unpaginated select silently truncated.
+  type EnrollmentRow = {
+    student_id: string;
+    students: { name: string; student_code: string } | { name: string; student_code: string }[] | null;
+    profiles: { full_name: string } | { full_name: string }[] | null;
+  };
+  const enrollments: EnrollmentRow[] = [];
+  const ENROLLMENT_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("enrollments")
+      .select("student_id, students(name, student_code), profiles(full_name)")
+      .eq("offering_id", offeringId)
+      .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    enrollments.push(...page);
+    if (page.length < ENROLLMENT_PAGE_SIZE) break;
+  }
 
-  const studentIds = (enrollments ?? []).map((e) => e.student_id);
-  const safeStudentIds = studentIds.length ? studentIds : ["00000000-0000-0000-0000-000000000000"];
   const assignmentIds = assignments.map((a) => a.id);
   const safeAssignmentIds = assignmentIds.length ? assignmentIds : ["00000000-0000-0000-0000-000000000000"];
 
-  const { data: logs } = await supabase
-    .from("assignment_logs")
-    .select("assignment_id, student_id, status, grade")
-    .in("assignment_id", safeAssignmentIds)
-    .in("student_id", safeStudentIds);
+  // Cross-join of every assignment × every enrolled student — for this
+  // course's size (1,000+ students × several assignments) a single
+  // unpaginated select here silently truncated, and adding
+  // `.in("student_id", studentIds)` on top of `.in("assignment_id", ...)`
+  // would also risk a URL-length failure with one UUID per enrolled
+  // student — so this is scoped to assignment_id alone (already exact,
+  // since only assignments from this offering are ever looked up below)
+  // and paginated.
+  const logs: { assignment_id: string; student_id: string; status: string | null; grade: string | null }[] = [];
+  const LOGS_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += LOGS_PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("assignment_logs")
+      .select("assignment_id, student_id, status, grade")
+      .in("assignment_id", safeAssignmentIds)
+      .range(from, from + LOGS_PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    logs.push(...page);
+    if (page.length < LOGS_PAGE_SIZE) break;
+  }
 
   const period = new Date().toISOString().slice(0, 7);
 
-  const { data: notes } = await supabase
-    .from("student_monthly_notes")
-    .select("student_id, comment")
-    .eq("offering_id", offeringId)
-    .eq("period", period)
-    .in("student_id", safeStudentIds);
+  // Scoping to offering_id + period is already exact for this offering's
+  // roster — `commentMap`/`topicsMap` below are only ever read by student
+  // ids drawn from `enrollments`, so a `.in("student_id", studentIds)` on
+  // top was both redundant and, for a large course, a URL-length risk
+  // (same class of bug as getSessionRoster in attendance.ts).
+  const { data: notes } = await supabase.from("student_monthly_notes").select("student_id, comment").eq("offering_id", offeringId).eq("period", period);
 
   const { data: topics } = await supabase
     .from("student_topic_submissions")
     .select("student_id, topic_catalog(label)")
     .eq("offering_id", offeringId)
     .eq("period", period)
-    .eq("status", "approved")
-    .in("student_id", safeStudentIds);
+    .eq("status", "approved");
 
   const logMap = new Map<string, { status: string | null; grade: string | null }>();
-  for (const l of logs ?? []) logMap.set(`${l.assignment_id}:${l.student_id}`, { status: l.status, grade: l.grade });
+  for (const l of logs) logMap.set(`${l.assignment_id}:${l.student_id}`, { status: l.status, grade: l.grade });
 
   const commentMap = new Map<string, string>();
   for (const n of notes ?? []) commentMap.set(n.student_id, n.comment ?? "");
