@@ -133,6 +133,30 @@ export async function saveBranding(draft: BrandingDraft) {
   if (error) throw new Error(error.message);
 }
 
+// Whether this org's generated staff report PDFs should carry the org's
+// own branding/logo (default) or the platform's default owner branding
+// instead — some orgs would rather not put their own identity on an
+// internal HR/payroll document.
+export async function getStaffReportBrandingPreference(): Promise<boolean> {
+  const profile = await getCurrentProfile();
+  const orgId = profile?.org?.id;
+  if (!orgId) return false;
+  const supabase = await createClient();
+  const { data } = await supabase.from("organizations").select("staff_reports_use_platform_branding").eq("id", orgId).single();
+  return !!data?.staff_reports_use_platform_branding;
+}
+
+export async function setStaffReportBrandingPreference(usePlatformDefault: boolean) {
+  const profile = await getCurrentProfile();
+  if (!profile || profile.role !== "admin" || !profile.org) throw new Error("Not authorized");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("organizations")
+    .update({ staff_reports_use_platform_branding: usePlatformDefault })
+    .eq("id", profile.org.id);
+  if (error) throw new Error(error.message);
+}
+
 export async function getPlatformDefaultBranding(): Promise<BrandingDraft> {
   const supabase = await createClient();
   return getPlatformDefaults(supabase);

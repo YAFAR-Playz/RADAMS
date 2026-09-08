@@ -5,8 +5,9 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { logActivity } from "@/lib/actions/activity-log";
-import { getBranding } from "@/lib/actions/branding";
+import { getBranding, getPlatformDefaultBranding, getStaffReportBrandingPreference } from "@/lib/actions/branding";
 import { uploadStaffReportToDrive } from "@/lib/actions/drive";
+import { currencySymbol } from "@/lib/currency";
 import type { EvaluationItem, SalaryCourseLine } from "@/lib/actions/pay";
 
 const ALLOWED_CONTRACT_TYPES = [
@@ -360,7 +361,6 @@ const WHITE: Color = [1, 1, 1];
 const TEXT_DARK: Color = [0.09, 0.11, 0.16];
 const TEXT_MUTED: Color = [0.42, 0.46, 0.53];
 const BORDER: Color = [0.88, 0.9, 0.93];
-const ROW_ALT: Color = [0.975, 0.98, 0.985];
 const OK: Color = [0.09, 0.5, 0.24];
 const DANGER: Color = [0.72, 0.11, 0.11];
 const DEFAULT_ACCENT: Color = [0.145, 0.388, 0.922];
@@ -375,6 +375,24 @@ function hexToColor(hex: string | null | undefined): Color {
 
 function mix(a: Color, b: Color, t: number): Color {
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+}
+
+// pdf-lib's standard Helvetica font only supports WinAnsi encoding (Latin-1
+// plus a handful of Windows-1252 "smart punctuation" code points) and
+// THROWS — crashing the whole report, not just misrendering one glyph —
+// on anything else. This data comes from free-text fields real people
+// type (names, categories, notes), so a stray curly quote, minus sign
+// (−, distinct from a plain hyphen), emoji, or non-Latin script would
+// otherwise take down every report until someone found and edited that
+// one row. Replaces anything outside the safe range with "?" instead.
+const WINANSI_SAFE_EXTRAS = new Set([0x2018, 0x2019, 0x201c, 0x201d, 0x2013, 0x2014, 0x2026, 0x2022, 0x00a0]);
+function sanitizePdfText(input: string): string {
+  let out = "";
+  for (const ch of input) {
+    const code = ch.codePointAt(0) ?? 63;
+    out += (code >= 0x20 && code <= 0x7e) || (code >= 0xa0 && code <= 0xff) || WINANSI_SAFE_EXTRAS.has(code) ? ch : "?";
+  }
+  return out;
 }
 
 // A logo URL comes from branding (Supabase Storage or wherever it's
@@ -394,8 +412,6 @@ async function fetchLogoBytes(logoUrl: string | null): Promise<{ bytes: Uint8Arr
     return null;
   }
 }
-
-type TableColumn = { header: string; width: number; align?: "left" | "right" };
 
 // Small stateful cursor over a growing pdf-lib document, themed with the
 // org's brand color and logo — keeps the report assembly code below
@@ -423,7 +439,7 @@ class ReportCanvas {
     this.accent = accent;
     this.accentTint = mix(accent, WHITE, 0.88);
     this.logo = logo;
-    this.orgName = orgName;
+    this.orgName = sanitizePdfText(orgName);
     this.page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
     this.ownPages.push(this.page);
     this.y = PAGE_HEIGHT - MARGIN;
@@ -459,33 +475,202 @@ class ReportCanvas {
     if (this.y - needed < MARGIN) this.newPage();
   }
 
-  // The big brand band at the top of the cover page — logo + org name.
-  coverBand() {
+  // Cover header — a thin brand bar (same rule every other page gets) then a
+  // plain bordered card holding the logo, a title, and a subtitle line.
+  // Mirrors the org's existing "Salary Details" PDF style (thin top bar,
+  // white card with logo + title) rather than a big solid color band.
+  coverHeader(title: string, subtitle: string) {
+    title = sanitizePdfText(title);
+    subtitle = sanitizePdfText(subtitle);
+    this.page.drawRectangle({ x: 0, y: PAGE_HEIGHT - 6, width: PAGE_WIDTH, height: 6, color: rgb(...this.accent) });
+    const top = PAGE_HEIGHT - 22;
     const height = 92;
-    this.page.drawRectangle({ x: 0, y: PAGE_HEIGHT - height, width: PAGE_WIDTH, height, color: rgb(...this.accent) });
-    let textX = MARGIN;
+    this.page.drawRectangle({ x: MARGIN, y: top - height, width: PAGE_WIDTH - MARGIN * 2, height, color: rgb(...WHITE), borderColor: rgb(...BORDER), borderWidth: 1 });
+    let textX = MARGIN + 22;
     if (this.logo) {
-      const logoH = 36;
+      const logoH = 52;
       const logoW = logoH / this.logo.ratio;
-      this.page.drawImage(this.logo.image, { x: MARGIN, y: PAGE_HEIGHT - height / 2 - logoH / 2, width: logoW, height: logoH });
-      textX = MARGIN + logoW + 16;
+      this.page.drawImage(this.logo.image, { x: MARGIN + 18, y: top - height / 2 - logoH / 2, width: logoW, height: logoH });
+      textX = MARGIN + 18 + logoW + 18;
     }
-    this.page.drawText(this.orgName, { x: textX, y: PAGE_HEIGHT - 42, size: 17, font: this.bold, color: rgb(...WHITE) });
-    this.page.drawText("STAFF REPORT", { x: textX, y: PAGE_HEIGHT - 62, size: 10, font: this.bold, color: rgb(...WHITE) });
-    this.y = PAGE_HEIGHT - height - 28;
+    this.page.drawText(title, { x: textX, y: top - 40, size: 18, font: this.bold, color: rgb(...this.accent) });
+    this.page.drawText(subtitle, { x: textX, y: top - 60, size: 10, font: this.font, color: rgb(...TEXT_MUTED) });
+    this.y = top - height - 20;
   }
 
-  // A full-width colored banner — period headers and the Contract/Receipt
-  // section dividers all use this for a consistent, clearly-branded break.
-  banner(text: string, size = 12.5) {
-    const height = 30;
-    this.ensureSpace(height + 16);
-    this.page.drawRectangle({ x: 0, y: this.y - height, width: PAGE_WIDTH, height, color: rgb(...this.accent) });
-    this.page.drawText(text, { x: MARGIN, y: this.y - height + 9, size, font: this.bold, color: rgb(...WHITE) });
-    this.y -= height + 16;
+  // A real rounded rectangle with an actual border, via a single SVG path
+  // (pdf-lib has no native corner-radius rectangle, but drawSvgPath renders
+  // one clean continuous stroke — verified by rendering and visually
+  // inspecting the output before relying on it here). `y` is the shape's
+  // bottom edge in PDF space; the path itself is authored top-down (SVG
+  // convention) with `height` as its own local origin.
+  roundedRect(x: number, y: number, width: number, height: number, radius: number, opts: { fill?: Color; borderColor?: Color; borderWidth?: number } = {}) {
+    const r = Math.min(radius, width / 2, height / 2);
+    const path = `M${r},0 H${width - r} Q${width},0 ${width},${r} V${height - r} Q${width},${height} ${width - r},${height} H${r} Q0,${height} 0,${height - r} V${r} Q0,0 ${r},0 Z`;
+    this.page.drawSvgPath(path, {
+      x,
+      y: y + height,
+      color: opts.fill ? rgb(...opts.fill) : undefined,
+      borderColor: opts.borderColor ? rgb(...opts.borderColor) : undefined,
+      borderWidth: opts.borderColor ? (opts.borderWidth ?? 1) : undefined,
+    });
+  }
+
+  // A fully-rounded "stadium" pill — the salary-breakdown value chips.
+  pill(x: number, y: number, width: number, height: number, fill: Color, borderColor?: Color) {
+    this.roundedRect(x, y, width, height, height / 2, { fill, borderColor, borderWidth: borderColor ? 1 : undefined });
+  }
+
+  // A bold heading with a colored underline (this org's own existing PDF
+  // style for section breaks — h3{color; border-bottom} — rather than a
+  // heavy full-width color band, which read as too "webpage-y" next to the
+  // rest of this document's plain white background).
+  heading(text: string, size = 14) {
+    text = sanitizePdfText(text);
+    this.ensureSpace(size + 10);
+    this.page.drawText(text, { x: MARGIN, y: this.y, size, font: this.bold, color: rgb(...this.accent) });
+    this.y -= 5;
+    this.page.drawLine({ start: { x: MARGIN, y: this.y }, end: { x: PAGE_WIDTH - MARGIN, y: this.y }, thickness: 1.5, color: rgb(...this.accent) });
+    this.y -= 14;
+  }
+
+  // Small accent-colored uppercase label used above every card/section,
+  // matching the reference sheet's blue "SALARY BREAKDOWN" / "ASSISTANT
+  // DETAILS" style headings.
+  sectionLabel(text: string, gap = 8) {
+    this.ensureSpace(11 + gap);
+    this.page.drawText(sanitizePdfText(text).toUpperCase(), { x: MARGIN, y: this.y, size: 9.5, font: this.bold, color: rgb(...this.accent) });
+    this.y -= 11 + gap;
+  }
+
+  // One "Label ⋯ [ pill value ]" row — solid uses the full accent color
+  // with white bold text (the Total Salary row); otherwise a light tint
+  // with dark text, matching every other breakdown row.
+  // "Label ⋯ [ pill value ]" — a light bordered pill with dark text for a
+  // normal row, or a solid accent pill with white text for the Total row
+  // (matching the org's existing salary PDF: pale pill values, solid pill
+  // only for the grand total).
+  breakdownRow(label: string, value: string, opts: { solid?: boolean } = {}) {
+    label = sanitizePdfText(label);
+    value = sanitizePdfText(value);
+    const rowHeight = 28;
+    const pillWidth = 130;
+    this.ensureSpace(rowHeight + 6);
+    const pillX = PAGE_WIDTH - MARGIN - pillWidth;
+    this.page.drawText(label, { x: MARGIN, y: this.y - rowHeight / 2 - 4, size: opts.solid ? 11 : 10, font: this.bold, color: rgb(...TEXT_DARK) });
+    this.pill(pillX, this.y - rowHeight, pillWidth, rowHeight, opts.solid ? this.accent : this.accentTint, opts.solid ? undefined : BORDER);
+    const valueSize = opts.solid ? 11.5 : 10.5;
+    const valueColor = opts.solid ? WHITE : TEXT_DARK;
+    const w = this.bold.widthOfTextAtSize(value, valueSize);
+    this.page.drawText(value, { x: pillX + (pillWidth - w) / 2, y: this.y - rowHeight / 2 - valueSize / 2.8, size: valueSize, font: this.bold, color: rgb(...valueColor) });
+    this.y -= rowHeight + 6;
+  }
+
+  // A labeled note box for free text that can run long (basis strings,
+  // bonus/deduction reasons) — its own full-width line rather than crammed
+  // into a fixed-width table cell, which is what caused real overlap before.
+  noteBox(label: string, text: string) {
+    label = sanitizePdfText(label);
+    text = sanitizePdfText(text);
+    const padding = 12;
+    const labelH = 9;
+    const contentWidth = PAGE_WIDTH - MARGIN * 2 - padding * 2;
+    const lines = this.wrap(text, 9.5, false, contentWidth);
+    const height = labelH + 6 + lines.length * 13 + padding * 2 - 4;
+    this.ensureSpace(height + 10);
+    const top = this.y;
+    this.roundedRect(MARGIN, top - height, PAGE_WIDTH - MARGIN * 2, height, 8, { fill: [0.98, 0.985, 0.995], borderColor: BORDER });
+    this.page.drawText(label.toUpperCase(), { x: MARGIN + padding, y: top - padding - labelH + 2, size: 8, font: this.bold, color: rgb(...this.accent) });
+    let ly = top - padding - labelH - 10;
+    for (const line of lines) {
+      this.page.drawText(line, { x: MARGIN + padding, y: ly, size: 9.5, font: this.font, color: rgb(...TEXT_DARK) });
+      ly -= 13;
+    }
+    this.y = top - height - 10;
+  }
+
+  // A blue-labeled, bordered card of "left text ⋯ right value" rows
+  // separated by thin rules — the extra-work / deduction breakdown lists.
+  listRows(label: string, items: { left: string; right: string; color?: Color }[]) {
+    if (!items.length) return;
+    this.sectionLabel(label, 6);
+    const padding = 10;
+    const valueColW = 70;
+    const leftWidth = PAGE_WIDTH - MARGIN * 2 - padding * 2 - valueColW - 10;
+    const rowHeights = items.map((item) => Math.max(20, this.wrap(sanitizePdfText(item.left), 9.5, false, leftWidth).length * 13 + 7));
+    const height = rowHeights.reduce((s, h) => s + h, 0) + padding * 2 - 4;
+    this.ensureSpace(height + 8);
+    const top = this.y;
+    this.roundedRect(MARGIN, top - height, PAGE_WIDTH - MARGIN * 2, height, 8, { fill: WHITE, borderColor: BORDER });
+
+    let ly = top - padding;
+    items.forEach((rawItem, i) => {
+      const item = { ...rawItem, left: sanitizePdfText(rawItem.left), right: sanitizePdfText(rawItem.right) };
+      const lines = this.wrap(item.left, 9.5, false, leftWidth);
+      const rowHeight = rowHeights[i];
+      if (i > 0) {
+        this.page.drawLine({ start: { x: MARGIN + padding, y: ly }, end: { x: PAGE_WIDTH - MARGIN - padding, y: ly }, thickness: 0.5, color: rgb(...BORDER) });
+      }
+      lines.forEach((line, li) => {
+        this.page.drawText(line, { x: MARGIN + padding, y: ly - 13 - li * 13, size: 9.5, font: this.font, color: rgb(...TEXT_DARK) });
+      });
+      const valSize = 10;
+      const w = this.bold.widthOfTextAtSize(item.right, valSize);
+      this.page.drawText(item.right, { x: PAGE_WIDTH - MARGIN - padding - w, y: ly - 13, size: valSize, font: this.bold, color: rgb(...(item.color ?? TEXT_DARK)) });
+      ly -= rowHeight;
+    });
+    this.y = top - height - 10;
+  }
+
+  // A 2-per-row grid of light bordered rounded boxes — small gray uppercase
+  // label, bold value below — for the cover's staff-details block.
+  detailGrid(items: { label: string; value: string; full?: boolean }[]) {
+    const gap = 10;
+    const padding = 12;
+    const minBoxH = 42;
+    const halfWidth = (PAGE_WIDTH - MARGIN * 2 - gap) / 2;
+    // Height is driven by how many lines the value actually wraps to (e.g.
+    // "Courses" listing several long names) — a fixed height let a second
+    // wrapped line spill out past the box's own background before.
+    const linesFor = (value: string, width: number) => this.wrap(sanitizePdfText(value), 10.5, true, width - padding * 2).slice(0, 3);
+    const boxHeightFor = (lineCount: number) => Math.max(minBoxH, 28 + lineCount * 13);
+
+    let i = 0;
+    while (i < items.length) {
+      const item = items[i];
+      if (item.full) {
+        const lines = linesFor(item.value, PAGE_WIDTH - MARGIN * 2);
+        const boxH = boxHeightFor(lines.length);
+        this.ensureSpace(boxH + gap);
+        this.drawDetailBox(MARGIN, this.y - boxH, PAGE_WIDTH - MARGIN * 2, boxH, item.label, lines);
+        this.y -= boxH + gap;
+        i += 1;
+      } else {
+        const next = items[i + 1] && !items[i + 1].full ? items[i + 1] : null;
+        const lines = linesFor(item.value, halfWidth);
+        const nextLines = next ? linesFor(next.value, halfWidth) : [];
+        const boxH = boxHeightFor(Math.max(lines.length, nextLines.length));
+        this.ensureSpace(boxH + gap);
+        this.drawDetailBox(MARGIN, this.y - boxH, halfWidth, boxH, item.label, lines);
+        if (next) this.drawDetailBox(MARGIN + halfWidth + gap, this.y - boxH, halfWidth, boxH, next.label, nextLines);
+        this.y -= boxH + gap;
+        i += next ? 2 : 1;
+      }
+    }
+  }
+
+  private drawDetailBox(x: number, y: number, width: number, height: number, label: string, valueLines: string[]) {
+    label = sanitizePdfText(label);
+    this.roundedRect(x, y, width, height, 8, { fill: [0.975, 0.98, 0.988], borderColor: BORDER });
+    const padding = 12;
+    this.page.drawText(label.toUpperCase(), { x: x + padding, y: y + height - 17, size: 7.5, font: this.bold, color: rgb(...TEXT_MUTED) });
+    valueLines.forEach((line, i) => {
+      this.page.drawText(line, { x: x + padding, y: y + height - 32 - i * 13, size: 10.5, font: this.bold, color: rgb(...TEXT_DARK) });
+    });
   }
 
   wrap(text: string, size: number, bold = false, maxWidth = PAGE_WIDTH - MARGIN * 2): string[] {
+    text = sanitizePdfText(text);
     const font = bold ? this.bold : this.font;
     const words = text.split(" ");
     const lines: string[] = [];
@@ -516,91 +701,6 @@ class ReportCanvas {
     this.y -= opts.gap ?? 0;
   }
 
-  // A small colored square bullet before a line — used for the extra-work
-  // (green) / deduction (red) line items under a course's table row.
-  bulletLine(value: string, color: Color, size = 9.5) {
-    this.ensureSpace(size + 4);
-    this.page.drawRectangle({ x: MARGIN + 2, y: this.y + 1.5, width: 6, height: 6, color: rgb(...color) });
-    this.page.drawText(value, { x: MARGIN + 14, y: this.y, size, font: this.font, color: rgb(...TEXT_DARK) });
-    this.y -= size + 4;
-  }
-
-  // A light card — used for the cover page's staff-details block.
-  card(lines: { label: string; value: string; color?: Color }[]) {
-    const rowHeight = 20;
-    const padding = 14;
-    const valueX = MARGIN + 150;
-    const valueSize = 10.5;
-    const valueWidth = PAGE_WIDTH - MARGIN - padding - valueX;
-    // A long value (e.g. several course names joined together) wraps onto
-    // extra lines within its own row rather than running off the page edge.
-    const wrapped = lines.map((l) => ({ ...l, valueLines: this.wrap(l.value, valueSize, false, valueWidth) }));
-    const totalRows = wrapped.reduce((s, l) => s + Math.max(1, l.valueLines.length), 0);
-    const height = totalRows * rowHeight + padding * 2 - 4;
-    this.ensureSpace(height + 16);
-    const top = this.y;
-    this.page.drawRectangle({ x: MARGIN, y: top - height, width: PAGE_WIDTH - MARGIN * 2, height, color: rgb(0.98, 0.98, 0.99), borderColor: rgb(...BORDER), borderWidth: 1 });
-    this.page.drawRectangle({ x: MARGIN, y: top - height, width: 4, height, color: rgb(...this.accent) });
-    let ly = top - padding - 9;
-    for (const l of wrapped) {
-      this.page.drawText(l.label, { x: MARGIN + padding + 8, y: ly, size: 9, font: this.bold, color: rgb(...TEXT_MUTED) });
-      l.valueLines.forEach((vLine, i) => {
-        this.page.drawText(vLine, { x: valueX, y: ly - i * rowHeight, size: valueSize, font: this.font, color: rgb(...(l.color ?? TEXT_DARK)) });
-      });
-      ly -= rowHeight * Math.max(1, l.valueLines.length);
-    }
-    this.y = top - height - 16;
-  }
-
-  // A themed table with a tinted header row and alternating row shading,
-  // re-drawing the header on any page it has to spill onto.
-  table(columns: TableColumn[], rows: string[][]) {
-    const tableWidth = columns.reduce((s, c) => s + c.width, 0);
-    const headerHeight = 24;
-    const rowHeight = 22;
-
-    const drawHeader = () => {
-      this.ensureSpace(headerHeight);
-      this.page.drawRectangle({ x: MARGIN, y: this.y - headerHeight, width: tableWidth, height: headerHeight, color: rgb(...this.accentTint) });
-      let cx = MARGIN;
-      for (const col of columns) {
-        const w = this.bold.widthOfTextAtSize(col.header, 9);
-        const tx = col.align === "right" ? cx + col.width - 10 - w : cx + 8;
-        this.page.drawText(col.header, { x: tx, y: this.y - headerHeight + 8.5, size: 9, font: this.bold, color: rgb(...this.accent) });
-        cx += col.width;
-      }
-      this.y -= headerHeight;
-    };
-
-    drawHeader();
-    rows.forEach((row, i) => {
-      if (this.y - rowHeight < MARGIN) {
-        this.newPage();
-        drawHeader();
-      }
-      this.page.drawRectangle({
-        x: MARGIN,
-        y: this.y - rowHeight,
-        width: tableWidth,
-        height: rowHeight,
-        color: rgb(...(i % 2 === 1 ? ROW_ALT : WHITE)),
-        borderColor: rgb(...BORDER),
-        borderWidth: 0.5,
-      });
-      let cx = MARGIN;
-      row.forEach((cell, ci) => {
-        const col = columns[ci];
-        const size = 9.5;
-        const w = this.font.widthOfTextAtSize(cell, size);
-        const tx = col.align === "right" ? cx + col.width - 10 - w : cx + 8;
-        this.page.drawText(cell, { x: tx, y: this.y - rowHeight + 7, size, font: this.font, color: rgb(...TEXT_DARK) });
-        cx += col.width;
-      });
-      this.y -= rowHeight;
-    });
-    this.y -= 8;
-  }
-
   finalizeFooters() {
     const total = this.ownPages.length;
     this.ownPages.forEach((p, i) => {
@@ -614,7 +714,7 @@ class ReportCanvas {
 // page comes first so it's clear what the following pages are.
 async function appendFileSection(canvas: ReportCanvas, label: string, file: EmbeddableFile) {
   canvas.newPage();
-  canvas.banner(label);
+  canvas.heading(label);
   canvas.text(file.fileName, { size: 10, color: TEXT_MUTED, gap: 8 });
 
   if (file.mimeType === "application/pdf") {
@@ -645,58 +745,65 @@ async function appendFileSection(canvas: ReportCanvas, label: string, file: Embe
   canvas.text("(This file type can't be embedded in the PDF — it's still on file in the app.)", { color: TEXT_MUTED });
 }
 
-const TABLE_COLUMNS: TableColumn[] = [
-  { header: "COURSE", width: 148 },
-  { header: "BASIS", width: 106 },
-  { header: "BASE", width: 55, align: "right" },
-  { header: "BONUS", width: 55, align: "right" },
-  { header: "DEDUCT.", width: 57, align: "right" },
-  { header: "SUBTOTAL", width: 62, align: "right" },
-];
-
+// Follows the org's existing "Salary Details" PDF style: a bordered header
+// card, boxed detail grids with small gray labels, and label+pill rows for
+// money values, rather than a cramped table — the previous table layout let
+// a long basis string (e.g. "Fixed base + 50 papers checked · prorated
+// 26/31 — joined 2026-07-05") draw straight over the numeric columns next
+// to it, since a single-line table cell has no wrapping. Free text (basis,
+// bonus/deduction reasons) now always gets its own full-width box instead.
 async function buildStaffReportPdf(
   data: StaffReportData,
   orgName: string,
   accentHex: string,
-  logo: { bytes: Uint8Array; mime: "image/png" | "image/jpeg" } | null,
-  generatedByName: string
+  currency: string,
+  logo: { bytes: Uint8Array; mime: "image/png" | "image/jpeg" } | null
 ): Promise<Uint8Array> {
+  const money = (n: number) => `${currency}${n.toLocaleString()}`;
   const canvas = await ReportCanvas.create(orgName, accentHex, logo);
-  canvas.coverBand();
+  canvas.coverHeader("Staff Report", `${data.name} · ${data.role.charAt(0).toUpperCase() + data.role.slice(1)}`);
 
-  canvas.text(data.name, { size: 19, bold: true, gap: 2 });
-  canvas.text(data.role.charAt(0).toUpperCase() + data.role.slice(1), { size: 11, color: TEXT_MUTED, gap: 14 });
-
-  const cardLines: { label: string; value: string; color?: Color }[] = [
-    { label: "EMAIL", value: data.email },
-    ...(data.phone ? [{ label: "PHONE", value: data.phone }] : []),
-    ...(data.hiredAt ? [{ label: "HIRED", value: new Date(data.hiredAt).toLocaleDateString() }] : []),
-    ...(data.leftAt ? [{ label: "LEFT", value: new Date(data.leftAt).toLocaleDateString(), color: DANGER }] : []),
-    { label: "COURSES", value: data.offeringLabels.join(", ") },
-    { label: "GENERATED", value: `${generatedByName} · ${new Date().toLocaleDateString()}` },
+  canvas.sectionLabel("Staff details");
+  const details: { label: string; value: string; full?: boolean }[] = [
+    { label: "Email", value: data.email },
+    { label: "Phone", value: data.phone ?? "—" },
+    ...(data.hiredAt ? [{ label: "Hired", value: new Date(data.hiredAt).toLocaleDateString() }] : []),
+    ...(data.leftAt ? [{ label: "Left", value: new Date(data.leftAt).toLocaleDateString() }] : []),
+    { label: "Courses", value: data.offeringLabels.join(", "), full: true },
   ];
-  canvas.card(cardLines);
+  canvas.detailGrid(details);
+  canvas.y -= 6;
 
   if (data.periods.length === 0) {
     canvas.text("No released salary history found for the selected course(s).", { color: TEXT_MUTED });
   }
 
   for (const p of data.periods) {
-    canvas.banner(periodLabel(p.period));
-    canvas.table(
-      TABLE_COLUMNS,
-      p.courses.map((c) => [c.course, c.basis ?? "—", c.base.toLocaleString(), c.bonus.toLocaleString(), c.deduction.toLocaleString(), c.subtotal.toLocaleString()])
-    );
+    canvas.heading(periodLabel(p.period), 15);
 
     for (const c of p.courses) {
-      if (c.bonusReason) canvas.text(`Bonus reason (${c.course}): ${c.bonusReason}`, { size: 9, color: TEXT_MUTED, indent: 4 });
-      if (c.deductionReason) canvas.text(`Deduction reason (${c.course}): ${c.deductionReason}`, { size: 9, color: TEXT_MUTED, indent: 4 });
-      for (const item of c.extraItems) {
-        canvas.bulletLine(`${item.category ?? "Extra"}${item.note ? ` — ${item.note}` : ""}  (+${item.amount.toLocaleString()})`, OK);
-      }
-      for (const item of c.deductionItems) {
-        canvas.bulletLine(`${item.category ?? "Deduction"}${item.note ? ` — ${item.note}` : ""}  (−${item.amount.toLocaleString()})`, DANGER);
-      }
+      canvas.text(c.course, { size: 12.5, bold: true, color: TEXT_DARK, gap: 8 });
+      canvas.sectionLabel("Salary breakdown", 6);
+      canvas.breakdownRow("Base Salary", money(c.base));
+      canvas.breakdownRow("Bonus", money(c.bonus));
+      canvas.breakdownRow("Deductions", money(c.deduction));
+      canvas.y -= 2;
+      canvas.breakdownRow("Total Salary", money(c.subtotal), { solid: true });
+      canvas.y -= 6;
+
+      if (c.basis) canvas.noteBox("Basis", c.basis);
+      if (c.bonusReason) canvas.noteBox("Bonus reason", c.bonusReason);
+      if (c.deductionReason) canvas.noteBox("Deduction reason", c.deductionReason);
+
+      canvas.listRows(
+        "Extra work",
+        c.extraItems.map((item) => ({ left: `${item.category ?? "Extra"}${item.note ? ` — ${item.note}` : ""}`, right: `+${money(item.amount)}`, color: OK }))
+      );
+      canvas.listRows(
+        "Deductions breakdown",
+        c.deductionItems.map((item) => ({ left: `${item.category ?? "Deduction"}${item.note ? ` — ${item.note}` : ""}`, right: `-${money(item.amount)}`, color: DANGER }))
+      );
+      canvas.y -= 14;
     }
 
     const receipt = data.receiptsByPeriod[p.period];
@@ -711,7 +818,7 @@ async function buildStaffReportPdf(
     await appendFileSection(canvas, "Contract", data.contract);
   } else {
     canvas.newPage();
-    canvas.banner("Contract");
+    canvas.heading("Contract");
     canvas.text("No contract has been uploaded for this staff member yet.", { color: TEXT_MUTED });
   }
 
@@ -750,12 +857,17 @@ export async function generateStaffReport(staffId: string, offeringIds: string[]
   if (!profile || !profile.org) throw new Error("Not authenticated");
   requireHrOrAdmin(profile.role);
 
-  const [data, branding] = await Promise.all([getStaffReportData(staffId, offeringIds), getBranding()]);
+  const admin = createAdminClient();
+  const [data, usePlatformBranding, { data: orgRow }] = await Promise.all([
+    getStaffReportData(staffId, offeringIds),
+    getStaffReportBrandingPreference(),
+    admin.from("organizations").select("currency").eq("id", profile.org.id).single(),
+  ]);
+  const branding = usePlatformBranding ? await getPlatformDefaultBranding() : await getBranding();
   const orgName = branding?.name ?? profile.org.name ?? "RadAMS";
   const logo = await fetchLogoBytes(branding?.logoUrl ?? null);
-  const pdfBytes = await buildStaffReportPdf(data, orgName, branding?.primary ?? "#2563eb", logo, profile.fullName);
+  const pdfBytes = await buildStaffReportPdf(data, orgName, branding?.primary ?? "#2563eb", currencySymbol(orgRow?.currency), logo);
 
-  const admin = createAdminClient();
   const path = `${profile.org.id}/${staffId}/${Date.now()}.pdf`;
   const { error: uploadError } = await admin.storage.from("staff-reports").upload(path, Buffer.from(pdfBytes), { contentType: "application/pdf" });
   if (uploadError) throw new Error(uploadError.message);
@@ -765,12 +877,16 @@ export async function generateStaffReport(staffId: string, offeringIds: string[]
 
   const fileName = `${data.name} - Staff Report.pdf`;
   const monthYearFolder = MONTH_YEAR_FOLDER_LABEL();
+  const { data: adminRows } = await admin.from("profiles").select("email").eq("org_id", profile.org.id).eq("role", "admin").is("left_at", null);
+  const adminEmails = (adminRows ?? []).map((r) => r.email).filter((e): e is string => !!e);
+
   const driveResult = await uploadStaffReportToDrive({
     orgName,
     monthYearFolder,
     staffName: data.name,
     fileName,
     pdfBase64: Buffer.from(pdfBytes).toString("base64"),
+    adminEmails,
   });
 
   await admin.from("staff_report_generations").insert({
