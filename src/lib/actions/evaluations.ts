@@ -346,8 +346,17 @@ export async function listEvaluationPeriods(): Promise<string[]> {
   requireFinanceOrAdmin(profile?.role);
   if (!profile?.org) return [];
   const supabase = await createClient();
-  const { data } = await supabase.from("evaluations").select("period").eq("org_id", profile.org.id);
-  return Array.from(new Set((data ?? []).map((d) => d.period))).sort((a, b) => (a < b ? 1 : -1));
+  // All-time, org-wide — can clear Postgrest's default 1000-row cap for an
+  // older/larger org, which silently dropped older periods from the filter.
+  const periods: { period: string }[] = [];
+  const PAGE_SIZE = 1000;
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data: page } = await supabase.from("evaluations").select("period").eq("org_id", profile.org.id).range(from, from + PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    periods.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
+  return Array.from(new Set(periods.map((d) => d.period))).sort((a, b) => (a < b ? 1 : -1));
 }
 
 export async function listEvaluationSubmissions(filters: {
@@ -360,22 +369,36 @@ export async function listEvaluationSubmissions(filters: {
   if (!profile?.org) return [];
   const supabase = await createClient();
 
-  let query = supabase
-    .from("evaluations")
-    .select(
-      "id, period, notes, rating, status, head:profiles!evaluations_head_id_fkey(full_name), assistant:profiles!evaluations_assistant_id_fkey(full_name), course_offerings(session, unit, courses(name)), evaluation_lines(kind, category, amount, note)"
-    )
-    .eq("org_id", profile.org.id)
-    .order("period", { ascending: false });
+  function buildQuery(from: number, to: number) {
+    let query = supabase
+      .from("evaluations")
+      .select(
+        "id, period, notes, rating, status, head:profiles!evaluations_head_id_fkey(full_name), assistant:profiles!evaluations_assistant_id_fkey(full_name), course_offerings(session, unit, courses(name)), evaluation_lines(kind, category, amount, note)"
+      )
+      .eq("org_id", profile!.org!.id)
+      .order("period", { ascending: false });
 
-  if (filters.period) query = query.eq("period", filters.period);
-  if (filters.offeringId) query = query.eq("offering_id", filters.offeringId);
-  if (filters.assistantId) query = query.eq("assistant_id", filters.assistantId);
+    if (filters.period) query = query.eq("period", filters.period);
+    if (filters.offeringId) query = query.eq("offering_id", filters.offeringId);
+    if (filters.assistantId) query = query.eq("assistant_id", filters.assistantId);
 
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
+    return query.range(from, to);
+  }
 
-  return (data ?? [])
+  // All-time (when unfiltered), org-wide — can clear Postgrest's default
+  // 1000-row cap for an older/larger org, which silently dropped older
+  // submissions from Finance/Admin's evaluations review.
+  const data: Awaited<ReturnType<typeof buildQuery>>["data"] = [];
+  const PAGE_SIZE = 1000;
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data: page, error } = await buildQuery(from, from + PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+    if (!page || page.length === 0) break;
+    data.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
+
+  return data
     .map((e) => {
       const head = Array.isArray(e.head) ? e.head[0] : e.head;
       const assistant = Array.isArray(e.assistant) ? e.assistant[0] : e.assistant;

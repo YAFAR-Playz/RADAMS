@@ -49,32 +49,78 @@ export async function getFullExport(offeringId: string): Promise<FullExportRow[]
   if (!profile || profile.role !== "head") return [];
   const supabase = await createClient();
 
-  const { data: enrollments } = await supabase
-    .from("enrollments")
-    .select("student_id, created_at, left_at, students(student_code, name), profiles(full_name)")
-    .eq("offering_id", offeringId);
-  if (!enrollments || enrollments.length === 0) return [];
-
-  const studentIds = enrollments.map((e) => e.student_id);
+  // Paginated: this offering's own enrollments can clear Postgrest's
+  // default 1000-row cap on their own (one offering in this org has 1,039
+  // active enrollments), which a single unpaginated select silently
+  // truncated.
+  type FullExportEnrollmentRow = {
+    student_id: string;
+    created_at: string;
+    left_at: string | null;
+    students: { student_code: string; name: string } | { student_code: string; name: string }[] | null;
+    profiles: { full_name: string } | { full_name: string }[] | null;
+  };
+  const enrollments: FullExportEnrollmentRow[] = [];
+  const ENROLLMENT_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("enrollments")
+      .select("student_id, created_at, left_at, students(student_code, name), profiles(full_name)")
+      .eq("offering_id", offeringId)
+      .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    enrollments.push(...page);
+    if (page.length < ENROLLMENT_PAGE_SIZE) break;
+  }
+  if (!enrollments.length) return [];
 
   const { data: assignments } = await supabase.from("assignments").select("id").eq("offering_id", offeringId);
   const assignmentIds = (assignments ?? []).map((a) => a.id);
-  const { data: logs } = assignmentIds.length
-    ? await supabase.from("assignment_logs").select("student_id, status").in("assignment_id", assignmentIds).in("student_id", studentIds)
-    : { data: [] as { student_id: string; status: string | null }[] };
+  // Scoping to assignment_id alone is already exact — the map below only
+  // ever looks up students present in `enrollments`, so a redundant
+  // `.in("student_id", studentIds)` on top risked a URL-length failure for
+  // this course's size (same class of bug fixed in attendance.ts). Paginated
+  // since assignments × students for a large course can also clear the
+  // 1000-row cap on its own.
+  const logs: { student_id: string; status: string | null }[] = [];
+  const LOGS_PAGE_SIZE = 1000;
+  if (assignmentIds.length) {
+    for (let from = 0; ; from += LOGS_PAGE_SIZE) {
+      const { data: page } = await supabase
+        .from("assignment_logs")
+        .select("student_id, status")
+        .in("assignment_id", assignmentIds)
+        .range(from, from + LOGS_PAGE_SIZE - 1);
+      if (!page || page.length === 0) break;
+      logs.push(...page);
+      if (page.length < LOGS_PAGE_SIZE) break;
+    }
+  }
   const checkedByStudent = new Map<string, number>();
-  for (const l of logs ?? []) {
+  for (const l of logs) {
     if (l.status === "checked") checkedByStudent.set(l.student_id, (checkedByStudent.get(l.student_id) ?? 0) + 1);
   }
 
   const { data: sessions } = await supabase.from("attendance_sessions").select("id").eq("offering_id", offeringId);
   const sessionIds = (sessions ?? []).map((s) => s.id);
-  const { data: attendance } = sessionIds.length
-    ? await supabase.from("attendance_records").select("student_id, status").in("session_id", sessionIds).in("student_id", studentIds)
-    : { data: [] as { student_id: string; status: string }[] };
+  // Same reasoning as the logs fetch above — session_id alone is exact.
+  const attendance: { student_id: string; status: string }[] = [];
+  const ATTENDANCE_PAGE_SIZE = 1000;
+  if (sessionIds.length) {
+    for (let from = 0; ; from += ATTENDANCE_PAGE_SIZE) {
+      const { data: page } = await supabase
+        .from("attendance_records")
+        .select("student_id, status")
+        .in("session_id", sessionIds)
+        .range(from, from + ATTENDANCE_PAGE_SIZE - 1);
+      if (!page || page.length === 0) break;
+      attendance.push(...page);
+      if (page.length < ATTENDANCE_PAGE_SIZE) break;
+    }
+  }
   const attendanceTotal = new Map<string, number>();
   const attendancePresent = new Map<string, number>();
-  for (const a of attendance ?? []) {
+  for (const a of attendance) {
     attendanceTotal.set(a.student_id, (attendanceTotal.get(a.student_id) ?? 0) + 1);
     if (a.status === "present" || a.status === "late") attendancePresent.set(a.student_id, (attendancePresent.get(a.student_id) ?? 0) + 1);
   }
@@ -160,18 +206,42 @@ export async function getOversightSummary(
   // totals — same rule as the Students/Assistants tabs. "Left" is tracked
   // per enrollment (see setEnrollmentLeftStatus in students.ts), so this
   // filters straight on the enrollment row rather than needing a join.
-  const { data: enrollments } = await supabase
-    .from("enrollments")
-    .select("student_id, assistant_id")
-    .eq("offering_id", offeringId)
-    .is("left_at", null);
+  // Paginated: this offering's own active enrollments can clear Postgrest's
+  // default 1000-row cap on their own (one offering in this org has 1,039).
+  const enrollments: { student_id: string; assistant_id: string | null }[] = [];
+  const ENROLLMENT_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("enrollments")
+      .select("student_id, assistant_id")
+      .eq("offering_id", offeringId)
+      .is("left_at", null)
+      .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    enrollments.push(...page);
+    if (page.length < ENROLLMENT_PAGE_SIZE) break;
+  }
 
-  const { data: logs } = assignmentIds.length
-    ? await supabase.from("assignment_logs").select("student_id, sent_at").in("assignment_id", assignmentIds)
-    : { data: [] as { student_id: string; sent_at: string | null }[] };
+  // Scoping to assignment_id alone is already exact for this offering.
+  // Paginated since assignments × students for a large course can clear
+  // the 1000-row cap on its own.
+  const logs: { student_id: string; sent_at: string | null }[] = [];
+  const LOGS_PAGE_SIZE = 1000;
+  if (assignmentIds.length) {
+    for (let from = 0; ; from += LOGS_PAGE_SIZE) {
+      const { data: page } = await supabase
+        .from("assignment_logs")
+        .select("student_id, sent_at")
+        .in("assignment_id", assignmentIds)
+        .range(from, from + LOGS_PAGE_SIZE - 1);
+      if (!page || page.length === 0) break;
+      logs.push(...page);
+      if (page.length < LOGS_PAGE_SIZE) break;
+    }
+  }
 
   const sentByStudent = new Map<string, number>();
-  for (const log of logs ?? []) {
+  for (const log of logs) {
     if (log.sent_at) sentByStudent.set(log.student_id, (sentByStudent.get(log.student_id) ?? 0) + 1);
   }
 
@@ -181,7 +251,7 @@ export async function getOversightSummary(
     .map((row) => {
       const a = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
       if (!a) return null;
-      const myStudents = (enrollments ?? []).filter((e) => e.assistant_id === a.id);
+      const myStudents = enrollments.filter((e) => e.assistant_id === a.id);
       const total = myStudents.length * expectedPerStudent;
       const sent = myStudents.reduce((sum, e) => sum + (sentByStudent.get(e.student_id) ?? 0), 0);
       return { id: a.id, name: a.full_name, initials: a.initials, students: myStudents.length, sent, total };
@@ -220,11 +290,22 @@ export async function getAssistantComments(offeringId: string, assistantId: stri
 
   if (!assignmentIds.length) return [];
 
-  const { data: logs } = await supabase
-    .from("assignment_logs")
-    .select("assignment_id, student_id, status, grade, comment, sent_at")
-    .in("assignment_id", assignmentIds)
-    .in("student_id", studentIds);
+  // Scoping to assignment_id alone is already exact — the map below only
+  // ever looks up students present in `enrollments`, so a redundant
+  // `.in("student_id", studentIds)` on top risked the same URL-length
+  // failure fixed elsewhere in this codebase. Paginated as a backstop.
+  const logs: { assignment_id: string; student_id: string; status: string | null; grade: string | null; comment: string | null; sent_at: string | null }[] = [];
+  const LOGS_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += LOGS_PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("assignment_logs")
+      .select("assignment_id, student_id, status, grade, comment, sent_at")
+      .in("assignment_id", assignmentIds)
+      .range(from, from + LOGS_PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    logs.push(...page);
+    if (page.length < LOGS_PAGE_SIZE) break;
+  }
 
   const studentById = new Map(
     (enrollments ?? []).map((e) => {
@@ -233,7 +314,7 @@ export async function getAssistantComments(offeringId: string, assistantId: stri
     })
   );
 
-  return (logs ?? [])
+  return logs
     .map((log) => {
       const student = studentById.get(log.student_id);
       if (!student) return null;

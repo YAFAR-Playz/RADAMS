@@ -34,18 +34,20 @@ export async function setStudentTargetGrade(enrollmentId: string, targetGrade: n
 
 export type StudentTrafficLight = TrafficLightResult & { studentId: string };
 
-// One pass over the offering's assignments/logs — safe for courses with
-// hundreds of students, matching the batching pattern already used in
-// getStudentsForOffering (2 queries total, no per-student round trips).
+// One pass over the offering's assignments/logs, matching the batching
+// pattern already used in getStudentsForOffering (a fixed number of
+// queries, no per-student round trips).
 export async function getTrafficLightForOffering(offeringId: string): Promise<Record<string, StudentTrafficLight>> {
   const supabase = await createClient();
 
-  // bands, enrollments and assignments are all independent of each other —
-  // fetching them one-after-another was tripling this function's round-trip
-  // latency for no reason.
-  const [bands, { data: enrollments }, { data: assignments }] = await Promise.all([
+  // bands and assignments are independent of enrollments — fetching them
+  // one-after-another was tripling this function's round-trip latency for
+  // no reason. Enrollments are paginated in their own loop below since a
+  // course can have 1,000+ active enrollments (a real one in this org
+  // already does), which a single unpaginated select would silently
+  // truncate.
+  const [bands, { data: assignments }] = await Promise.all([
     getTrafficLightBands(),
-    supabase.from("enrollments").select("student_id, target_grade").eq("offering_id", offeringId),
     supabase
       .from("assignments")
       .select("id, max_marks, lettered, due_date, created_at")
@@ -53,7 +55,20 @@ export async function getTrafficLightForOffering(offeringId: string): Promise<Re
       .order("due_date", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: true }),
   ]);
-  if (!enrollments || !enrollments.length) return {};
+
+  const enrollments: { student_id: string; target_grade: number | null }[] = [];
+  const ENROLLMENT_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("enrollments")
+      .select("student_id, target_grade")
+      .eq("offering_id", offeringId)
+      .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    enrollments.push(...page);
+    if (page.length < ENROLLMENT_PAGE_SIZE) break;
+  }
+  if (!enrollments.length) return {};
 
   const totalAssignments = assignments?.length ?? 0;
   if (!totalAssignments) {
@@ -65,11 +80,25 @@ export async function getTrafficLightForOffering(offeringId: string): Promise<Re
   const assignmentById = new Map(assignments!.map((a) => [a.id, a]));
 
   const studentIds = enrollments.map((e) => e.student_id);
-  const { data: logs } = await supabase
-    .from("assignment_logs")
-    .select("student_id, assignment_id, status, grade")
-    .in("assignment_id", Array.from(assignmentOrder.keys()))
-    .in("student_id", studentIds);
+  const assignmentIds = Array.from(assignmentOrder.keys());
+  // Cross-join of every assignment × every enrolled student — a course with
+  // a few dozen assignments and a few hundred students already clears
+  // Postgrest's default 1000-row cap on a single unpaginated select, which
+  // silently dropped some students' grades/missed-status from the
+  // traffic-light computation below.
+  const logs: { student_id: string; assignment_id: string; status: string | null; grade: string | null }[] = [];
+  const LOGS_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += LOGS_PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("assignment_logs")
+      .select("student_id, assignment_id, status, grade")
+      .in("assignment_id", assignmentIds)
+      .in("student_id", studentIds)
+      .range(from, from + LOGS_PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    logs.push(...page);
+    if (page.length < LOGS_PAGE_SIZE) break;
+  }
 
   const missedByStudent = new Map<string, number>();
   const gradesByStudent = new Map<string, { order: number; pct: number }[]>();

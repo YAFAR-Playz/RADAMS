@@ -60,21 +60,52 @@ function findMatch(row: ImportRow, existing: ExistingStudent[]): MatchInfo | nul
 // (freshly added but not yet enrolled anywhere), or with at least one
 // enrollment in a still-active offering, remain eligible to match against.
 async function fetchDedupCandidates(supabase: Awaited<ReturnType<typeof createClient>>, orgId: string): Promise<ExistingStudent[]> {
-  const { data: existingData } = await supabase
-    .from("students")
-    .select("id, name, phone, email, guardian_phone")
-    .eq("org_id", orgId);
-  const existing = existingData ?? [];
+  // Paginated: an org accumulating more than 1,000 total students (this
+  // codebase's flagship large table) had this unbounded select silently
+  // truncate, so every import run after that point stopped seeing older
+  // students at all — dedup matching failed for them and duplicate records
+  // got created instead of merging.
+  const existing: ExistingStudent[] = [];
+  const STUDENT_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += STUDENT_PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("students")
+      .select("id, name, phone, email, guardian_phone")
+      .eq("org_id", orgId)
+      .range(from, from + STUDENT_PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    existing.push(...page);
+    if (page.length < STUDENT_PAGE_SIZE) break;
+  }
   if (!existing.length) return existing;
 
-  const { data: enrollmentRows } = await supabase
-    .from("enrollments")
-    .select("student_id, course_offerings(active)")
-    .in("student_id", existing.map((s) => s.id));
+  // Scoped only to this org's own students, but that set can itself run
+  // into the thousands, both risking the same 1000-row cap on the result
+  // and building a `.in()` filter with one UUID per student — for a large
+  // org that's tens of thousands of characters, past what a GET request's
+  // URL can carry, silently failing the whole query. Paginated over the
+  // student ids in URL-safe batches, with each batch's own row pagination.
+  const studentIds = existing.map((s) => s.id);
+  const ID_BATCH_SIZE = 200;
+  const ENROLLMENT_PAGE_SIZE = 1000;
+  const enrollmentRows: { student_id: string; course_offerings: { active: boolean } | { active: boolean }[] | null }[] = [];
+  for (let i = 0; i < studentIds.length; i += ID_BATCH_SIZE) {
+    const idBatch = studentIds.slice(i, i + ID_BATCH_SIZE);
+    for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
+      const { data: page } = await supabase
+        .from("enrollments")
+        .select("student_id, course_offerings(active)")
+        .in("student_id", idBatch)
+        .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
+      if (!page || page.length === 0) break;
+      enrollmentRows.push(...page);
+      if (page.length < ENROLLMENT_PAGE_SIZE) break;
+    }
+  }
 
   const hasAny = new Set<string>();
   const hasActive = new Set<string>();
-  for (const row of enrollmentRows ?? []) {
+  for (const row of enrollmentRows) {
     hasAny.add(row.student_id);
     const offering = Array.isArray(row.course_offerings) ? row.course_offerings[0] : row.course_offerings;
     if (offering?.active) hasActive.add(row.student_id);

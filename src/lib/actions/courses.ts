@@ -68,12 +68,25 @@ export async function listCourses(): Promise<CoursesOverview> {
     .in("offering_id", offeringIds);
   // A student who left this specific course still keeps their enrollment
   // row, and one enrolled in several offerings shows up once per offering —
-  // neither should count toward "currently enrolled" totals.
-  const { data: enrollments } = await supabase
-    .from("enrollments")
-    .select("offering_id, student_id, left_at")
-    .in("offering_id", offeringIds);
-  const activeEnrollments = (enrollments ?? []).filter((e) => !e.left_at);
+  // neither should count toward "currently enrolled" totals. Paginated: an
+  // org's enrollments across every offering combined can easily clear
+  // Postgrest's default 1000-row cap (one offering alone has 1,039 active
+  // enrollments in this org), which a single unpaginated select silently
+  // truncated, undercounting the Courses page's per-offering and total
+  // enrolled-student counts.
+  const enrollments: { offering_id: string; student_id: string; left_at: string | null }[] = [];
+  const ENROLLMENT_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("enrollments")
+      .select("offering_id, student_id, left_at")
+      .in("offering_id", offeringIds)
+      .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    enrollments.push(...page);
+    if (page.length < ENROLLMENT_PAGE_SIZE) break;
+  }
+  const activeEnrollments = enrollments.filter((e) => !e.left_at);
 
   const headsByOffering = new Map<string, string[]>();
   for (const row of headLinks ?? []) {

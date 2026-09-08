@@ -32,13 +32,31 @@ function monthEnds(months: number): Date[] {
   return ends;
 }
 
+// Generic paginated fetch — an org's total students/staff (including left/
+// inactive, since this reconstructs a point-in-time headcount) can clear
+// Postgrest's default 1000-row cap over several years, which a single
+// unpaginated select silently truncated, undercounting the growth trend.
+async function fetchAllRows<T>(fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null }>): Promise<T[]> {
+  const PAGE_SIZE = 1000;
+  const rows: T[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data } = await fetchPage(from, from + PAGE_SIZE - 1);
+    if (!data || data.length === 0) break;
+    rows.push(...data);
+    if (data.length < PAGE_SIZE) break;
+  }
+  return rows;
+}
+
 export async function getStudentCountTrend(months = 6): Promise<number[]> {
   const profile = await getCurrentProfile();
   const orgId = profile?.org?.id;
   if (!orgId) return [];
   const supabase = await createClient();
-  const { data } = await supabase.from("students").select("created_at").eq("org_id", orgId);
-  const createdDates = (data ?? []).map((s) => new Date(s.created_at).getTime());
+  const data = await fetchAllRows<{ created_at: string }>((from, to) =>
+    supabase.from("students").select("created_at").eq("org_id", orgId).range(from, to)
+  );
+  const createdDates = data.map((s) => new Date(s.created_at).getTime());
   return monthEnds(months).map((end) => createdDates.filter((t) => t <= end.getTime()).length);
 }
 
@@ -47,8 +65,10 @@ export async function getStaffCountTrend(months = 6): Promise<number[]> {
   const orgId = profile?.org?.id;
   if (!orgId) return [];
   const supabase = await createClient();
-  const { data } = await supabase.from("profiles").select("created_at, left_at").eq("org_id", orgId).neq("role", "owner");
-  const rows = (data ?? []).map((p) => ({ created: new Date(p.created_at).getTime(), left: p.left_at ? new Date(p.left_at).getTime() : null }));
+  const data = await fetchAllRows<{ created_at: string; left_at: string | null }>((from, to) =>
+    supabase.from("profiles").select("created_at, left_at").eq("org_id", orgId).neq("role", "owner").range(from, to)
+  );
+  const rows = data.map((p) => ({ created: new Date(p.created_at).getTime(), left: p.left_at ? new Date(p.left_at).getTime() : null }));
   return monthEnds(months).map((end) => rows.filter((r) => r.created <= end.getTime() && (r.left === null || r.left > end.getTime())).length);
 }
 
@@ -180,6 +200,9 @@ export async function getOrgRatingDistribution(): Promise<RatingSlice[]> {
   const orgId = profile?.org?.id;
   if (!orgId) return [];
   const supabase = await createClient();
-  const { data } = await supabase.from("evaluations").select("rating").eq("org_id", orgId);
-  return toRatingSlices(data ?? []);
+  // All-time, org-wide — can clear the 1000-row cap for an older/larger org.
+  const data = await fetchAllRows<{ rating: string | null }>((from, to) =>
+    supabase.from("evaluations").select("rating").eq("org_id", orgId).range(from, to)
+  );
+  return toRatingSlices(data);
 }

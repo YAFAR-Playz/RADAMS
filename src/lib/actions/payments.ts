@@ -110,23 +110,63 @@ export async function createPaymentPlan(input: { studentId: string; offeringId: 
 export async function listPaymentPlans(): Promise<StudentPaymentRow[]> {
   const supabase = await createClient();
 
-  const { data: plans } = await supabase
-    .from("payment_plans")
-    .select(
-      "id, student_id, offering_id, plan_type, total_amount, discount_pct, students(name, student_code, initials), course_offerings(session, unit, courses(name))"
-    )
-    .order("created_at", { ascending: false });
-  if (!plans || plans.length === 0) return [];
+  // Paginated: an org accumulating payment plans over multiple terms/years
+  // can clear Postgrest's default 1000-row cap, which a single unpaginated
+  // select silently truncated, dropping older plans/students from the
+  // finance Payments page.
+  type PlanRow = {
+    id: string;
+    student_id: string;
+    offering_id: string;
+    plan_type: PlanType | null;
+    total_amount: number;
+    discount_pct: number;
+    students: { name: string; student_code: string; initials: string } | { name: string; student_code: string; initials: string }[] | null;
+    course_offerings:
+      | { session: string; unit: string | null; courses: { name: string } | { name: string }[] | null }
+      | { session: string; unit: string | null; courses: { name: string } | { name: string }[] | null }[]
+      | null;
+  };
+  const plans: PlanRow[] = [];
+  const PLAN_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += PLAN_PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("payment_plans")
+      .select(
+        "id, student_id, offering_id, plan_type, total_amount, discount_pct, students(name, student_code, initials), course_offerings(session, unit, courses(name))"
+      )
+      .order("created_at", { ascending: false })
+      .range(from, from + PLAN_PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    plans.push(...page);
+    if (page.length < PLAN_PAGE_SIZE) break;
+  }
+  if (!plans.length) return [];
 
   const planIds = plans.map((p) => p.id);
-  const { data: installments } = await supabase
-    .from("payment_installments")
-    .select("id, plan_id, seq, amount, due_date, status, paid_at")
-    .in("plan_id", planIds)
-    .order("seq", { ascending: true });
+  // planIds is bounded by however many plans exist (already paginated
+  // above), but batched in URL-safe chunks to stay well clear of the same
+  // .in() URL-length limit found elsewhere in this codebase.
+  const ID_BATCH_SIZE = 200;
+  const INSTALLMENT_PAGE_SIZE = 1000;
+  const installments: { id: string; plan_id: string; seq: number; amount: number; due_date: string | null; status: "pending" | "paid"; paid_at: string | null }[] = [];
+  for (let i = 0; i < planIds.length; i += ID_BATCH_SIZE) {
+    const idBatch = planIds.slice(i, i + ID_BATCH_SIZE);
+    for (let from = 0; ; from += INSTALLMENT_PAGE_SIZE) {
+      const { data: page } = await supabase
+        .from("payment_installments")
+        .select("id, plan_id, seq, amount, due_date, status, paid_at")
+        .in("plan_id", idBatch)
+        .order("seq", { ascending: true })
+        .range(from, from + INSTALLMENT_PAGE_SIZE - 1);
+      if (!page || page.length === 0) break;
+      installments.push(...page);
+      if (page.length < INSTALLMENT_PAGE_SIZE) break;
+    }
+  }
 
   const installmentsByPlan = new Map<string, InstallmentRow[]>();
-  for (const row of installments ?? []) {
+  for (const row of installments) {
     const list = installmentsByPlan.get(row.plan_id) ?? [];
     list.push({ id: row.id, seq: row.seq, amount: Number(row.amount), dueDate: row.due_date, status: row.status, paidAt: row.paid_at });
     installmentsByPlan.set(row.plan_id, list);

@@ -127,28 +127,57 @@ export async function getRoster(assignmentId: string): Promise<RosterStudent[]> 
   // A student marked as "left" should stop appearing anywhere an assistant
   // or head logs/checks assignment work for them — they still show up
   // (greyed out) on the Students tab as a historical record, but there's
-  // nothing left to log here.
-  let enrollmentQuery = supabase
-    .from("enrollments")
-    .select("id, student_id, assistant_id, students!inner(id, name, student_code, initials, phone, guardian_name, guardian_phone), profiles(full_name)")
-    .eq("offering_id", assignment.offering_id)
-    .is("left_at", null);
+  // nothing left to log here. Paginated: this offering's own roster can
+  // clear Postgrest's default 1000-row cap on its own (one offering in this
+  // org has 1,039 active enrollments), which a single unpaginated select
+  // silently truncated.
+  type RosterEnrollmentRow = {
+    id: string;
+    student_id: string;
+    assistant_id: string | null;
+    students:
+      | { id: string; name: string; student_code: string; initials: string; phone: string | null; guardian_name: string | null; guardian_phone: string | null }
+      | { id: string; name: string; student_code: string; initials: string; phone: string | null; guardian_name: string | null; guardian_phone: string | null }[]
+      | null;
+    profiles: { full_name: string } | { full_name: string }[] | null;
+  };
+  const enrollments: RosterEnrollmentRow[] = [];
+  const ENROLLMENT_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
+    let page = supabase
+      .from("enrollments")
+      .select("id, student_id, assistant_id, students!inner(id, name, student_code, initials, phone, guardian_name, guardian_phone), profiles(full_name)")
+      .eq("offering_id", assignment.offering_id)
+      .is("left_at", null)
+      .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
+    if (profile.role === "assistant") page = page.eq("assistant_id", profile.id);
+    const { data } = await page;
+    if (!data || data.length === 0) break;
+    enrollments.push(...data);
+    if (data.length < ENROLLMENT_PAGE_SIZE) break;
+  }
+  if (!enrollments.length) return [];
 
-  if (profile.role === "assistant") {
-    enrollmentQuery = enrollmentQuery.eq("assistant_id", profile.id);
+  // Scoping to assignment_id alone is already exact — the map below only
+  // ever looks up students present in `enrollments`, so a
+  // `.in("student_id", studentIds)` on top risked a URL-length failure for
+  // this course's size (same class of bug fixed in attendance.ts).
+  // Paginated as a backstop since a large course's log rows can also clear
+  // the 1000-row cap on their own.
+  const logs: { student_id: string; status: string | null; grade: string | null; comment: string | null; sent_at: string | null }[] = [];
+  const LOGS_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += LOGS_PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("assignment_logs")
+      .select("student_id, status, grade, comment, sent_at")
+      .eq("assignment_id", assignmentId)
+      .range(from, from + LOGS_PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    logs.push(...page);
+    if (page.length < LOGS_PAGE_SIZE) break;
   }
 
-  const { data: enrollments, error } = await enrollmentQuery;
-  if (error || !enrollments) return [];
-
-  const studentIds = enrollments.map((e) => e.student_id);
-  const { data: logs } = await supabase
-    .from("assignment_logs")
-    .select("student_id, status, grade, comment, sent_at")
-    .eq("assignment_id", assignmentId)
-    .in("student_id", studentIds.length ? studentIds : ["00000000-0000-0000-0000-000000000000"]);
-
-  const logByStudent = new Map((logs ?? []).map((l) => [l.student_id, l]));
+  const logByStudent = new Map(logs.map((l) => [l.student_id, l]));
 
   return enrollments
     .map((e) => {
