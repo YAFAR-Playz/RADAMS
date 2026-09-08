@@ -112,16 +112,34 @@ export async function getSessionRoster(sessionId: string): Promise<AttendanceRos
   // against — same rule as the Students tab and everywhere else "left" is
   // checked. "Left" is tracked per enrollment (setEnrollmentLeftStatus in
   // students.ts), so this filters directly on the enrollment row.
-  let enrollmentQuery = supabase
-    .from("enrollments")
-    .select("student_id, assistant_id, students(id, name, student_code, initials, phone, guardian_phone)")
-    .eq("offering_id", session.offering_id)
-    .is("left_at", null);
-  if (profile.role === "assistant") {
-    enrollmentQuery = enrollmentQuery.eq("assistant_id", profile.id);
+  // Paginated: a single unbounded select here silently truncated at
+  // Postgrest's default 1000-row cap for a course with more active
+  // enrollments than that, capping the entire roster (and its "showing X of
+  // Y" count) at 1000 regardless of the actual enrollment count — up to 39
+  // students on a 1,039-student course were simply never in the returned
+  // array, so they could never be marked present/absent no matter what
+  // Registration did in the UI.
+  type EnrollmentRow = {
+    student_id: string;
+    assistant_id: string | null;
+    students: { id: string; name: string; student_code: string; initials: string; phone: string | null; guardian_phone: string | null } | { id: string; name: string; student_code: string; initials: string; phone: string | null; guardian_phone: string | null }[] | null;
+  };
+  const enrollments: EnrollmentRow[] = [];
+  const ENROLLMENT_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
+    let page = supabase
+      .from("enrollments")
+      .select("student_id, assistant_id, students(id, name, student_code, initials, phone, guardian_phone)")
+      .eq("offering_id", session.offering_id)
+      .is("left_at", null)
+      .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
+    if (profile.role === "assistant") page = page.eq("assistant_id", profile.id);
+    const { data } = await page;
+    if (!data || data.length === 0) break;
+    enrollments.push(...data);
+    if (data.length < ENROLLMENT_PAGE_SIZE) break;
   }
-  const { data: enrollments } = await enrollmentQuery;
-  if (!enrollments) return [];
+  if (!enrollments.length) return [];
 
   // Scoping to session_id alone is already exact — the .map() below only
   // ever looks up students present in `enrollments`, so records for anyone
@@ -311,14 +329,30 @@ export async function getFullAttendanceExport(offeringId: string): Promise<Atten
 
   // A student who left THIS course is excluded — same rule as the live
   // roster (getSessionRoster) and everywhere else "left" is checked.
-  let enrollmentQuery = supabase
-    .from("enrollments")
-    .select("student_id, assistant_id, students(id, name, guardian_phone)")
-    .eq("offering_id", offeringId)
-    .is("left_at", null);
-  if (profile.role === "assistant") enrollmentQuery = enrollmentQuery.eq("assistant_id", profile.id);
-  const { data: enrollments } = await enrollmentQuery;
-  if (!enrollments || !enrollments.length) return [];
+  // Paginated for the same reason as getSessionRoster's enrollment fetch —
+  // an unbounded select here silently truncated the export at 1,000 students
+  // for a larger course.
+  type ExportEnrollmentRow = {
+    student_id: string;
+    assistant_id: string | null;
+    students: { id: string; name: string; guardian_phone: string | null } | { id: string; name: string; guardian_phone: string | null }[] | null;
+  };
+  const enrollments: ExportEnrollmentRow[] = [];
+  const EXPORT_ENROLLMENT_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += EXPORT_ENROLLMENT_PAGE_SIZE) {
+    let page = supabase
+      .from("enrollments")
+      .select("student_id, assistant_id, students(id, name, guardian_phone)")
+      .eq("offering_id", offeringId)
+      .is("left_at", null)
+      .range(from, from + EXPORT_ENROLLMENT_PAGE_SIZE - 1);
+    if (profile.role === "assistant") page = page.eq("assistant_id", profile.id);
+    const { data } = await page;
+    if (!data || data.length === 0) break;
+    enrollments.push(...data);
+    if (data.length < EXPORT_ENROLLMENT_PAGE_SIZE) break;
+  }
+  if (!enrollments.length) return [];
 
   const { data: sessionsData } = await supabase
     .from("attendance_sessions")
