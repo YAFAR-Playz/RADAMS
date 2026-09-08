@@ -99,8 +99,12 @@ export function RegistrationsContent() {
       setPage(0);
       await reload();
       setTimeout(() => setSuccess(null), 3000);
-    } catch {
-      setError("Couldn't register this student — try again.");
+    } catch (e) {
+      // "Not authenticated" specifically means the session went stale (see
+      // proxy.ts's getUser() fix) — surfacing it (rather than always the
+      // same generic banner) tells the user to refresh/log back in instead
+      // of retrying the same broken submit.
+      setError(e instanceof Error && e.message ? e.message : "Couldn't register this student — try again.");
     } finally {
       setSubmitting(false);
     }
@@ -116,8 +120,8 @@ export function RegistrationsContent() {
       setPage(0);
       await reload();
       setTimeout(() => setSuccess(null), 3000);
-    } catch {
-      setError("Couldn't register this student — try again.");
+    } catch (e) {
+      setError(e instanceof Error && e.message ? e.message : "Couldn't register this student — try again.");
     } finally {
       setSubmitting(false);
       setDuplicateMatch(null);
