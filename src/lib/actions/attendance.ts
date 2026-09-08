@@ -213,8 +213,28 @@ export async function createSession(input: { offeringId: string; title: string; 
     .single();
   if (error || !session) throw new Error(error?.message ?? "Failed to create session");
 
-  const { data: enrollments } = await supabase.from("enrollments").select("student_id").eq("offering_id", input.offeringId);
-  if (enrollments && enrollments.length) {
+  // A student who already left this course shouldn't get a fresh record
+  // seeded for a brand-new session — same rule as the roster and export.
+  // Paginated: an unbounded select here silently truncated at Postgrest's
+  // default 1000-row cap for a 1,000+ student course, seeding records for
+  // only the first 1000 enrolled students and silently skipping the rest
+  // (harmless for the roster/export today, since both fall back to
+  // enrollments directly and default a missing record to absent — but the
+  // gap is still real and worth not having).
+  const enrollments: { student_id: string }[] = [];
+  const ENROLLMENT_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("enrollments")
+      .select("student_id")
+      .eq("offering_id", input.offeringId)
+      .is("left_at", null)
+      .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    enrollments.push(...page);
+    if (page.length < ENROLLMENT_PAGE_SIZE) break;
+  }
+  if (enrollments.length) {
     const { error: recError } = await supabase
       .from("attendance_records")
       .insert(enrollments.map((e) => ({ session_id: session.id, student_id: e.student_id, status: "absent" as const })));
