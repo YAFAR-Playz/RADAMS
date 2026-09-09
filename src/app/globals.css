@@ -108,3 +108,52 @@ body {
     transform: none;
   }
 }
+
+/* View transitions — page navigation, and in-page tab/step swaps */
+::view-transition-old(page-content) {
+  animation: 120ms ease-in both vt-fade-out;
+}
+::view-transition-new(page-content) {
+  animation: 180ms ease-out 40ms both vt-fade-in;
+}
+
+::view-transition-old(form-step) {
+  animation: 110ms ease-in both vt-slide-out;
+}
+::view-transition-new(form-step) {
+  animation: 160ms ease-out 40ms both vt-slide-in;
+}
+
+@keyframes vt-fade-out {
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@keyframes vt-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@keyframes vt-slide-out {
+  to {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+}
+@keyframes vt-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+}
