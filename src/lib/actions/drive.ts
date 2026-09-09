@@ -79,11 +79,12 @@ async function loadDriveDeliveryContext(offeringId: string, period: string) {
     meta,
     students,
     courseLabel,
-    orgName: branding?.name ?? profile.org.name ?? "RadAMS",
+    orgName: branding?.name ?? profile.org.name ?? "ZAD-AMS",
     primaryColor: branding?.primary ?? "#2563eb",
     logoUrl: branding?.logoUrl ?? null,
     monthLabel: periodLabel(period),
     showAverageGrade: reportSettings.showAverageGrade,
+    isTouringDemo: profile.isTouringDemo,
   };
 }
 
@@ -118,10 +119,14 @@ export async function deleteMonthlyReportsFromDriveChunk(offeringId: string, per
   const profile = await getCurrentProfile();
   if (!profile || profile.role !== "admin") throw new Error("Not authorized");
 
-  const { students, courseLabel, orgName, monthLabel } = await loadDriveDeliveryContext(offeringId, period);
+  const { students, courseLabel, orgName, monthLabel, isTouringDemo } = await loadDriveDeliveryContext(offeringId, period);
   const wanted = new Set(studentIds);
   const scoped = students.filter((s) => wanted.has(s.studentId));
   if (scoped.length === 0) return [];
+
+  if (isTouringDemo) {
+    return scoped.map((s) => ({ studentId: s.studentId, ok: true, deleted: true }));
+  }
 
   const payload = {
     rootFolderId: DRIVE_ROOT_FOLDER_ID,
@@ -148,10 +153,28 @@ export async function deleteMonthlyReportsFromDriveChunk(offeringId: string, per
 // folder creation is idempotent and the script replaces (not duplicates)
 // that month's PDF.
 export async function deliverDriveReportsChunk(offeringId: string, period: string, studentIds: string[]): Promise<DriveDeliveryResult[]> {
-  const { supabase, meta, students, courseLabel, orgName, primaryColor, logoUrl, monthLabel, showAverageGrade } = await loadDriveDeliveryContext(offeringId, period);
+  const { supabase, meta, students, courseLabel, orgName, primaryColor, logoUrl, monthLabel, showAverageGrade, isTouringDemo } = await loadDriveDeliveryContext(offeringId, period);
   const wanted = new Set(studentIds);
   const scoped = students.filter((s) => wanted.has(s.studentId));
   if (scoped.length === 0) return [];
+
+  // Onboarding-tour sessions run against a real (but disposable) cloned org,
+  // so every other write in the demo really persists — except this one,
+  // which would otherwise reach the actual Drive bridge and create real
+  // folders/files outside the sandbox. Simulate success instead: mark the
+  // same DB rows delivered so the UI genuinely reflects it, without the
+  // external call.
+  if (isTouringDemo) {
+    await Promise.all(
+      scoped.map((s) => supabase.from("monthly_report_students").update({ delivered_at: new Date().toISOString() }).eq("generation_id", meta.id).eq("student_id", s.studentId))
+    );
+    return scoped.map((s) => ({
+      studentId: s.studentId,
+      ok: true,
+      folderUrl: "https://drive.google.com/drive/folders/demo-tour-simulated",
+      fileUrl: "https://drive.google.com/file/d/demo-tour-simulated",
+    }));
+  }
 
   const payload = {
     rootFolderId: DRIVE_ROOT_FOLDER_ID,

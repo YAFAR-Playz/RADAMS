@@ -34,6 +34,7 @@ function ThemeToggle({ className }: { className?: string }) {
 
   return (
     <button
+      data-tour="theme-toggle"
       onClick={toggle}
       className={`flex items-center gap-2 rounded-[8px] px-3 py-2 text-[13px] font-medium text-[var(--text)] hover:bg-[var(--surface2)] ${className ?? ""}`}
     >
@@ -90,6 +91,7 @@ function UserMenu({ person }: { person: { name: string; label: string; initials:
   return (
     <div className="relative" ref={ref}>
       <button
+        data-tour="user-menu-toggle"
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-[9px] rounded-[10px] pl-[14px] border-l border-[var(--border)] py-1"
       >
@@ -108,6 +110,7 @@ function UserMenu({ person }: { person: { name: string; label: string; initials:
           <div className="my-1 h-px bg-[var(--border)]" />
           <Link
             href="/settings"
+            data-tour-nav="settings"
             onClick={() => setOpen(false)}
             className="flex w-full items-center gap-2 rounded-[8px] px-3 py-2 text-[13px] font-medium text-[var(--text)] hover:bg-[var(--surface2)]"
           >
@@ -328,6 +331,7 @@ export function AppShell({
                 key={n.key}
                 href={`/${n.key}`}
                 title={n.label}
+                data-tour-nav={n.key}
                 className="flex items-center gap-3 overflow-hidden rounded-[9px] px-[9px] py-[10px] text-[13.5px] hover:bg-[var(--surface2)]"
                 style={{
                   color: isActive ? "var(--brand)" : "var(--muted)",
@@ -360,6 +364,7 @@ export function AppShell({
           <Link
             href="/settings"
             title="Settings"
+            data-tour-nav="settings"
             className={`flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--text)] ${isRail ? "opacity-0" : "opacity-100"}`}
           >
             <Icon name="settings" size={16} />
@@ -380,6 +385,7 @@ export function AppShell({
         {/* MOBILE APP BAR */}
         <header className="flex h-14 flex-none items-center gap-[11px] border-b border-[var(--border)] bg-[var(--surface)] px-4 md:hidden">
           <button
+            data-tour="nav-menu-toggle"
             onClick={openMobileMenu}
             className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]"
           >
@@ -427,6 +433,7 @@ export function AppShell({
                   key={n.key}
                   href={`/${n.key}`}
                   onClick={closeMobileMenu}
+                  data-tour-nav={n.key}
                   className="flex items-center gap-3 rounded-[10px] px-[13px] py-[13px] text-[15px]"
                   style={{
                     color: isActive ? "var(--brand)" : "var(--text)",
@@ -458,6 +465,7 @@ export function AppShell({
               href="/settings"
               onClick={closeMobileMenu}
               title="Settings"
+              data-tour-nav="settings"
               className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]"
             >
               <Icon name="settings" size={18} />

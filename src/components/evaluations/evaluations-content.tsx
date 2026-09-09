@@ -364,6 +364,7 @@ export function EvaluationsContent() {
                   </div>
                 )}
                 <select
+                  data-tour="evaluations-assistant-select"
                   value={assistantId ?? ""}
                   onChange={(e) => setAssistantId(e.target.value)}
                   className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[13.5px] font-semibold text-[var(--text)] outline-none"
@@ -430,6 +431,7 @@ export function EvaluationsContent() {
                     )}
                   </div>
                   <button
+                    data-tour="evaluations-add-extra"
                     onClick={() => addLine("extra")}
                     className="flex items-center gap-[5px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[11px] py-[6px] text-[12.5px] font-semibold text-[var(--brand)] hover:bg-[var(--brands)]"
                   >
@@ -508,6 +510,7 @@ export function EvaluationsContent() {
                   <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Evaluation notes</h3>
                 </div>
                 <textarea
+                  data-tour="evaluations-notes"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Summarize the assistant's performance this month — punctuality, quality of feedback, responsiveness…"
@@ -522,6 +525,7 @@ export function EvaluationsContent() {
                       return (
                         <button
                           key={r.value}
+                          data-tour={r.value === RATINGS[0].value ? "evaluations-rating" : undefined}
                           onClick={() => setRating(r.value)}
                           className="flex items-center gap-[7px] rounded-full border px-[13px] py-2 text-[12.5px] font-semibold"
                           style={active ? { borderColor: fg, background: bg, color: fg } : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }}
@@ -583,6 +587,7 @@ export function EvaluationsContent() {
           )}
           <div className="flex flex-col gap-[9px]">
             <button
+              data-tour="evaluations-submit"
               onClick={() => onSubmit("submitted")}
               disabled={!assistantId || saving !== null}
               className="flex h-[46px] w-full items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[14px] font-semibold text-[var(--brandfg)] disabled:opacity-60"

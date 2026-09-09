@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { Icon } from "@/components/icons";
 import { Spinner } from "@/components/ui/spinner";
 import { exitOnboardingDemo } from "@/lib/actions/onboarding";
@@ -13,6 +13,19 @@ const STEP_STORAGE_KEY = "onboarding-tour-step";
 // Turbopack's on-demand compile of a route not yet visited this session.
 const FIND_TARGET_TIMEOUT_MS = 15000;
 const FIND_TARGET_POLL_MS = 120;
+// Once a target is found, re-confirm at this relaxed interval instead of
+// stopping — cheap (a querySelector + a getBoundingClientRect) and catches
+// a target that only settles into its final position/element after the
+// first successful resolution.
+const CONFIRM_POLL_MS = 500;
+const TRANSITION = "top 220ms ease, left 220ms ease, right 220ms ease, bottom 220ms ease, width 220ms ease, height 220ms ease, opacity 200ms ease";
+
+type Mode = "nav-menu" | "nav-link" | "content";
+type Target = { el: Element; mode: Mode };
+
+function isVisible(el: Element): boolean {
+  return (el as HTMLElement).offsetParent !== null;
+}
 
 function readStoredStep(max: number): number {
   if (typeof window === "undefined") return 0;
@@ -21,69 +34,54 @@ function readStoredStep(max: number): number {
   return Number.isFinite(n) && n >= 0 && n < max ? n : 0;
 }
 
+// The user drives every transition themselves — the engine never silently
+// teleports them. When a step's content lives on a different route, it
+// spotlights the real sidebar nav link (or, on mobile where the drawer
+// starts closed, the hamburger menu first) and waits for a real click,
+// exactly like reaching any other spotlighted button.
+// The app renders more than one element for the same logical target at once
+// — a desktop sidebar link and its mobile-drawer twin, or (for "settings")
+// a third copy inside the account-menu dropdown — only one of which is
+// actually visible at a time depending on viewport/open state. Picking the
+// first DOM match regardless of visibility would sometimes spotlight a
+// hidden element, so every match is checked and the first visible one wins.
+function firstVisible(selector: string): Element | null {
+  const all = document.querySelectorAll(selector);
+  for (const el of all) {
+    if (isVisible(el)) return el;
+  }
+  return null;
+}
+
+function resolveTarget(step: TourStep, pathname: string): Target | null {
+  if (pathname === step.path) {
+    const el = firstVisible(`[data-tour="${step.selector}"]`) ?? document.querySelector(`[data-tour="${step.selector}"]`);
+    return el ? { el, mode: "content" } : null;
+  }
+  const key = step.path.replace(/^\//, "");
+  const link = firstVisible(`[data-tour-nav="${key}"]`);
+  if (link) return { el: link, mode: "nav-link" };
+  const menu = firstVisible('[data-tour="nav-menu-toggle"]');
+  if (menu) return { el: menu, mode: "nav-menu" };
+  return null;
+}
+
 export function TourRunner({ steps }: { steps: TourStep[] }) {
-  const router = useRouter();
   const pathname = usePathname();
   const [stepIndex, setStepIndex] = useState(() => readStoredStep(steps.length));
   const [rect, setRect] = useState<DOMRect | null>(null);
+  const [mode, setMode] = useState<Mode | null>(null);
+  const [targetEl, setTargetEl] = useState<Element | null>(null);
   const [finding, setFinding] = useState(false);
+  const [notFound, setNotFound] = useState(false);
   const [finishing, setFinishing] = useState(false);
+  const [poke, setPoke] = useState(0);
 
   const step = steps[stepIndex] ?? null;
 
   useEffect(() => {
     window.sessionStorage.setItem(STEP_STORAGE_KEY, String(stepIndex));
   }, [stepIndex]);
-
-  useEffect(() => {
-    if (!step) return;
-    if (pathname !== step.path) {
-      router.push(step.path);
-    }
-  }, [step, pathname, router]);
-
-  useEffect(() => {
-    if (!step || pathname !== step.path) {
-      const id = requestAnimationFrame(() => {
-        setRect(null);
-        setFinding(false);
-      });
-      return () => cancelAnimationFrame(id);
-    }
-    let cancelled = false;
-    const startedAt = Date.now();
-    const findingId = requestAnimationFrame(() => setFinding(true));
-
-    function measure() {
-      if (cancelled) return;
-      const el = document.querySelector(`[data-tour="${step!.selector}"]`);
-      if (el) {
-        setRect(el.getBoundingClientRect());
-        setFinding(false);
-        return;
-      }
-      if (Date.now() - startedAt > FIND_TARGET_TIMEOUT_MS) {
-        setRect(null);
-        setFinding(false);
-        return;
-      }
-      window.setTimeout(measure, FIND_TARGET_POLL_MS);
-    }
-    measure();
-
-    function onViewportChange() {
-      const el = document.querySelector(`[data-tour="${step!.selector}"]`);
-      if (el) setRect(el.getBoundingClientRect());
-    }
-    window.addEventListener("resize", onViewportChange);
-    window.addEventListener("scroll", onViewportChange, true);
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(findingId);
-      window.removeEventListener("resize", onViewportChange);
-      window.removeEventListener("scroll", onViewportChange, true);
-    };
-  }, [step, pathname]);
 
   const finish = useCallback(async (completed: boolean) => {
     setFinishing(true);
@@ -96,25 +94,102 @@ export function TourRunner({ steps }: { steps: TourStep[] }) {
   }, []);
 
   const goNext = useCallback(() => {
-    if (stepIndex >= steps.length - 1) {
-      finish(true);
-      return;
-    }
-    setStepIndex((i) => i + 1);
-  }, [stepIndex, steps.length, finish]);
+    setStepIndex((i) => {
+      if (i >= steps.length - 1) {
+        finish(true);
+        return i;
+      }
+      return i + 1;
+    });
+  }, [steps.length, finish]);
 
   const goBack = useCallback(() => {
     setStepIndex((i) => Math.max(0, i - 1));
   }, []);
 
   useEffect(() => {
-    if (!step?.requireRealClick || !rect) return;
-    const el = document.querySelector(`[data-tour="${step.selector}"]`);
-    if (!el) return;
-    const handler = () => goNext();
-    el.addEventListener("click", handler);
-    return () => el.removeEventListener("click", handler);
-  }, [step, rect, goNext]);
+    if (!step) return;
+    let cancelled = false;
+    let lastEl: Element | null = null;
+    const startedAt = Date.now();
+    const findingId = requestAnimationFrame(() => {
+      setFinding(true);
+      setNotFound(false);
+    });
+
+    // Keeps re-resolving even after a first match, at a relaxed interval,
+    // for as long as this step is on screen — not just once. A first
+    // resolution can be wrong in a way that never self-corrects otherwise:
+    // e.g. the nav briefly renders narrower than its final layout (fonts,
+    // async content, or a transient viewport size) so the engine falls
+    // back to the mobile menu target, then the real layout settles a
+    // moment later with no `resize`/`scroll` event to prompt a recheck.
+    function measure(poll: number) {
+      if (cancelled) return;
+      const found = resolveTarget(step!, pathname);
+      if (found) {
+        if (found.el !== lastEl) {
+          lastEl = found.el;
+          setRect(found.el.getBoundingClientRect());
+          setMode(found.mode);
+          setTargetEl(found.el);
+        } else {
+          setRect(found.el.getBoundingClientRect());
+        }
+        setFinding(false);
+        window.setTimeout(() => measure(CONFIRM_POLL_MS), CONFIRM_POLL_MS);
+        return;
+      }
+      if (!lastEl && Date.now() - startedAt > FIND_TARGET_TIMEOUT_MS) {
+        setRect(null);
+        setMode(null);
+        setTargetEl(null);
+        setFinding(false);
+        setNotFound(true);
+        return;
+      }
+      window.setTimeout(() => measure(poll), poll);
+    }
+    measure(FIND_TARGET_POLL_MS);
+
+    function onViewportChange() {
+      const found = resolveTarget(step!, pathname);
+      if (found) {
+        lastEl = found.el;
+        setRect(found.el.getBoundingClientRect());
+        setMode(found.mode);
+        setTargetEl(found.el);
+      }
+    }
+    window.addEventListener("resize", onViewportChange);
+    window.addEventListener("scroll", onViewportChange, true);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(findingId);
+      window.removeEventListener("resize", onViewportChange);
+      window.removeEventListener("scroll", onViewportChange, true);
+    };
+  }, [step, pathname, poke]);
+
+  // Drives what a real click on the current target actually does: opening
+  // the mobile drawer just re-triggers the search above (poke) so it can
+  // then find the real nav link inside it; clicking a nav link needs no
+  // handling at all — its own navigation changes `pathname`, which the
+  // effect above already reacts to; a requireRealClick content target
+  // advances the tour.
+  useEffect(() => {
+    if (!targetEl || !mode) return;
+    if (mode === "nav-menu") {
+      const handler = () => window.setTimeout(() => setPoke((p) => p + 1), 60);
+      targetEl.addEventListener("click", handler);
+      return () => targetEl.removeEventListener("click", handler);
+    }
+    if (mode === "content" && step?.requireRealClick) {
+      const handler = () => goNext();
+      targetEl.addEventListener("click", handler);
+      return () => targetEl.removeEventListener("click", handler);
+    }
+  }, [targetEl, mode, step, goNext]);
 
   const tooltipStyle = useMemo(() => {
     if (!rect) return null;
@@ -122,15 +197,13 @@ export function TourRunner({ steps }: { steps: TourStep[] }) {
     const margin = 12;
     const cardWidth = Math.min(320, window.innerWidth - margin * 2);
     const cardHeightGuess = 190; // rough — enough to decide top vs. bottom on short viewports
-    const base: React.CSSProperties = { position: "fixed", zIndex: 101, width: cardWidth };
+    const base: React.CSSProperties = { position: "fixed", zIndex: 101, width: cardWidth, transition: TRANSITION };
 
-    // Side placements ("left"/"right") need real horizontal room on both
-    // sides of the card — on a narrow viewport (most phones, many tablets in
-    // portrait) they never fit, so always stack vertically there instead.
+    const placementPref = mode === "content" ? (step?.placement ?? "bottom") : "bottom";
     const roomOnRight = window.innerWidth - rect.right;
     const roomOnLeft = rect.left;
     const sideFits = window.innerWidth >= 640 && (roomOnRight >= cardWidth + gap + margin || roomOnLeft >= cardWidth + gap + margin);
-    let placement = step?.placement ?? "bottom";
+    let placement = placementPref;
     if ((placement === "left" || placement === "right") && !sideFits) {
       placement = rect.top > window.innerHeight / 2 ? "top" : "bottom";
     } else if (placement === "left" && roomOnLeft < cardWidth + gap + margin) {
@@ -155,30 +228,69 @@ export function TourRunner({ steps }: { steps: TourStep[] }) {
     const clampedTop = Math.max(margin, Math.min(rect.top, window.innerHeight - cardHeightGuess - margin));
     if (placement === "left") return { ...base, top: clampedTop, right: window.innerWidth - rect.left + gap };
     return { ...base, top: clampedTop, left: rect.right + gap };
-  }, [rect, step]);
+  }, [rect, step, mode]);
 
   if (!steps.length || !step) return null;
 
+  const navCopy =
+    mode === "nav-menu"
+      ? { title: "Open the menu", body: "Tap the menu icon to open navigation." }
+      : mode === "nav-link"
+        ? { title: "Keep going", body: "Click this to head to the next part of the tour." }
+        : null;
+
   return (
     <>
+      <style>{`
+        @keyframes tour-glow-pulse {
+          0%, 100% { box-shadow: 0 0 0 3px var(--brand), 0 0 14px 3px var(--brand); opacity: 0.85; }
+          50% { box-shadow: 0 0 0 3px var(--brand), 0 0 24px 8px var(--brand); opacity: 1; }
+        }
+      `}</style>
       {finding && !rect && (
         <div className="fixed bottom-5 right-5 z-[101] flex items-center gap-[8px] rounded-full border border-[var(--border)] bg-[var(--surface)] px-[14px] py-[9px] text-[12.5px] font-semibold text-[var(--muted)] shadow-[var(--shadow)]">
           <Spinner size={13} />
           Finding the next step…
         </div>
       )}
+      {notFound && !rect && (
+        <div className="fixed bottom-5 right-5 z-[101] flex items-center gap-[10px] rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[12px_14px] shadow-[var(--shadow)]">
+          <span className="text-[12.5px] font-medium text-[var(--muted)]">Couldn&apos;t find that on this page.</span>
+          <button
+            onClick={() => setPoke((p) => p + 1)}
+            className="flex-none rounded-[8px] border border-[var(--border)] px-[10px] py-[6px] text-[12px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]"
+          >
+            Retry
+          </button>
+          <button
+            onClick={goNext}
+            className="flex-none rounded-[8px] bg-[var(--brand)] px-[10px] py-[6px] text-[12px] font-semibold text-[var(--brandfg)]"
+          >
+            Skip step
+          </button>
+        </div>
+      )}
       {rect && (
         <>
-          {/* Four bars surrounding the target rect — dark, pointer-events:auto
-              (blocks off-script clicks) — the target's own rect area has no
-              overlay above it, so it stays naturally clickable. */}
-          <div className="fixed inset-x-0 top-0 z-[100] bg-[rgba(8,10,20,0.55)]" style={{ height: Math.max(0, rect.top) }} />
-          <div className="fixed inset-x-0 bottom-0 z-[100] bg-[rgba(8,10,20,0.55)]" style={{ top: rect.bottom }} />
-          <div className="fixed left-0 z-[100] bg-[rgba(8,10,20,0.55)]" style={{ top: rect.top, height: rect.height, width: Math.max(0, rect.left) }} />
-          <div className="fixed right-0 z-[100] bg-[rgba(8,10,20,0.55)]" style={{ top: rect.top, height: rect.height, left: rect.right }} />
+          {/* Four bars surrounding the target rect — dim everything else and
+              block off-script clicks; the target's own rect area has no
+              overlay above it, so it stays naturally clickable. Transitions
+              on position/size make moving between targets read as a smooth
+              animated glide instead of an abrupt pop. */}
+          <div className="fixed inset-x-0 top-0 z-[100] bg-[rgba(8,10,20,0.6)]" style={{ height: Math.max(0, rect.top - 6), transition: TRANSITION }} />
+          <div className="fixed inset-x-0 bottom-0 z-[100] bg-[rgba(8,10,20,0.6)]" style={{ top: rect.bottom + 6, transition: TRANSITION }} />
+          <div className="fixed left-0 z-[100] bg-[rgba(8,10,20,0.6)]" style={{ top: rect.top - 6, height: rect.height + 12, width: Math.max(0, rect.left - 6), transition: TRANSITION }} />
+          <div className="fixed right-0 z-[100] bg-[rgba(8,10,20,0.6)]" style={{ top: rect.top - 6, height: rect.height + 12, left: rect.right + 6, transition: TRANSITION }} />
           <div
-            className="pointer-events-none fixed z-[100] rounded-[8px] ring-2 ring-[var(--brand)]"
-            style={{ top: rect.top - 4, left: rect.left - 4, width: rect.width + 8, height: rect.height + 8 }}
+            className="pointer-events-none fixed z-[100] rounded-[10px]"
+            style={{
+              top: rect.top - 5,
+              left: rect.left - 5,
+              width: rect.width + 10,
+              height: rect.height + 10,
+              transition: TRANSITION,
+              animation: "tour-glow-pulse 1.8s ease-in-out infinite",
+            }}
           />
         </>
       )}
@@ -195,33 +307,40 @@ export function TourRunner({ steps }: { steps: TourStep[] }) {
               <Icon name="x" size={15} />
             </button>
           </div>
-          <h3 className="m-0 text-[14.5px] font-semibold text-[var(--text)]">{step.title}</h3>
-          <p className="m-0 text-[13px] leading-relaxed text-[var(--muted)]">{step.body}</p>
-          <div className="mt-[4px] flex items-center justify-between gap-2">
-            <button
-              onClick={goBack}
-              disabled={stepIndex === 0 || finishing}
-              className="flex items-center gap-[5px] rounded-[8px] px-[10px] py-[7px] text-[12.5px] font-semibold text-[var(--muted)] disabled:opacity-40"
-            >
-              <Icon name="chev-left" size={14} />
-              Back
-            </button>
-            {step.requireRealClick ? (
-              <span className="flex items-center gap-[6px] text-[12px] font-semibold text-[var(--brand)]">
-                <Icon name="target" size={14} />
-                Click it to continue
-              </span>
-            ) : (
+          <h3 className="m-0 text-[14.5px] font-semibold text-[var(--text)]">{navCopy?.title ?? step.title}</h3>
+          <p className="m-0 text-[13px] leading-relaxed text-[var(--muted)]">{navCopy?.body ?? step.body}</p>
+          {navCopy ? (
+            <span className="flex items-center gap-[6px] text-[12px] font-semibold text-[var(--brand)]">
+              <Icon name="target" size={14} />
+              Click it to continue
+            </span>
+          ) : (
+            <div className="mt-[4px] flex items-center justify-between gap-2">
               <button
-                onClick={goNext}
-                disabled={finishing}
-                className="flex items-center gap-[6px] rounded-[8px] bg-[var(--brand)] px-[14px] py-[8px] text-[12.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+                onClick={goBack}
+                disabled={stepIndex === 0 || finishing}
+                className="flex items-center gap-[5px] rounded-[8px] px-[10px] py-[7px] text-[12.5px] font-semibold text-[var(--muted)] disabled:opacity-40"
               >
-                {stepIndex >= steps.length - 1 ? "Finish" : "Next"}
-                <Icon name="cr" size={14} />
+                <Icon name="chev-left" size={14} />
+                Back
               </button>
-            )}
-          </div>
+              {step.requireRealClick ? (
+                <span className="flex items-center gap-[6px] text-[12px] font-semibold text-[var(--brand)]">
+                  <Icon name="target" size={14} />
+                  Click it to continue
+                </span>
+              ) : (
+                <button
+                  onClick={goNext}
+                  disabled={finishing}
+                  className="flex items-center gap-[6px] rounded-[8px] bg-[var(--brand)] px-[14px] py-[8px] text-[12.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+                >
+                  {stepIndex >= steps.length - 1 ? "Finish" : "Next"}
+                  <Icon name="cr" size={14} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
     </>

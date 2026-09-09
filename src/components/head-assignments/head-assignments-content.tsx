@@ -471,6 +471,7 @@ export function HeadAssignmentsContent() {
               <div>
                 <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Title</label>
                 <input
+                  data-tour="assignment-form-title"
                   value={form.title}
                   onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
                   placeholder="e.g. Paper 4 — Alternative to Practical"
@@ -511,6 +512,7 @@ export function HeadAssignmentsContent() {
                         return (
                           <button
                             key={t.id}
+                            data-tour={t === templates[0] ? "assignment-form-template" : undefined}
                             onClick={() => setForm((f) => ({ ...f, templateId: t.id }))}
                             className="flex items-center gap-[10px] rounded-[var(--rad-sm)] border-[1.5px] p-[11px_13px] text-left"
                             style={{ borderColor: active ? "var(--brand)" : "var(--border)", background: active ? "var(--brands)" : "var(--surface)" }}
@@ -695,6 +697,7 @@ export function HeadAssignmentsContent() {
                 Cancel
               </button>
               <button
+                data-tour="assignment-form-save"
                 onClick={onSave}
                 disabled={!canSave || saving}
                 className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:cursor-not-allowed"

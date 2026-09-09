@@ -279,7 +279,7 @@ export function SettingsContent() {
       </section>
 
       {/* PASSWORD */}
-      <section className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
+      <section data-tour="settings-password-section" className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
         <h3 className="m-0 mb-[14px] text-[14px] font-semibold text-[var(--text)]">Password</h3>
         <div className="grid grid-cols-1 gap-[12px] sm:grid-cols-2">
           <div>

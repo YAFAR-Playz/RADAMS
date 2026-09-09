@@ -157,6 +157,7 @@ export function AutoAssignModal({
             Cancel
           </button>
           <button
+            data-tour="students-auto-assign-confirm"
             onClick={onRun}
             disabled={running || selectedCount === 0}
             className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
