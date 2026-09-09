@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import { getMyPay, getMyReceiptUrl, sendFinanceMessage, markPayViewed, getMyMessages, type MyPay, type PayMessage } from "@/lib/actions/pay";
 
 function periodLabel(period: string) {
@@ -59,10 +60,13 @@ export function MyPayContent() {
     (async () => {
       setLoading(true);
       try {
-        setData(await getMyPay());
+        const result = await getMyPay();
+        startTransition(() => {
+          setData(result);
+          setLoading(false);
+        });
       } catch {
         setError("Couldn't load your pay — try again.");
-      } finally {
         setLoading(false);
       }
     })();
@@ -100,14 +104,7 @@ export function MyPayContent() {
     }
   }
 
-  if (loading && !data) {
-    return (
-      <div className="flex flex-col gap-4">
-        <SkeletonRow className="h-[140px]" />
-        <SkeletonRow className="h-[200px]" />
-      </div>
-    );
-  }
+  if (loading && !data) return <TabLoader label="Loading pay…" />;
 
   if (!data || data.periods.length === 0) {
     return (

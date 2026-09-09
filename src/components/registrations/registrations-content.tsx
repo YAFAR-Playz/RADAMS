@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import { registerStudent, listRegistrations, type RegistrationRow } from "@/lib/actions/registrations";
 import { findStudentByPhone, type StudentDuplicateMatch } from "@/lib/actions/students";
@@ -37,8 +38,10 @@ export function RegistrationsContent() {
   useEffect(() => {
     (async () => {
       const data = await listMyOfferings();
-      setOfferings(data);
-      setOfferingId(data[0]?.id ?? null);
+      startTransition(() => {
+        setOfferings(data);
+        setOfferingId(data[0]?.id ?? null);
+      });
     })();
     (async () => {
       await reload();
@@ -67,10 +70,13 @@ export function RegistrationsContent() {
   async function reload() {
     setLoading(true);
     try {
-      setRegistrations(await listRegistrations());
+      const data = await listRegistrations();
+      startTransition(() => {
+        setRegistrations(data);
+        setLoading(false);
+      });
     } catch {
       setError("Couldn't load recent registrations.");
-    } finally {
       setLoading(false);
     }
   }
@@ -139,6 +145,8 @@ export function RegistrationsContent() {
   const pageRows = filtered.slice(pageStart, pageStart + PAGE_SIZE);
 
   const offeringsLoading = offerings === null;
+
+  if (offeringsLoading && !error) return <TabLoader label="Loading registrations…" />;
 
   return (
     <div className="flex flex-col gap-4">

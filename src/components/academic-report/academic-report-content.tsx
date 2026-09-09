@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import {
   getReportAssignments,
@@ -119,12 +120,14 @@ export function AcademicReportContent({ viewerRole }: { viewerRole: "admin" | "h
     setPage(0);
     setSearch("");
     setExpanded({});
-    getReportAssignments(offeringId, period).then(setAssignments);
+    getReportAssignments(offeringId, period).then((data) => startTransition(() => setAssignments(data)));
     getGeneratedReport(offeringId, period).then(({ meta, students }) => {
-      setMeta(meta);
-      setStudents(students);
+      startTransition(() => {
+        setMeta(meta);
+        setStudents(students);
+      });
     });
-    listReportGenerations(offeringId).then(setHistory);
+    listReportGenerations(offeringId).then((data) => startTransition(() => setHistory(data)));
   }
 
   useEffect(() => {
@@ -322,6 +325,8 @@ export function AcademicReportContent({ viewerRole }: { viewerRole: "admin" | "h
     ]);
     downloadCsv(`academic-report-${period}`, headers, rows);
   }
+
+  if (!offerings && !error) return <TabLoader label="Loading report…" />;
 
   return (
     <div className="flex flex-col gap-4">

@@ -104,6 +104,19 @@ body {
   }
 }
 
+@keyframes tabLoaderBounce {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  40% {
+    transform: translateY(-10px);
+    opacity: 1;
+  }
+}
+
 @keyframes fadeUp {
   from {
     opacity: 0;

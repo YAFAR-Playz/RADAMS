@@ -3,6 +3,7 @@
 import { startTransition, useEffect, useState } from "react";
 import { Icon, type IconName } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import type { Tone } from "@/lib/roles";
 import { toneColors } from "@/lib/tone";
 import {
@@ -176,20 +177,24 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
       }
     })();
     listStaffForCalcMethod().then((data) => {
-      setStaffList(data);
-      if (data.length) {
-        setStaffPickId(data[0].id);
-        setStaffPickMethod(data[0].calcMethod);
-      }
+      startTransition(() => {
+        setStaffList(data);
+        if (data.length) {
+          setStaffPickId(data[0].id);
+          setStaffPickMethod(data[0].calcMethod);
+        }
+      });
     });
     listAllOfferingsForOrg().then((data) => {
-      setOfferings(data);
-      if (data.length) setCoursePickId(data[0].id);
+      startTransition(() => {
+        setOfferings(data);
+        if (data.length) setCoursePickId(data[0].id);
+      });
     });
-    getTrafficLightBands().then(setBands);
+    getTrafficLightBands().then((data) => startTransition(() => setBands(data)));
     if (viewerRole === "admin") {
-      getReportSettings().then(setReportSettingsState);
-      getStaffingNotifyEmails().then(setNotifyEmails);
+      getReportSettings().then((data) => startTransition(() => setReportSettingsState(data)));
+      getStaffingNotifyEmails().then((data) => startTransition(() => setNotifyEmails(data)));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -371,6 +376,14 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
 
   const sym = CURRENCIES.find((c) => c.code === settings?.currency)?.symbol ?? "£";
   const visible = !!settings?.salaryVisibleToHeads;
+
+  const settingsReady =
+    settings !== null &&
+    staffList !== null &&
+    offerings !== null &&
+    bands !== null &&
+    (viewerRole !== "admin" || (reportSettings !== null && notifyEmails !== null));
+  if (!settingsReady && !error) return <TabLoader label="Loading settings…" />;
 
   return (
     <div className="flex flex-col gap-4">

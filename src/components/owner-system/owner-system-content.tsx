@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import { getSystemOverview, type SystemOverview } from "@/lib/actions/owner";
 
 const STATUS_TONE: Record<string, { bg: string; fg: string; label: string }> = {
@@ -20,14 +21,19 @@ export function OwnerSystemContent() {
     (async () => {
       setLoading(true);
       try {
-        setData(await getSystemOverview());
+        const result = await getSystemOverview();
+        startTransition(() => {
+          setData(result);
+          setLoading(false);
+        });
       } catch {
         setError("Couldn't load system overview.");
-      } finally {
         setLoading(false);
       }
     })();
   }, []);
+
+  if (!data && !error) return <TabLoader label="Loading system…" />;
 
   return (
     <div className="flex flex-col gap-4">

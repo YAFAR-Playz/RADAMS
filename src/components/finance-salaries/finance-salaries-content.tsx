@@ -3,6 +3,7 @@
 import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
 import {
   listPeriods,
@@ -682,6 +683,9 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
       setViewingReceiptId(null);
     }
   }
+
+  const salariesReady = periods !== null && (periods.length === 0 || assistants !== null);
+  if (!salariesReady && !error) return <TabLoader label="Loading salaries…" />;
 
   const totalPayroll = (assistants ?? []).reduce((sum, a) => sum + total(a), 0);
   const paidAmt = (assistants ?? []).filter((a) => a.status === "paid").reduce((sum, a) => sum + total(a), 0);

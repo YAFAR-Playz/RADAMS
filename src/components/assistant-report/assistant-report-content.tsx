@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import { getMyGeneratedReport, type GeneratedReportMeta, type GeneratedStudentReport } from "@/lib/actions/academic-report";
 import { formatGradeByScale } from "@/lib/grade-scale";
@@ -67,8 +68,10 @@ export function AssistantReportContent() {
     setPage(0);
     setSearch("");
     getMyGeneratedReport(offeringId, period).then(({ meta, students }) => {
-      setMeta(meta);
-      setStudents(students);
+      startTransition(() => {
+        setMeta(meta);
+        setStudents(students);
+      });
     });
   }
 
@@ -86,6 +89,8 @@ export function AssistantReportContent() {
   const safePage = Math.min(page, pageCount - 1);
   const pageStart = safePage * PAGE_SIZE;
   const pageRows = filtered.slice(pageStart, pageStart + PAGE_SIZE);
+
+  if (!offerings) return <TabLoader label="Loading report…" />;
 
   return (
     <div className="flex flex-col gap-4">

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import { importStudents, previewExistingMatches, type MatchInfo } from "@/lib/actions/import";
 
@@ -73,8 +74,10 @@ export function ImportContent() {
 
   useEffect(() => {
     listMyOfferings().then((data) => {
-      setOfferings(data);
-      setOfferingId(data[0]?.id ?? null);
+      startTransition(() => {
+        setOfferings(data);
+        setOfferingId(data[0]?.id ?? null);
+      });
     });
   }, []);
 
@@ -219,6 +222,8 @@ export function ImportContent() {
     a.click();
     URL.revokeObjectURL(url);
   }
+
+  if (offeringsLoading && !error) return <TabLoader label="Loading import…" />;
 
   return (
     <div className="flex flex-col gap-4">

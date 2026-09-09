@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { startTransition, useEffect, useMemo, useState, useTransition } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import { toneColors } from "@/lib/tone";
 import { STATUS_DEFS, statusDef, type AssignmentStatus } from "@/lib/assignments-data";
 import {
@@ -101,8 +102,10 @@ export function HeadCheckingContent() {
 
   useEffect(() => {
     listMyOfferings().then((data) => {
-      setOfferings(data);
-      setOfferingId(data[0]?.id ?? null);
+      startTransition(() => {
+        setOfferings(data);
+        setOfferingId(data[0]?.id ?? null);
+      });
     });
     Promise.all([getEffectiveTemplate("assignment_student"), getEffectiveTemplate("assignment_parent"), getOrgBrandName()]).then(([tplS, tplP, org]) => {
       setTemplateStudent(tplS);
@@ -277,6 +280,8 @@ export function HeadCheckingContent() {
 
   const offeringsLoading = offerings === null;
   const assignmentsLoading = assignments === null;
+
+  if (offeringsLoading && !error) return <TabLoader label="Loading checking…" />;
 
   return (
     <div className="flex flex-col gap-4">

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import { toneColors } from "@/lib/tone";
 import type { Role, Tone } from "@/lib/roles";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
@@ -79,8 +80,10 @@ export function AttendanceContent({ role }: { role: Role }) {
 
   useEffect(() => {
     listMyOfferings().then((data) => {
-      setOfferings(data);
-      setOfferingId(data[0]?.id ?? null);
+      startTransition(() => {
+        setOfferings(data);
+        setOfferingId(data[0]?.id ?? null);
+      });
     });
     Promise.all([getEffectiveTemplate("attendance_student"), getEffectiveTemplate("attendance_parent"), getOrgBrandName()]).then(([tplS, tplP, org]) => {
       setTemplateStudent(tplS);
@@ -143,11 +146,17 @@ export function AttendanceContent({ role }: { role: Role }) {
       setRosterLoading(true);
       try {
         const data = await getSessionRoster(sessionId);
-        if (!cancelled) setRoster(data);
+        if (!cancelled) {
+          startTransition(() => {
+            setRoster(data);
+            setRosterLoading(false);
+          });
+        }
       } catch {
-        if (!cancelled) setError("Couldn't load this session's roster.");
-      } finally {
-        if (!cancelled) setRosterLoading(false);
+        if (!cancelled) {
+          setError("Couldn't load this session's roster.");
+          setRosterLoading(false);
+        }
       }
     })();
     return () => {
@@ -291,6 +300,8 @@ export function AttendanceContent({ role }: { role: Role }) {
   const waPhone = recipient === "student" ? waStudent?.phone : waStudent?.guardianPhone;
   const waDigits = waPhone ? waPhone.replace(/[^\d]/g, "") : "";
   const waUrl = `https://wa.me/${waDigits}?text=${encodeURIComponent(waMessage)}`;
+
+  if (offeringsLoading && !error) return <TabLoader label="Loading attendance…" />;
 
   return (
     <div className="flex flex-col gap-4">

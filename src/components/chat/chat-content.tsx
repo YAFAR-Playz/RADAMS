@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import {
   listConversations,
   listStaffDirectory,
@@ -54,7 +55,10 @@ export function ChatContent({ role }: { role: Role }) {
   }
 
   useEffect(() => {
-    listConversations().then(setConversations);
+    // Only the FIRST reveal (skeleton -> list) should animate — the interval
+    // poll below keeps conversations quietly in sync and must never replay
+    // that transition, or the list would visibly flash every POLL_MS.
+    listConversations().then((data) => startTransition(() => setConversations(data)));
     const t = setInterval(reloadConversations, POLL_MS * 2);
     return () => clearInterval(t);
   }, []);
@@ -62,9 +66,18 @@ export function ChatContent({ role }: { role: Role }) {
   useEffect(() => {
     if (!activeId) return;
     let cancelled = false;
+    let first = true;
     async function load() {
       const data = await listMessages(activeId as string);
-      if (!cancelled) setMessages(data);
+      if (cancelled) return;
+      // Same reasoning as above: animate the switch into a new conversation,
+      // not every subsequent poll tick for the same one.
+      if (first) {
+        first = false;
+        startTransition(() => setMessages(data));
+      } else {
+        setMessages(data);
+      }
     }
     load();
     markConversationRead(activeId);
@@ -133,6 +146,8 @@ export function ChatContent({ role }: { role: Role }) {
     if (!q) return directory;
     return directory.filter((d) => d.name.toLowerCase().includes(q) || d.role.toLowerCase().includes(q));
   }, [directory, directorySearch]);
+
+  if (!conversations && !error) return <TabLoader label="Loading chat…" />;
 
   return (
     <div className="flex h-[calc(100vh-140px)] min-h-[480px] gap-4">

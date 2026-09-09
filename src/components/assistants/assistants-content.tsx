@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import {
   getAssistantGroups,
@@ -77,13 +78,15 @@ export function AssistantsContent() {
     setLoading(true);
     try {
       const { groups, unassigned } = await getAssistantGroups(id);
-      setGroups(groups);
-      setUnassigned(unassigned);
-      setOpen((prev) => (Object.keys(prev).length ? prev : { [groups[0]?.id ?? ""]: true }));
-      setLinkDrafts(Object.fromEntries(groups.map((g) => [g.id, g.whatsappLink ?? ""])));
+      startTransition(() => {
+        setGroups(groups);
+        setUnassigned(unassigned);
+        setOpen((prev) => (Object.keys(prev).length ? prev : { [groups[0]?.id ?? ""]: true }));
+        setLinkDrafts(Object.fromEntries(groups.map((g) => [g.id, g.whatsappLink ?? ""])));
+        setLoading(false);
+      });
     } catch {
       setError("Couldn't load assistant groups.");
-    } finally {
       setLoading(false);
     }
   }
@@ -201,6 +204,8 @@ export function AssistantsContent() {
   const safeRequestsPage = Math.min(requestsPage, requestsPageCount - 1);
   const requestsPageStart = safeRequestsPage * REQUESTS_PAGE_SIZE;
   const pagedRequests = (requests ?? []).slice(requestsPageStart, requestsPageStart + REQUESTS_PAGE_SIZE);
+
+  if (offeringsLoading && !error) return <TabLoader label="Loading assistants…" />;
 
   return (
     <div className="flex flex-col gap-4">

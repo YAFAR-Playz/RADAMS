@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
 import { listStaffPayments, updatePaySettings, type StaffPaymentRow, type CalcMethod } from "@/lib/actions/staff-payments";
 
@@ -39,14 +40,16 @@ export function StaffPaymentsContent() {
     setLoading(true);
     try {
       const [data, settings] = await Promise.all([listStaffPayments(), getPayrollSettings()]);
-      setRows(data);
-      if (settings) {
-        setCurrency(settings.currency);
-        setHeadFixedPerAssistantEnabled(settings.headFixedPerAssistantEnabled);
-      }
+      startTransition(() => {
+        setRows(data);
+        if (settings) {
+          setCurrency(settings.currency);
+          setHeadFixedPerAssistantEnabled(settings.headFixedPerAssistantEnabled);
+        }
+        setLoading(false);
+      });
     } catch {
       setError("Couldn't load staff payments.");
-    } finally {
       setLoading(false);
     }
   }
@@ -85,6 +88,16 @@ export function StaffPaymentsContent() {
     } finally {
       setSavingId(null);
     }
+  }
+
+  if (!rows) {
+    return error ? (
+      <div className="rounded-[var(--rad-sm)] border border-[var(--danger)] bg-[var(--dangers)] px-4 py-3 text-[13px] font-medium text-[var(--danger)]">
+        {error}
+      </div>
+    ) : (
+      <TabLoader label="Loading payments…" />
+    );
   }
 
   return (

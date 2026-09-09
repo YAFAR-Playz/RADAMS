@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import { toneColors } from "@/lib/tone";
 import { statusDef } from "@/lib/assignments-data";
 import { trackInfo } from "@/lib/oversight-data";
@@ -54,8 +55,12 @@ function AssistantRow({
       if (!expanded || comments !== null) return;
       setLoading(true);
       try {
-        setComments(await getAssistantComments(offeringId, assistant.id));
-      } finally {
+        const data = await getAssistantComments(offeringId, assistant.id);
+        startTransition(() => {
+          setComments(data);
+          setLoading(false);
+        });
+      } catch {
         setLoading(false);
       }
     })();
@@ -238,10 +243,14 @@ export function OversightContent() {
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
-    listHeadOfferings().then((data) => {
-      setOfferings(data);
-      setOfferingId(data[0]?.id ?? null);
-    });
+    listHeadOfferings()
+      .then((data) => {
+        startTransition(() => {
+          setOfferings(data);
+          setOfferingId(data[0]?.id ?? null);
+        });
+      })
+      .catch(() => startTransition(() => setOfferings([])));
   }, []);
 
   useEffect(() => {
@@ -255,9 +264,12 @@ export function OversightContent() {
       setOpen({});
       try {
         const { stats, assistants } = await getOversightSummary(offeringId);
-        setStats(stats);
-        setAssistants(assistants);
-      } finally {
+        startTransition(() => {
+          setStats(stats);
+          setAssistants(assistants);
+          setSummaryLoading(false);
+        });
+      } catch {
         setSummaryLoading(false);
       }
     })();
@@ -294,6 +306,8 @@ export function OversightContent() {
   }
 
   const offeringsLoading = offerings === null;
+
+  if (offeringsLoading) return <TabLoader label="Loading oversight…" />;
 
   return (
     <div className="flex flex-col gap-4">
