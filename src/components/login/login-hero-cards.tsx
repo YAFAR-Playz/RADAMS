@@ -27,8 +27,8 @@ const SCENES: Scene[] = [
   },
 ];
 
-const CYCLE_MS = 2600;
-const FADE_MS = 200;
+const CYCLE_MS = 3200;
+const FADE_MS = 350;
 
 export function LoginHeroCards({ brand }: { brand: string }) {
   const [index, setIndex] = useState(0);
