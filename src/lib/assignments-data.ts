@@ -3,6 +3,8 @@ import type { IconName } from "@/components/icons";
 
 export type AssignmentStatus = "checked" | "submitted" | "late" | "missing" | "excused";
 
+export type MessageRecipient = "student" | "parent";
+
 export type StatusDef = {
   key: AssignmentStatus;
   label: string;

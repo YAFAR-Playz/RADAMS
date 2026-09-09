@@ -6,7 +6,7 @@ import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
 import { PageHeader } from "@/components/ui/page-header";
 import { toneColors } from "@/lib/tone";
-import { STATUS_DEFS, statusDef, type AssignmentStatus } from "@/lib/assignments-data";
+import { STATUS_DEFS, statusDef, type AssignmentStatus, type MessageRecipient } from "@/lib/assignments-data";
 import {
   listMyOfferings,
   listAssignmentsForOffering,
@@ -25,7 +25,7 @@ import { matchesStudentQuery } from "@/lib/student-search";
 
 const PAGE_SIZE = 10;
 
-type Recipient = "student" | "parent";
+type Recipient = MessageRecipient;
 
 function buildMessage(
   template: string,
@@ -263,9 +263,9 @@ export function HeadCheckingContent() {
 
   async function onConfirmSend() {
     if (!assignmentId || !modalStudent) return;
-    patchLocal(modalStudent.studentId, { sentAt: new Date().toISOString() });
+    patchLocal(modalStudent.studentId, { sentAt: new Date().toISOString(), recipient });
     try {
-      await markSent(assignmentId, modalStudent.studentId);
+      await markSent(assignmentId, modalStudent.studentId, recipient);
     } catch {
       // Non-fatal — WhatsApp still opens via the link below.
     }

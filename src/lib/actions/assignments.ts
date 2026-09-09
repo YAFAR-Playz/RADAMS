@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
-import type { AssignmentStatus } from "@/lib/assignments-data";
+import type { AssignmentStatus, MessageRecipient } from "@/lib/assignments-data";
 import { resolveTemplateFlags } from "@/lib/assignment-template-fallback";
 
 export type OfferingOption = { id: string; label: string };
@@ -31,6 +31,7 @@ export type RosterStudent = {
   grade: string | null;
   comment: string | null;
   sentAt: string | null;
+  recipient: MessageRecipient | null;
 };
 
 export async function listMyOfferings(): Promise<OfferingOption[]> {
@@ -164,12 +165,12 @@ export async function getRoster(assignmentId: string): Promise<RosterStudent[]> 
   // this course's size (same class of bug fixed in attendance.ts).
   // Paginated as a backstop since a large course's log rows can also clear
   // the 1000-row cap on their own.
-  const logs: { student_id: string; status: string | null; grade: string | null; comment: string | null; sent_at: string | null }[] = [];
+  const logs: { student_id: string; status: string | null; grade: string | null; comment: string | null; sent_at: string | null; recipient: string | null }[] = [];
   const LOGS_PAGE_SIZE = 1000;
   for (let from = 0; ; from += LOGS_PAGE_SIZE) {
     const { data: page } = await supabase
       .from("assignment_logs")
-      .select("student_id, status, grade, comment, sent_at")
+      .select("student_id, status, grade, comment, sent_at, recipient")
       .eq("assignment_id", assignmentId)
       .range(from, from + LOGS_PAGE_SIZE - 1);
     if (!page || page.length === 0) break;
@@ -199,6 +200,7 @@ export async function getRoster(assignmentId: string): Promise<RosterStudent[]> 
         grade: log?.grade ?? null,
         comment: log?.comment ?? null,
         sentAt: log?.sent_at ?? null,
+        recipient: (log?.recipient as MessageRecipient | null) ?? null,
       };
     })
     .filter((x): x is RosterStudent => !!x)
@@ -208,7 +210,13 @@ export async function getRoster(assignmentId: string): Promise<RosterStudent[]> 
 async function upsertLog(
   assignmentId: string,
   studentId: string,
-  patch: { status?: AssignmentStatus | null; grade?: string | null; comment?: string | null; sentAt?: string | null }
+  patch: {
+    status?: AssignmentStatus | null;
+    grade?: string | null;
+    comment?: string | null;
+    sentAt?: string | null;
+    recipient?: MessageRecipient | null;
+  }
 ) {
   const profile = await getCurrentProfile();
   if (!profile) throw new Error("Not authenticated");
@@ -232,6 +240,7 @@ async function upsertLog(
   if (patch.grade !== undefined) row.grade = patch.grade;
   if (patch.comment !== undefined) row.comment = patch.comment;
   if (patch.sentAt !== undefined) row.sent_at = patch.sentAt;
+  if (patch.recipient !== undefined) row.recipient = patch.recipient;
 
   const { error } = await supabase.from("assignment_logs").upsert(row, { onConflict: "assignment_id,student_id" });
   if (error) throw new Error(error.message);
@@ -266,6 +275,6 @@ export async function setComment(assignmentId: string, studentId: string, commen
   await upsertLog(assignmentId, studentId, { comment });
 }
 
-export async function markSent(assignmentId: string, studentId: string) {
-  await upsertLog(assignmentId, studentId, { sentAt: new Date().toISOString() });
+export async function markSent(assignmentId: string, studentId: string, recipient: MessageRecipient) {
+  await upsertLog(assignmentId, studentId, { sentAt: new Date().toISOString(), recipient });
 }

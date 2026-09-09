@@ -17,7 +17,14 @@ import {
   type AssistantSummary,
   type OversightStats,
   type OversightComment,
+  type RecipientFilter,
 } from "@/lib/actions/oversight";
+
+const RECIPIENT_FILTERS: { value: RecipientFilter; label: string }[] = [
+  { value: "both", label: "Both" },
+  { value: "parent", label: "Parents" },
+  { value: "student", label: "Students" },
+];
 import { downloadCsv } from "@/lib/csv-export";
 
 const COMMENTS_PAGE_SIZE = 10;
@@ -33,11 +40,13 @@ function ProgressBar({ pct, color }: { pct: number; color: string }) {
 function AssistantRow({
   assistant,
   offeringId,
+  recipientFilter,
   expanded,
   onToggle,
 }: {
   assistant: AssistantSummary;
   offeringId: string;
+  recipientFilter: RecipientFilter;
   expanded: boolean;
   onToggle: () => void;
 }) {
@@ -162,6 +171,7 @@ function AssistantRow({
             pageComments.map((c) => {
               const def = statusDef(c.status);
               const { bg, fg } = def ? toneColors(def.tone) : { bg: "var(--surface2)", fg: "var(--muted)" };
+              const effectivelySent = recipientFilter === "both" ? c.sent : c.sent && c.recipient === recipientFilter;
               return (
                 <div
                   key={c.studentId + c.assignment}
@@ -193,10 +203,11 @@ function AssistantRow({
                   </span>
                   <span
                     className="inline-flex flex-none items-center gap-[5px] text-[11.5px] font-semibold"
-                    style={{ color: c.sent ? "var(--ok)" : "var(--warn)" }}
+                    style={{ color: effectivelySent ? "var(--ok)" : "var(--warn)" }}
                   >
-                    <Icon name={c.sent ? "check2" : "clock"} size={13} />
-                    {c.sent ? "Sent" : "Pending"}
+                    <Icon name={effectivelySent ? "check2" : "clock"} size={13} />
+                    {effectivelySent ? "Sent" : "Pending"}
+                    {effectivelySent && c.recipient && <span className="font-normal text-[var(--subtle)]">· {c.recipient === "parent" ? "Parent" : "Student"}</span>}
                   </span>
                 </div>
               );
@@ -237,6 +248,7 @@ function AssistantRow({
 export function OversightContent() {
   const [offerings, setOfferings] = useState<OfferingOption[] | null>(null);
   const [offeringId, setOfferingId] = useState<string | null>(null);
+  const [recipientFilter, setRecipientFilter] = useState<RecipientFilter>("both");
   const [stats, setStats] = useState<OversightStats | null>(null);
   const [assistants, setAssistants] = useState<AssistantSummary[] | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -264,7 +276,7 @@ export function OversightContent() {
       setSummaryLoading(true);
       setOpen({});
       try {
-        const { stats, assistants } = await getOversightSummary(offeringId);
+        const { stats, assistants } = await getOversightSummary(offeringId, recipientFilter);
         startTransition(() => {
           setStats(stats);
           setAssistants(assistants);
@@ -274,7 +286,7 @@ export function OversightContent() {
         setSummaryLoading(false);
       }
     })();
-  }, [offeringId]);
+  }, [offeringId, recipientFilter]);
 
   const current = useMemo(() => offerings?.find((o) => o.id === offeringId) ?? null, [offerings, offeringId]);
 
@@ -364,6 +376,27 @@ export function OversightContent() {
           )}
         </div>
 
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-[2px] flex-none text-[12.5px] font-semibold text-[var(--muted)]">Messages to</span>
+          {RECIPIENT_FILTERS.map((f) => {
+            const active = f.value === recipientFilter;
+            return (
+              <button
+                key={f.value}
+                onClick={() => setRecipientFilter(f.value)}
+                className="flex flex-none items-center gap-[7px] rounded-full border px-[14px] py-2 text-[13px] font-semibold"
+                style={
+                  active
+                    ? { borderColor: "var(--brand)", background: "var(--brand)", color: "var(--brandfg)" }
+                    : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
+                }
+              >
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
+
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {summaryLoading || !stats
             ? Array.from({ length: 4 }, (_, i) => <SkeletonRow key={i} className="h-[62px]" />)
@@ -402,6 +435,7 @@ export function OversightContent() {
                 key={a.id}
                 assistant={a}
                 offeringId={offeringId}
+                recipientFilter={recipientFilter}
                 expanded={!!open[a.id]}
                 onToggle={() => toggleAssistant(a.id)}
               />
