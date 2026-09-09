@@ -75,6 +75,7 @@ export function StudentsContent({ role }: { role: Role }) {
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"enroll" | "name">("enroll");
   const [paymentFilter, setPaymentFilter] = useState<"all" | "paid" | "pending" | "installments">("all");
+  const [unassignedOnly, setUnassignedOnly] = useState(false);
   const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -231,10 +232,13 @@ export function StudentsContent({ role }: { role: Role }) {
   const offeringsLoading = offerings === null;
   const current = offerings?.find((o) => o.id === offeringId) ?? null;
 
+  const canFilterUnassigned = role === "admin" || role === "head" || role === "registration";
+
   const filtered = useMemo(() => {
     if (!students) return [];
     const rows = students.filter((s) => {
       if (!matchesStudentQuery(search, s.name, s.studentCode)) return false;
+      if (canFilterUnassigned && unassignedOnly && (s.assistantId || s.leftAt)) return false;
       if (isRegistration && paymentFilter !== "all") {
         const payment = paymentByStudent[s.studentId];
         if (paymentFilter === "paid" && payment?.status !== "paid") return false;
@@ -247,7 +251,7 @@ export function StudentsContent({ role }: { role: Role }) {
       if (sortBy === "name") return a.name.localeCompare(b.name);
       return new Date(b.enrolledAt).getTime() - new Date(a.enrolledAt).getTime();
     });
-  }, [students, search, sortBy, isRegistration, paymentFilter, paymentByStudent]);
+  }, [students, search, sortBy, isRegistration, paymentFilter, paymentByStudent, canFilterUnassigned, unassignedOnly]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
@@ -645,6 +649,35 @@ export function StudentsContent({ role }: { role: Role }) {
             className="h-full w-full border-none bg-transparent text-[13.5px] text-[var(--text)] outline-none"
           />
         </div>
+        {canFilterUnassigned && (
+          <button
+            onClick={() => {
+              setUnassignedOnly((v) => !v);
+              setPage(0);
+            }}
+            className="flex flex-none items-center gap-[6px] rounded-full border px-3 py-[7px] text-[12.5px] font-semibold"
+            style={
+              unassignedOnly
+                ? { borderColor: "var(--brand)", background: "var(--brand)", color: "var(--brandfg)" }
+                : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
+            }
+          >
+            <Icon name="user-plus" size={13} />
+            Unassigned only
+            {unassignedCount > 0 && (
+              <span
+                className="rounded-full px-[6px] py-[1px] text-[11px]"
+                style={
+                  unassignedOnly
+                    ? { background: "rgba(255,255,255,0.25)", color: "var(--brandfg)" }
+                    : { background: "var(--surface2)", color: "var(--subtle)" }
+                }
+              >
+                {unassignedCount}
+              </span>
+            )}
+          </button>
+        )}
         {isRegistration ? (
           <div className="flex flex-wrap items-center gap-[6px]">
             {(
