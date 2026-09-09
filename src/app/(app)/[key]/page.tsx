@@ -32,6 +32,7 @@ import { SettingsContent } from "@/components/settings/settings-content";
 import { OwnerUsersContent } from "@/components/owner-users/owner-users-content";
 import { OwnerSystemContent } from "@/components/owner-system/owner-system-content";
 import { HistoryContent } from "@/components/history/history-content";
+import { OwnerHistoryContent } from "@/components/owner-history/owner-history-content";
 import { AcademicReportContent } from "@/components/academic-report/academic-report-content";
 import { AssistantReportContent } from "@/components/assistant-report/assistant-report-content";
 import { WeakTopicsContent } from "@/components/weak-topics/weak-topics-content";
@@ -151,6 +152,10 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
 
   if (key === "history" && profile.role === "admin") {
     return <HistoryContent />;
+  }
+
+  if (key === "history" && profile.role === "owner") {
+    return <OwnerHistoryContent />;
   }
 
   if (key === "report" && (profile.role === "admin" || profile.role === "head")) {

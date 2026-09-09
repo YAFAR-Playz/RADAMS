@@ -64,19 +64,56 @@ export async function listRecentActivityAcrossOrgs(limit = 8): Promise<PlatformA
   });
 }
 
+// Owner's full History tab — same 30-day window and category filter as the
+// org-scoped listActivityLog below, but spans every org (optionally scoped
+// to one) since Owner has no org of their own to filter by.
+export async function listPlatformActivityLog(orgId?: string, category?: ActivityCategory): Promise<PlatformActivityRow[]> {
+  const profile = await getCurrentProfile();
+  if (!profile || profile.role !== "owner") return [];
+  const admin = createAdminClient();
+  const since = new Date(Date.now() - RETENTION_DAYS * 86400000).toISOString();
+
+  let query = admin
+    .from("activity_log")
+    .select("id, actor_name, category, summary, created_at, organizations(name)")
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(5000);
+  if (orgId) query = query.eq("org_id", orgId);
+  if (category) query = query.eq("category", category);
+
+  const { data } = await query;
+  return (data ?? []).map((r) => {
+    const org = Array.isArray(r.organizations) ? r.organizations[0] : r.organizations;
+    return {
+      id: r.id,
+      actorName: r.actor_name,
+      category: r.category as ActivityCategory,
+      summary: r.summary,
+      createdAt: r.created_at,
+      orgName: org?.name ?? "—",
+    };
+  });
+}
+
 export async function listActivityLog(category?: ActivityCategory): Promise<ActivityLogRow[]> {
   const profile = await getCurrentProfile();
   if (!profile || profile.role !== "admin" || !profile.org) return [];
   const supabase = await createClient();
   const since = new Date(Date.now() - RETENTION_DAYS * 86400000).toISOString();
 
+  // No artificial page-size cap here beyond the 30-day window itself — a
+  // busy org's admin should see every logged action in that window, not
+  // just however many happen to fit under some arbitrary count. The limit
+  // below is a sanity ceiling against a runaway logging bug, not a real
+  // page size (HistoryContent paginates the full result client-side).
   let query = supabase
     .from("activity_log")
     .select("id, actor_name, category, summary, created_at")
     .eq("org_id", profile.org.id)
     .gte("created_at", since)
     .order("created_at", { ascending: false })
-    .limit(300);
+    .limit(5000);
   if (category) query = query.eq("category", category);
 
   const { data } = await query;

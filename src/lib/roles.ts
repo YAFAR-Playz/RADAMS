@@ -38,6 +38,7 @@ const NAV_DEF: Record<Role, NavItem[]> = {
     { icon: "palette", label: "Branding", key: "branding" },
     { icon: "mail", label: "Templates", key: "templates" },
     { icon: "shield", label: "System", key: "system" },
+    { icon: "clock", label: "History", key: "history" },
     { icon: "message", label: "Chat", key: "chat" },
   ],
   admin: [

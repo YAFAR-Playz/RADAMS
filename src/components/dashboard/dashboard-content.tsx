@@ -88,7 +88,11 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+    <section className="relative overflow-hidden rounded-[18px] border border-[var(--border)] bg-[var(--surface)] shadow-[0_1px_2px_rgba(16,23,41,0.04),0_14px_32px_rgba(16,23,41,0.06)]">
+      <div
+        className="absolute inset-x-0 top-0 h-[3px]"
+        style={{ background: "linear-gradient(90deg, transparent, var(--brand), transparent)" }}
+      />
       <header className="flex items-center justify-between gap-2 border-b border-[var(--border2)] px-[18px] py-[15px]">
         <div className="min-w-0">
           <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">{title}</h3>
@@ -142,8 +146,9 @@ function KpiRow({ kpis }: { kpis: Kpi[] | null }) {
         return (
           <div
             key={k.label}
-            className="flex flex-col gap-[11px] rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[15px] pb-[14px] shadow-[var(--shadow)]"
+            className="relative flex flex-col gap-[11px] overflow-hidden rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-[15px] pb-[14px] shadow-[0_1px_2px_rgba(16,23,41,0.04),0_10px_24px_rgba(16,23,41,0.06)]"
           >
+            <div className="absolute inset-x-0 top-0 h-[3px]" style={{ background: fg }} />
             <div className="flex items-center justify-between">
               <div
                 className="flex h-[34px] w-[34px] items-center justify-center rounded-[9px]"
@@ -983,14 +988,23 @@ export function DashboardContent({
 
   return (
     <div className="flex flex-col">
-      <div className="mb-[18px]">
-        <div className="text-[12.5px] font-semibold uppercase tracking-[0.01em] text-[var(--subtle)]">
-          {dateLabel()}
+      <div
+        className="relative mb-[18px] overflow-hidden rounded-[20px] border border-[var(--border)] p-[20px_24px] sm:p-[24px_28px]"
+        style={{ background: "linear-gradient(135deg, var(--brands) 0%, var(--surface) 60%)" }}
+      >
+        <div
+          className="pointer-events-none absolute -right-[70px] -top-[90px] h-[220px] w-[220px] rounded-full opacity-[0.16] blur-[6px]"
+          style={{ background: "radial-gradient(circle, var(--brand) 0%, transparent 70%)" }}
+        />
+        <div className="relative">
+          <div className="text-[12.5px] font-semibold uppercase tracking-[0.01em] text-[var(--subtle)]">
+            {dateLabel()}
+          </div>
+          <h1 className="m-0 mt-[3px] mb-1 text-[24px] font-bold tracking-[-0.02em] text-[var(--text)] sm:text-[26px]">
+            {greetingFor(firstName)}
+          </h1>
+          <p className="m-0 text-[14px] text-[var(--muted)]">{dashboardSubtitle(role, orgName)}</p>
         </div>
-        <h1 className="m-0 mt-[3px] mb-1 text-[23px] font-semibold tracking-[-0.02em] text-[var(--text)]">
-          {greetingFor(firstName)}
-        </h1>
-        <p className="m-0 text-[14px] text-[var(--muted)]">{dashboardSubtitle(role, orgName)}</p>
       </div>
 
       <KpiRow kpis={kpis} />

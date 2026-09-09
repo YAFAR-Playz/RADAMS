@@ -142,7 +142,7 @@ export function HrRequestsContent() {
           Add / remove / replace requests from course heads. Review the full details, then approve or decline.
         </p>
         <div className="mt-4 grid grid-cols-3 gap-3">
-          {loading || !requests
+          {loading
             ? Array.from({ length: 3 }, (_, i) => <SkeletonRow key={i} className="h-[56px]" />)
             : stats.map((s) => (
                 <div key={s.label} className="rounded-[var(--rad-sm)] border border-[var(--border2)] bg-[var(--surface2)] p-[12px_14px]">
@@ -156,7 +156,7 @@ export function HrRequestsContent() {
       </div>
 
       <div className="flex flex-col gap-3">
-        {loading && !requests ? (
+        {loading ? (
           Array.from({ length: 3 }, (_, i) => <SkeletonRow key={i} className="h-[70px]" />)
         ) : requests && requests.length === 0 ? (
           <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-10 text-center text-[13.5px] text-[var(--muted)] shadow-[var(--shadow)]">
