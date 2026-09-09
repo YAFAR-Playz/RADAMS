@@ -85,17 +85,28 @@ export async function getAdminDashboard(): Promise<AdminDashboard> {
   const today = new Date().toISOString().slice(0, 10);
   const pendingTasks = assignmentRows.filter((a) => !a.closed_at && a.due_date && a.due_date < today).length;
 
-  // One count-only query per offering rather than fetching every enrollment
-  // row for the whole org — a single unbounded select here silently
-  // truncated at Supabase's default 1000-row cap once enrollments passed
-  // that count, under-reporting students for every offering after the cut.
+  // One paginated bulk fetch instead of one round trip per offering — an org
+  // running many courses used to pay a full network round trip per offering
+  // just to count enrollments, which is the slowest part of this dashboard
+  // for exactly the orgs with the most courses. Paginating (rather than a
+  // single unbounded select) still avoids Postgrest's default 1000-row cap,
+  // which is what the old per-offering counts were written to work around.
   const studentsByOffering = new Map<string, number>();
-  await Promise.all(
-    offeringIds.map(async (id) => {
-      const { count } = await supabase.from("enrollments").select("id", { count: "exact", head: true }).eq("offering_id", id);
-      studentsByOffering.set(id, count ?? 0);
-    })
-  );
+  const ENROLLMENT_COUNT_PAGE_SIZE = 1000;
+  if (offeringIds.length) {
+    for (let from = 0; ; from += ENROLLMENT_COUNT_PAGE_SIZE) {
+      const { data: page } = await supabase
+        .from("enrollments")
+        .select("offering_id")
+        .in("offering_id", offeringIds)
+        .range(from, from + ENROLLMENT_COUNT_PAGE_SIZE - 1);
+      if (!page || page.length === 0) break;
+      for (const row of page) {
+        studentsByOffering.set(row.offering_id, (studentsByOffering.get(row.offering_id) ?? 0) + 1);
+      }
+      if (page.length < ENROLLMENT_COUNT_PAGE_SIZE) break;
+    }
+  }
 
   const roleCount = new Map<string, number>();
   for (const s of staff ?? []) {

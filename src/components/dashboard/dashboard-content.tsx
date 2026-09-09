@@ -451,14 +451,16 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+const ACTIVITY_PREVIEW_COUNT = 6;
+
 function ActivityCard({ rows }: { rows: PlatformActivityRow[] }) {
   return (
-    <Card title="Recent activity" subtitle="Across every organization">
+    <Card title="Recent activity" subtitle="Across every organization" action={<ViewAllButton href="/history">View more</ViewAllButton>}>
       <div className="px-2 py-[7px]">
         {rows.length === 0 ? (
           <EmptyRow>No recent activity.</EmptyRow>
         ) : (
-          rows.map((a) => (
+          rows.slice(0, ACTIVITY_PREVIEW_COUNT).map((a) => (
             <div key={a.id} className="flex gap-[11px] p-[10px_11px]">
               <div className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-[8px] bg-[var(--surface2)] text-[var(--muted)]">
                 <Icon name={CATEGORY_ICON[a.category]} size={15} />
