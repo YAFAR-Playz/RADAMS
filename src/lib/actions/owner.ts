@@ -334,7 +334,7 @@ export async function listAllStaff(params: { page?: number; search?: string; rol
 
   let query = supabase
     .from("profiles")
-    .select("id, full_name, initials, email, phone, role, org_id, created_at, is_main_admin, organizations(name)", { count: "exact" })
+    .select("id, full_name, initials, email, phone, role, org_id, created_at, is_main_admin, organizations!profiles_org_id_fkey(name)", { count: "exact" })
     .order("full_name", { ascending: true });
 
   if (params.search?.trim()) {
@@ -391,7 +391,10 @@ export async function getSystemOverview(): Promise<SystemOverview> {
   await requireOwner();
   const supabase = await createClient();
 
-  const { data: profiles } = await supabase.from("profiles").select("full_name, role, created_at, organizations(name)").order("created_at", { ascending: false });
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("full_name, role, created_at, organizations!profiles_org_id_fkey(name)")
+    .order("created_at", { ascending: false });
   const { data: orgs } = await supabase.from("organizations").select("status");
 
   const roleCounts = new Map<string, number>();

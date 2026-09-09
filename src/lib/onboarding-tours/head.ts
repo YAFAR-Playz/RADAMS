@@ -50,6 +50,14 @@ export const HEAD_TOUR: TourStep[] = [
   },
   {
     path: "/students",
+    selector: "students-unassigned-toggle",
+    title: "Clear the filter",
+    body: "Everyone's assigned now, so this filter would just show an empty list — turn it back off to see your full roster again.",
+    placement: "bottom",
+    requireRealClick: true,
+  },
+  {
+    path: "/students",
     selector: "students-traffic-light",
     title: "The traffic light system",
     body: "Every student gets a Green / Yellow / Red dot based on their recent grades — green is on track, yellow is a caution, red needs attention. Finance sets the grade thresholds for these in Organization settings; you just read them here.",
