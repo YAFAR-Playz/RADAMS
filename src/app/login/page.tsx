@@ -1,5 +1,5 @@
-import { Icon } from "@/components/icons";
 import { LoginForm } from "@/components/login/login-form";
+import { LoginHeroCards } from "@/components/login/login-hero-cards";
 import { getPlatformDefaultBranding } from "@/lib/actions/branding";
 
 export default async function LoginPage() {
@@ -11,7 +11,6 @@ export default async function LoginPage() {
     "--brandfg": "#ffffff",
     "--brands": `color-mix(in srgb, ${brand} 9%, var(--surface))`,
   } as React.CSSProperties;
-  const bars = [40, 68, 52, 85, 62];
 
   return (
     <div
@@ -49,100 +48,7 @@ export default async function LoginPage() {
           <span className="text-[23px] font-bold tracking-[-0.02em] text-[var(--text)]">{branding.name}</span>
         </div>
 
-        {/* HERO — floating product snapshot cards */}
-        <div className="relative my-10 flex-1">
-          <div
-            className="pointer-events-none absolute left-1/2 top-1/2 h-[280px] w-[280px] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-[0.14] blur-[30px]"
-            style={{ background: `radial-gradient(circle, ${brand} 0%, transparent 70%)` }}
-          />
-
-          {/* Payroll card */}
-          <div
-            className="absolute left-[6%] top-[8%] w-[240px] rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-[18px] shadow-[0_18px_36px_rgba(16,23,41,0.12)]"
-            style={{ transform: "rotate(-6deg)" }}
-          >
-            <div className="flex items-center gap-[9px]">
-              <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] bg-[var(--brands)] text-[var(--brand)]">
-                <Icon name="wallet" size={16} />
-              </div>
-              <div>
-                <p className="m-0 text-[13px] font-semibold text-[var(--text)]">July payroll</p>
-                <p className="m-0 text-[11.5px] text-[var(--subtle)]">42 staff · on time</p>
-              </div>
-            </div>
-            <div className="mt-[14px] flex items-center justify-between rounded-[10px] bg-[var(--surface2)] px-3 py-[9px]">
-              <span className="text-[15px] font-bold tracking-[-0.01em] text-[var(--text)]">$18,240</span>
-              <span
-                className="rounded-full px-[9px] py-[3px] text-[10.5px] font-semibold"
-                style={{ background: "color-mix(in srgb, #16a34a 16%, transparent)", color: "#15803d" }}
-              >
-                Released
-              </span>
-            </div>
-          </div>
-
-          {/* Attendance card */}
-          <div
-            className="absolute right-[2%] top-[30%] w-[210px] rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-[18px] shadow-[0_18px_36px_rgba(16,23,41,0.12)]"
-            style={{ transform: "rotate(4deg)" }}
-          >
-            <div className="flex items-center gap-[9px]">
-              <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] bg-[var(--brands)] text-[var(--brand)]">
-                <Icon name="chart" size={16} />
-              </div>
-              <div>
-                <p className="m-0 text-[13px] font-semibold text-[var(--text)]">Attendance</p>
-                <p className="m-0 text-[11.5px] text-[var(--subtle)]">this month</p>
-              </div>
-            </div>
-            <div className="mt-[16px] flex h-[46px] items-end gap-[6px]">
-              {bars.map((h, i) => (
-                <div
-                  key={i}
-                  className="flex-1 rounded-t-[3px]"
-                  style={{
-                    height: `${h}%`,
-                    background: i === bars.length - 1 ? "var(--brand)" : "color-mix(in srgb, var(--brand) 30%, transparent)",
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Team card */}
-          <div
-            className="absolute bottom-[6%] left-[16%] w-[220px] rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-[18px] shadow-[0_18px_36px_rgba(16,23,41,0.12)]"
-            style={{ transform: "rotate(-3deg)" }}
-          >
-            <div className="flex items-center gap-[9px]">
-              <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] bg-[var(--brands)] text-[var(--brand)]">
-                <Icon name="users" size={16} />
-              </div>
-              <div>
-                <p className="m-0 text-[13px] font-semibold text-[var(--text)]">12 assistants</p>
-                <p className="m-0 text-[11.5px] text-[var(--subtle)]">auto-assigned today</p>
-              </div>
-            </div>
-            <div className="mt-[14px] flex">
-              {[0, 1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="h-7 w-7 rounded-full border-2 border-[var(--surface)] text-[10px] font-bold text-[var(--brandfg)]"
-                  style={{
-                    marginLeft: i === 0 ? 0 : -8,
-                    background: `color-mix(in srgb, var(--brand) ${70 - i * 12}%, var(--subtle))`,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    zIndex: 4 - i,
-                  }}
-                >
-                  {i < 3 ? "" : "+9"}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <LoginHeroCards brand={brand} />
 
         <div className="relative">
           <h2 className="m-0 mb-[10px] max-w-[400px] text-[28px] font-semibold leading-[1.25] tracking-[-0.02em] text-[var(--text)]">
