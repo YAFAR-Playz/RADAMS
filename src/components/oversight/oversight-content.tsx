@@ -342,7 +342,7 @@ export function OversightContent() {
           )
         }
       >
-        <div className="flex flex-wrap items-center gap-2">
+        <div data-tour="oversight-offering-picker" className="flex flex-wrap items-center gap-2">
           <span className="mr-[2px] flex-none text-[12.5px] font-semibold text-[var(--muted)]">Offering</span>
           {offeringsLoading ? (
             <>
@@ -397,7 +397,7 @@ export function OversightContent() {
           })}
         </div>
 
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div data-tour="oversight-stats" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {summaryLoading || !stats
             ? Array.from({ length: 4 }, (_, i) => <SkeletonRow key={i} className="h-[62px]" />)
             : statRows.map((s) => (

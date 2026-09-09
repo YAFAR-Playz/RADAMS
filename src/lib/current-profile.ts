@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Role } from "@/lib/roles";
 
+export type OnboardingTourStatus = "pending" | "completed" | "skipped";
+
 export type CurrentProfile = {
   id: string;
   role: Role;
@@ -9,6 +11,8 @@ export type CurrentProfile = {
   email: string;
   avatarUrl: string | null;
   org: { id: string; name: string; brandName: string; logoLetter: string; logoUrl: string | null; primaryColor: string; corner: "soft" | "sharp" } | null;
+  onboardingTourStatus: OnboardingTourStatus;
+  isTouringDemo: boolean;
 };
 
 // Shared by getCurrentProfile and the auth callback page — the latter needs
@@ -56,7 +60,7 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, role, full_name, initials, email, org_id, avatar_url")
+    .select("id, role, full_name, initials, email, org_id, avatar_url, onboarding_tour_status, pre_demo_org_id")
     .eq("id", userData.user.id)
     // Defense in depth alongside the auth-level ban applied when staff are
     // removed — a still-valid session shouldn't resolve to a profile once
@@ -76,5 +80,7 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
     email: profile.email,
     avatarUrl: profile.avatar_url,
     org,
+    onboardingTourStatus: (profile.onboarding_tour_status as OnboardingTourStatus | null) ?? "pending",
+    isTouringDemo: profile.pre_demo_org_id !== null,
   };
 }

@@ -545,6 +545,7 @@ export function StudentsContent({ role }: { role: Role }) {
           <>
             {canReassignAssistants && (
               <button
+                data-tour="students-auto-assign"
                 onClick={() => setAutoOpen(true)}
                 disabled={unassignedCount === 0 || !offeringId}
                 title={unassignedCount === 0 ? "No unassigned students on this course" : "Auto-assign unassigned students"}
@@ -648,6 +649,7 @@ export function StudentsContent({ role }: { role: Role }) {
         </div>
         {canFilterUnassigned && (
           <button
+            data-tour="students-unassigned-toggle"
             onClick={() => {
               setUnassignedOnly((v) => !v);
               setPage(0);

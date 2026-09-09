@@ -248,6 +248,7 @@ export function HeadAssignmentsContent() {
         subtitle="Each assignment is scoped to a course offering and logged by each student's assistant."
         actions={
           <button
+            data-tour="assignments-new"
             onClick={openNewModal}
             disabled={!offeringId}
             className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[15px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)] disabled:opacity-60"

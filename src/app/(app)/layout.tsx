@@ -6,6 +6,11 @@ import { listAllStaffingRequests } from "@/lib/actions/hr";
 import { getAssistantPendingLogCount } from "@/lib/actions/dashboard";
 import { getPlatformDefaultBranding } from "@/lib/actions/branding";
 import { hasUnviewedReleasedPay } from "@/lib/actions/pay";
+import { roleHasOnboardingTour } from "@/lib/onboarding-roles";
+import { getTourSteps } from "@/lib/onboarding-tours";
+import { DemoBanner } from "@/components/onboarding/demo-banner";
+import { OnboardingPrompt } from "@/components/onboarding/onboarding-prompt";
+import { TourRunner } from "@/components/onboarding/tour-runner";
 
 // The tab title otherwise falls back to the root layout's static "ZAD-AMS" —
 // once inside an org, show that org's own name instead.
@@ -70,6 +75,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div style={brandVars as React.CSSProperties}>
+      {profile.isTouringDemo && <DemoBanner />}
       <AppShell
         navItems={navItems}
         person={{ name: profile.fullName, label: ROLE_LABELS[profile.role], initials: profile.initials, avatarUrl: profile.avatarUrl }}
@@ -80,6 +86,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       >
         {children}
       </AppShell>
+      {profile.isTouringDemo && <TourRunner steps={getTourSteps(profile.role)} />}
+      {!profile.isTouringDemo && profile.onboardingTourStatus === "pending" && roleHasOnboardingTour(profile.role) && <OnboardingPrompt />}
     </div>
   );
 }
