@@ -18,6 +18,11 @@ const FIND_TARGET_POLL_MS = 120;
 // a target that only settles into its final position/element after the
 // first successful resolution.
 const CONFIRM_POLL_MS = 500;
+// A deliberate pause between a target first appearing (a new page/modal
+// rendering) and the spotlight actually jumping to it — without this the
+// glow can snap onto a field the instant it mounts, before the user has
+// even registered the new screen, which reads as rushed/glitchy.
+const SETTLE_MS = 600;
 const TRANSITION = "top 220ms ease, left 220ms ease, right 220ms ease, bottom 220ms ease, width 220ms ease, height 220ms ease, opacity 200ms ease";
 
 type Mode = "nav-menu" | "nav-link" | "content";
@@ -111,6 +116,10 @@ export function TourRunner({ steps }: { steps: TourStep[] }) {
     if (!step) return;
     let cancelled = false;
     let lastEl: Element | null = null;
+    // Distinct from `lastEl`: only set once the settle delay below has
+    // actually applied a target to state, so a confirm-poll tick landing
+    // inside that delay window doesn't race ahead and apply it early.
+    let appliedEl: Element | null = null;
     const startedAt = Date.now();
     const findingId = requestAnimationFrame(() => {
       setFinding(true);
@@ -130,13 +139,19 @@ export function TourRunner({ steps }: { steps: TourStep[] }) {
       if (found) {
         if (found.el !== lastEl) {
           lastEl = found.el;
-          setRect(found.el.getBoundingClientRect());
-          setMode(found.mode);
-          setTargetEl(found.el);
-        } else {
+          const settleEl = found.el;
+          const settleMode = found.mode;
+          window.setTimeout(() => {
+            if (cancelled || lastEl !== settleEl) return;
+            appliedEl = settleEl;
+            setRect(settleEl.getBoundingClientRect());
+            setMode(settleMode);
+            setTargetEl(settleEl);
+            setFinding(false);
+          }, SETTLE_MS);
+        } else if (found.el === appliedEl) {
           setRect(found.el.getBoundingClientRect());
         }
-        setFinding(false);
         window.setTimeout(() => measure(CONFIRM_POLL_MS), CONFIRM_POLL_MS);
         return;
       }
@@ -272,15 +287,28 @@ export function TourRunner({ steps }: { steps: TourStep[] }) {
       )}
       {rect && (
         <>
-          {/* Four bars surrounding the target rect — dim everything else and
-              block off-script clicks; the target's own rect area has no
-              overlay above it, so it stays naturally clickable. Transitions
-              on position/size make moving between targets read as a smooth
-              animated glide instead of an abrupt pop. */}
-          <div className="fixed inset-x-0 top-0 z-[100] bg-[rgba(8,10,20,0.6)]" style={{ height: Math.max(0, rect.top - 6), transition: TRANSITION }} />
-          <div className="fixed inset-x-0 bottom-0 z-[100] bg-[rgba(8,10,20,0.6)]" style={{ top: rect.bottom + 6, transition: TRANSITION }} />
-          <div className="fixed left-0 z-[100] bg-[rgba(8,10,20,0.6)]" style={{ top: rect.top - 6, height: rect.height + 12, width: Math.max(0, rect.left - 6), transition: TRANSITION }} />
-          <div className="fixed right-0 z-[100] bg-[rgba(8,10,20,0.6)]" style={{ top: rect.top - 6, height: rect.height + 12, left: rect.right + 6, transition: TRANSITION }} />
+          {/* Four bars surrounding the target rect — dim everything else for
+              visual focus only. These are click-through (pointer-events-none)
+              on every step, required or not: earlier they blocked clicks to
+              anything outside the current target, which sounds like a
+              helpful guardrail but in practice trapped the user mid-form —
+              unable to fill in a field the tour hadn't gotten to yet, or
+              even reach the "Exit demo" banner. Wandering off-script now
+              just means the next step's own search may come up empty, which
+              the "Couldn't find that — Retry / Skip step" fallback already
+              handles gracefully. Transitions on position/size make moving
+              between targets read as a smooth animated glide instead of an
+              abrupt pop. */}
+          <div className="pointer-events-none fixed inset-x-0 top-0 z-[100] bg-[rgba(8,10,20,0.6)]" style={{ height: Math.max(0, rect.top - 6), transition: TRANSITION }} />
+          <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[100] bg-[rgba(8,10,20,0.6)]" style={{ top: rect.bottom + 6, transition: TRANSITION }} />
+          <div
+            className="pointer-events-none fixed left-0 z-[100] bg-[rgba(8,10,20,0.6)]"
+            style={{ top: rect.top - 6, height: rect.height + 12, width: Math.max(0, rect.left - 6), transition: TRANSITION }}
+          />
+          <div
+            className="pointer-events-none fixed right-0 z-[100] bg-[rgba(8,10,20,0.6)]"
+            style={{ top: rect.top - 6, height: rect.height + 12, left: rect.right + 6, transition: TRANSITION }}
+          />
           <div
             className="pointer-events-none fixed z-[100] rounded-[10px]"
             style={{
@@ -310,10 +338,15 @@ export function TourRunner({ steps }: { steps: TourStep[] }) {
           <h3 className="m-0 text-[14.5px] font-semibold text-[var(--text)]">{navCopy?.title ?? step.title}</h3>
           <p className="m-0 text-[13px] leading-relaxed text-[var(--muted)]">{navCopy?.body ?? step.body}</p>
           {navCopy ? (
-            <span className="flex items-center gap-[6px] text-[12px] font-semibold text-[var(--brand)]">
-              <Icon name="target" size={14} />
-              Click it to continue
-            </span>
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-[6px] text-[12px] font-semibold text-[var(--brand)]">
+                <Icon name="target" size={14} />
+                Click it to continue
+              </span>
+              <button onClick={goNext} disabled={finishing} className="flex-none text-[12px] font-semibold text-[var(--muted)] hover:text-[var(--text)]">
+                Skip step
+              </button>
+            </div>
           ) : (
             <div className="mt-[4px] flex items-center justify-between gap-2">
               <button
@@ -325,10 +358,15 @@ export function TourRunner({ steps }: { steps: TourStep[] }) {
                 Back
               </button>
               {step.requireRealClick ? (
-                <span className="flex items-center gap-[6px] text-[12px] font-semibold text-[var(--brand)]">
-                  <Icon name="target" size={14} />
-                  Click it to continue
-                </span>
+                <div className="flex items-center gap-[12px]">
+                  <button onClick={goNext} disabled={finishing} className="flex-none text-[12px] font-semibold text-[var(--muted)] hover:text-[var(--text)]">
+                    Skip step
+                  </button>
+                  <span className="flex items-center gap-[6px] text-[12px] font-semibold text-[var(--brand)]">
+                    <Icon name="target" size={14} />
+                    Click it to continue
+                  </span>
+                </div>
               ) : (
                 <button
                   onClick={goNext}
