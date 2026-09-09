@@ -167,6 +167,7 @@ export function ChatContent({ role }: { role: Role }) {
         <div className="flex items-center justify-between gap-2 border-b border-[var(--border2)] p-[14px_16px]">
           <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Chat</h3>
           <button
+            data-tour="chat-new-message"
             onClick={openNewMessage}
             className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px] bg-[var(--brand)] text-[var(--brandfg)]"
             title="New message"
@@ -265,6 +266,7 @@ export function ChatContent({ role }: { role: Role }) {
             </div>
             <div className="flex items-center gap-[10px] border-t border-[var(--border2)] p-[12px_16px]">
               <input
+                data-tour="chat-message-input"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {
@@ -277,6 +279,7 @@ export function ChatContent({ role }: { role: Role }) {
                 className="h-[42px] flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[14px] text-[13.5px] text-[var(--text)] outline-none"
               />
               <button
+                data-tour="chat-send"
                 onClick={onSend}
                 disabled={!draft.trim() || sending}
                 className="flex h-[42px] w-[42px] flex-none items-center justify-center rounded-[var(--rad-sm)] bg-[var(--brand)] text-[var(--brandfg)] disabled:opacity-50"
@@ -313,9 +316,10 @@ export function ChatContent({ role }: { role: Role }) {
               {canHaveChannels && offerings && offerings.length > 0 && (
                 <div>
                   <div className="p-[10px_16px] text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Course channels</div>
-                  {offerings.map((o) => (
+                  {offerings.map((o, i) => (
                     <button
                       key={o.id}
+                      data-tour={i === 0 ? "chat-open-channel" : undefined}
                       onClick={() => openChannel(o.id)}
                       className="flex w-full items-center gap-[10px] p-[10px_16px] text-left hover:bg-[var(--surface2)]"
                     >

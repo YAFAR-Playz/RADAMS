@@ -50,10 +50,12 @@ function StatusSelect({
   student,
   onChange,
   size = "sm",
+  dataTour,
 }: {
   student: RosterStudent;
   onChange: (status: AssignmentStatus | "") => void;
   size?: "sm" | "lg";
+  dataTour?: string;
 }) {
   const def = statusDef(student.status);
   const { bg, fg } = def ? toneColors(def.tone) : { bg: "var(--surface2)", fg: "var(--muted)" };
@@ -65,6 +67,7 @@ function StatusSelect({
     >
       <Icon name={def ? def.icon : "clock"} size={big ? 15 : 13} className="flex-none" style={{ color: fg }} />
       <select
+        data-tour={dataTour}
         value={student.status ?? ""}
         onChange={(e) => onChange(e.target.value as AssignmentStatus | "")}
         className={`h-full w-full cursor-pointer appearance-none border-none bg-transparent font-semibold outline-none ${big ? "text-[14px]" : "text-[12.5px]"}`}
@@ -398,6 +401,7 @@ export function HeadCheckingContent() {
             return (
               <button
                 key={s.key}
+                data-tour={s.key === "missing" ? "checking-followup-filter" : undefined}
                 onClick={() => {
                   setStatusFilter(active ? null : s.key);
                   setPage(0);
@@ -443,7 +447,7 @@ export function HeadCheckingContent() {
               {showComment && <span className="min-w-0 flex-[1.4_1_140px]">Comment</span>}
               <span className="w-[36px] flex-none" />
             </div>
-            {pageStudents.map((st) => (
+            {pageStudents.map((st, rowIndex) => (
               <div
                 key={st.studentId}
                 className="flex flex-wrap items-center gap-[12px] border-b border-[var(--border2)] px-[18px] py-[11px] hover:bg-[var(--surface2)]"
@@ -459,7 +463,11 @@ export function HeadCheckingContent() {
                   {st.assistantName ?? "Unassigned"}
                 </div>
                 <div className="flex min-w-0 flex-[1.3_1_140px] items-center">
-                  <StatusSelect student={st} onChange={(status) => onStatusChange(st.studentId, status)} />
+                  <StatusSelect
+                    student={st}
+                    onChange={(status) => onStatusChange(st.studentId, status)}
+                    dataTour={rowIndex === 0 ? "checking-status-select" : undefined}
+                  />
                 </div>
                 {showGrade && (
                   <input
@@ -499,7 +507,7 @@ export function HeadCheckingContent() {
 
           {/* CARDS (mobile + tablet) */}
           <div className="flex flex-col gap-3 lg:hidden">
-            {pageStudents.map((st) => {
+            {pageStudents.map((st, rowIndex) => {
               const def = statusDef(st.status);
               const { bg, fg } = def ? toneColors(def.tone) : { bg: "var(--surface2)", fg: "var(--muted)" };
               return (
@@ -519,7 +527,12 @@ export function HeadCheckingContent() {
                     </span>
                   </div>
                   <div className="mb-3">
-                    <StatusSelect student={st} onChange={(status) => onStatusChange(st.studentId, status)} size="lg" />
+                    <StatusSelect
+                      student={st}
+                      onChange={(status) => onStatusChange(st.studentId, status)}
+                      size="lg"
+                      dataTour={rowIndex === 0 ? "checking-status-select" : undefined}
+                    />
                   </div>
                   <div className="flex flex-wrap gap-[10px]">
                     {showGrade && (
@@ -615,6 +628,7 @@ export function HeadCheckingContent() {
                 {(["student", "parent"] as Recipient[]).map((r) => (
                   <button
                     key={r}
+                    data-tour={r === "parent" ? "checking-modal-recipient" : undefined}
                     onClick={() => setRecipient(r)}
                     className="flex-1 rounded-[7px] py-[7px] text-[12.5px] font-semibold"
                     style={{
@@ -646,7 +660,10 @@ export function HeadCheckingContent() {
                 </span>
               </div>
               <div className="mb-[7px] text-[12px] font-semibold text-[var(--muted)]">Message preview</div>
-              <div className="max-h-[190px] overflow-auto whitespace-pre-wrap rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[13px] text-[13px] leading-[1.55] text-[var(--text)]">
+              <div
+                data-tour="checking-modal-preview"
+                className="max-h-[190px] overflow-auto whitespace-pre-wrap rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[13px] text-[13px] leading-[1.55] text-[var(--text)]"
+              >
                 {modalMessage}
               </div>
             </div>
@@ -658,6 +675,7 @@ export function HeadCheckingContent() {
                 Cancel
               </button>
               <a
+                data-tour="checking-modal-send"
                 href={modalMessage ? modalWaUrl : undefined}
                 target="_blank"
                 rel="noopener"

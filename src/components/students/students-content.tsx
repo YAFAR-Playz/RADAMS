@@ -905,7 +905,7 @@ export function StudentsContent({ role }: { role: Role }) {
                               ? `${tl.tier === "green" ? "On track" : tl.tier === "yellow" ? "Caution" : "Critical"}: ${tl.reasons.join("; ")}`
                               : "On track";
                           return (
-                            <span title={title} className="flex w-[14px] flex-none items-center justify-center">
+                            <span data-tour="students-traffic-light" title={title} className="flex w-[14px] flex-none items-center justify-center">
                               <span className="block h-[10px] w-[10px] rounded-full" style={{ background: fg }} />
                             </span>
                           );

@@ -358,6 +358,7 @@ export function AcademicReportContent({ viewerRole }: { viewerRole: "admin" | "h
               className="h-10 cursor-pointer rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13px] text-[var(--text)] outline-none"
             />
             <button
+              data-tour="report-grade-scale"
               onClick={openScale}
               disabled={!offeringId}
               className="flex h-10 flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-[14px] text-[13px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
@@ -375,6 +376,7 @@ export function AcademicReportContent({ viewerRole }: { viewerRole: "admin" | "h
             </button>
             <ReportActionButtons href={`/report-print?offeringId=${offeringId}&period=${period}`} disabled={!meta} />
             <button
+              data-tour="report-send-drive"
               onClick={onSendToDrive}
               disabled={!meta || sendingToDrive}
               title="Generate every student's branded PDF and save it into their Drive folder"
@@ -395,6 +397,7 @@ export function AcademicReportContent({ viewerRole }: { viewerRole: "admin" | "h
               </button>
             )}
             <button
+              data-tour="report-generate"
               onClick={openGenerate}
               disabled={!offeringId || assignments === null}
               className="flex h-10 flex-none items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[14px] text-[13px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
@@ -670,6 +673,7 @@ export function AcademicReportContent({ viewerRole }: { viewerRole: "admin" | "h
                 Cancel
               </button>
               <button
+                data-tour="report-generate-confirm"
                 onClick={onGenerate}
                 disabled={generating}
                 className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
@@ -735,6 +739,7 @@ export function AcademicReportContent({ viewerRole }: { viewerRole: "admin" | "h
                 {SCALE_OPTIONS.map((s) => (
                   <button
                     key={s}
+                    data-tour={s === SCALE_OPTIONS[0] ? "report-scale-type" : undefined}
                     onClick={() => setScaleDraft((d) => ({ ...d, scale: s }))}
                     className="h-9 flex-1 rounded-[8px] text-[12.5px] font-semibold capitalize"
                     style={scaleDraft.scale === s ? { background: "var(--surface)", color: "var(--text)", boxShadow: "var(--shadow)" } : { color: "var(--muted)" }}
@@ -774,6 +779,7 @@ export function AcademicReportContent({ viewerRole }: { viewerRole: "admin" | "h
                   </div>
                 ))}
                 <button
+                  data-tour="report-scale-add-band"
                   onClick={addBand}
                   className="flex h-9 items-center justify-center gap-[6px] rounded-[8px] border border-dashed border-[var(--border)] text-[12.5px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)]"
                 >
@@ -787,6 +793,7 @@ export function AcademicReportContent({ viewerRole }: { viewerRole: "admin" | "h
                 Cancel
               </button>
               <button
+                data-tour="report-scale-save"
                 onClick={onSaveScale}
                 disabled={scaleSaving}
                 className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"

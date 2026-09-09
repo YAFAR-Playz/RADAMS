@@ -426,12 +426,14 @@ export function AssistantsContent() {
                     </div>
                   </div>
                   <button
+                    data-tour="assistants-replace-btn"
                     onClick={() => openRequestModal("replace", g.name)}
                     className="flex items-center gap-[5px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[11px] py-[6px] text-[12px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)]"
                   >
                     Replace
                   </button>
                   <button
+                    data-tour="assistants-remove-btn"
                     onClick={() => openRequestModal("remove", g.name)}
                     className="flex items-center gap-[5px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[11px] py-[6px] text-[12px] font-semibold text-[var(--muted)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] hover:text-[var(--danger)]"
                   >
@@ -458,6 +460,7 @@ export function AssistantsContent() {
                 </div>
                 <div className="p-[10px_12px]">
                   <div
+                    data-tour="assistants-group-toggle"
                     onClick={() => toggleGroup(g.id)}
                     className="flex cursor-pointer items-center gap-[10px] rounded-[9px] bg-[var(--surface2)] p-[8px_10px] hover:bg-[var(--border2)]"
                   >
@@ -483,6 +486,7 @@ export function AssistantsContent() {
                                 {reassigning === st.id && <Spinner size={11} className="mr-1 text-[var(--subtle)]" />}
                                 <span className="mr-[2px] text-[10px] font-semibold text-[var(--subtle)]">→</span>
                                 <select
+                                  data-tour="assistants-reassign-select"
                                   defaultValue={g.name}
                                   onChange={(e) => {
                                     const targetGroup = groups.find((x) => x.name === e.target.value);
@@ -575,6 +579,7 @@ export function AssistantsContent() {
                   <div>
                     <label className="mb-[6px] block text-[12.5px] font-semibold text-[var(--text)]">Full name</label>
                     <input
+                      data-tour="assistants-request-name"
                       value={candidateName}
                       onChange={(e) => setCandidateName(e.target.value)}
                       placeholder="e.g. Jordan Hale"
@@ -660,6 +665,7 @@ export function AssistantsContent() {
                   {kind === "add" ? "Why is another assistant needed?" : "Reason for this request"}
                 </label>
                 <textarea
+                  data-tour="assistants-request-reason"
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   placeholder="Add context for HR…"
@@ -672,6 +678,7 @@ export function AssistantsContent() {
                 Cancel
               </button>
               <button
+                data-tour="assistants-request-submit"
                 onClick={onSubmitRequest}
                 disabled={submitting}
                 className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"

@@ -206,6 +206,7 @@ export function WeakTopicsContent({ role }: { role: Role }) {
             {(["catalog", "manage", "progress"] as const).map((t) => (
               <button
                 key={t}
+                data-tour={`weaktopics-tab-${t}`}
                 onClick={() => setTab(t)}
                 className={`h-9 border-b-2 px-[4px] text-[13px] font-semibold ${
                   tab === t ? "border-[var(--brand)] text-[var(--text)]" : "border-transparent text-[var(--muted)]"
@@ -300,6 +301,7 @@ function CatalogPanel({ offeringId, setError }: { offeringId: string; setError: 
         </div>
 
         <input
+          data-tour="weaktopics-label-input"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="Topic label, e.g. Quadratic equations"
@@ -307,6 +309,7 @@ function CatalogPanel({ offeringId, setError }: { offeringId: string; setError: 
         />
         <MaterialsEditor materials={materials} onChange={setMaterials} />
         <button
+          data-tour="weaktopics-create"
           onClick={onCreate}
           disabled={!label.trim() || busy}
           className="mt-[10px] flex h-9 items-center gap-[6px] rounded-[8px] bg-[var(--brand)] px-[14px] text-[12.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
@@ -497,7 +500,7 @@ function AssistantSubmitPanel({ offeringId, period, setError }: { offeringId: st
       ) : (
         <>
         <div className="divide-y divide-[var(--border)]">
-          {pageRows.map((s) => {
+          {pageRows.map((s, rowIndex) => {
             const takenTopicIds = new Set(s.submissions.map((sub) => sub.topicId));
             return (
             <div key={s.studentId} className="flex flex-col gap-[8px] p-[14px_18px]">
@@ -505,6 +508,7 @@ function AssistantSubmitPanel({ offeringId, period, setError }: { offeringId: st
                 <div className="text-[13.5px] font-semibold text-[var(--text)]">{s.studentName}</div>
                 <div className="flex items-center gap-[8px]">
                   <select
+                    data-tour={rowIndex === 0 ? "weaktopics-assign-select" : undefined}
                     value={picks[s.studentId] ?? ""}
                     onChange={(e) => setPicks((p) => ({ ...p, [s.studentId]: e.target.value }))}
                     className="h-9 rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none"
@@ -519,6 +523,7 @@ function AssistantSubmitPanel({ offeringId, period, setError }: { offeringId: st
                       ))}
                   </select>
                   <button
+                    data-tour={rowIndex === 0 ? "weaktopics-assign-submit" : undefined}
                     onClick={() => onSubmit(s.studentId)}
                     disabled={!picks[s.studentId] || busyId === s.studentId}
                     className="flex h-9 items-center gap-[6px] rounded-[8px] bg-[var(--brand)] px-[12px] text-[12.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
@@ -542,12 +547,14 @@ function AssistantSubmitPanel({ offeringId, period, setError }: { offeringId: st
               )}
               <div className="flex items-start gap-[8px]">
                 <textarea
+                  data-tour={rowIndex === 0 ? "weaktopics-comment" : undefined}
                   value={comments[s.studentId] ?? ""}
                   onChange={(e) => setComments((c) => ({ ...c, [s.studentId]: e.target.value }))}
                   placeholder="Overall comment for this student this month — shown in the head's monthly report…"
                   className="h-[54px] flex-1 resize-none rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] py-[7px] text-[12px] leading-[1.4] text-[var(--text)] outline-none focus:border-[var(--brand)]"
                 />
                 <button
+                  data-tour={rowIndex === 0 ? "weaktopics-comment-save" : undefined}
                   onClick={() => onSaveComment(s.studentId)}
                   disabled={(comments[s.studentId] ?? "") === (savedComments[s.studentId] ?? "") || savingComment === s.studentId}
                   className="flex h-9 flex-none items-center gap-[6px] self-end rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px] text-[12px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"

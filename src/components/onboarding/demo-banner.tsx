@@ -23,7 +23,13 @@ export function DemoBanner() {
   }
 
   return (
-    <div className="sticky top-0 z-[95] flex items-center justify-center gap-[10px] bg-[var(--brand)] px-4 py-[9px] text-[13px] font-semibold text-[var(--brandfg)]">
+    // z-[110] — above the onboarding tour's dimming overlay (z-[100]) and
+    // tooltip (z-101), so this escape hatch always stays clickable even
+    // while a step is actively spotlighting something elsewhere on the
+    // page. Without this, the tour's own "block off-script clicks" bars
+    // (by design) swallow clicks anywhere outside the current target —
+    // including this banner.
+    <div className="sticky top-0 z-[110] flex items-center justify-center gap-[10px] bg-[var(--brand)] px-4 py-[9px] text-[13px] font-semibold text-[var(--brandfg)]">
       <Icon name="target" size={15} />
       You&apos;re viewing a demo — nothing here is real, and it&apos;s thrown away when you exit.
       <button

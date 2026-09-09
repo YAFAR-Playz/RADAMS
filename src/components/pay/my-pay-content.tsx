@@ -182,7 +182,7 @@ export function MyPayContent() {
       {loading ? (
         <SkeletonRow className="h-[200px]" />
       ) : data.released ? (
-        <section className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+        <section data-tour="mypay-breakdown" className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
           <header className="flex items-center justify-between border-b border-[var(--border2)] p-[15px_18px]">
             <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Breakdown · {periodLabel(data.period)}</h3>
             <div className="flex items-center gap-[8px]">
@@ -265,7 +265,7 @@ export function MyPayContent() {
               )}
             </div>
           ))}
-          <div className="flex items-center justify-between gap-3 bg-[var(--surface2)] p-[13px_18px]">
+          <div data-tour="mypay-total" className="flex items-center justify-between gap-3 bg-[var(--surface2)] p-[13px_18px]">
             <span className="text-[12.5px] font-medium text-[var(--muted)]">Paid via {data.payMethod}</span>
             <div className="flex items-center gap-[10px]">
               <span className="text-[13px] text-[var(--muted)]">Total this month</span>
