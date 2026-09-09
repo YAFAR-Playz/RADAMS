@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 
 export type ReportGroup = "homework" | "classwork" | "quiz" | "mock_exam" | "other";
@@ -29,7 +30,12 @@ export async function listAssignmentTemplates(): Promise<AssignmentTemplate[]> {
     return data.map((t) => ({ id: t.id, label: t.label, hasGrade: t.has_grade, hasComment: t.has_comment, reportGroup: t.report_group as ReportGroup }));
   }
 
-  const { data: seeded, error } = await supabase
+  // Runs for "anyone" per the comment above, including a non-admin — the
+  // write policy on this table is admin-only, so the bootstrap insert needs
+  // the admin client to actually succeed instead of silently failing RLS
+  // and leaving every non-admin permanently stuck with an empty list.
+  const admin = createAdminClient();
+  const { data: seeded, error } = await admin
     .from("assignment_templates")
     .insert(DEFAULT_TEMPLATES.map((t) => ({ org_id: profile.org!.id, label: t.label, has_grade: t.hasGrade, has_comment: t.hasComment })))
     .select("id, label, has_grade, has_comment, report_group");
