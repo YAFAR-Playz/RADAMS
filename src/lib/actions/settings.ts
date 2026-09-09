@@ -3,12 +3,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/current-profile";
+import type { Role } from "@/lib/roles";
 
 export type MyProfile = {
   fullName: string;
   email: string;
   phone: string | null;
   avatarUrl: string | null;
+  role: Role;
 };
 
 const ALLOWED_AVATAR_TYPES = ["image/png", "image/jpeg", "image/webp"];
@@ -26,9 +28,9 @@ export async function getMyProfile(): Promise<MyProfile | null> {
   const profile = await getCurrentProfile();
   if (!profile) return null;
   const supabase = await createClient();
-  const { data } = await supabase.from("profiles").select("full_name, email, phone, avatar_url").eq("id", profile.id).single();
+  const { data } = await supabase.from("profiles").select("full_name, email, phone, avatar_url, role").eq("id", profile.id).single();
   if (!data) return null;
-  return { fullName: data.full_name, email: data.email, phone: data.phone, avatarUrl: data.avatar_url };
+  return { fullName: data.full_name, email: data.email, phone: data.phone, avatarUrl: data.avatar_url, role: data.role as Role };
 }
 
 export async function updateMyDetails(patch: { fullName: string; phone: string }) {

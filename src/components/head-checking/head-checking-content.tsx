@@ -480,6 +480,7 @@ export function HeadCheckingContent() {
                   />
                 )}
                 <button
+                  data-tour="checking-send"
                   onClick={() => {
                     setRecipient("parent");
                     setModalId(st.studentId);

@@ -246,6 +246,7 @@ export function AssistantsContent() {
               </span>
             </button>
             <button
+              data-tour="assistants-request"
               onClick={() => openRequestModal("add")}
               className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[15px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)]"
             >

@@ -14,6 +14,8 @@ import {
   removeMyAvatar,
   type MyProfile,
 } from "@/lib/actions/settings";
+import { startOnboardingDemo } from "@/lib/actions/onboarding";
+import { roleHasOnboardingTour } from "@/lib/onboarding-roles";
 
 export function SettingsContent() {
   const [profile, setProfile] = useState<MyProfile | null>(null);
@@ -33,6 +35,8 @@ export function SettingsContent() {
   const [savingPassword, setSavingPassword] = useState(false);
 
   const [avatarUploading, setAvatarUploading] = useState(false);
+
+  const [startingTour, setStartingTour] = useState(false);
 
   async function reload() {
     setLoading(true);
@@ -120,6 +124,18 @@ export function SettingsContent() {
       setError(e instanceof Error ? e.message : "Couldn't upload your profile picture — try again.");
     } finally {
       setAvatarUploading(false);
+    }
+  }
+
+  async function onStartTour() {
+    setStartingTour(true);
+    setError(null);
+    try {
+      await startOnboardingDemo();
+      window.location.href = "/dashboard";
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't start the tour — try again.");
+      setStartingTour(false);
     }
   }
 
@@ -295,6 +311,24 @@ export function SettingsContent() {
           Update password
         </button>
       </section>
+
+      {/* PRODUCT TOUR */}
+      {roleHasOnboardingTour(profile.role) && (
+        <section className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
+          <h3 className="m-0 mb-[5px] text-[14px] font-semibold text-[var(--text)]">Product tour</h3>
+          <p className="m-0 mb-[14px] text-[12px] text-[var(--muted)]">
+            A guided, step-by-step walkthrough in a throwaway demo — nothing you do there touches your real data.
+          </p>
+          <button
+            onClick={onStartTour}
+            disabled={startingTour}
+            className="flex items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-[16px] py-[10px] text-[13px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)] disabled:opacity-60"
+          >
+            {startingTour ? <Spinner size={14} /> : <Icon name="target" size={14} />}
+            Restart the guided tour
+          </button>
+        </section>
+      )}
     </div>
   );
 }

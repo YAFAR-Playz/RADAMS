@@ -341,6 +341,7 @@ export function AttendanceContent({ role }: { role: Role }) {
             )}
             {canEdit && (
               <button
+                data-tour="attendance-new-session"
                 onClick={() => setModalOpen(true)}
                 disabled={!offeringId}
                 className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[15px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
@@ -403,7 +404,7 @@ export function AttendanceContent({ role }: { role: Role }) {
 
       <div className="flex flex-wrap items-start gap-4">
         {/* SESSIONS LIST */}
-        <section className="min-w-0 flex-[1_1_300px] overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+        <section data-tour="attendance-sessions" className="min-w-0 flex-[1_1_300px] overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
           <header className="flex items-center justify-between border-b border-[var(--border2)] p-[14px_18px]">
             <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Sessions</h3>
             <span className="text-[11px] font-medium text-[var(--subtle)]">Latest first</span>
