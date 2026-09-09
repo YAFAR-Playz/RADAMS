@@ -777,7 +777,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
           </div>
         </div>
         <div className="mt-4 grid grid-cols-3 gap-3">
-          {loading || !assistants
+          {loading
             ? Array.from({ length: 3 }, (_, i) => <SkeletonRow key={i} className="h-[58px]" />)
             : [
                 { value: fmt(totalPayroll), label: "Total payroll", color: "var(--brand)" },
@@ -840,7 +840,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
           </div>
         </div>
 
-        {loading && !assistants ? (
+        {loading ? (
           <div className="flex flex-col gap-2 p-[14px_18px]">
             {Array.from({ length: 4 }, (_, i) => (
               <SkeletonRow key={i} className="h-[60px]" />

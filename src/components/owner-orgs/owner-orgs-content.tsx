@@ -171,7 +171,7 @@ export function OwnerOrgsContent() {
           </button>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {loading || !orgs
+          {loading
             ? Array.from({ length: 4 }, (_, i) => <SkeletonRow key={i} className="h-[58px]" />)
             : stats.map((s) => (
                 <div key={s.label} className="rounded-[var(--rad-sm)] border border-[var(--border2)] bg-[var(--surface2)] p-[12px_14px]">
@@ -185,7 +185,7 @@ export function OwnerOrgsContent() {
       </div>
 
       <div className="flex flex-col gap-[14px]">
-        {loading && !orgs ? (
+        {loading ? (
           Array.from({ length: 3 }, (_, i) => <SkeletonRow key={i} className="h-[140px]" />)
         ) : orgs && orgs.length === 0 ? (
           <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-10 text-center text-[13.5px] text-[var(--muted)] shadow-[var(--shadow)]">

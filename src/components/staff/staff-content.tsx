@@ -367,7 +367,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
           </div>
         </div>
         <div className="mt-4 grid grid-cols-3 gap-3">
-          {loading || !staff
+          {loading
             ? Array.from({ length: 3 }, (_, i) => <SkeletonRow key={i} className="h-[58px]" />)
             : stats.map((s) => (
                 <div key={s.label} className="rounded-[var(--rad-sm)] border border-[var(--border2)] bg-[var(--surface2)] p-[12px_14px]">
@@ -489,7 +489,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
 
       {/* USER LIST */}
       <div className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
-        {loading && !staff ? (
+        {loading ? (
           <div className="flex flex-col gap-2 p-[14px_18px]">
             {Array.from({ length: 6 }, (_, i) => (
               <SkeletonRow key={i} className="h-[56px]" />

@@ -404,7 +404,7 @@ export function AssistantsContent() {
 
       {/* ASSISTANT GROUPS */}
       <div className="flex flex-col gap-[14px]">
-        {loading && !groups ? (
+        {loading ? (
           Array.from({ length: 3 }, (_, i) => <SkeletonRow key={i} className="h-[80px]" />)
         ) : !groups || groups.length === 0 ? (
           <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-10 text-center text-[13.5px] text-[var(--muted)] shadow-[var(--shadow)]">

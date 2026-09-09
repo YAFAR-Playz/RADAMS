@@ -710,7 +710,7 @@ export function StudentsContent({ role }: { role: Role }) {
 
       {/* TABLE */}
       <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
-        {loading && !students ? (
+        {loading ? (
           <div className="flex flex-col gap-2 p-[14px_18px]">
             {Array.from({ length: 6 }, (_, i) => (
               <SkeletonRow key={i} className="h-[56px]" />

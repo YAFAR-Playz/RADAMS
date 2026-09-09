@@ -33,7 +33,15 @@ export function OwnerSystemContent() {
     })();
   }, []);
 
-  if (!data && !error) return <TabLoader label="Loading system…" />;
+  if (!data) {
+    return error ? (
+      <div className="rounded-[var(--rad-sm)] border border-[var(--danger)] bg-[var(--dangers)] px-4 py-3 text-[13px] font-medium text-[var(--danger)]">
+        {error}
+      </div>
+    ) : (
+      <TabLoader label="Loading system…" />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -55,7 +63,7 @@ export function OwnerSystemContent() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <section className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
           <h3 className="m-0 mb-[14px] text-[14px] font-semibold text-[var(--text)]">Users by role</h3>
-          {loading || !data ? (
+          {loading ? (
             <SkeletonRow className="h-[140px]" />
           ) : data.usersByRole.length === 0 ? (
             <div className="p-3 text-center text-[12.5px] text-[var(--subtle)]">No staff yet.</div>
@@ -76,7 +84,7 @@ export function OwnerSystemContent() {
 
         <section className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
           <h3 className="m-0 mb-[14px] text-[14px] font-semibold text-[var(--text)]">Organizations by status</h3>
-          {loading || !data ? (
+          {loading ? (
             <SkeletonRow className="h-[100px]" />
           ) : data.orgsByStatus.length === 0 ? (
             <div className="p-3 text-center text-[12.5px] text-[var(--subtle)]">No organizations yet.</div>
@@ -105,7 +113,7 @@ export function OwnerSystemContent() {
           <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Recent signups</h3>
         </header>
         <div className="p-[7px_8px]">
-          {loading || !data ? (
+          {loading ? (
             <div className="flex flex-col gap-2 p-2">
               {Array.from({ length: 4 }, (_, i) => (
                 <SkeletonRow key={i} className="h-[48px]" />
