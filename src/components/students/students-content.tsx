@@ -273,7 +273,12 @@ export function StudentsContent({ role }: { role: Role }) {
   }
 
   const canReassignAssistants = role === "admin" || role === "head";
-  const unassignedCount = students?.filter((s) => !s.assistantId).length ?? 0;
+  // Admin (unlike head) still sees left students here, dimmed with a badge,
+  // for managing their left/restored status — but one who left before ever
+  // being assigned an assistant isn't actually waiting to be auto-assigned,
+  // so it must be excluded here even though getStudentsForOffering doesn't
+  // filter it out of `students` itself for this role.
+  const unassignedCount = students?.filter((s) => !s.assistantId && !s.leftAt).length ?? 0;
 
   async function onExport() {
     if (!offeringId) return;
