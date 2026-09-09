@@ -4,6 +4,7 @@ import { startTransition, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
 import type { Role } from "@/lib/roles";
 import {
   listStaff,
@@ -322,18 +323,16 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
       )}
 
       {/* HEADER */}
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">{isHr ? "HR" : "Admin"}</div>
-            <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Users &amp; access</h1>
-            <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">
-              {isHr
-                ? "Manage staff across the organization. Add or remove non-admin users and review staffing requests."
-                : "Manage your organization's users. Add or remove staff and edit their role."}
-            </p>
-          </div>
-          <div className="flex flex-none items-center gap-[8px]">
+      <PageHeader
+        eyebrow={isHr ? "HR" : "Admin"}
+        title="Users & access"
+        subtitle={
+          isHr
+            ? "Manage staff across the organization. Add or remove non-admin users and review staffing requests."
+            : "Manage your organization's users. Add or remove staff and edit their role."
+        }
+        actions={
+          <>
             <button
               onClick={() => setDepartedOpen(true)}
               className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-[14px] py-[10px] text-[13px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)]"
@@ -364,9 +363,10 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
               <Icon name="user-plus" size={16} />
               Add user
             </button>
-          </div>
-        </div>
-        <div className="mt-4 grid grid-cols-3 gap-3">
+          </>
+        }
+      >
+        <div className="grid grid-cols-3 gap-3">
           {loading
             ? Array.from({ length: 3 }, (_, i) => <SkeletonRow key={i} className="h-[58px]" />)
             : stats.map((s) => (
@@ -378,7 +378,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
                 </div>
               ))}
         </div>
-      </div>
+      </PageHeader>
 
       {/* PENDING REQUESTS */}
       {pendingRequests.length > 0 && (

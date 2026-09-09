@@ -4,6 +4,7 @@ import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import { importStudents, previewExistingMatches, type MatchInfo } from "@/lib/actions/import";
 
@@ -237,11 +238,12 @@ export function ImportContent() {
       )}
 
       {/* HEADER + STEPPER */}
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Registration</div>
-        <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Bulk import students</h1>
-        <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">Upload a CSV file, map its columns, then review before importing.</p>
-        <div className="mt-[18px] flex flex-wrap items-center gap-y-[10px]">
+      <PageHeader
+        eyebrow="Registration"
+        title="Bulk import students"
+        subtitle="Upload a CSV file, map its columns, then review before importing."
+      >
+        <div className="flex flex-wrap items-center gap-y-[10px]">
           {STEPS.map((label, i) => {
             const done = i < step;
             const isCurrent = i === step;
@@ -267,7 +269,7 @@ export function ImportContent() {
             );
           })}
         </div>
-      </div>
+      </PageHeader>
 
       {/* STEP 0: UPLOAD */}
       {step === 0 && (

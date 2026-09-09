@@ -4,6 +4,7 @@ import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
 import type { Role } from "@/lib/roles";
 import { listAllStaff, updateAnyStaffRole, removeAnyStaffMember, getOwnerLoginAsLink, type PlatformStaffMember } from "@/lib/actions/owner";
 
@@ -136,15 +137,12 @@ export function OwnerUsersContent() {
         </div>
       )}
 
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Owner · all organizations</div>
-        <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Users</h1>
-        <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">Every user across every organization on the platform.</p>
-        <div className="mt-4 rounded-[var(--rad-sm)] border border-[var(--border2)] bg-[var(--surface2)] p-[12px_14px]">
+      <PageHeader eyebrow="Owner · all organizations" title="Users" subtitle="Every user across every organization on the platform.">
+        <div className="rounded-[var(--rad-sm)] border border-[var(--border2)] bg-[var(--surface2)] p-[12px_14px]">
           <div className="text-[21px] font-bold leading-[1.1] tracking-[-0.02em] text-[var(--brand)]">{total.toLocaleString()}</div>
           <div className="mt-[2px] text-[12px] font-medium text-[var(--muted)]">Total users on the platform</div>
         </div>
-      </div>
+      </PageHeader>
 
       <div className="flex flex-wrap items-center gap-[10px]">
         <div className="flex h-10 min-w-[220px] max-w-[320px] flex-1 items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-3">

@@ -4,6 +4,7 @@ import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
 import { toneColors } from "@/lib/tone";
 import type { Role } from "@/lib/roles";
 import { statusDef, STATUS_DEFS } from "@/lib/assignments-data";
@@ -530,66 +531,62 @@ export function StudentsContent({ role }: { role: Role }) {
       )}
 
       {/* HEADER */}
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">
-              {isAdmin ? "Admin · Students" : role === "registration" ? "Registration · Students" : isAssistant ? "My students" : "Students"}
-            </div>
-            <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">
-              {role === "registration" ? "Enrollment & payments" : "Student progress"}
-            </h1>
-            <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">
-              {role === "registration"
-                ? "Every student org-wide — enrollment, contact details, and payment status."
-                : isAssistant
-                  ? "Your assigned students — performance to date and contact details."
-                  : "Every student's status across recent assignments. Reassign or edit as needed."}
-            </p>
-          </div>
-          {canReassignAssistants && (
-            <button
-              onClick={() => setAutoOpen(true)}
-              disabled={unassignedCount === 0 || !offeringId}
-              title={unassignedCount === 0 ? "No unassigned students on this course" : "Auto-assign unassigned students"}
-              className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--brand)] bg-[var(--surface)] px-[14px] py-[10px] text-[13px] font-semibold text-[var(--brand)] hover:bg-[var(--brands)] disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:text-[var(--subtle)] disabled:hover:bg-[var(--surface)]"
-            >
-              <Icon name="users" size={16} />
-              Auto-assign
-              <span
-                className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-[5px] text-[11px] font-bold"
-                style={
-                  unassignedCount === 0
-                    ? { background: "var(--surface2)", color: "var(--subtle)" }
-                    : { background: "var(--brand)", color: "var(--brandfg)" }
-                }
+      <PageHeader
+        eyebrow={isAdmin ? "Admin · Students" : role === "registration" ? "Registration · Students" : isAssistant ? "My students" : "Students"}
+        title={role === "registration" ? "Enrollment & payments" : "Student progress"}
+        subtitle={
+          role === "registration"
+            ? "Every student org-wide — enrollment, contact details, and payment status."
+            : isAssistant
+              ? "Your assigned students — performance to date and contact details."
+              : "Every student's status across recent assignments. Reassign or edit as needed."
+        }
+        actions={
+          <>
+            {canReassignAssistants && (
+              <button
+                onClick={() => setAutoOpen(true)}
+                disabled={unassignedCount === 0 || !offeringId}
+                title={unassignedCount === 0 ? "No unassigned students on this course" : "Auto-assign unassigned students"}
+                className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--brand)] bg-[var(--surface)] px-[14px] py-[10px] text-[13px] font-semibold text-[var(--brand)] hover:bg-[var(--brands)] disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:text-[var(--subtle)] disabled:hover:bg-[var(--surface)]"
               >
-                {unassignedCount}
-              </span>
-            </button>
-          )}
-          {!isAssistant && (
-            <button
-              onClick={onExport}
-              disabled={filtered.length === 0 || exporting}
-              className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-[14px] py-[10px] text-[13px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
-            >
-              {exporting ? <Spinner size={15} /> : <Icon name="file-up" size={16} />}
-              Export CSV
-            </button>
-          )}
-          {isHead && headsCanAddStudents && (
-            <button
-              onClick={openAddStudent}
-              className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[14px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)]"
-            >
-              <Icon name="user-plus" size={16} />
-              Add Student
-            </button>
-          )}
-        </div>
-
-        <div className="mt-[15px] flex flex-wrap items-center gap-2">
+                <Icon name="users" size={16} />
+                Auto-assign
+                <span
+                  className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-[5px] text-[11px] font-bold"
+                  style={
+                    unassignedCount === 0
+                      ? { background: "var(--surface2)", color: "var(--subtle)" }
+                      : { background: "var(--brand)", color: "var(--brandfg)" }
+                  }
+                >
+                  {unassignedCount}
+                </span>
+              </button>
+            )}
+            {!isAssistant && (
+              <button
+                onClick={onExport}
+                disabled={filtered.length === 0 || exporting}
+                className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-[14px] py-[10px] text-[13px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
+              >
+                {exporting ? <Spinner size={15} /> : <Icon name="file-up" size={16} />}
+                Export CSV
+              </button>
+            )}
+            {isHead && headsCanAddStudents && (
+              <button
+                onClick={openAddStudent}
+                className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[14px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)]"
+              >
+                <Icon name="user-plus" size={16} />
+                Add Student
+              </button>
+            )}
+          </>
+        }
+      >
+        <div className="flex flex-wrap items-center gap-2">
           <span className="mr-[2px] flex-none text-[12.5px] font-semibold text-[var(--muted)]">Course</span>
           {offeringsLoading ? (
             <>
@@ -633,7 +630,7 @@ export function StudentsContent({ role }: { role: Role }) {
             <span className="text-[13px] text-[var(--subtle)]">No courses yet.</span>
           )}
         </div>
-      </div>
+      </PageHeader>
 
       {/* TOOLBAR */}
       <div className="flex flex-wrap items-center gap-3">

@@ -4,6 +4,8 @@ import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
+import { SectionCard } from "@/components/ui/section-card";
 import type { Role } from "@/lib/roles";
 import { listRecentStaffJoins, type StaffingLogRow } from "@/lib/actions/hr";
 import { listStaff, createStaffMember, removeStaffMember, assignStaffToCourses, type StaffMember } from "@/lib/actions/staff";
@@ -108,13 +110,12 @@ export function HiringContent() {
         </div>
       )}
 
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">HR</div>
-        <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Hiring &amp; staffing</h1>
-        <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">
-          Add or remove any non-admin staff member — heads, assistants, registration, finance or HR.
-        </p>
-        <div className="mt-[15px] flex flex-wrap gap-2">
+      <PageHeader
+        eyebrow="HR"
+        title="Hiring & staffing"
+        subtitle="Add or remove any non-admin staff member — heads, assistants, registration, finance or HR."
+      >
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => openNew("add")}
             className="flex items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[15px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)]"
@@ -131,12 +132,9 @@ export function HiringContent() {
             Remove
           </button>
         </div>
-      </div>
+      </PageHeader>
 
-      <section className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
-        <header className="border-b border-[var(--border2)] p-[14px_18px]">
-          <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Recent staffing actions</h3>
-        </header>
+      <SectionCard title="Recent staffing actions">
         <div className="p-[7px_8px]">
           {loading && !log ? (
             <div className="flex flex-col gap-2 p-[8px]">
@@ -161,7 +159,7 @@ export function HiringContent() {
             ))
           )}
         </div>
-      </section>
+      </SectionCard>
 
       {modalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(8,12,22,0.5)] p-5">

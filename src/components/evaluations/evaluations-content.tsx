@@ -4,6 +4,7 @@ import { startTransition, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import { listOfferingAssistants, type AssistantOption } from "@/lib/actions/head-assignments";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
@@ -320,15 +321,11 @@ export function EvaluationsContent() {
       )}
 
       {/* HEADER */}
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Monthly evaluation</div>
-            <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">
-              Evaluate assistant · {periodLabel(period)}
-            </h1>
-            <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">Adjustments use categories defined by the Finance team and feed into salary.</p>
-          </div>
+      <PageHeader
+        eyebrow="Monthly evaluation"
+        title={`Evaluate assistant · ${periodLabel(period)}`}
+        subtitle="Adjustments use categories defined by the Finance team and feed into salary."
+        actions={
           <span
             className="inline-flex flex-none items-center gap-[6px] rounded-full px-[11px] py-[5px] text-[12px] font-semibold"
             style={status === "submitted" ? { background: "var(--oks)", color: "var(--ok)" } : { background: "var(--warns)", color: "var(--warn)" }}
@@ -336,8 +333,9 @@ export function EvaluationsContent() {
             <Icon name={status === "submitted" ? "check2" : "clock"} size={13} />
             {status === "submitted" ? "Submitted to Finance" : "Draft · not submitted"}
           </span>
-        </div>
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        }
+      >
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div>
             <label className="mb-[6px] block text-[12.5px] font-semibold text-[var(--text)]">Month</label>
             <div className="flex h-[46px] items-center rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3">
@@ -401,7 +399,7 @@ export function EvaluationsContent() {
             )}
           </div>
         </div>
-      </div>
+      </PageHeader>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.7fr_1fr]">
         <div className="flex min-w-0 flex-col gap-4">

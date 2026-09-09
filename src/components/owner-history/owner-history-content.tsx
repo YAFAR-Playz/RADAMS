@@ -4,6 +4,8 @@ import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
+import { SectionCard } from "@/components/ui/section-card";
 import { listPlatformActivityLog, type PlatformActivityRow } from "@/lib/actions/activity-log";
 import { listOrgsOverview } from "@/lib/actions/owner";
 import { ACTIVITY_CATEGORIES, CATEGORY_LABEL, CATEGORY_ICON, type ActivityCategory } from "@/lib/activity-categories";
@@ -59,12 +61,8 @@ export function OwnerHistoryContent() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Owner · Platform</div>
-        <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Platform activity history</h1>
-        <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">Every logged action across every organization, last 30 days.</p>
-
-        <div className="mt-[15px] flex flex-wrap items-center gap-[10px]">
+      <PageHeader eyebrow="Owner · Platform" title="Platform activity history" subtitle="Every logged action across every organization, last 30 days.">
+        <div className="flex flex-wrap items-center gap-[10px]">
           <select
             value={orgId}
             onChange={(e) => setOrgId(e.target.value)}
@@ -110,13 +108,9 @@ export function OwnerHistoryContent() {
             })}
           </div>
         </div>
-      </div>
+      </PageHeader>
 
-      <section className="relative overflow-hidden rounded-[18px] border border-[var(--border)] bg-[var(--surface)] shadow-[0_1px_2px_rgba(16,23,41,0.04),0_14px_32px_rgba(16,23,41,0.06)]">
-        <div
-          className="absolute inset-x-0 top-0 h-[3px]"
-          style={{ background: "linear-gradient(90deg, transparent, var(--brand), transparent)" }}
-        />
+      <SectionCard>
         {loading ? (
           <div className="flex flex-col gap-2 p-[14px_18px]">
             {Array.from({ length: 6 }, (_, i) => (
@@ -173,7 +167,7 @@ export function OwnerHistoryContent() {
             )}
           </>
         )}
-      </section>
+      </SectionCard>
     </div>
   );
 }

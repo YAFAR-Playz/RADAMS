@@ -4,6 +4,7 @@ import { startTransition, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
 import { toneColors } from "@/lib/tone";
 import { statusDef } from "@/lib/assignments-data";
 import { trackInfo } from "@/lib/oversight-data";
@@ -312,34 +313,24 @@ export function OversightContent() {
   return (
     <div className="flex flex-col gap-4">
       {/* HEADER CARD */}
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">
-              Course oversight
-            </div>
-            <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">
-              Assistant message tracking
-            </h1>
-          </div>
-          {offeringId && (
-            <div className="flex flex-none items-center gap-[8px]">
-              <button
-                onClick={onFullExport}
-                disabled={exporting}
-                className="flex flex-none items-center gap-[6px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 py-[7px] text-[12px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
-              >
-                {exporting ? <Spinner size={13} /> : <Icon name="file-up" size={13} />}
-                Export all data
-              </button>
-            </div>
-          )}
-        </div>
-        <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">
-          Switch between your course offerings and drill into any assistant&apos;s logged comments.
-        </p>
-
-        <div className="mt-[15px] flex flex-wrap items-center gap-2">
+      <PageHeader
+        eyebrow="Course oversight"
+        title="Assistant message tracking"
+        subtitle="Switch between your course offerings and drill into any assistant's logged comments."
+        actions={
+          offeringId && (
+            <button
+              onClick={onFullExport}
+              disabled={exporting}
+              className="flex flex-none items-center gap-[6px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 py-[7px] text-[12px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
+            >
+              {exporting ? <Spinner size={13} /> : <Icon name="file-up" size={13} />}
+              Export all data
+            </button>
+          )
+        }
+      >
+        <div className="flex flex-wrap items-center gap-2">
           <span className="mr-[2px] flex-none text-[12.5px] font-semibold text-[var(--muted)]">Offering</span>
           {offeringsLoading ? (
             <>
@@ -373,7 +364,7 @@ export function OversightContent() {
           )}
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {summaryLoading || !stats
             ? Array.from({ length: 4 }, (_, i) => <SkeletonRow key={i} className="h-[62px]" />)
             : statRows.map((s) => (
@@ -385,7 +376,7 @@ export function OversightContent() {
                 </div>
               ))}
         </div>
-      </div>
+      </PageHeader>
 
       {/* ASSISTANTS */}
       <section className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">

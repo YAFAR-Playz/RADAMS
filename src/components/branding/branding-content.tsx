@@ -4,6 +4,7 @@ import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   getBranding,
   saveBranding,
@@ -130,19 +131,18 @@ export function BrandingContent() {
         </div>
       )}
 
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Organization branding</div>
-        <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Customize your organization</h1>
-        <p className="m-0 mt-[3px] max-w-[560px] text-[13px] leading-[1.5] text-[var(--muted)]">
-          Adjust your brand name, colors, font and shape — every screen in your organization updates automatically.
-        </p>
-        <div className="mt-[14px] flex items-start gap-[10px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--infos)] p-[11px_13px]">
+      <PageHeader
+        eyebrow="Organization branding"
+        title="Customize your organization"
+        subtitle="Adjust your brand name, colors, font and shape — every screen in your organization updates automatically."
+      >
+        <div className="flex items-start gap-[10px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--infos)] p-[11px_13px]">
           <Icon name="building" size={17} className="mt-[1px] flex-none text-[var(--info)]" />
           <span className="text-[12.5px] leading-[1.45] text-[var(--text)]">
             These settings apply to <span className="font-semibold">your organization</span> only and never affect other organizations.
           </span>
         </div>
-      </div>
+      </PageHeader>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.25fr_1fr]">
         <div className="flex min-w-0 flex-col gap-4">

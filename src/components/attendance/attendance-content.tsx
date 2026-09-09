@@ -4,6 +4,7 @@ import { startTransition, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
 import { toneColors } from "@/lib/tone";
 import type { Role, Tone } from "@/lib/roles";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
@@ -315,22 +316,18 @@ export function AttendanceContent({ role }: { role: Role }) {
       )}
 
       {/* HEADER */}
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Attendance</div>
-            <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">
-              {canEdit ? "Take attendance" : role === "assistant" ? "My students' attendance" : "Attendance records"}
-            </h1>
-            <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">
-              {canEdit
-                ? "Create a session for a course and mark each student."
-                : role === "assistant"
-                  ? "Attendance for your assigned students, per session."
-                  : "Attendance recorded by the Registration team, per session."}
-            </p>
-          </div>
-          <div className="flex flex-none items-center gap-[8px]">
+      <PageHeader
+        eyebrow="Attendance"
+        title={canEdit ? "Take attendance" : role === "assistant" ? "My students' attendance" : "Attendance records"}
+        subtitle={
+          canEdit
+            ? "Create a session for a course and mark each student."
+            : role === "assistant"
+              ? "Attendance for your assigned students, per session."
+              : "Attendance recorded by the Registration team, per session."
+        }
+        actions={
+          <>
             {role !== "assistant" && (
               <button
                 onClick={onExport}
@@ -352,10 +349,10 @@ export function AttendanceContent({ role }: { role: Role }) {
                 New session
               </button>
             )}
-          </div>
-        </div>
-
-        <div className="mt-[15px] flex flex-wrap items-center gap-2">
+          </>
+        }
+      >
+        <div className="flex flex-wrap items-center gap-2">
           <span className="mr-[2px] flex-none text-[12.5px] font-semibold text-[var(--muted)]">Course</span>
           {offeringsLoading ? (
             <>
@@ -402,7 +399,7 @@ export function AttendanceContent({ role }: { role: Role }) {
             <span className="text-[13px] text-[var(--subtle)]">No courses yet.</span>
           )}
         </div>
-      </div>
+      </PageHeader>
 
       <div className="flex flex-wrap items-start gap-4">
         {/* SESSIONS LIST */}

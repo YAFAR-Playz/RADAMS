@@ -4,6 +4,7 @@ import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   getOrgTemplates,
   saveOrgTemplate,
@@ -149,17 +150,16 @@ export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform"
         <AssignmentTypesPanel />
       ) : (
       <>
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">
-          {isPlatform ? "Owner · Platform default templates" : "Admin · Organization templates"}
-        </div>
-        <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">WhatsApp message templates</h1>
-        <p className="m-0 mt-[3px] max-w-[600px] text-[13px] leading-[1.5] text-[var(--muted)]">
-          {isPlatform
+      <PageHeader
+        eyebrow={isPlatform ? "Owner · Platform default templates" : "Admin · Organization templates"}
+        title="WhatsApp message templates"
+        subtitle={
+          isPlatform
             ? "Set the default WhatsApp messages used by any organization that hasn't written its own. Each category has a separate message for the student and for the parent."
-            : "Customize the WhatsApp messages your organization sends. Each category has a separate message for the student and for the parent, and each starts from a built-in default."}
-        </p>
-        <div className="mt-[14px] flex items-start gap-[10px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--infos)] p-[11px_13px]">
+            : "Customize the WhatsApp messages your organization sends. Each category has a separate message for the student and for the parent, and each starts from a built-in default."
+        }
+      >
+        <div className="flex items-start gap-[10px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--infos)] p-[11px_13px]">
           <Icon name="building" size={17} className="mt-[1px] flex-none text-[var(--info)]" />
           <span className="text-[12.5px] leading-[1.45] text-[var(--text)]">
             {isPlatform ? (
@@ -172,7 +172,7 @@ export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform"
             )}
           </span>
         </div>
-      </div>
+      </PageHeader>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[300px_1fr]">
         {/* TEMPLATE LIST */}

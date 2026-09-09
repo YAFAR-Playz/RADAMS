@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Icon, type IconName } from "@/components/icons";
 import { SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { SectionCard as Card } from "@/components/ui/section-card";
 import { toneColors } from "@/lib/tone";
 import { mockKpisForRole, type Kpi, type Role, type Tone } from "@/lib/roles";
 import { dashboardSubtitle, greetingFor, dateLabel } from "@/lib/dashboard-data";
@@ -76,34 +77,6 @@ function ProgressBar({ pct, color }: { pct: number; color: string }) {
   );
 }
 
-function Card({
-  title,
-  subtitle,
-  action,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="relative overflow-hidden rounded-[18px] border border-[var(--border)] bg-[var(--surface)] shadow-[0_1px_2px_rgba(16,23,41,0.04),0_14px_32px_rgba(16,23,41,0.06)]">
-      <div
-        className="absolute inset-x-0 top-0 h-[3px]"
-        style={{ background: "linear-gradient(90deg, transparent, var(--brand), transparent)" }}
-      />
-      <header className="flex items-center justify-between gap-2 border-b border-[var(--border2)] px-[18px] py-[15px]">
-        <div className="min-w-0">
-          <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">{title}</h3>
-          {subtitle && <p className="mt-[2px] mb-0 text-[12px] text-[var(--subtle)]">{subtitle}</p>}
-        </div>
-        {action}
-      </header>
-      {children}
-    </section>
-  );
-}
 
 function ViewAllButton({ children = "View all", href }: { children?: string; href?: string }) {
   const className = "flex flex-none items-center gap-1 whitespace-nowrap bg-none text-[12.5px] font-semibold text-[var(--brand)]";
@@ -523,7 +496,8 @@ function OwnerPanels({
 }) {
   return (
     <>
-      <Card title="Organizations" action={<ViewAllButton href="/orgs">Manage</ViewAllButton>}>
+      <div className="lg:col-span-2 grid items-stretch gap-4 lg:grid-cols-[1.7fr_1fr]">
+        <Card title="Organizations" action={<ViewAllButton href="/orgs">Manage</ViewAllButton>}>
         <div className="px-2 py-[7px]">
           {orgs.length === 0 ? (
             <EmptyRow>No organizations yet.</EmptyRow>
@@ -548,7 +522,8 @@ function OwnerPanels({
           )}
         </div>
       </Card>
-      <ActivityCard rows={activity} />
+        <ActivityCard rows={activity} />
+      </div>
       <div className="lg:col-span-2">
         <OrgSizeCard rows={orgSize} />
       </div>

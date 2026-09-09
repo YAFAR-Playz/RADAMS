@@ -4,6 +4,7 @@ import { startTransition, useEffect, useState } from "react";
 import { Icon, type IconName } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
 import type { Tone } from "@/lib/roles";
 import { toneColors } from "@/lib/tone";
 import {
@@ -396,13 +397,11 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
         </div>
       )}
 
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Admin · Finance controls</div>
-        <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Organization settings</h1>
-        <p className="m-0 mt-[3px] max-w-[560px] text-[13px] leading-[1.5] text-[var(--muted)]">
-          These controls are set by Finance and Admin. They apply org-wide and change what Heads see in evaluations.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Admin · Finance controls"
+        title="Organization settings"
+        subtitle="These controls are set by Finance and Admin. They apply org-wide and change what Heads see in evaluations."
+      />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.3fr_1fr]">
         <div className="flex flex-col gap-4">

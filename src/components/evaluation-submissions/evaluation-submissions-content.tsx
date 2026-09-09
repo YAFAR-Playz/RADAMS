@@ -4,6 +4,7 @@ import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   listEvaluationPeriods,
   listEvaluationSubmissions,
@@ -87,14 +88,11 @@ export function EvaluationSubmissionsContent() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Read-only</div>
-        <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Evaluation submissions</h1>
-        <p className="m-0 mt-[3px] max-w-[620px] text-[13px] leading-[1.5] text-[var(--muted)]">
-          Every evaluation a Head has submitted, by month, course and assistant — extras, deductions, rating and notes exactly as
-          submitted. To edit a payable amount, use Salaries instead.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Read-only"
+        title="Evaluation submissions"
+        subtitle="Every evaluation a Head has submitted, by month, course and assistant — extras, deductions, rating and notes exactly as submitted. To edit a payable amount, use Salaries instead."
+      />
 
       <div className="flex flex-wrap gap-[10px] rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[13px] shadow-[var(--shadow)]">
         <div className="flex h-9 min-w-[140px] flex-1 items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px]">

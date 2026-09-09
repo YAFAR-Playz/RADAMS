@@ -4,6 +4,8 @@ import { startTransition, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
+import { SectionCard } from "@/components/ui/section-card";
 import { toneColors } from "@/lib/tone";
 import type { Tone } from "@/lib/roles";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
@@ -240,19 +242,11 @@ export function HeadAssignmentsContent() {
       )}
 
       {/* HEADER */}
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">
-              Assignments
-            </div>
-            <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">
-              Create &amp; assign work
-            </h1>
-            <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">
-              Each assignment is scoped to a course offering and logged by each student&apos;s assistant.
-            </p>
-          </div>
+      <PageHeader
+        eyebrow="Assignments"
+        title="Create & assign work"
+        subtitle="Each assignment is scoped to a course offering and logged by each student's assistant."
+        actions={
           <button
             onClick={openNewModal}
             disabled={!offeringId}
@@ -261,9 +255,9 @@ export function HeadAssignmentsContent() {
             <Icon name="plus" size={16} />
             New assignment
           </button>
-        </div>
-
-        <div className="mt-[15px] flex flex-wrap items-center gap-2">
+        }
+      >
+        <div className="flex flex-wrap items-center gap-2">
           <span className="mr-[2px] flex-none text-[12.5px] font-semibold text-[var(--muted)]">Offering</span>
           {offeringsLoading ? (
             <>
@@ -296,16 +290,17 @@ export function HeadAssignmentsContent() {
             <span className="text-[13px] text-[var(--subtle)]">No courses assigned yet.</span>
           )}
         </div>
-      </div>
+      </PageHeader>
 
       {/* ASSIGNMENT LIST */}
-      <section className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
-        <header className="flex items-center justify-between border-b border-[var(--border2)] p-[14px_18px]">
-          <h3 className="m-0 flex items-center gap-2 text-[14px] font-semibold text-[var(--text)]">
+      <SectionCard
+        title={
+          <span className="flex items-center gap-2">
             {listLoading && <Spinner size={13} />}
             {current?.label ?? "—"} · {assignments?.length ?? 0} assignments
-          </h3>
-        </header>
+          </span>
+        }
+      >
 
         {listLoading && !assignments ? (
           <div className="flex flex-col gap-2 p-[14px_18px]">
@@ -447,7 +442,7 @@ export function HeadAssignmentsContent() {
             );
           })
         )}
-      </section>
+      </SectionCard>
 
       {/* NEW / EDIT ASSIGNMENT MODAL */}
       {modalOpen && (
