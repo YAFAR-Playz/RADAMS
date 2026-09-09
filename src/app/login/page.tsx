@@ -36,7 +36,7 @@ export default async function LoginPage() {
           style={{ background: `radial-gradient(circle, ${brand} 0%, transparent 70%)` }}
         />
 
-        <div className="relative flex items-center gap-3">
+        <div className="relative flex items-center gap-3 animate-[fadeUp_500ms_ease-out_both]">
           <div className="flex h-11 w-11 flex-none items-center justify-center overflow-hidden rounded-[13px] bg-[var(--brand)] text-[22px] font-bold tracking-[-0.02em] text-[var(--brandfg)] shadow-[0_6px_16px_rgba(16,23,41,0.14)]">
             {branding.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -50,7 +50,7 @@ export default async function LoginPage() {
 
         <LoginHeroCards brand={brand} />
 
-        <div className="relative">
+        <div className="relative animate-[fadeUp_550ms_ease-out_both]" style={{ animationDelay: "180ms" }}>
           <h2 className="m-0 mb-[10px] max-w-[400px] text-[28px] font-semibold leading-[1.25] tracking-[-0.02em] text-[var(--text)]">
             Run your tutoring center from one screen.
           </h2>
@@ -59,7 +59,12 @@ export default async function LoginPage() {
           </p>
         </div>
 
-        <span className="relative mt-8 text-[12px] text-[var(--subtle)]">© 2026 {branding.name}. All rights reserved.</span>
+        <span
+          className="relative mt-8 text-[12px] text-[var(--subtle)] animate-[fadeUp_550ms_ease-out_both]"
+          style={{ animationDelay: "240ms" }}
+        >
+          © 2026 {branding.name}. All rights reserved.
+        </span>
       </div>
 
       {/* FORM SIDE */}
@@ -70,7 +75,7 @@ export default async function LoginPage() {
         />
 
         <div className="relative w-full max-w-[380px]">
-          <div className="mb-8 flex items-center gap-[11px] lg:hidden">
+          <div className="mb-8 flex items-center gap-[11px] animate-[fadeUp_500ms_ease-out_both] lg:hidden">
             <div className="flex h-[42px] w-[42px] flex-none items-center justify-center overflow-hidden rounded-[12px] bg-[var(--brand)] text-[20px] font-bold tracking-[-0.02em] text-[var(--brandfg)] shadow-[0_4px_12px_rgba(16,23,41,0.12)]">
               {branding.logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -82,7 +87,10 @@ export default async function LoginPage() {
             <span className="text-[22px] font-bold tracking-[-0.02em] text-[var(--text)]">{branding.name}</span>
           </div>
 
-          <div className="relative overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_1px_2px_rgba(16,23,41,0.04),0_18px_40px_rgba(16,23,41,0.08)] sm:p-8">
+          <div
+            className="relative overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_1px_2px_rgba(16,23,41,0.04),0_18px_40px_rgba(16,23,41,0.08)] animate-[fadeUp_550ms_ease-out_both] sm:p-8"
+            style={{ animationDelay: "80ms" }}
+          >
             <div
               className="absolute inset-x-0 top-0 h-[3px]"
               style={{ background: `linear-gradient(90deg, transparent, ${brand}, transparent)` }}

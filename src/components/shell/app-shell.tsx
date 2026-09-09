@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, ViewTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -270,6 +270,7 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   const activeKey = useActiveKey();
+  const pathname = usePathname();
   const [navMode, setNavMode] = useState<NavMode>(() => {
     if (typeof localStorage === "undefined") return "sidebar";
     const saved = localStorage.getItem("radams-nav");
@@ -392,7 +393,11 @@ export function AppShell({
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto px-4 py-5 md:px-7 md:py-[26px]">{children}</main>
+        <main className="flex-1 overflow-y-auto px-4 py-5 md:px-7 md:py-[26px]">
+          <ViewTransition key={pathname} enter="page-content" exit="page-content" default="none">
+            {children}
+          </ViewTransition>
+        </main>
       </div>
 
       {/* MOBILE FULL-SCREEN MENU */}

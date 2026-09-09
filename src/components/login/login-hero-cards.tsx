@@ -27,8 +27,8 @@ const SCENES: Scene[] = [
   },
 ];
 
-const CYCLE_MS = 4500;
-const FADE_MS = 350;
+const CYCLE_MS = 2600;
+const FADE_MS = 200;
 
 export function LoginHeroCards({ brand }: { brand: string }) {
   const [index, setIndex] = useState(0);
@@ -57,7 +57,7 @@ export function LoginHeroCards({ brand }: { brand: string }) {
   } as const;
 
   return (
-    <div className="relative my-10 flex-1">
+    <div className="relative my-10 flex-1 animate-[fadeUp_550ms_ease-out_both]" style={{ animationDelay: "90ms" }}>
       <div
         className="pointer-events-none absolute left-1/2 top-1/2 h-[280px] w-[280px] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-[0.14] blur-[30px]"
         style={{ background: `radial-gradient(circle, ${brand} 0%, transparent 70%)` }}
