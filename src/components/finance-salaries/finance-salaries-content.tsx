@@ -4,6 +4,7 @@ import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
 import {
   listPeriods,
@@ -707,14 +708,12 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
         </div>
       )}
 
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Finance</div>
-            <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Salary breakdown</h1>
-            <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">Edit per-course adjustments and release payments when ready.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+      <PageHeader
+        eyebrow="Finance"
+        title="Salary breakdown"
+        subtitle="Edit per-course adjustments and release payments when ready."
+        actions={
+          <>
             {periods && periods.length > 0 && (
               <div className="flex h-10 items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3">
                 <Icon name="cal-check" size={15} className="text-[var(--subtle)]" />
@@ -774,9 +773,10 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
               {exportingFull ? <Spinner size={15} /> : <Icon name="file-up" size={16} />}
               Export full history
             </button>
-          </div>
-        </div>
-        <div className="mt-4 grid grid-cols-3 gap-3">
+          </>
+        }
+      >
+        <div className="grid grid-cols-3 gap-3">
           {loading
             ? Array.from({ length: 3 }, (_, i) => <SkeletonRow key={i} className="h-[58px]" />)
             : [
@@ -792,7 +792,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
                 </div>
               ))}
         </div>
-      </div>
+      </PageHeader>
 
       <section className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
         <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border2)] p-[15px_18px]">

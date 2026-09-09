@@ -4,6 +4,7 @@ import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
 import type { Role } from "@/lib/roles";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import {
@@ -167,16 +168,14 @@ export function WeakTopicsContent({ role }: { role: Role }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Weak topics</div>
-            <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Weak / revision topics</h1>
-            <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">
-              {role === "head" ? "Manage the topic catalog and every student's monthly tags and comment." : "Tag your students with weak topics each month."}
-            </p>
-          </div>
-          <div className="flex flex-none items-center gap-[8px]">
+      <PageHeader
+        eyebrow="Weak topics"
+        title="Weak / revision topics"
+        subtitle={
+          role === "head" ? "Manage the topic catalog and every student's monthly tags and comment." : "Tag your students with weak topics each month."
+        }
+        actions={
+          <>
             {offerings.length > 0 && (
               <select
                 value={offeringId}
@@ -199,11 +198,11 @@ export function WeakTopicsContent({ role }: { role: Role }) {
                 className="h-10 cursor-pointer rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13px] text-[var(--text)] outline-none"
               />
             )}
-          </div>
-        </div>
-
+          </>
+        }
+      >
         {role === "head" && (
-          <div className="mt-4 flex gap-[6px] border-b border-[var(--border)]">
+          <div className="flex gap-[6px] border-b border-[var(--border)]">
             {(["catalog", "manage", "progress"] as const).map((t) => (
               <button
                 key={t}
@@ -217,7 +216,7 @@ export function WeakTopicsContent({ role }: { role: Role }) {
             ))}
           </div>
         )}
-      </div>
+      </PageHeader>
 
       {error && (
         <div className="rounded-[var(--rad-sm)] border border-[var(--danger)] bg-[var(--dangers)] px-[14px] py-[10px] text-[13px] font-medium text-[var(--danger)]">

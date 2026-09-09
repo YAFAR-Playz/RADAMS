@@ -4,6 +4,7 @@ import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   listOrgsOverview,
   createOrganization,
@@ -153,15 +154,11 @@ export function OwnerOrgsContent() {
         </div>
       )}
 
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Owner · Platform</div>
-            <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Organizations</h1>
-            <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">
-              Manage every organization and its admin. Sign in as any admin to troubleshoot.
-            </p>
-          </div>
+      <PageHeader
+        eyebrow="Owner · Platform"
+        title="Organizations"
+        subtitle="Manage every organization and its admin. Sign in as any admin to troubleshoot."
+        actions={
           <button
             onClick={openAdd}
             className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[15px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)]"
@@ -169,8 +166,9 @@ export function OwnerOrgsContent() {
             <Icon name="plus" size={16} />
             New organization
           </button>
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        }
+      >
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {loading
             ? Array.from({ length: 4 }, (_, i) => <SkeletonRow key={i} className="h-[58px]" />)
             : stats.map((s) => (
@@ -182,7 +180,7 @@ export function OwnerOrgsContent() {
                 </div>
               ))}
         </div>
-      </div>
+      </PageHeader>
 
       <div className="flex flex-col gap-[14px]">
         {loading ? (

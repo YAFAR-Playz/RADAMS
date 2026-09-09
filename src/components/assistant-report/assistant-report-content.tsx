@@ -4,6 +4,8 @@ import { startTransition, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
+import { SectionCard } from "@/components/ui/section-card";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import { getMyGeneratedReport, type GeneratedReportMeta, type GeneratedStudentReport } from "@/lib/actions/academic-report";
 import { formatGradeByScale } from "@/lib/grade-scale";
@@ -94,17 +96,12 @@ export function AssistantReportContent() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Monthly Reports</div>
-            <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">My students&apos; reports</h1>
-            <p className="m-0 mt-[3px] max-w-[560px] text-[13px] leading-[1.5] text-[var(--muted)]">
-              View, share, download, or print each of your students&apos; monthly reports — available once the head generates the report for that month.
-            </p>
-          </div>
-        </div>
-        <div className="mt-4 flex flex-wrap items-center gap-[10px]">
+      <PageHeader
+        eyebrow="Monthly Reports"
+        title="My students' reports"
+        subtitle="View, share, download, or print each of your students' monthly reports — available once the head generates the report for that month."
+      >
+        <div className="flex flex-wrap items-center gap-[10px]">
           <select
             value={offeringId}
             onChange={(e) => setOfferingId(e.target.value)}
@@ -141,9 +138,9 @@ export function AssistantReportContent() {
           />
           <ReportActionButtons href={`/report-print?offeringId=${offeringId}&period=${period}`} disabled={!meta} />
         </div>
-      </div>
+      </PageHeader>
 
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+      <SectionCard>
         {students === null ? (
           <div className="flex flex-col gap-2 p-[14px_18px]">
             {Array.from({ length: 4 }, (_, i) => (
@@ -222,7 +219,7 @@ export function AssistantReportContent() {
             )}
           </>
         )}
-      </div>
+      </SectionCard>
     </div>
   );
 }

@@ -4,6 +4,8 @@ import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
+import { SectionCard } from "@/components/ui/section-card";
 import { listActivityLog, type ActivityLogRow } from "@/lib/actions/activity-log";
 import { ACTIVITY_CATEGORIES, CATEGORY_LABEL, CATEGORY_ICON, type ActivityCategory } from "@/lib/activity-categories";
 
@@ -49,12 +51,8 @@ export function HistoryContent() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Admin</div>
-        <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Activity history</h1>
-        <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">Every logged action across your org, last 30 days.</p>
-
-        <div className="mt-[15px] flex flex-wrap gap-2">
+      <PageHeader eyebrow="Admin" title="Activity history" subtitle="Every logged action across your org, last 30 days.">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setFilter("all")}
             className="flex flex-none items-center gap-[7px] rounded-full border px-[14px] py-2 text-[13px] font-semibold"
@@ -85,9 +83,9 @@ export function HistoryContent() {
             );
           })}
         </div>
-      </div>
+      </PageHeader>
 
-      <section className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+      <SectionCard>
         {loading ? (
           <div className="flex flex-col gap-2 p-[14px_18px]">
             {Array.from({ length: 6 }, (_, i) => (
@@ -140,7 +138,7 @@ export function HistoryContent() {
             )}
           </>
         )}
-      </section>
+      </SectionCard>
     </div>
   );
 }

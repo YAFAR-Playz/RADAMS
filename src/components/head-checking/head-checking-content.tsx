@@ -4,6 +4,7 @@ import { startTransition, useEffect, useMemo, useState, useTransition } from "re
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
 import { toneColors } from "@/lib/tone";
 import { STATUS_DEFS, statusDef, type AssignmentStatus } from "@/lib/assignments-data";
 import {
@@ -295,19 +296,13 @@ export function HeadCheckingContent() {
       )}
 
       {/* CONTEXT HEADER */}
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Checking</div>
-            <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">
-              {currentAssignment?.title ?? (assignmentsLoading ? "Loading…" : "No assignments yet")}
-            </h1>
-            <div className="mt-[3px] text-[13px] text-[var(--muted)]">
-              Review every assistant&apos;s logging for this assignment — override anything, then message a guardian.
-              {currentAssignment ? ` Out of ${currentAssignment.maxMarks}.` : ""}
-              {currentOffering ? ` ${currentOffering.label}.` : ""}
-            </div>
-          </div>
+      <PageHeader
+        eyebrow="Checking"
+        title={currentAssignment?.title ?? (assignmentsLoading ? "Loading…" : "No assignments yet")}
+        subtitle={`Review every assistant's logging for this assignment — override anything, then message a guardian.${
+          currentAssignment ? ` Out of ${currentAssignment.maxMarks}.` : ""
+        }${currentOffering ? ` ${currentOffering.label}.` : ""}`}
+        actions={
           <button
             disabled={rosterLoading || savingId !== null}
             onClick={() => assignmentId && reloadRoster(assignmentId)}
@@ -316,9 +311,9 @@ export function HeadCheckingContent() {
             {rosterLoading ? <Spinner size={15} /> : <Icon name="check" size={16} />}
             Refresh
           </button>
-        </div>
-
-        <div className="mt-[15px] flex flex-wrap items-center gap-2">
+        }
+      >
+        <div className="flex flex-wrap items-center gap-2">
           <span className="mr-[2px] flex-none text-[12.5px] font-semibold text-[var(--muted)]">Course</span>
           {offeringsLoading ? (
             <>
@@ -380,7 +375,7 @@ export function HeadCheckingContent() {
             </div>
           </div>
         </div>
-      </div>
+      </PageHeader>
 
       {/* TOOLBAR */}
       <div className="flex flex-wrap items-center gap-3">

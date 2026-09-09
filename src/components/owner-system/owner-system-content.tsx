@@ -4,6 +4,8 @@ import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
+import { SectionCard } from "@/components/ui/section-card";
 import { getSystemOverview, type SystemOverview } from "@/lib/actions/owner";
 
 const STATUS_TONE: Record<string, { bg: string; fg: string; label: string }> = {
@@ -54,15 +56,15 @@ export function OwnerSystemContent() {
         </div>
       )}
 
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Owner · Platform</div>
-        <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">System</h1>
-        <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">Platform-wide composition — who&apos;s on ZAD-AMS and how organizations are doing.</p>
-      </div>
+      <PageHeader
+        eyebrow="Owner · Platform"
+        title="System"
+        subtitle="Platform-wide composition — who's on ZAD-AMS and how organizations are doing."
+      />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <section className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-          <h3 className="m-0 mb-[14px] text-[14px] font-semibold text-[var(--text)]">Users by role</h3>
+        <SectionCard title="Users by role">
+          <div className="p-[17px_18px]">
           {loading ? (
             <SkeletonRow className="h-[140px]" />
           ) : data.usersByRole.length === 0 ? (
@@ -80,10 +82,11 @@ export function OwnerSystemContent() {
               </div>
             ))
           )}
-        </section>
+          </div>
+        </SectionCard>
 
-        <section className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-          <h3 className="m-0 mb-[14px] text-[14px] font-semibold text-[var(--text)]">Organizations by status</h3>
+        <SectionCard title="Organizations by status">
+          <div className="p-[17px_18px]">
           {loading ? (
             <SkeletonRow className="h-[100px]" />
           ) : data.orgsByStatus.length === 0 ? (
@@ -105,13 +108,11 @@ export function OwnerSystemContent() {
               })}
             </div>
           )}
-        </section>
+          </div>
+        </SectionCard>
       </div>
 
-      <section className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
-        <header className="border-b border-[var(--border2)] p-[14px_16px]">
-          <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Recent signups</h3>
-        </header>
+      <SectionCard title="Recent signups">
         <div className="p-[7px_8px]">
           {loading ? (
             <div className="flex flex-col gap-2 p-2">
@@ -138,7 +139,7 @@ export function OwnerSystemContent() {
             ))
           )}
         </div>
-      </section>
+      </SectionCard>
     </div>
   );
 }

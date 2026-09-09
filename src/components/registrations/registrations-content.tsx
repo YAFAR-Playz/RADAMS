@@ -4,6 +4,7 @@ import { startTransition, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import { registerStudent, listRegistrations, type RegistrationRow } from "@/lib/actions/registrations";
 import { findStudentByPhone, type StudentDuplicateMatch } from "@/lib/actions/students";
@@ -166,11 +167,11 @@ export function RegistrationsContent() {
       )}
 
       {/* HEADER */}
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Registration</div>
-        <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Register a student</h1>
-        <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">Enroll a single student into a course offering. For bulk sign-ups, use Import.</p>
-      </div>
+      <PageHeader
+        eyebrow="Registration"
+        title="Register a student"
+        subtitle="Enroll a single student into a course offering. For bulk sign-ups, use Import."
+      />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1.3fr]">
         {/* REGISTRATION FORM */}

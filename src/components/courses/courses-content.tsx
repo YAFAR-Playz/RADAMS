@@ -4,6 +4,7 @@ import { startTransition, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   listCourses,
   listHeadsForOrg,
@@ -328,15 +329,11 @@ export function CoursesContent() {
       )}
 
       {/* HEADER */}
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Admin</div>
-            <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Courses &amp; sessions</h1>
-            <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">
-              Monitor active course offerings, set start &amp; end dates, and activate or deactivate any course-unit-session.
-            </p>
-          </div>
+      <PageHeader
+        eyebrow="Admin"
+        title="Courses & sessions"
+        subtitle="Monitor active course offerings, set start & end dates, and activate or deactivate any course-unit-session."
+        actions={
           <button
             onClick={openAdd}
             className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[15px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)]"
@@ -344,8 +341,9 @@ export function CoursesContent() {
             <Icon name="plus" size={16} />
             New course offering
           </button>
-        </div>
-        <div className="mt-4 grid grid-cols-3 gap-3">
+        }
+      >
+        <div className="grid grid-cols-3 gap-3">
           {loading || !courses
             ? Array.from({ length: 3 }, (_, i) => <SkeletonRow key={i} className="h-[58px]" />)
             : stats.map((s) => (
@@ -357,7 +355,7 @@ export function CoursesContent() {
                 </div>
               ))}
         </div>
-      </div>
+      </PageHeader>
 
       {/* TOOLBAR */}
       <div className="flex flex-wrap items-center gap-[10px]">

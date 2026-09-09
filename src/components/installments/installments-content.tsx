@@ -4,6 +4,7 @@ import { startTransition, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
 import { listPaymentPlans, markInstallmentPaid, setPlanDiscount, setPlanType, type StudentPaymentRow, type PlanType } from "@/lib/actions/payments";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
@@ -131,11 +132,12 @@ export function InstallmentsContent() {
       )}
 
       {/* HEADER */}
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Registration</div>
-        <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Installments &amp; payments</h1>
-        <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">Track each student&apos;s payment plan and mark installments as paid.</p>
-        <div className="mt-4 grid grid-cols-3 gap-3">
+      <PageHeader
+        eyebrow="Registration"
+        title="Installments & payments"
+        subtitle="Track each student's payment plan and mark installments as paid."
+      >
+        <div className="grid grid-cols-3 gap-3">
           {loading || !plans
             ? Array.from({ length: 3 }, (_, i) => <SkeletonRow key={i} className="h-[58px]" />)
             : stats.map((s) => (
@@ -147,7 +149,7 @@ export function InstallmentsContent() {
                 </div>
               ))}
         </div>
-      </div>
+      </PageHeader>
 
       {/* TOOLBAR */}
       <div className="flex flex-wrap items-center gap-[10px]">

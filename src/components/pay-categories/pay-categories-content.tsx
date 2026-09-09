@@ -4,6 +4,7 @@ import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   listPayCategories,
   addPayCategory,
@@ -644,14 +645,12 @@ export function PayCategoriesContent() {
         </div>
       )}
 
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Finance</div>
-        <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Pay categories &amp; rates</h1>
-        <p className="m-0 mt-[3px] max-w-[560px] text-[13px] leading-[1.5] text-[var(--muted)]">
-          Define the extra-work and deduction categories Heads choose from in evaluations, plus per-course and bracket pay rates.
-          Adding/removing items happens instantly; edited values are saved with the button below once you&apos;re ready.
-        </p>
-        <div className="mt-[14px] flex flex-wrap items-center gap-[9px]">
+      <PageHeader
+        eyebrow="Finance"
+        title="Pay categories & rates"
+        subtitle="Define the extra-work and deduction categories Heads choose from in evaluations, plus per-course and bracket pay rates. Adding/removing items happens instantly; edited values are saved with the button below once you're ready."
+      >
+        <div className="flex flex-wrap items-center gap-[9px]">
           <span className="text-[12.5px] font-semibold text-[var(--muted)]">Rates &amp; brackets apply to</span>
           <div className="relative min-w-[240px]">
             <button
@@ -689,7 +688,7 @@ export function PayCategoriesContent() {
             )}
           </div>
         </div>
-      </div>
+      </PageHeader>
 
       {loading && !categories ? (
         <>

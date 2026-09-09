@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
 import { getMyPay, getMyReceiptUrl, sendFinanceMessage, markPayViewed, getMyMessages, type MyPay, type PayMessage } from "@/lib/actions/pay";
 
 function periodLabel(period: string) {
@@ -138,14 +139,12 @@ export function MyPayContent() {
       )}
 
       {/* HEADER */}
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">My pay</div>
-            <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">My salary breakdown</h1>
-            <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">How your pay was calculated this month.</p>
-          </div>
-          <div className="flex items-center gap-[10px]">
+      <PageHeader
+        eyebrow="My pay"
+        title="My salary breakdown"
+        subtitle="How your pay was calculated this month."
+        actions={
+          <>
             <div className="flex h-10 items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3">
               <Icon name="cal-check" size={15} className="text-[var(--subtle)]" />
               <select
@@ -167,10 +166,10 @@ export function MyPayContent() {
               <Icon name="message" size={15} />
               Message Finance
             </button>
-          </div>
-        </div>
-
-        <div className="mt-4 grid grid-cols-3 gap-3">
+          </>
+        }
+      >
+        <div className="grid grid-cols-3 gap-3">
           {stats.map((s) => (
             <div key={s.label} className="rounded-[var(--rad-sm)] border border-[var(--border2)] bg-[var(--surface2)] p-[13px_15px]">
               <div className="text-[22px] font-bold leading-[1.1] tracking-[-0.02em] text-[var(--brand)]">{s.value}</div>
@@ -178,7 +177,7 @@ export function MyPayContent() {
             </div>
           ))}
         </div>
-      </div>
+      </PageHeader>
 
       {loading ? (
         <SkeletonRow className="h-[200px]" />

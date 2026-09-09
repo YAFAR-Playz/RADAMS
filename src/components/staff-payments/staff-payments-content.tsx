@@ -4,6 +4,7 @@ import { startTransition, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
 import { listStaffPayments, updatePaySettings, type StaffPaymentRow, type CalcMethod } from "@/lib/actions/staff-payments";
 
@@ -112,13 +113,12 @@ export function StaffPaymentsContent() {
       )}
 
       {/* HEADER */}
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Finance</div>
-        <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Staff payments</h1>
-        <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">
-          Every head &amp; assistant — payment method, last payment, lifetime earnings, and how their salary is calculated.
-        </p>
-        <div className="mt-[15px] flex flex-wrap items-center gap-[10px]">
+      <PageHeader
+        eyebrow="Finance"
+        title="Staff payments"
+        subtitle="Every head & assistant — payment method, last payment, lifetime earnings, and how their salary is calculated."
+      >
+        <div className="flex flex-wrap items-center gap-[10px]">
           <div className="flex h-10 min-w-[200px] max-w-[320px] flex-1 items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3">
             <Icon name="search" size={16} className="text-[var(--subtle)]" />
             <input
@@ -154,7 +154,7 @@ export function StaffPaymentsContent() {
             })}
           </div>
         </div>
-      </div>
+      </PageHeader>
 
       {/* STAFF CARDS */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">

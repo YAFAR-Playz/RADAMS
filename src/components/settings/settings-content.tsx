@@ -4,6 +4,7 @@ import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   getMyProfile,
   updateMyDetails,
@@ -164,11 +165,7 @@ export function SettingsContent() {
         </div>
       )}
 
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Account</div>
-        <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Settings</h1>
-        <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">Manage your own profile, contact details and login.</p>
-      </div>
+      <PageHeader eyebrow="Account" title="Settings" subtitle="Manage your own profile, contact details and login." />
 
       {/* PROFILE PICTURE + NAME + PHONE */}
       <section className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">

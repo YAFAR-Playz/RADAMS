@@ -4,6 +4,7 @@ import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   getPlatformDefaultBranding,
   savePlatformDefaultBranding,
@@ -112,21 +113,19 @@ export function OwnerBrandingContent() {
         </div>
       )}
 
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Owner · Platform</div>
-        <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Platform branding</h1>
-        <p className="m-0 mt-[3px] max-w-[560px] text-[13px] leading-[1.5] text-[var(--muted)]">
-          Set the brand name, colors, font and shape used by any organization that hasn&apos;t customized its own. The moment an
-          admin sets their own value, it overrides this default for their organization only.
-        </p>
-        <div className="mt-[14px] flex items-start gap-[10px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--infos)] p-[11px_13px]">
+      <PageHeader
+        eyebrow="Owner · Platform"
+        title="Platform branding"
+        subtitle="Set the brand name, colors, font and shape used by any organization that hasn't customized its own. The moment an admin sets their own value, it overrides this default for their organization only."
+      >
+        <div className="flex items-start gap-[10px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--infos)] p-[11px_13px]">
           <Icon name="building" size={17} className="mt-[1px] flex-none text-[var(--info)]" />
           <span className="text-[12.5px] leading-[1.45] text-[var(--text)]">
             These settings apply <span className="font-semibold">platform-wide</span> as the fallback — they never overwrite an
             organization that has already set its own branding.
           </span>
         </div>
-      </div>
+      </PageHeader>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.25fr_1fr]">
         <div className="flex min-w-0 flex-col gap-4">

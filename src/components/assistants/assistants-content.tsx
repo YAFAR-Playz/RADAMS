@@ -4,6 +4,7 @@ import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
+import { PageHeader } from "@/components/ui/page-header";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import {
   getAssistantGroups,
@@ -219,14 +220,12 @@ export function AssistantsContent() {
       )}
 
       {/* HEADER */}
-      <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">Assistants</div>
-            <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">Team &amp; student groups</h1>
-            <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">Request staffing changes and assign students to each assistant&apos;s group.</p>
-          </div>
-          <div className="flex flex-none flex-wrap items-center gap-[9px]">
+      <PageHeader
+        eyebrow="Assistants"
+        title="Team & student groups"
+        subtitle="Request staffing changes and assign students to each assistant's group."
+        actions={
+          <>
             <button
               onClick={() => setAutoOpen(true)}
               disabled={unassigned.length === 0}
@@ -253,10 +252,10 @@ export function AssistantsContent() {
               <Icon name="user-plus" size={16} />
               Request assistant
             </button>
-          </div>
-        </div>
-
-        <div className="mt-[15px] flex flex-wrap items-center gap-2">
+          </>
+        }
+      >
+        <div className="flex flex-wrap items-center gap-2">
           <span className="mr-[2px] flex-none text-[12.5px] font-semibold text-[var(--muted)]">Offering</span>
           {offeringsLoading ? (
             <>
@@ -310,7 +309,7 @@ export function AssistantsContent() {
             </div>
           </div>
         )}
-      </div>
+      </PageHeader>
 
       {/* PENDING REQUESTS */}
       {requests && requests.length > 0 && (
