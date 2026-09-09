@@ -91,10 +91,10 @@ export function LoginForm() {
       {step === "contact" && (
         <>
           <h1 className="m-0 mb-[7px] text-[27px] font-semibold text-[var(--text)] tracking-[-0.02em]">
-            Sign in to your account
+            Welcome back
           </h1>
           <p className="m-0 mb-[22px] text-[14.5px] text-[var(--muted)] leading-relaxed">
-            Enter your email or phone to continue.
+            Sign in with your email or phone number to pick up where you left off.
           </p>
           <div className="flex gap-1 bg-[var(--surface2)] border border-[var(--border)] rounded-[10px] p-[3px] mb-[18px]">
             <button
@@ -171,7 +171,7 @@ export function LoginForm() {
             <Icon name="arrow-r" size={17} />
           </button>
           <p className="mt-[18px] text-[12.5px] text-[var(--subtle)] leading-relaxed text-center">
-            By continuing you agree to the Terms of Service and Privacy Policy.
+            By continuing, you agree to our Terms of Service and Privacy Policy.
           </p>
         </>
       )}
@@ -189,7 +189,7 @@ export function LoginForm() {
             Enter your password
           </h1>
           <p className="m-0 mb-[22px] text-[14.5px] text-[var(--muted)] leading-relaxed">
-            Welcome back. Enter your password to sign in.
+            Almost there — enter your password to finish signing in.
           </p>
           <label className="text-[13px] font-semibold text-[var(--text)] block mb-2">Password</label>
           <div className="flex items-center gap-[9px] bg-[var(--surface)] border border-[var(--border)] rounded-[var(--rad-sm)] px-[13px] h-[50px] focus-within:border-[var(--brand)] focus-within:shadow-[0_0_0_3px_var(--brands)]">
@@ -246,11 +246,11 @@ export function LoginForm() {
             <Icon name="mail" size={24} />
           </div>
           <h1 className="m-0 mb-[7px] text-[27px] font-semibold text-[var(--text)] tracking-[-0.02em]">
-            Check your email
+            Check your inbox
           </h1>
           <p className="m-0 mb-6 text-[14.5px] text-[var(--muted)] leading-relaxed">
-            We sent a password reset link to <span className="text-[var(--text)] font-semibold">{contactDisplay}</span>.
-            Open it on this device to set a new password.
+            We&apos;ve sent a password reset link to <span className="text-[var(--text)] font-semibold">{contactDisplay}</span>.
+            Open it on this device to choose a new password.
           </p>
           {error && <p className="mb-3 text-[12.5px] text-[var(--danger)] font-medium">{error}</p>}
           <div className="flex items-center text-[13px]">
