@@ -2,7 +2,9 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
-import type { AssignmentStatus } from "@/lib/assignments-data";
+import type { AssignmentStatus, MessageRecipient } from "@/lib/assignments-data";
+
+export type RecipientFilter = MessageRecipient | "both";
 
 export type OfferingOption = { id: string; label: string };
 
@@ -31,6 +33,7 @@ export type OversightComment = {
   grade: string | null;
   comment: string | null;
   sent: boolean;
+  recipient: MessageRecipient | null;
 };
 
 export type FullExportRow = {
@@ -190,7 +193,8 @@ export async function listHeadOfferings(): Promise<OfferingOption[]> {
 }
 
 export async function getOversightSummary(
-  offeringId: string
+  offeringId: string,
+  recipientFilter: RecipientFilter = "both"
 ): Promise<{ stats: OversightStats; assistants: AssistantSummary[] }> {
   const supabase = await createClient();
 
@@ -225,13 +229,13 @@ export async function getOversightSummary(
   // Scoping to assignment_id alone is already exact for this offering.
   // Paginated since assignments × students for a large course can clear
   // the 1000-row cap on its own.
-  const logs: { student_id: string; sent_at: string | null }[] = [];
+  const logs: { student_id: string; sent_at: string | null; recipient: string | null }[] = [];
   const LOGS_PAGE_SIZE = 1000;
   if (assignmentIds.length) {
     for (let from = 0; ; from += LOGS_PAGE_SIZE) {
       const { data: page } = await supabase
         .from("assignment_logs")
-        .select("student_id, sent_at")
+        .select("student_id, sent_at, recipient")
         .in("assignment_id", assignmentIds)
         .range(from, from + LOGS_PAGE_SIZE - 1);
       if (!page || page.length === 0) break;
@@ -240,9 +244,16 @@ export async function getOversightSummary(
     }
   }
 
+  // "both" counts anything logged as sent, regardless of who it went to —
+  // matches the pre-recipient behavior. A specific recipient filter only
+  // counts logs tagged with that recipient, so older rows (recorded before
+  // this column existed) are excluded from either specific filter until a
+  // new send re-tags them.
   const sentByStudent = new Map<string, number>();
   for (const log of logs) {
-    if (log.sent_at) sentByStudent.set(log.student_id, (sentByStudent.get(log.student_id) ?? 0) + 1);
+    if (!log.sent_at) continue;
+    if (recipientFilter !== "both" && log.recipient !== recipientFilter) continue;
+    sentByStudent.set(log.student_id, (sentByStudent.get(log.student_id) ?? 0) + 1);
   }
 
   const expectedPerStudent = Math.max(1, assignmentIds.length);
@@ -294,12 +305,20 @@ export async function getAssistantComments(offeringId: string, assistantId: stri
   // ever looks up students present in `enrollments`, so a redundant
   // `.in("student_id", studentIds)` on top risked the same URL-length
   // failure fixed elsewhere in this codebase. Paginated as a backstop.
-  const logs: { assignment_id: string; student_id: string; status: string | null; grade: string | null; comment: string | null; sent_at: string | null }[] = [];
+  const logs: {
+    assignment_id: string;
+    student_id: string;
+    status: string | null;
+    grade: string | null;
+    comment: string | null;
+    sent_at: string | null;
+    recipient: string | null;
+  }[] = [];
   const LOGS_PAGE_SIZE = 1000;
   for (let from = 0; ; from += LOGS_PAGE_SIZE) {
     const { data: page } = await supabase
       .from("assignment_logs")
-      .select("assignment_id, student_id, status, grade, comment, sent_at")
+      .select("assignment_id, student_id, status, grade, comment, sent_at, recipient")
       .in("assignment_id", assignmentIds)
       .range(from, from + LOGS_PAGE_SIZE - 1);
     if (!page || page.length === 0) break;
@@ -327,6 +346,7 @@ export async function getAssistantComments(offeringId: string, assistantId: stri
         grade: log.grade,
         comment: log.comment,
         sent: !!log.sent_at,
+        recipient: (log.recipient as MessageRecipient | null) ?? null,
       };
     })
     .filter((x): x is OversightComment => !!x)
