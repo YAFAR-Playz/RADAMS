@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import {
   listPayCategories,
   addPayCategory,
@@ -258,15 +259,17 @@ export function PayCategoriesContent() {
       listOfficeHourRatesByOffering(),
       getPayrollSettings(),
     ]);
-    setCategories(cats);
-    setCourseRates(rates);
-    setOfficeHourOrgDefaultState(orgDefault);
-    setOfficeHourRates(officeHours);
-    if (settings) {
-      setCurrency(settings.currency);
-      setMockExamEnabled(settings.mockExamEnabled);
-      setHeadFixedPerAssistantEnabled(settings.headFixedPerAssistantEnabled);
-    }
+    startTransition(() => {
+      setCategories(cats);
+      setCourseRates(rates);
+      setOfficeHourOrgDefaultState(orgDefault);
+      setOfficeHourRates(officeHours);
+      if (settings) {
+        setCurrency(settings.currency);
+        setMockExamEnabled(settings.mockExamEnabled);
+        setHeadFixedPerAssistantEnabled(settings.headFixedPerAssistantEnabled);
+      }
+    });
   }
 
   async function refetchBrackets(scope: string[]) {
@@ -301,19 +304,21 @@ export function PayCategoriesContent() {
     setLoading(true);
     try {
       await refetchLists();
-      setCategoryDrafts({});
-      setOptionDrafts({});
-      setCourseRateDrafts({});
-      setCourseFixedSalaryDrafts({});
-      setBracketDrafts({});
-      setOfficeHourOrgDefaultDraft(null);
-      setOfficeHourRateDrafts({});
-      setCategoryRateDrafts({});
-      setCategoryOptionDrafts({});
-      setOfficeHoursDefaultDrafts({});
+      startTransition(() => {
+        setCategoryDrafts({});
+        setOptionDrafts({});
+        setCourseRateDrafts({});
+        setCourseFixedSalaryDrafts({});
+        setBracketDrafts({});
+        setOfficeHourOrgDefaultDraft(null);
+        setOfficeHourRateDrafts({});
+        setCategoryRateDrafts({});
+        setCategoryOptionDrafts({});
+        setOfficeHoursDefaultDrafts({});
+        setLoading(false);
+      });
     } catch {
       setError("Couldn't load pay categories.");
-    } finally {
       setLoading(false);
     }
   }
@@ -617,6 +622,16 @@ export function PayCategoriesContent() {
       : courseScope.length === 1
         ? courseRates?.find((c) => c.offeringId === courseScope[0])?.label ?? "1 course selected"
         : `${courseScope.length} courses selected`;
+
+  if (!categories) {
+    return error ? (
+      <div className="rounded-[var(--rad-sm)] border border-[var(--danger)] bg-[var(--dangers)] px-4 py-3 text-[13px] font-medium text-[var(--danger)]">
+        {error}
+      </div>
+    ) : (
+      <TabLoader label="Loading pay categories…" />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4 pb-[70px]">

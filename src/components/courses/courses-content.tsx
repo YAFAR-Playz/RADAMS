@@ -3,6 +3,7 @@
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import {
   listCourses,
   listHeadsForOrg,
@@ -150,13 +151,21 @@ export function CoursesContent() {
   const pageStart = safePage * PAGE_SIZE;
   const pageRows = filtered.slice(pageStart, pageStart + PAGE_SIZE);
 
-  const stats = courses
-    ? [
-        { value: String(courses.filter((c) => c.active).length), label: "Active offerings", color: "var(--ok)" },
-        { value: String(courses.filter((c) => !c.active).length), label: "Inactive", color: "var(--muted)" },
-        { value: String(totalEnrolledStudents), label: "Enrolled students", color: "var(--brand)" },
-      ]
-    : [];
+  if (!courses) {
+    return error ? (
+      <div className="rounded-[var(--rad-sm)] border border-[var(--danger)] bg-[var(--dangers)] px-4 py-3 text-[13px] font-medium text-[var(--danger)]">
+        {error}
+      </div>
+    ) : (
+      <TabLoader label="Loading courses…" />
+    );
+  }
+
+  const stats = [
+    { value: String(courses.filter((c) => c.active).length), label: "Active offerings", color: "var(--ok)" },
+    { value: String(courses.filter((c) => !c.active).length), label: "Inactive", color: "var(--muted)" },
+    { value: String(totalEnrolledStudents), label: "Enrolled students", color: "var(--brand)" },
+  ];
 
   function openAdd() {
     setEditId(null);

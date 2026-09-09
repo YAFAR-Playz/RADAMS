@@ -2,7 +2,8 @@
 
 import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
-import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { Spinner } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import {
   getBranding,
   saveBranding,
@@ -103,11 +104,12 @@ export function BrandingContent() {
   }
 
   if (loading || !draft) {
-    return (
-      <div className="flex flex-col gap-4">
-        <SkeletonRow className="h-[120px]" />
-        <SkeletonRow className="h-[260px]" />
+    return error ? (
+      <div className="rounded-[var(--rad-sm)] border border-[var(--danger)] bg-[var(--dangers)] px-4 py-3 text-[13px] font-medium text-[var(--danger)]">
+        {error}
       </div>
+    ) : (
+      <TabLoader label="Loading branding…" />
     );
   }
 

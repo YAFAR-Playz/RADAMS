@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import { listPaymentPlans, markInstallmentPaid, setPlanDiscount, setPlanType, type StudentPaymentRow, type PlanType } from "@/lib/actions/payments";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
@@ -28,10 +29,13 @@ export function InstallmentsContent() {
   async function reload() {
     setLoading(true);
     try {
-      setPlans(await listPaymentPlans());
+      const data = await listPaymentPlans();
+      startTransition(() => {
+        setPlans(data);
+        setLoading(false);
+      });
     } catch {
       setError("Couldn't load payment plans.");
-    } finally {
       setLoading(false);
     }
   }
@@ -39,9 +43,11 @@ export function InstallmentsContent() {
   useEffect(() => {
     (async () => {
       await reload();
-      setOfferings(await listMyOfferings());
-      const settings = await getPayrollSettings();
-      setSym(currencySymbol(settings?.currency));
+      const [offeringData, settings] = await Promise.all([listMyOfferings(), getPayrollSettings()]);
+      startTransition(() => {
+        setOfferings(offeringData);
+        setSym(currencySymbol(settings?.currency));
+      });
     })();
   }, []);
 
@@ -110,6 +116,8 @@ export function InstallmentsContent() {
       setTogglingId(null);
     }
   }
+
+  if ((!plans || !offerings) && !error) return <TabLoader label="Loading payments…" />;
 
   return (
     <div className="flex flex-col gap-4">

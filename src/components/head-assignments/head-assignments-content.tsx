@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import { toneColors } from "@/lib/tone";
 import type { Tone } from "@/lib/roles";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
@@ -89,11 +90,13 @@ export function HeadAssignmentsContent() {
     setListLoading(true);
     try {
       const [a, ast] = await Promise.all([listAssignmentsWithProgress(id), listOfferingAssistants(id)]);
-      setAssignments(a);
-      setAssistants(ast);
+      startTransition(() => {
+        setAssignments(a);
+        setAssistants(ast);
+        setListLoading(false);
+      });
     } catch {
       setError("Couldn't load assignments for this offering.");
-    } finally {
       setListLoading(false);
     }
   }
@@ -222,6 +225,8 @@ export function HeadAssignmentsContent() {
   }
 
   const assistantOptions = useMemo(() => assistants ?? [], [assistants]);
+
+  if (offeringsLoading && !error) return <TabLoader label="Loading assignments…" />;
 
   return (
     <div className="flex flex-col gap-4">

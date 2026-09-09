@@ -3,6 +3,7 @@
 import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import {
   getOrgTemplates,
   saveOrgTemplate,
@@ -112,6 +113,8 @@ export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform"
       setSaving(false);
     }
   }
+
+  if (!overrides && !error) return <TabLoader label="Loading templates…" />;
 
   const current = TEMPLATE_DEFS.find((t) => t.key === sel)!;
   const customized = overrides?.[sel] != null;

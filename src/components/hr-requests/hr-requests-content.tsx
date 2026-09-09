@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import { listAllStaffingRequests, type StaffingRequestDetail } from "@/lib/actions/hr";
 import { resolveStaffingRequest } from "@/lib/actions/staff";
 
@@ -85,10 +86,13 @@ export function HrRequestsContent() {
     (async () => {
       setLoading(true);
       try {
-        setRequests(await listAllStaffingRequests());
+        const data = await listAllStaffingRequests();
+        startTransition(() => {
+          setRequests(data);
+          setLoading(false);
+        });
       } catch {
         setError("Couldn't load staffing requests.");
-      } finally {
         setLoading(false);
       }
     })();
@@ -109,6 +113,8 @@ export function HrRequestsContent() {
       setResolvingId(null);
     }
   }
+
+  if (!requests && !error) return <TabLoader label="Loading requests…" />;
 
   const pendingCount = requests?.filter((r) => r.status === "pending").length ?? 0;
   const approvedCount = requests?.filter((r) => r.status === "approved").length ?? 0;

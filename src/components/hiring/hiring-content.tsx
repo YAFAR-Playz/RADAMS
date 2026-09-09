@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import type { Role } from "@/lib/roles";
 import { listRecentStaffJoins, type StaffingLogRow } from "@/lib/actions/hr";
 import { listStaff, createStaffMember, removeStaffMember, assignStaffToCourses, type StaffMember } from "@/lib/actions/staff";
@@ -42,12 +43,14 @@ export function HiringContent() {
     setLoading(true);
     try {
       const [l, s, o] = await Promise.all([listRecentStaffJoins(), listStaff(), listAllOfferingsForOrg()]);
-      setLog(l);
-      setStaff(s.filter((u) => u.role !== "owner" && u.role !== "admin"));
-      setOfferings(o);
+      startTransition(() => {
+        setLog(l);
+        setStaff(s.filter((u) => u.role !== "owner" && u.role !== "admin"));
+        setOfferings(o);
+        setLoading(false);
+      });
     } catch {
       setError("Couldn't load hiring data.");
-    } finally {
       setLoading(false);
     }
   }
@@ -63,6 +66,8 @@ export function HiringContent() {
     setForm({ ...emptyForm, existingId: staff?.[0]?.id ?? "" });
     setModalOpen(true);
   }
+
+  if (!staff && !error) return <TabLoader label="Loading hiring…" />;
 
   const showCourses = kind === "add" && (form.role === "head" || form.role === "assistant");
   const canSubmit = kind === "add" ? form.name.trim().length > 0 && form.email.trim().length > 0 : form.existingId.length > 0;

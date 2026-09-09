@@ -4,6 +4,7 @@ import { startTransition, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Icon, type IconName } from "@/components/icons";
 import { SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import { toneColors } from "@/lib/tone";
 import { mockKpisForRole, type Kpi, type Role, type Tone } from "@/lib/roles";
 import { dashboardSubtitle, greetingFor, dateLabel } from "@/lib/dashboard-data";
@@ -867,6 +868,17 @@ export function DashboardContent({
     (async () => {
       if (isMock) return;
       setLoading(true);
+      try {
+        await loadForRole();
+      } catch {
+        // No error banner on this page today — just make sure a failed
+        // fetch can't leave the loader spinning forever with nothing the
+        // user can do about it.
+        setLoading(false);
+      }
+    })();
+
+    async function loadForRole() {
       if (role === "admin") {
         const [dash, staffing] = await Promise.all([getAdminDashboard(), getStaffingTrend()]);
         startTransition(() => {
@@ -928,7 +940,7 @@ export function DashboardContent({
       } else {
         setLoading(false);
       }
-    })();
+    }
   }, [role, isMock]);
 
   // Split from the effect above on purpose — ranking every assistant
@@ -966,6 +978,8 @@ export function DashboardContent({
                 : role === "owner"
                   ? ownerKpis
                   : null;
+
+  if (!isMock && kpis === null) return <TabLoader label="Loading dashboard…" />;
 
   return (
     <div className="flex flex-col">

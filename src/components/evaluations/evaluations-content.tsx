@@ -3,6 +3,7 @@
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import { listOfferingAssistants, type AssistantOption } from "@/lib/actions/head-assignments";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
@@ -304,6 +305,8 @@ export function EvaluationsContent() {
 
   const offeringsLoading = offerings === null;
   const currentAssistant = assistants?.find((a) => a.id === assistantId) ?? null;
+
+  if (!error && (offerings === null || (offerings.length > 0 && loading))) return <TabLoader label="Loading evaluations…" />;
 
   return (
     <div className="flex flex-col gap-4">

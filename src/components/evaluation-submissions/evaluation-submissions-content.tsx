@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import {
   listEvaluationPeriods,
   listEvaluationSubmissions,
@@ -72,7 +73,7 @@ export function EvaluationSubmissionsContent() {
           offeringId: offeringId || undefined,
           assistantId: assistantId || undefined,
         });
-        if (!cancelled) setRows(data);
+        if (!cancelled) startTransition(() => setRows(data));
       } catch {
         if (!cancelled) setError("Couldn't load evaluation submissions — try again.");
       }
@@ -81,6 +82,8 @@ export function EvaluationSubmissionsContent() {
       cancelled = true;
     };
   }, [period, offeringId, assistantId]);
+
+  if (!error && (periods === null || offerings === null || assistants === null)) return <TabLoader label="Loading submissions…" />;
 
   return (
     <div className="flex flex-col gap-4">

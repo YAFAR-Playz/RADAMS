@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import {
   listOrgsOverview,
   createOrganization,
@@ -44,10 +45,13 @@ export function OwnerOrgsContent() {
   async function reload() {
     setLoading(true);
     try {
-      setOrgs(await listOrgsOverview());
+      const data = await listOrgsOverview();
+      startTransition(() => {
+        setOrgs(data);
+        setLoading(false);
+      });
     } catch {
       setError("Couldn't load organizations.");
-    } finally {
       setLoading(false);
     }
   }
@@ -121,14 +125,22 @@ export function OwnerOrgsContent() {
     }
   }
 
-  const stats = orgs
-    ? [
-        { value: String(orgs.length), label: "Organizations", color: "var(--brand)" },
-        { value: String(orgs.filter((o) => o.status === "active").length), label: "Active", color: "var(--ok)" },
-        { value: orgs.reduce((s, o) => s + o.metrics.students, 0).toLocaleString(), label: "Total students", color: "var(--text)" },
-        { value: String(orgs.reduce((s, o) => s + o.metrics.courses, 0)), label: "Total courses", color: "var(--text)" },
-      ]
-    : [];
+  if (!orgs) {
+    return error ? (
+      <div className="rounded-[var(--rad-sm)] border border-[var(--danger)] bg-[var(--dangers)] px-4 py-3 text-[13px] font-medium text-[var(--danger)]">
+        {error}
+      </div>
+    ) : (
+      <TabLoader label="Loading organizations…" />
+    );
+  }
+
+  const stats = [
+    { value: String(orgs.length), label: "Organizations", color: "var(--brand)" },
+    { value: String(orgs.filter((o) => o.status === "active").length), label: "Active", color: "var(--ok)" },
+    { value: orgs.reduce((s, o) => s + o.metrics.students, 0).toLocaleString(), label: "Total students", color: "var(--text)" },
+    { value: String(orgs.reduce((s, o) => s + o.metrics.courses, 0)), label: "Total courses", color: "var(--text)" },
+  ];
 
   return (
     <div className="flex flex-col gap-4">

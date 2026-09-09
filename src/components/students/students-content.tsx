@@ -3,6 +3,7 @@
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import { toneColors } from "@/lib/tone";
 import type { Role } from "@/lib/roles";
 import { statusDef, STATUS_DEFS } from "@/lib/assignments-data";
@@ -509,6 +510,9 @@ export function StudentsContent({ role }: { role: Role }) {
     for (let i = lo; i <= hi; i++) out.push(i);
     return out;
   }, [safePage, pageCount]);
+
+  const ready = offerings !== null && (offerings.length === 0 || students !== null);
+  if (!ready && !error) return <TabLoader label="Loading students…" />;
 
   return (
     <div className="flex flex-col gap-4">

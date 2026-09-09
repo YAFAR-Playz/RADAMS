@@ -3,6 +3,7 @@
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import type { Role } from "@/lib/roles";
 import {
   listStaff,
@@ -275,13 +276,21 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
     }
   }
 
-  const stats = staff
-    ? [
-        { value: String(staff.length), label: "Total users", color: "var(--brand)" },
-        { value: String(staff.filter((u) => u.role !== "owner").length), label: "Active staff", color: "var(--ok)" },
-        { value: String(pendingRequests.length), label: "Pending requests", color: "var(--warn)" },
-      ]
-    : [];
+  if (!staff) {
+    return error ? (
+      <div className="rounded-[var(--rad-sm)] border border-[var(--danger)] bg-[var(--dangers)] px-4 py-3 text-[13px] font-medium text-[var(--danger)]">
+        {error}
+      </div>
+    ) : (
+      <TabLoader label="Loading staff…" />
+    );
+  }
+
+  const stats = [
+    { value: String(staff.length), label: "Total users", color: "var(--brand)" },
+    { value: String(staff.filter((u) => u.role !== "owner").length), label: "Active staff", color: "var(--ok)" },
+    { value: String(pendingRequests.length), label: "Pending requests", color: "var(--warn)" },
+  ];
 
   return (
     <div className="flex flex-col gap-4">

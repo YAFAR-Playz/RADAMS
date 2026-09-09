@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import type { Role } from "@/lib/roles";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import {
@@ -155,10 +156,14 @@ export function WeakTopicsContent({ role }: { role: Role }) {
 
   useEffect(() => {
     listMyOfferings().then((data) => {
-      setOfferings(data);
-      if (data.length) setOfferingId(data[0].id);
+      startTransition(() => {
+        setOfferings(data);
+        if (data.length) setOfferingId(data[0].id);
+      });
     });
   }, []);
+
+  if (!offerings) return <TabLoader label="Loading weak topics…" />;
 
   return (
     <div className="flex flex-col gap-4">
@@ -172,7 +177,7 @@ export function WeakTopicsContent({ role }: { role: Role }) {
             </p>
           </div>
           <div className="flex flex-none items-center gap-[8px]">
-            {offerings && offerings.length > 0 && (
+            {offerings.length > 0 && (
               <select
                 value={offeringId}
                 onChange={(e) => setOfferingId(e.target.value)}
@@ -220,9 +225,7 @@ export function WeakTopicsContent({ role }: { role: Role }) {
         </div>
       )}
 
-      {!offerings ? (
-        <SkeletonRow className="h-[120px]" />
-      ) : offerings.length === 0 ? (
+      {offerings.length === 0 ? (
         <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[30px] text-center text-[13px] text-[var(--muted)]">
           No courses yet.
         </div>

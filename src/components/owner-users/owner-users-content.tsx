@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import type { Role } from "@/lib/roles";
 import { listAllStaff, updateAnyStaffRole, removeAnyStaffMember, getOwnerLoginAsLink, type PlatformStaffMember } from "@/lib/actions/owner";
 
@@ -45,12 +46,14 @@ export function OwnerUsersContent() {
     setLoading(true);
     try {
       const res = await listAllStaff({ page, search, role: roleFilter });
-      setRows(res.rows);
-      setTotal(res.total);
-      setPageSize(res.pageSize);
+      startTransition(() => {
+        setRows(res.rows);
+        setTotal(res.total);
+        setPageSize(res.pageSize);
+        setLoading(false);
+      });
     } catch {
       setError("Couldn't load users.");
-    } finally {
       setLoading(false);
     }
   }
@@ -111,6 +114,16 @@ export function OwnerUsersContent() {
   }
 
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
+
+  if (!rows) {
+    return error ? (
+      <div className="rounded-[var(--rad-sm)] border border-[var(--danger)] bg-[var(--dangers)] px-4 py-3 text-[13px] font-medium text-[var(--danger)]">
+        {error}
+      </div>
+    ) : (
+      <TabLoader label="Loading users…" />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">

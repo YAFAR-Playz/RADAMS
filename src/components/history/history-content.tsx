@@ -3,6 +3,7 @@
 import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { SkeletonRow } from "@/components/ui/spinner";
+import { TabLoader } from "@/components/ui/tab-loader";
 import { listActivityLog, type ActivityLogRow } from "@/lib/actions/activity-log";
 import { ACTIVITY_CATEGORIES, CATEGORY_LABEL, CATEGORY_ICON, type ActivityCategory } from "@/lib/activity-categories";
 
@@ -43,6 +44,8 @@ export function HistoryContent() {
   const safePage = Math.min(page, pageCount - 1);
   const pageStart = safePage * PAGE_SIZE;
   const pageLog = (log ?? []).slice(pageStart, pageStart + PAGE_SIZE);
+
+  if (log === null && loading) return <TabLoader label="Loading history…" />;
 
   return (
     <div className="flex flex-col gap-4">
