@@ -14,6 +14,11 @@ export function Spinner({ size = 18, className }: { size?: number; className?: s
   );
 }
 
-export function SkeletonRow({ className }: { className?: string }) {
-  return <div className={`animate-pulse rounded-[8px] bg-[var(--surface2)] ${className ?? ""}`} />;
+export function SkeletonRow({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <div
+      className={`rounded-[8px] bg-[var(--surface2)] ${className ?? ""}`}
+      style={{ animation: "fadeUp 400ms ease-out both, skeletonPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite", ...style }}
+    />
+  );
 }

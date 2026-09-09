@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import {
@@ -68,12 +68,14 @@ export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform"
           isPlatform ? getPlatformTemplates() : getOrgTemplates(),
           isPlatform ? Promise.resolve(null) : getEffectiveTemplates(allKeys),
         ]);
-        setOverrides(data);
-        setEffectiveDefaults(effective);
-        setDraft(data.assignment_parent ?? fallbackFor("assignment_parent", effective));
+        startTransition(() => {
+          setOverrides(data);
+          setEffectiveDefaults(effective);
+          setDraft(data.assignment_parent ?? fallbackFor("assignment_parent", effective));
+          setLoading(false);
+        });
       } catch {
         setError("Couldn't load templates.");
-      } finally {
         setLoading(false);
       }
     })();

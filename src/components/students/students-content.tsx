@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { toneColors } from "@/lib/tone";
@@ -185,11 +185,13 @@ export function StudentsContent({ role }: { role: Role }) {
       // every badge has resolved.
       const { rows, assistants: ast, gradeScale: gs, parentWhatsappLink: link } = await getStudentsTabForOffering(id);
       if (offeringIdRef.current !== id) return;
-      setStudents(rows);
-      setAssistants(ast);
-      setGradeScaleState(gs);
-      setParentWhatsappLink(link);
-      setLoading(false);
+      startTransition(() => {
+        setStudents(rows);
+        setAssistants(ast);
+        setGradeScaleState(gs);
+        setParentWhatsappLink(link);
+        setLoading(false);
+      });
 
       getTrafficLightForOffering(id).then((tl) => {
         if (offeringIdRef.current === id) setTrafficLight(tl);

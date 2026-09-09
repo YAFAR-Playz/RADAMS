@@ -394,7 +394,7 @@ export function AppShell({
         </header>
 
         <main className="flex-1 overflow-y-auto px-4 py-5 md:px-7 md:py-[26px]">
-          <ViewTransition key={pathname} enter="page-content" exit="page-content" default="none">
+          <ViewTransition key={pathname} enter="page-content" exit="page-content" update="page-content" default="none">
             {children}
           </ViewTransition>
         </main>

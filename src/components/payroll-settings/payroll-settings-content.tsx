@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { Icon, type IconName } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import type { Tone } from "@/lib/roles";
@@ -165,11 +165,13 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
       setLoading(true);
       try {
         const s = await getPayrollSettings();
-        setSettings(s);
-        if (s) setOrgDefaultMethod(s.defaultAssistantCalcMethod as CalcMethod);
+        startTransition(() => {
+          setSettings(s);
+          if (s) setOrgDefaultMethod(s.defaultAssistantCalcMethod as CalcMethod);
+          setLoading(false);
+        });
       } catch {
         setError("Couldn't load payroll settings.");
-      } finally {
         setLoading(false);
       }
     })();

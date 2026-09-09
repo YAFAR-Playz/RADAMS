@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import {
@@ -29,12 +29,14 @@ export function BrandingContent() {
       setLoading(true);
       try {
         const [data, staffReportPref] = await Promise.all([getBranding(), getStaffReportBrandingPreference()]);
-        setSaved(data);
-        setDraft(data);
-        setStaffReportUsesPlatform(staffReportPref);
+        startTransition(() => {
+          setSaved(data);
+          setDraft(data);
+          setStaffReportUsesPlatform(staffReportPref);
+          setLoading(false);
+        });
       } catch {
         setError("Couldn't load branding settings.");
-      } finally {
         setLoading(false);
       }
     })();

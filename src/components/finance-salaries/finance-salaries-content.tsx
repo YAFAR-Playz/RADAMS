@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
@@ -373,10 +373,13 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
   async function reload(p: string) {
     setLoading(true);
     try {
-      setAssistants(await listSalariesForPeriod(p));
+      const data = await listSalariesForPeriod(p);
+      startTransition(() => {
+        setAssistants(data);
+        setLoading(false);
+      });
     } catch {
       setError("Couldn't load salaries for this period.");
-    } finally {
       setLoading(false);
     }
   }
