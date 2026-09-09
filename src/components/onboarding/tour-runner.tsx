@@ -18,11 +18,6 @@ const FIND_TARGET_POLL_MS = 120;
 // a target that only settles into its final position/element after the
 // first successful resolution.
 const CONFIRM_POLL_MS = 500;
-// A deliberate pause between a target first appearing (a new page/modal
-// rendering) and the spotlight actually jumping to it — without this the
-// glow can snap onto a field the instant it mounts, before the user has
-// even registered the new screen, which reads as rushed/glitchy.
-const SETTLE_MS = 600;
 const TRANSITION = "top 220ms ease, left 220ms ease, right 220ms ease, bottom 220ms ease, width 220ms ease, height 220ms ease, opacity 200ms ease";
 
 type Mode = "nav-menu" | "nav-link" | "content";
@@ -116,14 +111,22 @@ export function TourRunner({ steps }: { steps: TourStep[] }) {
     if (!step) return;
     let cancelled = false;
     let lastEl: Element | null = null;
-    // Distinct from `lastEl`: only set once the settle delay below has
-    // actually applied a target to state, so a confirm-poll tick landing
-    // inside that delay window doesn't race ahead and apply it early.
-    let appliedEl: Element | null = null;
     const startedAt = Date.now();
+    // Clears whatever the previous step left on screen immediately, rather
+    // than leaving it frozen there while this step's target is searched
+    // for — otherwise, on a step whose target takes a moment to resolve (or
+    // never resolves), the tooltip appears stuck showing the last step's
+    // title/body forever, no matter how many times "Skip step" is pressed
+    // (each press does move stepIndex forward — there's just nothing new
+    // rendered yet to show for it). The CSS `transition` on position still
+    // makes a *found* target glide smoothly from A to B; this only affects
+    // the gap while nothing has been found yet.
     const findingId = requestAnimationFrame(() => {
       setFinding(true);
       setNotFound(false);
+      setRect(null);
+      setMode(null);
+      setTargetEl(null);
     });
 
     // Keeps re-resolving even after a first match, at a relaxed interval,
@@ -137,21 +140,11 @@ export function TourRunner({ steps }: { steps: TourStep[] }) {
       if (cancelled) return;
       const found = resolveTarget(step!, pathname);
       if (found) {
-        if (found.el !== lastEl) {
-          lastEl = found.el;
-          const settleEl = found.el;
-          const settleMode = found.mode;
-          window.setTimeout(() => {
-            if (cancelled || lastEl !== settleEl) return;
-            appliedEl = settleEl;
-            setRect(settleEl.getBoundingClientRect());
-            setMode(settleMode);
-            setTargetEl(settleEl);
-            setFinding(false);
-          }, SETTLE_MS);
-        } else if (found.el === appliedEl) {
-          setRect(found.el.getBoundingClientRect());
-        }
+        lastEl = found.el;
+        setRect(found.el.getBoundingClientRect());
+        setMode(found.mode);
+        setTargetEl(found.el);
+        setFinding(false);
         window.setTimeout(() => measure(CONFIRM_POLL_MS), CONFIRM_POLL_MS);
         return;
       }
