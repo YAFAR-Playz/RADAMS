@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { SkeletonRow } from "@/components/ui/spinner";
 import { listActivityLog, type ActivityLogRow } from "@/lib/actions/activity-log";
@@ -30,9 +30,13 @@ export function HistoryContent() {
       setLoading(true);
       setPage(0);
     })();
-    listActivityLog(filter === "all" ? undefined : filter)
-      .then(setLog)
-      .finally(() => setLoading(false));
+    listActivityLog(filter === "all" ? undefined : filter).then(
+      (data) => startTransition(() => {
+        setLog(data);
+        setLoading(false);
+      }),
+      () => setLoading(false)
+    );
   }, [filter]);
 
   const pageCount = Math.max(1, Math.ceil((log?.length ?? 0) / PAGE_SIZE));

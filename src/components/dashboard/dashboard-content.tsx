@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Icon, type IconName } from "@/components/icons";
 import { SkeletonRow } from "@/components/ui/spinner";
@@ -869,22 +869,39 @@ export function DashboardContent({
       setLoading(true);
       if (role === "admin") {
         const [dash, staffing] = await Promise.all([getAdminDashboard(), getStaffingTrend()]);
-        setAdminData(dash);
-        setStaffingTrend(staffing);
-      } else if (role === "assistant") setAssistantData(await getAssistantDashboard());
-      else if (role === "head") {
+        startTransition(() => {
+          setAdminData(dash);
+          setStaffingTrend(staffing);
+          setLoading(false);
+        });
+      } else if (role === "assistant") {
+        const data = await getAssistantDashboard();
+        startTransition(() => {
+          setAssistantData(data);
+          setLoading(false);
+        });
+      } else if (role === "head") {
         const [dash, ratings] = await Promise.all([getHeadDashboard(), getMyRatingDistribution()]);
-        setHeadData(dash);
-        setRatingDistribution(ratings);
+        startTransition(() => {
+          setHeadData(dash);
+          setRatingDistribution(ratings);
+          setLoading(false);
+        });
       } else if (role === "registration") {
         const [dash, trend] = await Promise.all([getRegistrationDashboard(), getRegistrationEnrollmentTrend()]);
-        setRegistrationData(dash);
-        setEnrollmentTrend(trend);
+        startTransition(() => {
+          setRegistrationData(dash);
+          setEnrollmentTrend(trend);
+          setLoading(false);
+        });
       } else if (role === "finance") {
         const [dash, trend, ratings] = await Promise.all([getFinanceDashboard(), getFinancePayrollTrend(), getOrgRatingDistribution()]);
-        setFinanceData(dash);
-        setPayrollTrend(trend);
-        setRatingDistribution(ratings);
+        startTransition(() => {
+          setFinanceData(dash);
+          setPayrollTrend(trend);
+          setRatingDistribution(ratings);
+          setLoading(false);
+        });
       } else if (role === "hr") {
         // No ratings chart here — evaluations' RLS never grants HR read
         // access at all (only head-own, admin, finance, owner), so
@@ -892,18 +909,25 @@ export function DashboardContent({
         // That would render as "no ratings exist," which is misleading —
         // real ratings exist, HR just can't see them under current policy.
         const [dash, staffing] = await Promise.all([getHrDashboard(), getStaffingTrend()]);
-        setHrData(dash);
-        setStaffingTrend(staffing);
+        startTransition(() => {
+          setHrData(dash);
+          setStaffingTrend(staffing);
+          setLoading(false);
+        });
       } else if (role === "owner") {
         const [dash, orgs, activity] = await Promise.all([getOwnerDashboard(), listOrgsOverview(), listRecentActivityAcrossOrgs()]);
-        setOwnerKpis(dash.kpis);
-        setOwnerOrgs(orgs);
-        setOwnerActivity(activity);
-        setOwnerOrgSize(dash.orgSizeByMetric);
-        setOwnerStudentGrowth(dash.studentGrowth);
-        setOwnerStaffGrowth(dash.staffGrowth);
+        startTransition(() => {
+          setOwnerKpis(dash.kpis);
+          setOwnerOrgs(orgs);
+          setOwnerActivity(activity);
+          setOwnerOrgSize(dash.orgSizeByMetric);
+          setOwnerStudentGrowth(dash.studentGrowth);
+          setOwnerStaffGrowth(dash.staffGrowth);
+          setLoading(false);
+        });
+      } else {
+        setLoading(false);
       }
-      setLoading(false);
     })();
   }, [role, isMock]);
 

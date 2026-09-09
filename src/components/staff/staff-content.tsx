@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import type { Role } from "@/lib/roles";
@@ -89,12 +89,14 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
     setLoading(true);
     try {
       const [s, r, o] = await Promise.all([listStaff(), listAllStaffingRequests(), listAllOfferingsForOrg()]);
-      setStaff(s);
-      setRequests(r);
-      setOfferings(o);
+      startTransition(() => {
+        setStaff(s);
+        setRequests(r);
+        setOfferings(o);
+        setLoading(false);
+      });
     } catch {
       setError("Couldn't load staff — try again.");
-    } finally {
       setLoading(false);
     }
   }

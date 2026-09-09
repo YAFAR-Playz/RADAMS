@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
@@ -212,17 +212,19 @@ export function EvaluationsContent() {
     setLoading(true);
     try {
       const [ev, papers] = await Promise.all([getOrCreateEvaluation(assistantId, offeringId, period), countCheckedPapers(assistantId, offeringId)]);
-      setEvalId(ev.id);
-      setBaseAmount(String(ev.baseAmount));
-      setExtras(ev.lines.filter((l) => l.kind === "extra"));
-      setDeductions(ev.lines.filter((l) => l.kind === "deduction"));
-      setNotes(ev.notes);
-      setRating(ev.rating);
-      setStatus(ev.status);
-      setCheckedPapers(papers);
+      startTransition(() => {
+        setEvalId(ev.id);
+        setBaseAmount(String(ev.baseAmount));
+        setExtras(ev.lines.filter((l) => l.kind === "extra"));
+        setDeductions(ev.lines.filter((l) => l.kind === "deduction"));
+        setNotes(ev.notes);
+        setRating(ev.rating);
+        setStatus(ev.status);
+        setCheckedPapers(papers);
+        setLoading(false);
+      });
     } catch {
       setError("Couldn't load this evaluation.");
-    } finally {
       setLoading(false);
     }
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import {
@@ -116,12 +116,14 @@ export function CoursesContent() {
     setLoading(true);
     try {
       const [c, h] = await Promise.all([listCourses(), listHeadsForOrg()]);
-      setCourses(c.offerings);
-      setTotalEnrolledStudents(c.totalEnrolledStudents);
-      setHeads(h);
+      startTransition(() => {
+        setCourses(c.offerings);
+        setTotalEnrolledStudents(c.totalEnrolledStudents);
+        setHeads(h);
+        setLoading(false);
+      });
     } catch {
       setError("Couldn't load courses — try again.");
-    } finally {
       setLoading(false);
     }
   }
