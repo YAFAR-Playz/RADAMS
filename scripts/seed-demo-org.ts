@@ -142,6 +142,48 @@ async function main() {
     courseIds[name] = data.id;
   }
 
+  console.log("Creating weak-topic catalog entries...");
+  const TOPIC_DEFS: Record<string, { label: string; materials: { kind: "video" | "notes" | "tricky_question"; label: string; link: string; duration: string }[] }[]> = {
+    Physics: [
+      {
+        label: "Newton's laws of motion",
+        materials: [
+          { kind: "notes", label: "Summary sheet", link: "https://example.com/notes/newtons-laws", duration: "" },
+          { kind: "video", label: "Worked examples", link: "https://example.com/video/newtons-laws", duration: "12 min" },
+        ],
+      },
+      { label: "Circular motion", materials: [{ kind: "tricky_question", label: "Common exam trap", link: "https://example.com/q/circular-motion", duration: "" }] },
+    ],
+    Chemistry: [
+      {
+        label: "Balancing equations",
+        materials: [{ kind: "notes", label: "Step-by-step method", link: "https://example.com/notes/balancing-equations", duration: "" }],
+      },
+    ],
+    Biology: [
+      {
+        label: "Cell respiration",
+        materials: [{ kind: "video", label: "Explainer video", link: "https://example.com/video/cell-respiration", duration: "9 min" }],
+      },
+    ],
+  };
+  for (const [courseName, topics] of Object.entries(TOPIC_DEFS)) {
+    for (const t of topics) {
+      const { data: topic, error } = await supabase
+        .from("topic_catalog")
+        .insert({ org_id: DEMO_ORG_ID, course_id: courseIds[courseName], label: t.label, created_by: heads[0] })
+        .select("id")
+        .single();
+      if (error || !topic) throw new Error(error?.message ?? "Failed to create topic catalog entry");
+      if (t.materials.length) {
+        const { error: matError } = await supabase
+          .from("topic_materials")
+          .insert(t.materials.map((m, i) => ({ topic_id: topic.id, kind: m.kind, label: m.label, link: m.link, duration: m.duration || null, sort_order: i })));
+        if (matError) throw new Error(`Failed to create topic materials: ${matError.message}`);
+      }
+    }
+  }
+
   console.log("Creating course offerings...");
   const offeringDefs = [
     { course: "Physics", session: "June", unit: "Unit 1", head: heads[0], assistants: [priya, sam] },

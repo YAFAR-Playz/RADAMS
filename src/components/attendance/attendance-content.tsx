@@ -377,11 +377,12 @@ export function AttendanceContent({ role }: { role: Role }) {
                 </select>
               </div>
             ) : (
-              offerings.map((o) => {
+              offerings.map((o, i) => {
                 const active = o.id === offeringId;
                 return (
                   <button
                     key={o.id}
+                    data-tour={i === 0 ? "myattendance-course" : undefined}
                     onClick={() => setOfferingId(o.id)}
                     className="flex flex-none items-center gap-[7px] rounded-full border px-[13px] py-2 text-[13px] font-semibold"
                     style={
@@ -419,7 +420,7 @@ export function AttendanceContent({ role }: { role: Role }) {
             ) : sessions.length === 0 ? (
               <div className="p-[28px_12px] text-center text-[13px] text-[var(--muted)]">No sessions yet for this course.</div>
             ) : (
-              pagedSessions.map((s) => {
+              pagedSessions.map((s, sessionIndex) => {
                 const active = s.id === sessionId;
                 const d = new Date(s.date);
                 const mon = d.toLocaleDateString("en-US", { month: "short" });
@@ -427,6 +428,7 @@ export function AttendanceContent({ role }: { role: Role }) {
                 return (
                   <div
                     key={s.id}
+                    data-tour={sessionIndex === 0 ? "myattendance-session-row" : undefined}
                     onClick={() => {
                       setSessionId(s.id);
                       setPage(0);
@@ -582,7 +584,7 @@ export function AttendanceContent({ role }: { role: Role }) {
                 {search ? `No students match "${search}"` : "No students enrolled in this course yet."}
               </div>
             ) : (
-              pageRows.map((r) => {
+              pageRows.map((r, rowIndex) => {
                 const meta = statusMeta(r.status);
                 const { bg, fg } = toneColors(meta.tone);
                 return (
@@ -629,6 +631,7 @@ export function AttendanceContent({ role }: { role: Role }) {
                           {meta.label}
                         </span>
                         <button
+                          data-tour={rowIndex === 0 ? "myattendance-send" : undefined}
                           onClick={() => {
                             setRecipient("parent");
                             setWaId(r.studentId);
@@ -698,6 +701,7 @@ export function AttendanceContent({ role }: { role: Role }) {
                 {(["student", "parent"] as Recipient[]).map((r) => (
                   <button
                     key={r}
+                    data-tour={r === "parent" ? "myattendance-modal-recipient" : undefined}
                     onClick={() => setRecipient(r)}
                     className="flex-1 rounded-[7px] py-[7px] text-[12.5px] font-semibold"
                     style={{
@@ -735,6 +739,7 @@ export function AttendanceContent({ role }: { role: Role }) {
                 Cancel
               </button>
               <a
+                data-tour="myattendance-modal-send"
                 href={waMessage ? waUrl : undefined}
                 target="_blank"
                 rel="noopener"
