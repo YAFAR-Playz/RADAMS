@@ -110,6 +110,7 @@ export function AssignmentTypesPanel() {
             </p>
           </div>
           <button
+            data-tour="assignment-types-new"
             onClick={openNew}
             className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[15px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)]"
           >
@@ -206,6 +207,7 @@ export function AssignmentTypesPanel() {
               <div>
                 <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Name</label>
                 <input
+                  data-tour="assignment-types-name"
                   value={draft.label}
                   onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))}
                   placeholder="e.g. Mock quiz"
@@ -288,6 +290,7 @@ export function AssignmentTypesPanel() {
                 Cancel
               </button>
               <button
+                data-tour="assignment-types-save"
                 onClick={onSave}
                 disabled={saving || !draft.label.trim()}
                 className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"

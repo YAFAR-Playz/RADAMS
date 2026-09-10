@@ -54,6 +54,7 @@ export function HistoryContent() {
       <PageHeader eyebrow="Admin" title="Activity history" subtitle="Every logged action across your org, last 30 days.">
         <div className="flex flex-wrap gap-2">
           <button
+            data-tour="history-filter-all"
             onClick={() => setFilter("all")}
             className="flex flex-none items-center gap-[7px] rounded-full border px-[14px] py-2 text-[13px] font-semibold"
             style={

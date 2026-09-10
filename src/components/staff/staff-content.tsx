@@ -389,7 +389,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
             <span className="rounded-full bg-[var(--warns)] px-2 py-[2px] text-[11px] font-bold text-[var(--warn)]">{pendingRequests.length} pending</span>
           </header>
           <div className="p-[7px_8px]">
-            {pendingRequests.map((r) => {
+            {pendingRequests.map((r, requestIndex) => {
               const title = r.kind === "add" ? "New assistant requested" : r.kind === "remove" ? "Removal requested" : "Replacement requested";
               const who = r.kind === "replace" ? `${r.targetName ?? "—"} → ${r.candidateName ?? "TBD"}` : r.candidateName ?? r.targetName ?? "—";
               return (
@@ -405,6 +405,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
                   </div>
                   <div className="flex flex-none gap-[7px]">
                     <button
+                      data-tour={requestIndex === 0 ? "staff-requests-view" : undefined}
                       onClick={() => setViewingRequest(r)}
                       className="rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[13px] py-[7px] text-[12px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)]"
                     >
@@ -418,6 +419,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
                       Approve
                     </button>
                     <button
+                      data-tour={requestIndex === 0 ? "staff-requests-decline" : undefined}
                       onClick={() => onResolve(r.id, "declined")}
                       disabled={resolvingId === r.id}
                       className="rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[13px] py-[7px] text-[12px] font-semibold text-[var(--muted)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] hover:text-[var(--danger)] disabled:opacity-60"
@@ -563,6 +565,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
                     )}
                     {!isHr && u.role !== "owner" && (
                       <button
+                        data-tour="staff-login-as"
                         onClick={() => onLoginAs(u.id)}
                         disabled={loginAsId === u.id}
                         title="Sign in as this user"

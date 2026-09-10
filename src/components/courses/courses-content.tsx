@@ -335,6 +335,7 @@ export function CoursesContent() {
         subtitle="Monitor active course offerings, set start & end dates, and activate or deactivate any course-unit-session."
         actions={
           <button
+            data-tour="courses-add"
             onClick={openAdd}
             className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[15px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)]"
           >
@@ -362,6 +363,7 @@ export function CoursesContent() {
         <div className="flex h-10 min-w-[200px] max-w-[300px] flex-1 items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-3">
           <Icon name="search" size={16} className="text-[var(--subtle)]" />
           <input
+            data-tour="courses-search"
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -399,7 +401,7 @@ export function CoursesContent() {
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         {loading && !courses
           ? Array.from({ length: 4 }, (_, i) => <SkeletonRow key={i} className="h-[220px]" />)
-          : pageRows.map((c) => {
+          : pageRows.map((c, rowIndex) => {
               const expanded = viewId === c.id;
               return (
                 <div key={c.id} className="flex flex-col gap-3 rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[14px_15px] shadow-[var(--shadow)]">
@@ -454,6 +456,7 @@ export function CoursesContent() {
                   </div>
                   <div className="flex flex-wrap gap-[7px]">
                     <button
+                      data-tour={rowIndex === 0 ? "courses-view-students" : undefined}
                       onClick={() => onToggleView(c)}
                       className="flex flex-1 items-center justify-center gap-[5px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px] py-2 text-[12px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]"
                     >
@@ -469,6 +472,7 @@ export function CoursesContent() {
                       {exportingId === c.id ? <Spinner size={13} /> : <Icon name="file-up" size={15} />}
                     </button>
                     <button
+                      data-tour={rowIndex === 0 ? "courses-edit" : undefined}
                       onClick={() => openEdit(c)}
                       title="Edit course"
                       className="flex h-9 w-9 flex-none items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]"
@@ -476,6 +480,7 @@ export function CoursesContent() {
                       <Icon name="settings" size={15} />
                     </button>
                     <button
+                      data-tour={rowIndex === 0 ? "courses-toggle-active" : undefined}
                       onClick={() => onToggleActive(c)}
                       disabled={togglingId === c.id}
                       className="flex flex-1 items-center justify-center gap-[6px] rounded-[8px] border bg-[var(--surface)] px-[11px] py-2 text-[12px] font-semibold hover:bg-[var(--surface2)] disabled:opacity-60"
@@ -602,6 +607,7 @@ export function CoursesContent() {
                 <div>
                   <label className="mb-[6px] block text-[12px] font-semibold text-[var(--text)]">Course</label>
                   <input
+                    data-tour="courses-modal-name"
                     value={form.courseName}
                     onChange={(e) => setForm((f) => ({ ...f, courseName: e.target.value }))}
                     placeholder="e.g. Physics"
@@ -655,6 +661,7 @@ export function CoursesContent() {
                 <div>
                   <label className="mb-[6px] block text-[12px] font-semibold text-[var(--text)]">Full-payment price ({sym})</label>
                   <input
+                    data-tour="courses-modal-fee"
                     value={form.feeFull}
                     onChange={(e) => setForm((f) => ({ ...f, feeFull: e.target.value.replace(/[^0-9]/g, "") }))}
                     placeholder="600"
@@ -739,11 +746,12 @@ export function CoursesContent() {
                   Course head(s) <span className="text-[var(--subtle)]">(assign one or more)</span>
                 </label>
                 <div className="flex flex-wrap gap-[6px]">
-                  {heads.map((h) => {
+                  {heads.map((h, headIndex) => {
                     const sel = form.headIds.includes(h.id);
                     return (
                       <button
                         key={h.id}
+                        data-tour={headIndex === 0 ? "courses-modal-head" : undefined}
                         onClick={() => setForm((f) => ({ ...f, headIds: sel ? f.headIds.filter((x) => x !== h.id) : [...f.headIds, h.id] }))}
                         className="inline-flex items-center gap-[5px] rounded-full border px-[11px] py-[5px] text-[12px] font-semibold"
                         style={
@@ -766,6 +774,7 @@ export function CoursesContent() {
                 Cancel
               </button>
               <button
+                data-tour="courses-modal-save"
                 onClick={onSave}
                 disabled={!canSave || saving}
                 className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"

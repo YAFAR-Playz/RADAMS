@@ -808,6 +808,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
             <span className="text-[12px] text-[var(--subtle)]">Tap a row to edit adjustments</span>
             {isAdmin && (
               <button
+                data-tour="salaries-add-payee"
                 onClick={openAdd}
                 disabled={!period}
                 title="Add someone not currently in this period's list"
@@ -965,6 +966,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
                   </button>
                   {isAdmin && (
                     <button
+                      data-tour={rowIndex === 0 ? "salaries-remove-payee" : undefined}
                       onClick={(e) => {
                         e.stopPropagation();
                         setRemoveTarget(a);
@@ -1312,6 +1314,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
                   <label className="flex flex-col gap-[6px]">
                     <span className="text-[12px] font-semibold text-[var(--muted)]">Person</span>
                     <select
+                      data-tour="salaries-add-payee-person"
                       value={addPayeeId}
                       onChange={(e) => {
                         setAddPayeeId(e.target.value);
@@ -1358,6 +1361,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
                 Cancel
               </button>
               <button
+                data-tour="salaries-add-payee-confirm"
                 onClick={onConfirmAdd}
                 disabled={adding || !addCandidate}
                 className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"

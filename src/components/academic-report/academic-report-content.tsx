@@ -387,6 +387,7 @@ export function AcademicReportContent({ viewerRole }: { viewerRole: "admin" | "h
             </button>
             {viewerRole === "admin" && (
               <button
+                data-tour="report-delete-drive"
                 onClick={() => setDeleteConfirmOpen(true)}
                 disabled={!meta || !students || students.length === 0 || deletingFromDrive}
                 title="Delete this course's PDFs for this month from Drive — folders are left in place"
