@@ -26,7 +26,7 @@ export function PageHeader({
           <h1 className="m-0 mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">{title}</h1>
           {subtitle && <p className="m-0 mt-[3px] text-[13px] text-[var(--muted)]">{subtitle}</p>}
         </div>
-        {actions && <div className="flex flex-none flex-wrap items-center gap-[8px]">{actions}</div>}
+        {actions && <div className="flex min-w-0 flex-wrap items-center justify-end gap-[8px]">{actions}</div>}
       </div>
       {children && <div className="relative mt-4">{children}</div>}
     </div>

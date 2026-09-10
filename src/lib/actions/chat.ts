@@ -2,6 +2,7 @@
 
 import { randomUUID } from "crypto";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import type { Role } from "@/lib/roles";
 
@@ -226,9 +227,17 @@ export async function getOrCreateOfferingChannel(offeringId: string): Promise<st
   // read first — that read is itself membership-gated by RLS, so for
   // someone not yet a member (the exact case being handled) it would come
   // back empty and this would try to re-insert everyone, colliding with the
-  // primary key for members who are already there.
+  // primary key for members who are already there. Needs the admin client:
+  // Postgres re-checks this table's RLS write policy for the implicit
+  // conflict-detection scan an `ON CONFLICT ... DO NOTHING` upsert does,
+  // which fails it even for a row that would otherwise satisfy the policy
+  // on a plain insert — confirmed live (a bare insert of the exact same row
+  // succeeds; the same insert with `ON CONFLICT DO NOTHING` is rejected).
+  // That left every freshly created channel with zero members, invisible to
+  // everyone including whoever just opened it.
   if (staffIds.size) {
-    await supabase
+    const admin = createAdminClient();
+    await admin
       .from("chat_conversation_members")
       .upsert(
         Array.from(staffIds).map((profile_id) => ({ conversation_id: conversationId, profile_id })),
