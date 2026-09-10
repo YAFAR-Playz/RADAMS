@@ -36,9 +36,12 @@ function applyTheme(mode: ThemeMode) {
 
 function ThemeToggle({ className }: { className?: string }) {
   const [mode, setMode] = useState<ThemeMode>(() => {
-    if (typeof window === "undefined") return "light";
+    if (typeof window === "undefined") return "auto";
     const stored = localStorage.getItem("radams-theme");
-    return stored === "dark" || stored === "auto" ? stored : "light";
+    // "auto" is the default for anyone who hasn't chosen a theme yet — an
+    // explicit "light" or "dark" pick is preserved as-is, matching the
+    // bootstrap script's own `|| "auto"` fallback in src/app/layout.tsx.
+    return stored === "light" || stored === "dark" || stored === "auto" ? stored : "auto";
   });
 
   useEffect(() => {

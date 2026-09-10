@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 const THEME_SCRIPT = `
 (function () {
   try {
-    var mode = localStorage.getItem("radams-theme") || "light";
+    var mode = localStorage.getItem("radams-theme") || "auto";
     var resolved = mode;
     if (mode === "auto") {
       var hour = new Date().getHours();
