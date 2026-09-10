@@ -97,6 +97,7 @@ export function EvaluationSubmissionsContent() {
       <div className="flex flex-wrap gap-[10px] rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[13px] shadow-[var(--shadow)]">
         <div className="flex h-9 min-w-[140px] flex-1 items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px]">
           <select
+            data-tour="evaluations-period"
             value={period}
             onChange={(e) => setPeriod(e.target.value)}
             className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[12.5px] font-semibold text-[var(--text)] outline-none"
@@ -155,11 +156,12 @@ export function EvaluationSubmissionsContent() {
         ) : rows.length === 0 ? (
           <div className="p-[36px_18px] text-center text-[13px] text-[var(--muted)]">No evaluations match these filters.</div>
         ) : (
-          rows.map((r) => {
+          rows.map((r, rowIndex) => {
             const isOpen = expanded === r.id;
             return (
               <div key={r.id} className="border-b border-[var(--border2)] last:border-b-0">
                 <button
+                  data-tour={rowIndex === 0 ? "evaluations-row-expand" : undefined}
                   onClick={() => setExpanded(isOpen ? null : r.id)}
                   className="flex w-full flex-wrap items-center gap-[10px] p-[13px_16px] text-left hover:bg-[var(--surface2)]"
                 >

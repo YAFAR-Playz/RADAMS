@@ -122,6 +122,7 @@ export function StaffPaymentsContent() {
           <div className="flex h-10 min-w-[200px] max-w-[320px] flex-1 items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3">
             <Icon name="search" size={16} className="text-[var(--subtle)]" />
             <input
+              data-tour="payments-search"
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -137,6 +138,7 @@ export function StaffPaymentsContent() {
               return (
                 <button
                   key={v}
+                  data-tour={v === "assistant" ? "payments-filter-assistant" : undefined}
                   onClick={() => {
                     setFilter(v);
                     setPage(0);
@@ -160,7 +162,7 @@ export function StaffPaymentsContent() {
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         {loading && !rows
           ? Array.from({ length: 4 }, (_, i) => <SkeletonRow key={i} className="h-[230px]" />)
-          : pageRows.map((r) => (
+          : pageRows.map((r, rowIndex) => (
               <div key={r.id} className="flex flex-col gap-3 rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[14px_15px] shadow-[var(--shadow)]">
                 <div className="flex items-center gap-[11px]">
                   <div className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-full bg-[var(--brands)] text-[13px] font-bold text-[var(--brand)]">
@@ -185,6 +187,7 @@ export function StaffPaymentsContent() {
                     <div className="mb-[5px] text-[10.5px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Calc method</div>
                     <div className="flex h-9 items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px]">
                       <select
+                        data-tour={rowIndex === 0 ? "payments-calc-method" : undefined}
                         value={r.calcMethod}
                         onChange={(e) => patchRow(r.id, { calcMethod: e.target.value as CalcMethod }, { calcMethod: e.target.value as CalcMethod })}
                         className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[12.5px] font-semibold text-[var(--text)] outline-none"
@@ -203,6 +206,7 @@ export function StaffPaymentsContent() {
                     <div className="mb-[5px] text-[10.5px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Payment method</div>
                     <div className="flex h-9 items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px]">
                       <select
+                        data-tour={rowIndex === 0 ? "payments-pay-method" : undefined}
                         value={r.payMethod}
                         onChange={(e) => patchRow(r.id, { payMethod: e.target.value }, { payMethod: e.target.value })}
                         className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[12.5px] font-semibold text-[var(--text)] outline-none"
@@ -238,6 +242,7 @@ export function StaffPaymentsContent() {
                     <div className="mb-[5px] text-[10.5px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Bonus %</div>
                     <div className="flex h-9 items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px]">
                       <input
+                        data-tour={rowIndex === 0 ? "payments-bonus-pct" : undefined}
                         defaultValue={r.bonusPct}
                         onBlur={(e) => {
                           const v = Number(e.target.value.replace(/[^0-9]/g, "")) || 0;

@@ -335,8 +335,13 @@ export function ChatContent({ role }: { role: Role }) {
               ) : filteredDirectory.length === 0 ? (
                 <div className="p-4 text-center text-[13px] text-[var(--muted)]">No staff found.</div>
               ) : (
-                filteredDirectory.map((d) => (
-                  <button key={d.id} onClick={() => startDm(d.id)} className="flex w-full items-center gap-[10px] p-[10px_16px] text-left hover:bg-[var(--surface2)]">
+                filteredDirectory.map((d, dirIndex) => (
+                  <button
+                    key={d.id}
+                    data-tour={dirIndex === 0 ? "chat-dm-directory-row" : undefined}
+                    onClick={() => startDm(d.id)}
+                    className="flex w-full items-center gap-[10px] p-[10px_16px] text-left hover:bg-[var(--surface2)]"
+                  >
                     <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-[var(--surface2)] text-[11.5px] font-bold text-[var(--muted)]">
                       {d.initials}
                     </div>

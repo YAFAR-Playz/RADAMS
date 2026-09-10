@@ -284,6 +284,7 @@ function MessagesModal({ payeeId, payeeName, defaultPeriod, onClose }: { payeeId
         )}
         <div className="flex-none p-[18px] pt-0">
           <textarea
+            data-tour="salaries-messages-input"
             value={body}
             onChange={(e) => setBody(e.target.value)}
             placeholder="Reply to this inquiry…"
@@ -298,6 +299,7 @@ function MessagesModal({ payeeId, payeeName, defaultPeriod, onClose }: { payeeId
             Close
           </button>
           <button
+            data-tour="salaries-messages-send"
             onClick={onSend}
             disabled={sending || !body.trim()}
             className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-70"
@@ -718,6 +720,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
               <div className="flex h-10 items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3">
                 <Icon name="cal-check" size={15} className="text-[var(--subtle)]" />
                 <select
+                  data-tour="salaries-period"
                   value={period ?? ""}
                   onChange={(e) => setPeriod(e.target.value)}
                   className="cursor-pointer appearance-none border-none bg-transparent text-[13.5px] font-semibold text-[var(--text)] outline-none"
@@ -739,6 +742,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
                 className="cursor-pointer border-none bg-transparent text-[13px] text-[var(--text)] outline-none"
               />
               <button
+                data-tour="salaries-generate"
                 onClick={onGenerate}
                 disabled={generating || !newPeriod}
                 className="flex items-center gap-[6px] rounded-[7px] bg-[var(--brand)] px-[11px] py-[6px] text-[12px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
@@ -748,6 +752,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
               </button>
             </div>
             <button
+              data-tour="salaries-release-all"
               onClick={onReleaseAll}
               disabled={releasingAll || !period || unreleasedCount === 0}
               title="Make this period's breakdown visible to everyone in My Pay — separate from marking paid"
@@ -851,12 +856,13 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
         ) : visibleAssistants.length === 0 ? (
           <div className="p-10 text-center text-[13.5px] text-[var(--muted)]">No assistants match your search.</div>
         ) : (
-          visibleAssistants.map((a) => {
+          visibleAssistants.map((a, rowIndex) => {
             const expanded = !!open[a.payeeId];
             const t = total(a);
             return (
               <div key={a.payeeId} className="border-b border-[var(--border2)] last:border-b-0">
                 <div
+                  data-tour={rowIndex === 0 ? "salaries-row-expand" : undefined}
                   onClick={() => setOpen((prev) => ({ ...prev, [a.payeeId]: !prev[a.payeeId] }))}
                   className="flex flex-wrap items-center gap-3 p-[14px_18px] cursor-pointer hover:bg-[var(--surface2)]"
                 >
@@ -894,6 +900,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
                     </div>
                   ) : (
                     <button
+                      data-tour={rowIndex === 0 ? "salaries-release-row" : undefined}
                       onClick={(e) => {
                         e.stopPropagation();
                         onRelease(a);
@@ -928,6 +935,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
                     </button>
                   )}
                   <button
+                    data-tour={rowIndex === 0 ? "salaries-mark-paid" : undefined}
                     onClick={(e) => {
                       e.stopPropagation();
                       onTogglePaid(a);
@@ -944,6 +952,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
                     {a.status === "paid" ? "Mark pending" : "Mark as paid"}
                   </button>
                   <button
+                    data-tour={rowIndex === 0 ? "salaries-messages" : undefined}
                     onClick={(e) => {
                       e.stopPropagation();
                       setMessagesTarget(a);
@@ -971,12 +980,13 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
 
                 {expanded && (
                   <div className="border-t border-[var(--border2)] bg-[var(--surface2)]">
-                    {a.lines.map((l) => (
+                    {a.lines.map((l, lineIndex) => (
                       <div key={l.id} className="border-b border-[var(--border2)] p-[11px_18px]">
                         <div className="flex flex-wrap items-center gap-[10px_12px]">
                           <span className="w-[148px] flex-none text-[12.5px] font-semibold text-[var(--text)]">{l.offering}</span>
                           <div className="flex h-7 flex-none items-center gap-[4px] rounded-full bg-[var(--infos)] pl-[9px] pr-[4px]">
                             <select
+                              data-tour={rowIndex === 0 && lineIndex === 0 ? "salaries-calc-method" : undefined}
                               value={l.calcMethod ?? "manual"}
                               onChange={(e) =>
                                 onChangeCalcMethod(
@@ -1018,6 +1028,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
                           <div className="flex h-8 w-20 flex-none items-center gap-[1px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[7px]">
                             <span className="text-[11px] font-bold text-[var(--subtle)]">{sym}</span>
                             <input
+                              data-tour={rowIndex === 0 && lineIndex === 0 ? "salaries-base" : undefined}
                               key={`base-${l.id}-${l.base}`}
                               defaultValue={l.base}
                               onBlur={(e) => onEditLine(l.id, { base: Number(e.target.value.replace(/[^0-9]/g, "")) || 0 })}
@@ -1028,6 +1039,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
                           <div className="flex h-8 w-[78px] flex-none items-center gap-[1px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[7px]">
                             <span className="text-[11px] font-bold text-[var(--ok)]">+{sym}</span>
                             <input
+                              data-tour={rowIndex === 0 && lineIndex === 0 ? "salaries-bonus" : undefined}
                               key={`bonus-${l.id}-${l.bonus}`}
                               defaultValue={l.bonus}
                               onBlur={(e) => onEditLine(l.id, { bonus: Number(e.target.value.replace(/[^0-9]/g, "")) || 0 })}
@@ -1038,6 +1050,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
                           <div className="flex h-8 w-[82px] flex-none items-center gap-[1px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[7px]">
                             <span className="text-[11px] font-bold text-[var(--danger)]">−{sym}</span>
                             <input
+                              data-tour={rowIndex === 0 && lineIndex === 0 ? "salaries-deduction" : undefined}
                               key={`deduction-${l.id}-${l.deduction}`}
                               defaultValue={l.deduction}
                               onBlur={(e) => onEditLine(l.id, { deduction: Number(e.target.value.replace(/[^0-9]/g, "")) || 0 })}
@@ -1067,6 +1080,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
                         {l.offeringId && (
                           <>
                             <button
+                              data-tour={rowIndex === 0 && lineIndex === 0 ? "salaries-eval-toggle" : undefined}
                               onClick={() => setOpenEval((prev) => ({ ...prev, [l.id]: !prev[l.id] }))}
                               className="mt-2 flex items-center gap-[5px] text-[11.5px] font-semibold text-[var(--brand)] hover:underline"
                             >
@@ -1103,6 +1117,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
                           </div>
                           <div className="flex h-8 items-center gap-[6px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[9px]">
                             <input
+                              data-tour={rowIndex === 0 ? "salaries-office-hours" : undefined}
                               key={`office-hours-${a.payeeId}-${selectedOfferingId}-${officeHoursOf(a, selectedOfferingId) ?? 0}`}
                               type="number"
                               min={0}
@@ -1161,6 +1176,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
                 Cancel
               </button>
               <button
+                data-tour="salaries-mark-paid-confirm"
                 onClick={onConfirmMarkPaid}
                 disabled={receiptSaving}
                 className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--ok)] text-[13.5px] font-semibold text-white disabled:opacity-60"
