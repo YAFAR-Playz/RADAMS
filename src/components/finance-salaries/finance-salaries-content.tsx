@@ -775,7 +775,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
                 value={newPeriod}
                 onChange={(e) => setNewPeriod(e.target.value)}
                 {...pickerOnlyDateProps}
-                className="cursor-pointer border-none bg-transparent text-[13px] text-[var(--text)] outline-none"
+                className="w-[100px] cursor-pointer border-none bg-transparent text-[13px] text-[var(--text)] outline-none"
               />
               <button
                 data-tour="salaries-generate"

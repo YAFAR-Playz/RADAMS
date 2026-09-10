@@ -355,7 +355,7 @@ export function AcademicReportContent({ viewerRole }: { viewerRole: "admin" | "h
               value={period}
               onChange={(e) => setPeriod(e.target.value)}
               {...pickerOnlyDateProps}
-              className="h-10 cursor-pointer rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13px] text-[var(--text)] outline-none"
+              className="h-10 w-[110px] cursor-pointer rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13px] text-[var(--text)] outline-none"
             />
             <button
               data-tour="report-grade-scale"
