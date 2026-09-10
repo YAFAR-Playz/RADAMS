@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { navForRole, ROLE_LABELS } from "@/lib/roles";
 import { AppShell } from "@/components/shell/app-shell";
-import { listAllStaffingRequests } from "@/lib/actions/hr";
+import { getPendingStaffingRequestCount } from "@/lib/actions/hr";
 import { getAssistantPendingLogCount } from "@/lib/actions/dashboard";
 import { getPlatformDefaultBranding } from "@/lib/actions/branding";
 import { hasUnviewedReleasedPay } from "@/lib/actions/pay";
@@ -42,8 +42,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   let navItems = navForRole(profile.role);
   if (profile.role === "hr") {
-    const requests = await listAllStaffingRequests();
-    const pending = requests.filter((r) => r.status === "pending").length;
+    const pending = await getPendingStaffingRequestCount();
     navItems = navItems.map((n) => (n.key === "requests" ? { ...n, badge: pending > 0 ? pending : undefined } : n));
   }
   if (profile.role === "assistant") {

@@ -108,6 +108,22 @@ export async function getHrDashboard(): Promise<HrDashboard> {
   return { kpis, pendingRequests: pendingRequests.slice(0, 5), staffByRole };
 }
 
+// A count-only variant of listAllStaffingRequests for the sidebar's pending-
+// requests badge, which is fetched on every navigation for an HR user — the
+// full list (with its extra requester-name/offering-label lookups) was
+// overkill just to render a number.
+export async function getPendingStaffingRequestCount(): Promise<number> {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org) return 0;
+  const supabase = await createClient();
+  const { count } = await supabase
+    .from("staffing_requests")
+    .select("id", { count: "exact", head: true })
+    .eq("org_id", profile.org.id)
+    .eq("status", "pending");
+  return count ?? 0;
+}
+
 export async function listAllStaffingRequests(): Promise<StaffingRequestDetail[]> {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org) return [];

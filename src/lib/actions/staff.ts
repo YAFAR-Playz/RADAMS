@@ -6,6 +6,8 @@ import { getCurrentProfile } from "@/lib/current-profile";
 import { logActivity } from "@/lib/actions/activity-log";
 import { sendEmail, renderBrandedEmail } from "@/lib/email";
 import type { Role } from "@/lib/roles";
+import { listAllStaffingRequests, type StaffingRequestDetail } from "@/lib/actions/hr";
+import { listAllOfferingsForOrg, type OfferingChoice } from "@/lib/actions/students";
 
 export type StaffMember = {
   id: string;
@@ -23,6 +25,18 @@ export type StaffMember = {
 function offeringLabel(o: { session: string; unit: string | null; courses: { name: string } | { name: string }[] | null }) {
   const course = Array.isArray(o.courses) ? o.courses[0] : o.courses;
   return [course?.name, o.session, o.unit].filter(Boolean).join(" · ");
+}
+
+function requireHrOrAdmin(role: string | undefined) {
+  if (role !== "hr" && role !== "admin") throw new Error("Not authorized");
+}
+
+// Mirrors the role options the UI actually offers per caller (staff-content.tsx's
+// ADMIN_ROLE_OPTIONS/HR_ROLE_OPTIONS) — enforced server-side too, since a Server
+// Action is directly callable with any payload regardless of what the UI renders.
+function assertAssignableRole(callerRole: string, targetRole: Role) {
+  if (targetRole === "owner") throw new Error("Owner accounts can't be managed here");
+  if (callerRole === "hr" && targetRole === "admin") throw new Error("HR can't assign the Admin role");
 }
 
 export async function listStaff(): Promise<StaffMember[]> {
@@ -47,29 +61,28 @@ export async function listStaff(): Promise<StaffMember[]> {
 
   const coursesByProfile = new Map<string, string[]>();
   const offeringIdsByProfile = new Map<string, string[]>();
-  if (heads.length) {
-    const { data } = await supabase
-      .from("offering_heads")
-      .select("head_id, offering_id, course_offerings(session, unit, courses(name))")
-      .in("head_id", heads);
-    for (const row of data ?? []) {
-      const o = Array.isArray(row.course_offerings) ? row.course_offerings[0] : row.course_offerings;
-      if (!o) continue;
-      coursesByProfile.set(row.head_id, [...(coursesByProfile.get(row.head_id) ?? []), offeringLabel(o)]);
-      offeringIdsByProfile.set(row.head_id, [...(offeringIdsByProfile.get(row.head_id) ?? []), row.offering_id]);
-    }
+  const [{ data: headLinks }, { data: assistantLinks }] = await Promise.all([
+    heads.length
+      ? supabase.from("offering_heads").select("head_id, offering_id, course_offerings(session, unit, courses(name))").in("head_id", heads)
+      : Promise.resolve({ data: [] as { head_id: string; offering_id: string; course_offerings: unknown }[] }),
+    assistants.length
+      ? supabase
+          .from("offering_assistants")
+          .select("assistant_id, offering_id, course_offerings(session, unit, courses(name))")
+          .in("assistant_id", assistants)
+      : Promise.resolve({ data: [] as { assistant_id: string; offering_id: string; course_offerings: unknown }[] }),
+  ]);
+  for (const row of headLinks ?? []) {
+    const o = Array.isArray(row.course_offerings) ? row.course_offerings[0] : row.course_offerings;
+    if (!o) continue;
+    coursesByProfile.set(row.head_id, [...(coursesByProfile.get(row.head_id) ?? []), offeringLabel(o as Parameters<typeof offeringLabel>[0])]);
+    offeringIdsByProfile.set(row.head_id, [...(offeringIdsByProfile.get(row.head_id) ?? []), row.offering_id]);
   }
-  if (assistants.length) {
-    const { data } = await supabase
-      .from("offering_assistants")
-      .select("assistant_id, offering_id, course_offerings(session, unit, courses(name))")
-      .in("assistant_id", assistants);
-    for (const row of data ?? []) {
-      const o = Array.isArray(row.course_offerings) ? row.course_offerings[0] : row.course_offerings;
-      if (!o) continue;
-      coursesByProfile.set(row.assistant_id, [...(coursesByProfile.get(row.assistant_id) ?? []), offeringLabel(o)]);
-      offeringIdsByProfile.set(row.assistant_id, [...(offeringIdsByProfile.get(row.assistant_id) ?? []), row.offering_id]);
-    }
+  for (const row of assistantLinks ?? []) {
+    const o = Array.isArray(row.course_offerings) ? row.course_offerings[0] : row.course_offerings;
+    if (!o) continue;
+    coursesByProfile.set(row.assistant_id, [...(coursesByProfile.get(row.assistant_id) ?? []), offeringLabel(o as Parameters<typeof offeringLabel>[0])]);
+    offeringIdsByProfile.set(row.assistant_id, [...(offeringIdsByProfile.get(row.assistant_id) ?? []), row.offering_id]);
   }
 
   return (profiles ?? []).map((p) => ({
@@ -84,6 +97,17 @@ export async function listStaff(): Promise<StaffMember[]> {
     offeringIds: offeringIdsByProfile.get(p.id) ?? [],
     isMainAdmin: !!p.is_main_admin,
   }));
+}
+
+// Bundles the Staff tab's three independent loads into one server round
+// trip. Calling listStaff/listAllStaffingRequests/listAllOfferingsForOrg
+// separately via a CLIENT-side Promise.all still dispatches each as its own
+// Server Function request (they don't parallelize over the network the way
+// a client Promise.all implies) — running them here, server-side, is what
+// actually parallelizes the underlying Supabase queries.
+export async function getStaffTabBootstrap(): Promise<{ staff: StaffMember[]; requests: StaffingRequestDetail[]; offerings: OfferingChoice[] }> {
+  const [staff, requests, offerings] = await Promise.all([listStaff(), listAllStaffingRequests(), listAllOfferingsForOrg()]);
+  return { staff, requests, offerings };
 }
 
 export type DepartedStaffMember = {
@@ -136,6 +160,8 @@ export async function listDepartedStaff(): Promise<DepartedStaffMember[]> {
 export async function createStaffMember(input: { name: string; email: string; phone: string; role: Role; hireDate?: string }): Promise<{ id: string; merged: boolean }> {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org) throw new Error("Not authenticated");
+  requireHrOrAdmin(profile.role);
+  assertAssignableRole(profile.role, input.role);
   if (!input.name.trim() || !input.email.trim()) throw new Error("Name and email are required");
 
   const supabase = await createClient();
@@ -235,8 +261,17 @@ export async function createStaffMember(input: { name: string; email: string; ph
 }
 
 export async function updateStaffMember(id: string, patch: { name: string; phone: string; role: Role }) {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org) throw new Error("Not authenticated");
+  requireHrOrAdmin(profile.role);
+  assertAssignableRole(profile.role, patch.role);
+
   const admin = createAdminClient();
-  const { data: before } = await admin.from("profiles").select("full_name, phone, role").eq("id", id).maybeSingle();
+  const { data: before } = await admin.from("profiles").select("org_id, full_name, phone, role").eq("id", id).maybeSingle();
+  if (!before || before.org_id !== profile.org.id) throw new Error("User not found in your organization");
+  // Same visibility boundary listStaff already enforces for HR — an admin/owner
+  // row (and its PII) should never be readable or editable via this action either.
+  if (profile.role === "hr" && (before.role === "admin" || before.role === "owner")) throw new Error("Not authorized");
 
   const initials = patch.name
     .trim()

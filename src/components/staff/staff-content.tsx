@@ -7,7 +7,7 @@ import { TabLoader } from "@/components/ui/tab-loader";
 import { PageHeader } from "@/components/ui/page-header";
 import type { Role } from "@/lib/roles";
 import {
-  listStaff,
+  getStaffTabBootstrap,
   createStaffMember,
   updateStaffMember,
   removeStaffMember,
@@ -18,12 +18,12 @@ import {
   assignStaffToCourses,
   type StaffMember,
 } from "@/lib/actions/staff";
-import { listAllStaffingRequests, type StaffingRequestDetail } from "@/lib/actions/hr";
+import { type StaffingRequestDetail } from "@/lib/actions/hr";
 import { DepartedStaffPanel } from "@/components/staff/departed-staff-panel";
 import { StaffContractModal } from "@/components/staff/staff-contract-modal";
 import { StaffReportModal } from "@/components/staff/staff-report-modal";
 import { listStaffForBulkReport, generateStaffReport } from "@/lib/actions/staff-reports";
-import { listAllOfferingsForOrg, type OfferingChoice } from "@/lib/actions/students";
+import { type OfferingChoice } from "@/lib/actions/students";
 import { downloadCsv } from "@/lib/csv-export";
 import { consumeSearchHandoff } from "@/lib/search-handoff";
 import { pickerOnlyDateProps } from "@/lib/date-input";
@@ -90,7 +90,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
   async function reload() {
     setLoading(true);
     try {
-      const [s, r, o] = await Promise.all([listStaff(), listAllStaffingRequests(), listAllOfferingsForOrg()]);
+      const { staff: s, requests: r, offerings: o } = await getStaffTabBootstrap();
       startTransition(() => {
         setStaff(s);
         setRequests(r);

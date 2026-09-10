@@ -1,9 +1,12 @@
-import ExcelJS from "exceljs";
-
 // Client-side only, mirrors csv-export.ts's shape but produces a real .xlsx
 // file — some downstream tools (and most non-technical staff) expect an
 // actual workbook rather than a CSV with an .xlsx extension slapped on.
+// exceljs is dynamically imported (same pattern as pdf-export.ts's
+// html2canvas/jspdf) since it's a large library only ever needed once
+// someone actually clicks "Export" — a static import would ship it in every
+// page's initial bundle that merely imports this module.
 export async function downloadXlsx(filename: string, headers: string[], rows: (string | number)[][]) {
+  const { default: ExcelJS } = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Export");
   sheet.addRow(headers);

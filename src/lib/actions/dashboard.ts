@@ -755,16 +755,17 @@ export async function getFinanceDashboard(): Promise<FinanceDashboard> {
   const supabase = await createClient();
   const period = currentPeriod();
 
-  const { data: org } = await supabase.from("organizations").select("currency").eq("id", orgId).single();
+  const [{ data: org }, { data: lines }] = await Promise.all([
+    supabase.from("organizations").select("currency").eq("id", orgId).single(),
+    supabase
+      .from("salary_lines")
+      .select(
+        "payee_id, base, bonus, deduction, status, pay_method, profiles(full_name, initials), course_offerings!salary_lines_offering_id_fkey(session, unit, courses(name))"
+      )
+      .eq("org_id", orgId)
+      .eq("period", period),
+  ]);
   const sym = currencySymbol(org?.currency);
-
-  const { data: lines } = await supabase
-    .from("salary_lines")
-    .select(
-      "payee_id, base, bonus, deduction, status, pay_method, profiles(full_name, initials), course_offerings!salary_lines_offering_id_fkey(session, unit, courses(name))"
-    )
-    .eq("org_id", orgId)
-    .eq("period", period);
 
   const byPayee = new Map<string, { name: string; initials: string; total: number; status: "paid" | "pending"; offering: string; payMethod: string }>();
   let totalPayroll = 0;

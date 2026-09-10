@@ -10,11 +10,7 @@ import { toneColors } from "@/lib/tone";
 import { mockKpisForRole, type Kpi, type Role, type Tone } from "@/lib/roles";
 import { dashboardSubtitle, greetingFor, dateLabel } from "@/lib/dashboard-data";
 import {
-  getAdminDashboard,
   getAssistantDashboard,
-  getHeadDashboard,
-  getRegistrationDashboard,
-  getFinanceDashboard,
   type AdminDashboard,
   type AssistantDashboard,
   type HeadDashboard,
@@ -25,19 +21,22 @@ import {
   type AssistantCheckRateRow,
 } from "@/lib/actions/dashboard";
 import {
-  getFinancePayrollTrend,
-  getRegistrationEnrollmentTrend,
-  getStaffingTrend,
-  getMyRatingDistribution,
-  getOrgRatingDistribution,
+  getAdminDashboardBootstrap,
+  getHeadDashboardBootstrap,
+  getRegistrationDashboardBootstrap,
+  getFinanceDashboardBootstrap,
+  getHrDashboardBootstrap,
+  getOwnerDashboardBootstrap,
+} from "@/lib/actions/dashboard-bootstrap";
+import {
   type PayrollTrendPoint,
   type EnrollmentTrendPoint,
   type StaffingTrendPoint,
   type RatingSlice,
 } from "@/lib/actions/dashboard-charts";
-import { getHrDashboard, type HrDashboard } from "@/lib/actions/hr";
-import { getOwnerDashboard, listOrgsOverview, type OrgOverview, type OrgSizeRow, type TrendPoint } from "@/lib/actions/owner";
-import { listRecentActivityAcrossOrgs, type PlatformActivityRow } from "@/lib/actions/activity-log";
+import { type HrDashboard } from "@/lib/actions/hr";
+import { type OrgOverview, type OrgSizeRow, type TrendPoint } from "@/lib/actions/owner";
+import { type PlatformActivityRow } from "@/lib/actions/activity-log";
 import { CATEGORY_ICON } from "@/lib/activity-categories";
 import { TrendAreaChart, GroupedBarChart, RatingDonut, CategoryDonut, Sparkline } from "./charts";
 
@@ -862,7 +861,7 @@ export function DashboardContent({
 
     async function loadForRole() {
       if (role === "admin") {
-        const [dash, staffing] = await Promise.all([getAdminDashboard(), getStaffingTrend()]);
+        const { dash, staffing } = await getAdminDashboardBootstrap();
         startTransition(() => {
           setAdminData(dash);
           setStaffingTrend(staffing);
@@ -875,21 +874,21 @@ export function DashboardContent({
           setLoading(false);
         });
       } else if (role === "head") {
-        const [dash, ratings] = await Promise.all([getHeadDashboard(), getMyRatingDistribution()]);
+        const { dash, ratings } = await getHeadDashboardBootstrap();
         startTransition(() => {
           setHeadData(dash);
           setRatingDistribution(ratings);
           setLoading(false);
         });
       } else if (role === "registration") {
-        const [dash, trend] = await Promise.all([getRegistrationDashboard(), getRegistrationEnrollmentTrend()]);
+        const { dash, trend } = await getRegistrationDashboardBootstrap();
         startTransition(() => {
           setRegistrationData(dash);
           setEnrollmentTrend(trend);
           setLoading(false);
         });
       } else if (role === "finance") {
-        const [dash, trend, ratings] = await Promise.all([getFinanceDashboard(), getFinancePayrollTrend(), getOrgRatingDistribution()]);
+        const { dash, trend, ratings } = await getFinanceDashboardBootstrap();
         startTransition(() => {
           setFinanceData(dash);
           setPayrollTrend(trend);
@@ -902,14 +901,14 @@ export function DashboardContent({
         // getOrgRatingDistribution would always come back empty for HR.
         // That would render as "no ratings exist," which is misleading —
         // real ratings exist, HR just can't see them under current policy.
-        const [dash, staffing] = await Promise.all([getHrDashboard(), getStaffingTrend()]);
+        const { dash, staffing } = await getHrDashboardBootstrap();
         startTransition(() => {
           setHrData(dash);
           setStaffingTrend(staffing);
           setLoading(false);
         });
       } else if (role === "owner") {
-        const [dash, orgs, activity] = await Promise.all([getOwnerDashboard(), listOrgsOverview(), listRecentActivityAcrossOrgs()]);
+        const { dash, orgs, activity } = await getOwnerDashboardBootstrap();
         startTransition(() => {
           setOwnerKpis(dash.kpis);
           setOwnerOrgs(orgs);

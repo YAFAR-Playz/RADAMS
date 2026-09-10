@@ -19,28 +19,65 @@ function useActiveKey() {
   return segments[0] || "dashboard";
 }
 
+type ThemeMode = "light" | "dark" | "auto";
+
+// Same 6pm–6am boundary as the inline bootstrap script in src/app/layout.tsx
+// (which sets the initial data-theme before hydration, from local storage
+// alone, to avoid a flash) — kept in sync here so a session left open across
+// either boundary while on "auto" switches live rather than only on reload.
+function resolveAutoTheme(): "light" | "dark" {
+  const hour = new Date().getHours();
+  return hour >= 18 || hour < 6 ? "dark" : "light";
+}
+
+function applyTheme(mode: ThemeMode) {
+  document.documentElement.setAttribute("data-theme", mode === "auto" ? resolveAutoTheme() : mode);
+}
+
 function ThemeToggle({ className }: { className?: string }) {
-  const [theme, setTheme] = useState<"light" | "dark">(() => {
-    if (typeof document === "undefined") return "light";
-    return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+  const [mode, setMode] = useState<ThemeMode>(() => {
+    if (typeof window === "undefined") return "light";
+    const stored = localStorage.getItem("radams-theme");
+    return stored === "dark" || stored === "auto" ? stored : "light";
   });
 
-  function toggle() {
-    const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    document.documentElement.setAttribute("data-theme", next);
+  useEffect(() => {
+    applyTheme(mode);
+    if (mode !== "auto") return;
+    // Re-checks once a minute rather than computing a precise timeout to the
+    // next boundary — simpler, and a page open for hours will still flip
+    // within a minute of 6am/6pm either way.
+    const id = setInterval(() => applyTheme("auto"), 60_000);
+    return () => clearInterval(id);
+  }, [mode]);
+
+  function choose(next: ThemeMode) {
+    setMode(next);
     localStorage.setItem("radams-theme", next);
+    applyTheme(next);
   }
 
+  const options: { mode: ThemeMode; label: string; icon: "sun" | "moon" | "monitor" }[] = [
+    { mode: "light", label: "Light", icon: "sun" },
+    { mode: "dark", label: "Dark", icon: "moon" },
+    { mode: "auto", label: "Auto", icon: "monitor" },
+  ];
+
   return (
-    <button
-      data-tour="theme-toggle"
-      onClick={toggle}
-      className={`flex items-center gap-2 rounded-[8px] px-3 py-2 text-[13px] font-medium text-[var(--text)] hover:bg-[var(--surface2)] ${className ?? ""}`}
-    >
-      <Icon name={theme === "dark" ? "moon" : "sun"} size={16} />
-      {theme === "dark" ? "Dark mode" : "Light mode"}
-    </button>
+    <div data-tour="theme-toggle" className={`flex gap-[4px] rounded-[8px] bg-[var(--surface2)] p-[3px] ${className ?? ""}`}>
+      {options.map((o) => (
+        <button
+          key={o.mode}
+          onClick={() => choose(o.mode)}
+          title={o.mode === "auto" ? "Dark from 6pm to 6am, light the rest of the day" : undefined}
+          className="flex flex-1 items-center justify-center gap-[5px] rounded-[6px] px-2 py-[7px] text-[12px] font-semibold"
+          style={mode === o.mode ? { background: "var(--surface)", color: "var(--text)", boxShadow: "var(--shadow)" } : { color: "var(--muted)" }}
+        >
+          <Icon name={o.icon} size={14} />
+          {o.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
