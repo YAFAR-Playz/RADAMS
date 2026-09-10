@@ -357,6 +357,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
               Export CSV
             </button>
             <button
+              data-tour="staff-add-user"
               onClick={openAdd}
               className="flex flex-none items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[15px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)]"
             >
@@ -436,6 +437,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
         <div className="flex h-10 min-w-[200px] max-w-[300px] flex-1 items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-3">
           <Icon name="search" size={16} className="text-[var(--subtle)]" />
           <input
+            data-tour="staff-search"
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -652,6 +654,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
               <div>
                 <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Full name</label>
                 <input
+                  data-tour="staff-modal-name"
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                   placeholder="e.g. Jordan Hale"
@@ -661,6 +664,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
               <div>
                 <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Email</label>
                 <input
+                  data-tour="staff-modal-email"
                   type="email"
                   value={form.email}
                   disabled={!!editId}
@@ -683,6 +687,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
                   <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Role</label>
                   <div className="flex h-[42px] items-center rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3">
                     <select
+                      data-tour="staff-modal-role"
                       value={form.role}
                       onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as Role }))}
                       className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[13.5px] font-semibold text-[var(--text)] outline-none"
@@ -732,6 +737,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
                 Cancel
               </button>
               <button
+                data-tour="staff-modal-save"
                 onClick={onSave}
                 disabled={!canSave || saving}
                 className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"

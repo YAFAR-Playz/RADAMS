@@ -163,7 +163,8 @@ export function HrRequestsContent() {
             No staffing requests yet.
           </div>
         ) : (
-          requests?.map((r) => {
+          requests?.map((r, requestIndex) => {
+            const isFirstPending = r.status === "pending" && requestIndex === (requests?.findIndex((x) => x.status === "pending") ?? -1);
             const meta = KIND_META[r.kind];
             const badge = statusBadge(r.status);
             const expanded = !!open[r.id];
@@ -187,6 +188,7 @@ export function HrRequestsContent() {
                     {badge.text}
                   </span>
                   <button
+                    data-tour={isFirstPending ? "hr-requests-expand" : undefined}
                     onClick={() => setOpen((p) => ({ ...p, [r.id]: !p[r.id] }))}
                     className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface2)]"
                   >
@@ -228,6 +230,7 @@ export function HrRequestsContent() {
                     {r.status === "pending" ? (
                       <div className="flex gap-[9px]">
                         <button
+                          data-tour={isFirstPending ? "hr-requests-approve" : undefined}
                           onClick={() => onAction(r.id, "approved")}
                           disabled={resolvingId === r.id}
                           className="flex h-11 flex-1 items-center justify-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
@@ -236,6 +239,7 @@ export function HrRequestsContent() {
                           Approve
                         </button>
                         <button
+                          data-tour={isFirstPending ? "hr-requests-decline" : undefined}
                           onClick={() => onAction(r.id, "declined")}
                           disabled={resolvingId === r.id}
                           className="flex h-11 flex-1 items-center justify-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--danger)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] disabled:opacity-60"

@@ -117,6 +117,7 @@ export function HiringContent() {
       >
         <div className="flex flex-wrap gap-2">
           <button
+            data-tour="hiring-add-staff"
             onClick={() => openNew("add")}
             className="flex items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[15px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)]"
           >
@@ -182,6 +183,7 @@ export function HiringContent() {
                   <div>
                     <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Full name</label>
                     <input
+                      data-tour="hiring-name"
                       value={form.name}
                       onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                       placeholder="e.g. Jordan Hale"
@@ -191,6 +193,7 @@ export function HiringContent() {
                   <div>
                     <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Email</label>
                     <input
+                      data-tour="hiring-email"
                       type="email"
                       value={form.email}
                       onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
@@ -212,6 +215,7 @@ export function HiringContent() {
                       <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Role</label>
                       <div className="flex h-[42px] items-center rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3">
                         <select
+                          data-tour="hiring-role"
                           value={form.role}
                           onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as Role }))}
                           className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[13.5px] font-semibold text-[var(--text)] outline-none"
@@ -298,6 +302,7 @@ export function HiringContent() {
                 Cancel
               </button>
               <button
+                data-tour="hiring-submit"
                 onClick={onSubmit}
                 disabled={!canSubmit || submitting}
                 className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"

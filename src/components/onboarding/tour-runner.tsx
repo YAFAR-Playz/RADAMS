@@ -8,6 +8,13 @@ import { exitOnboardingDemo } from "@/lib/actions/onboarding";
 import type { TourStep } from "@/lib/onboarding-tours/types";
 
 const STEP_STORAGE_KEY = "onboarding-tour-step";
+// The tooltip's dismiss button used to call finish(false), silently exiting
+// and discarding the whole demo — indistinguishable in effect from the
+// persistent banner's "Exit demo" button, but easy to click by mistake when
+// a user just wants to stop the guided walkthrough for a moment. Dismissing
+// now only hides the tour overlay; the user stays in the demo and can still
+// leave it deliberately via the "Exit demo" banner.
+const DISMISSED_STORAGE_KEY = "onboarding-tour-dismissed";
 // Generous: a step's target page can take a real while to become
 // interactive — several sequential data fetches on some tabs, plus (in dev)
 // Turbopack's on-demand compile of a route not yet visited this session.
@@ -76,6 +83,7 @@ export function TourRunner({ steps }: { steps: TourStep[] }) {
   const [notFound, setNotFound] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [poke, setPoke] = useState(0);
+  const [dismissed, setDismissed] = useState(() => typeof window !== "undefined" && window.sessionStorage.getItem(DISMISSED_STORAGE_KEY) === "1");
 
   const step = steps[stepIndex] ?? null;
 
@@ -89,8 +97,14 @@ export function TourRunner({ steps }: { steps: TourStep[] }) {
       await exitOnboardingDemo(completed);
     } finally {
       window.sessionStorage.removeItem(STEP_STORAGE_KEY);
+      window.sessionStorage.removeItem(DISMISSED_STORAGE_KEY);
       window.location.href = "/dashboard";
     }
+  }, []);
+
+  const dismiss = useCallback(() => {
+    window.sessionStorage.setItem(DISMISSED_STORAGE_KEY, "1");
+    setDismissed(true);
   }, []);
 
   const goNext = useCallback(() => {
@@ -238,7 +252,7 @@ export function TourRunner({ steps }: { steps: TourStep[] }) {
     return { ...base, top: clampedTop, left: rect.right + gap };
   }, [rect, step, mode]);
 
-  if (!steps.length || !step) return null;
+  if (!steps.length || !step || dismissed) return null;
 
   const navCopy =
     mode === "nav-menu"
@@ -324,7 +338,7 @@ export function TourRunner({ steps }: { steps: TourStep[] }) {
             <span className="text-[11px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">
               Step {stepIndex + 1} of {steps.length}
             </span>
-            <button onClick={() => finish(false)} disabled={finishing} className="flex-none text-[var(--subtle)] hover:text-[var(--text)]">
+            <button onClick={dismiss} title="Hide the tour — you'll stay in the demo" className="flex-none text-[var(--subtle)] hover:text-[var(--text)]">
               <Icon name="x" size={15} />
             </button>
           </div>
