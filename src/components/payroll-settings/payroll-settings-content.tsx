@@ -416,7 +416,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
               </div>
             ) : (
               <div className="flex flex-col gap-[9px]">
-                {TOGGLE_DEFS.map((t) => {
+                {TOGGLE_DEFS.map((t, toggleIndex) => {
                   const on = settings[t.key];
                   const { bg, fg } = toneColors(t.tone);
                   return (
@@ -430,6 +430,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                       </div>
                       {savingKey === t.key && <Spinner size={13} className="flex-none text-[var(--subtle)]" />}
                       <button
+                        data-tour={toggleIndex === 0 ? "settings-permission-toggle" : undefined}
                         onClick={() => onToggle(t.key)}
                         role="switch"
                         aria-checked={on}
@@ -604,11 +605,12 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
               <SkeletonRow className="h-[52px] w-full" />
             ) : (
               <div className="flex flex-wrap gap-2">
-                {CURRENCIES.map((c) => {
+                {CURRENCIES.map((c, currencyIndex) => {
                   const active = c.code === settings.currency;
                   return (
                     <button
                       key={c.code}
+                      data-tour={currencyIndex === 0 ? "settings-currency" : undefined}
                       onClick={() => onCurrency(c.code)}
                       className="flex items-center gap-2 rounded-[var(--rad-sm)] border-[1.5px] p-[10px_14px]"
                       style={{ borderColor: active ? "var(--brand)" : "var(--border)", background: active ? "var(--brands)" : "var(--surface)" }}
@@ -656,6 +658,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                   <div className="flex flex-wrap gap-[9px]">
                     <div className="flex h-9 min-w-[160px] flex-1 items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px]">
                       <select
+                        data-tour="settings-staff-picker"
                         value={staffPickId}
                         onChange={(e) => onPickStaff(e.target.value)}
                         className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[12.5px] font-semibold text-[var(--text)] outline-none"
@@ -669,6 +672,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                     </div>
                     <div className="flex h-9 min-w-[150px] flex-1 items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px]">
                       <select
+                        data-tour="settings-staff-method"
                         value={staffPickMethod}
                         onChange={(e) => setStaffPickMethod(e.target.value as CalcMethod)}
                         className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[12.5px] font-semibold text-[var(--text)] outline-none"
@@ -686,6 +690,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                     </div>
                   </div>
                   <button
+                    data-tour="settings-staff-save"
                     onClick={onSaveStaffDefault}
                     disabled={savingStaffDefault || !staffPickId}
                     className="flex h-9 items-center justify-center gap-[7px] rounded-[8px] bg-[var(--brand)] text-[12.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
@@ -814,6 +819,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                     />
                     <div className="flex h-9 flex-1 items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[10px]">
                       <input
+                        data-tour={i === 0 ? "settings-band-min" : undefined}
                         type="number"
                         value={b.min}
                         onChange={(e) => updateBand(i, { min: Number(e.target.value) || 0 })}
@@ -838,6 +844,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                   Add band
                 </button>
                 <button
+                  data-tour="settings-bands-save"
                   onClick={onSaveBands}
                   disabled={savingBands}
                   className="mt-[4px] flex h-9 items-center justify-center gap-[7px] rounded-[8px] bg-[var(--brand)] text-[12.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"

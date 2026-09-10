@@ -103,6 +103,7 @@ function CategoryGroup({
           <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">{title}</h3>
         </div>
         <button
+          data-tour={kind === "extra" ? "categories-add-extra" : undefined}
           onClick={onAdd}
           disabled={addingId === kind}
           className="flex items-center gap-[5px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[11px] py-[6px] text-[12px] font-semibold text-[var(--brand)] hover:bg-[var(--brands)] disabled:opacity-60"
@@ -113,12 +114,14 @@ function CategoryGroup({
       </header>
       <div className="p-2">
         {cats.length === 0 && <div className="p-3 text-center text-[12.5px] text-[var(--subtle)]">No categories yet.</div>}
-        {cats.map((c) => {
+        {cats.map((c, catIndex) => {
           const draft = categoryDrafts[c.id] ?? { label: c.label, rate: String(c.rate ?? 0) };
+          const isFirstExtra = kind === "extra" && catIndex === 0;
           return (
             <div key={c.id} className="m-1 rounded-[10px] border border-[var(--border2)] p-[11px]">
               <div className="flex items-center gap-[10px]">
                 <input
+                  data-tour={isFirstExtra ? "categories-label" : undefined}
                   value={draft.label}
                   onChange={(e) => onDraftCategory(c.id, { label: e.target.value })}
                   className="flex-1 border-none bg-transparent text-[13.5px] font-semibold text-[var(--text)] outline-none"
@@ -151,6 +154,7 @@ function CategoryGroup({
                   <div className="ml-auto flex h-8 w-[84px] flex-none items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[9px]">
                     <span className="text-[12px] font-semibold text-[var(--subtle)]">{sym}</span>
                     <input
+                      data-tour={isFirstExtra ? "categories-rate" : undefined}
                       value={draft.rate}
                       onChange={(e) => onDraftCategory(c.id, { rate: e.target.value.replace(/[^0-9]/g, "") })}
                       inputMode="numeric"
@@ -654,6 +658,7 @@ export function PayCategoriesContent() {
           <span className="text-[12.5px] font-semibold text-[var(--muted)]">Rates &amp; brackets apply to</span>
           <div className="relative min-w-[240px]">
             <button
+              data-tour="categories-scope-toggle"
               onClick={() => setScopeMenuOpen((p) => !p)}
               className="flex h-10 w-full items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3"
             >
@@ -665,11 +670,12 @@ export function PayCategoriesContent() {
             </button>
             {scopeMenuOpen && (
               <div className="absolute left-0 right-0 top-[46px] z-20 max-h-[240px] overflow-y-auto rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] p-[6px] shadow-[0_12px_36px_rgba(8,12,22,.18)]">
-                {(courseRates ?? []).map((c) => {
+                {(courseRates ?? []).map((c, scopeIndex) => {
                   const sel = courseScope.includes(c.offeringId);
                   return (
                     <button
                       key={c.offeringId}
+                      data-tour={scopeIndex === 0 ? "categories-scope-option" : undefined}
                       onClick={() => toggleScope(c.offeringId)}
                       className="flex w-full items-center gap-[10px] rounded-[8px] p-[9px_10px] hover:bg-[var(--surface2)]"
                     >
@@ -757,7 +763,7 @@ export function PayCategoriesContent() {
               <div className="p-[30px] text-center text-[13px] text-[var(--muted)]">Select one or more courses above to set their rates.</div>
             ) : (
               <div className="grid grid-cols-1 gap-[10px] p-[10px] sm:grid-cols-2">
-                {visibleCourseRates.map((c) => (
+                {visibleCourseRates.map((c, courseRateIndex) => (
                   <div key={c.offeringId} className="flex flex-col gap-[8px] rounded-[9px] border border-[var(--border2)] p-[10px_12px]">
                     <span className="text-[13px] font-semibold text-[var(--text)]">{c.label}</span>
                     <div className="flex items-center gap-[10px]">
@@ -765,6 +771,7 @@ export function PayCategoriesContent() {
                       <div className="flex h-[34px] w-[88px] flex-none items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[9px]">
                         <span className="text-[12.5px] font-semibold text-[var(--subtle)]">{sym}</span>
                         <input
+                          data-tour={courseRateIndex === 0 ? "categories-course-rate" : undefined}
                           value={courseRateDrafts[c.offeringId] ?? String(c.rate)}
                           onChange={(e) => draftCourseRate(c.offeringId, e.target.value.replace(/[^0-9]/g, ""))}
                           inputMode="numeric"
@@ -1045,7 +1052,7 @@ export function PayCategoriesContent() {
               </div>
             ) : (
               <div className="p-2">
-                {(bracketSlots ?? []).map((b) => {
+                {(bracketSlots ?? []).map((b, bracketIndex) => {
                   const draft = bracketDrafts[b.name] ?? {};
                   const loVal = draft.lo ?? (b.lo != null ? String(b.lo) : "");
                   const hiVal = draft.hi ?? (b.hi != null ? String(b.hi) : "");
@@ -1074,6 +1081,7 @@ export function PayCategoriesContent() {
                       <div className="flex h-[34px] w-[100px] flex-none items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[9px]">
                         <span className="text-[12.5px] font-semibold text-[var(--subtle)]">{sym}</span>
                         <input
+                          data-tour={bracketIndex === 0 ? "categories-bracket-pay" : undefined}
                           value={payVal}
                           placeholder={courseScope.length > 1 ? "Differs" : "0"}
                           onChange={(e) => draftBracket(b.name, { pay: e.target.value.replace(/[^0-9]/g, "") })}
@@ -1103,6 +1111,7 @@ export function PayCategoriesContent() {
         <div className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-center gap-3 border-t border-[var(--border)] bg-[var(--surface)] p-[12px_18px] shadow-[0_-8px_24px_rgba(8,12,22,.12)]">
           <span className="text-[13px] font-medium text-[var(--muted)]">You have unsaved changes</span>
           <button
+            data-tour="categories-save"
             onClick={onSaveAll}
             disabled={saving}
             className="flex items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[16px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)] disabled:opacity-60"

@@ -332,11 +332,23 @@ async function main() {
     { org_id: DEMO_ORG_ID, kind: "deduction", label: "Late submission", mode: "fixed", rate: 15, sort_order: 1 },
   ]);
   if (categoriesError) throw new Error(`Failed to create pay categories: ${categoriesError.message}`);
+  // Scoped to offerings[2] (Chemistry · June · Unit 1) — Fatima's seeded
+  // salary line above cites "Bracket B (120-160 papers)" for that exact
+  // offering, so Finance selecting Chemistry in Categories' course scope
+  // sees the same bracket the salary line already refers to. Brackets are
+  // per-offering (see 0022_add_offering_id_to_pay_brackets.sql) — a null
+  // offering_id here would make them permanently invisible in the UI,
+  // which getBracketSlots() always filters `.in("offering_id", ...)`.
   await supabase.from("pay_brackets").insert([
-    { org_id: DEMO_ORG_ID, name: "Bracket A (under 120)", lo: 0, hi: 119, pay: 800, sort_order: 0 },
-    { org_id: DEMO_ORG_ID, name: "Bracket B (120-160)", lo: 120, hi: 160, pay: 980, sort_order: 1 },
+    { org_id: DEMO_ORG_ID, offering_id: offerings[2].id, name: "Bracket A (under 120)", lo: 0, hi: 119, pay: 800, sort_order: 0 },
+    { org_id: DEMO_ORG_ID, offering_id: offerings[2].id, name: "Bracket B (120-160)", lo: 120, hi: 160, pay: 980, sort_order: 1 },
   ]);
-  await supabase.from("other_rates").insert([{ org_id: DEMO_ORG_ID, label: "Office hours", unit: "per hour", rate: 22, sort_order: 0 }]);
+  // Label must be "Office hour" (singular) — every app code path
+  // (getOfficeHourOrgDefault, resolveOfficeHourRate, etc. in
+  // src/lib/actions/pay-categories.ts) queries/creates that exact label;
+  // "Office hours" (plural) is invisible to the app and gets silently
+  // shadowed by a fresh $15/hr default row on first Categories page load.
+  await supabase.from("other_rates").insert([{ org_id: DEMO_ORG_ID, label: "Office hour", unit: "per hour", rate: 22, sort_order: 0 }]);
 
   console.log("Creating payment plans (full / installments / discounted / overdue)...");
   const planStudents = studentIds.slice(0, 12);
