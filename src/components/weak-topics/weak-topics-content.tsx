@@ -674,7 +674,7 @@ function ManagePanel({ offeringId, period, setError }: { offeringId: string; per
       ) : (
         <>
         <div className="divide-y divide-[var(--border)]">
-          {pageRows.map((s) => (
+          {pageRows.map((s, rowIndex) => (
             <div key={s.studentId} className="flex flex-col gap-[8px] p-[14px_18px]">
               <div className="flex flex-wrap items-center justify-between gap-[10px]">
                 <div>
@@ -683,6 +683,7 @@ function ManagePanel({ offeringId, period, setError }: { offeringId: string; per
                 </div>
                 <div className="flex items-center gap-[8px]">
                   <select
+                    data-tour={rowIndex === 0 ? "weaktopics-assign-select" : undefined}
                     value={picks[s.studentId] ?? ""}
                     onChange={(e) => setPicks((p) => ({ ...p, [s.studentId]: e.target.value }))}
                     className="h-9 rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none"
@@ -695,6 +696,7 @@ function ManagePanel({ offeringId, period, setError }: { offeringId: string; per
                     ))}
                   </select>
                   <button
+                    data-tour={rowIndex === 0 ? "weaktopics-assign-submit" : undefined}
                     onClick={() => onAdd(s.studentId)}
                     disabled={!picks[s.studentId] || busyId === s.studentId}
                     className="flex h-9 items-center gap-[6px] rounded-[8px] bg-[var(--brand)] px-[12px] text-[12.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
@@ -733,12 +735,14 @@ function ManagePanel({ offeringId, period, setError }: { offeringId: string; per
               )}
               <div className="flex items-start gap-[8px]">
                 <textarea
+                  data-tour={rowIndex === 0 ? "weaktopics-comment" : undefined}
                   value={comments[s.studentId] ?? ""}
                   onChange={(e) => setComments((c) => ({ ...c, [s.studentId]: e.target.value }))}
                   placeholder="Overall comment for this student this month — shown in the monthly report…"
                   className="h-[54px] flex-1 resize-none rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] py-[7px] text-[12px] leading-[1.4] text-[var(--text)] outline-none focus:border-[var(--brand)]"
                 />
                 <button
+                  data-tour={rowIndex === 0 ? "weaktopics-comment-save" : undefined}
                   onClick={() => onSaveComment(s.studentId)}
                   disabled={(comments[s.studentId] ?? "") === (savedComments[s.studentId] ?? "") || savingComment === s.studentId}
                   className="flex h-9 flex-none items-center gap-[6px] self-end rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px] text-[12px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"

@@ -50,10 +50,12 @@ function StatusSelect({
   student,
   onChange,
   size = "sm",
+  dataTour,
 }: {
   student: RosterStudent;
   onChange: (status: AssignmentStatus | "") => void;
   size?: "sm" | "lg";
+  dataTour?: string;
 }) {
   const def = statusDef(student.status);
   const { bg, fg } = def ? toneColors(def.tone) : { bg: "var(--surface2)", fg: "var(--muted)" };
@@ -65,6 +67,7 @@ function StatusSelect({
     >
       <Icon name={def ? def.icon : "clock"} size={big ? 15 : 13} className="flex-none" style={{ color: fg }} />
       <select
+        data-tour={dataTour}
         value={student.status ?? ""}
         onChange={(e) => onChange(e.target.value as AssignmentStatus | "")}
         className={`h-full w-full cursor-pointer appearance-none border-none bg-transparent font-semibold outline-none ${big ? "text-[14px]" : "text-[12.5px]"}`}
@@ -324,11 +327,12 @@ export function AssignmentsContent() {
               <SkeletonRow className="h-[36px] w-[120px]" />
             </>
           ) : offerings && offerings.length ? (
-            offerings.map((o) => {
+            offerings.map((o, i) => {
               const active = o.id === offeringId;
               return (
                 <button
                   key={o.id}
+                  data-tour={i === 0 ? "myassignments-course" : undefined}
                   onClick={() => setOfferingId(o.id)}
                   className="flex flex-none items-center gap-[7px] rounded-full border px-[13px] py-2 text-[13px] font-semibold"
                   style={
@@ -357,6 +361,7 @@ export function AssignmentsContent() {
               <SkeletonRow className="h-[18px] w-full" />
             ) : (
               <select
+                data-tour="myassignments-picker"
                 value={assignmentId ?? ""}
                 onChange={(e) => setAssignmentId(e.target.value)}
                 className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[13.5px] font-semibold text-[var(--text)] outline-none"
@@ -452,7 +457,7 @@ export function AssignmentsContent() {
                 {showComment && <span className="min-w-0 flex-[1.4]">Comment</span>}
                 <span className="w-[36px] flex-none" />
               </div>
-              {pageStudents.map((st) => (
+              {pageStudents.map((st, rowIndex) => (
                 <div
                   key={st.studentId}
                   className="flex items-center gap-[14px] border-b border-[var(--border2)] px-[18px] py-[11px] hover:bg-[var(--surface2)]"
@@ -467,11 +472,16 @@ export function AssignmentsContent() {
                     {savingId === st.studentId && <Spinner size={13} className="flex-none text-[var(--subtle)]" />}
                   </div>
                   <div className="flex flex-1 items-center">
-                    <StatusSelect student={st} onChange={(status) => onStatusChange(st.studentId, status)} />
+                    <StatusSelect
+                      student={st}
+                      onChange={(status) => onStatusChange(st.studentId, status)}
+                      dataTour={rowIndex === 0 ? "myassignments-status" : undefined}
+                    />
                   </div>
                   {showGrade && (
                     <input
                       key={`grade-${st.studentId}-${assignmentId}`}
+                      data-tour={rowIndex === 0 ? "myassignments-grade" : undefined}
                       defaultValue={st.grade ?? ""}
                       onBlur={(e) => onGradeBlur(st.studentId, e.target.value, e.target)}
                       placeholder="—"
@@ -481,6 +491,7 @@ export function AssignmentsContent() {
                   {showComment && (
                     <input
                       key={`comment-${st.studentId}-${assignmentId}`}
+                      data-tour={rowIndex === 0 ? "myassignments-comment" : undefined}
                       defaultValue={st.comment ?? currentAssignment?.defaultComment ?? ""}
                       onBlur={(e) => onCommentBlur(st.studentId, e.target.value)}
                       placeholder="Add comment…"
@@ -488,6 +499,7 @@ export function AssignmentsContent() {
                     />
                   )}
                   <button
+                    data-tour={rowIndex === 0 ? "myassignments-send" : undefined}
                     onClick={() => {
                       setRecipient("parent");
                       setModalId(st.studentId);
@@ -507,7 +519,7 @@ export function AssignmentsContent() {
 
           {/* MOBILE CARDS */}
           <div className="flex flex-col gap-3 md:hidden">
-            {pageStudents.map((st) => {
+            {pageStudents.map((st, rowIndex) => {
               const def = statusDef(st.status);
               const { bg, fg } = def ? toneColors(def.tone) : { bg: "var(--surface2)", fg: "var(--muted)" };
               return (
@@ -530,12 +542,18 @@ export function AssignmentsContent() {
                     </span>
                   </div>
                   <div className="mb-3">
-                    <StatusSelect student={st} onChange={(status) => onStatusChange(st.studentId, status)} size="lg" />
+                    <StatusSelect
+                      student={st}
+                      onChange={(status) => onStatusChange(st.studentId, status)}
+                      size="lg"
+                      dataTour={rowIndex === 0 ? "myassignments-status" : undefined}
+                    />
                   </div>
                   <div className="flex gap-[10px]">
                     {showGrade && (
                       <input
                         key={`grade-${st.studentId}-${assignmentId}`}
+                        data-tour={rowIndex === 0 ? "myassignments-grade" : undefined}
                         defaultValue={st.grade ?? ""}
                         onBlur={(e) => onGradeBlur(st.studentId, e.target.value, e.target)}
                         placeholder="Grade"
@@ -545,6 +563,7 @@ export function AssignmentsContent() {
                     {showComment && (
                       <input
                         key={`comment-${st.studentId}-${assignmentId}`}
+                        data-tour={rowIndex === 0 ? "myassignments-comment" : undefined}
                         defaultValue={st.comment ?? currentAssignment?.defaultComment ?? ""}
                         onBlur={(e) => onCommentBlur(st.studentId, e.target.value)}
                         placeholder="Add comment…"
@@ -553,6 +572,7 @@ export function AssignmentsContent() {
                     )}
                   </div>
                   <button
+                    data-tour={rowIndex === 0 ? "myassignments-send" : undefined}
                     onClick={() => {
                       setRecipient("parent");
                       setModalId(st.studentId);
@@ -627,6 +647,7 @@ export function AssignmentsContent() {
                 {(["student", "parent"] as Recipient[]).map((r) => (
                   <button
                     key={r}
+                    data-tour={r === "parent" ? "myassignments-modal-recipient" : undefined}
                     onClick={() => setRecipient(r)}
                     className="flex-1 rounded-[7px] py-[7px] text-[12.5px] font-semibold"
                     style={{
@@ -670,6 +691,7 @@ export function AssignmentsContent() {
                 Cancel
               </button>
               <a
+                data-tour="myassignments-modal-send"
                 href={modalMessage ? modalWaUrl : undefined}
                 target="_blank"
                 rel="noopener"

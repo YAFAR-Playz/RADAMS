@@ -103,6 +103,7 @@ export function AssistantReportContent() {
       >
         <div className="flex flex-wrap items-center gap-[10px]">
           <select
+            data-tour="myreport-course"
             value={offeringId}
             onChange={(e) => setOfferingId(e.target.value)}
             disabled={!offerings || offerings.length === 0}
@@ -148,7 +149,7 @@ export function AssistantReportContent() {
             ))}
           </div>
         ) : !meta ? (
-          <div className="flex flex-col items-center gap-2 p-10 text-center">
+          <div data-tour="myreport-not-generated" className="flex flex-col items-center gap-2 p-10 text-center">
             <Icon name="clock" size={26} className="text-[var(--subtle)]" />
             <div className="text-[13.5px] font-semibold text-[var(--text)]">Not generated yet</div>
             <div className="max-w-[360px] text-[13px] leading-[1.5] text-[var(--muted)]">

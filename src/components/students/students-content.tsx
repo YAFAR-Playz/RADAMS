@@ -769,7 +769,7 @@ export function StudentsContent({ role }: { role: Role }) {
             {pageRows.length === 0 ? (
               <div className="p-10 text-center text-[13.5px] text-[var(--muted)]">No students match these filters.</div>
             ) : (
-              pageRows.map((st) => (
+              pageRows.map((st, rowIndex) => (
                 <div
                   key={st.studentId}
                   className="flex flex-wrap items-center gap-[10px_14px] border-b border-[var(--border2)] px-[18px] py-[12px] hover:bg-[var(--surface2)]"
@@ -918,6 +918,7 @@ export function StudentsContent({ role }: { role: Role }) {
                   <div className="flex w-[74px] flex-none justify-end gap-[6px]">
                     {canViewMore && (
                       <button
+                        data-tour={rowIndex === 0 ? "mystudents-view-more" : undefined}
                         onClick={() => openViewMore(st)}
                         title="View more"
                         className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]"
@@ -927,6 +928,7 @@ export function StudentsContent({ role }: { role: Role }) {
                     )}
                     {isAssistant && (
                       <button
+                        data-tour={rowIndex === 0 ? "mystudents-welcome" : undefined}
                         onClick={() => {
                           setWelcomeRecipient("parent");
                           setWelcomeId(st.studentId);
@@ -1011,6 +1013,7 @@ export function StudentsContent({ role }: { role: Role }) {
                 {(["student", "parent"] as const).map((r) => (
                   <button
                     key={r}
+                    data-tour={r === "parent" ? "mystudents-welcome-recipient" : undefined}
                     onClick={() => setWelcomeRecipient(r)}
                     className="flex-1 rounded-[7px] py-[7px] text-[12.5px] font-semibold"
                     style={{
@@ -1036,6 +1039,7 @@ export function StudentsContent({ role }: { role: Role }) {
                 Cancel
               </button>
               <a
+                data-tour="mystudents-welcome-send"
                 href={welcomeMessage ? welcomeWaUrl : undefined}
                 target="_blank"
                 rel="noopener"
@@ -1387,6 +1391,7 @@ export function StudentsContent({ role }: { role: Role }) {
                         <span className="text-[11.5px] font-semibold text-[var(--muted)]">Target grade</span>
                         <div className="flex h-8 w-[80px] flex-none items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[9px]">
                           <input
+                            data-tour="mystudents-target-grade"
                             value={targetGradeDraft}
                             onChange={(e) => setTargetGradeDraft(e.target.value.replace(/[^0-9]/g, ""))}
                             placeholder="—"
@@ -1396,6 +1401,7 @@ export function StudentsContent({ role }: { role: Role }) {
                           <span className="text-[11px] font-semibold text-[var(--subtle)]">%</span>
                         </div>
                         <button
+                          data-tour="mystudents-target-grade-save"
                           onClick={onSaveTargetGrade}
                           disabled={savingTargetGrade}
                           className="flex h-8 items-center justify-center gap-[6px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[10px] text-[11.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)] disabled:opacity-60"
@@ -1503,12 +1509,14 @@ export function StudentsContent({ role }: { role: Role }) {
                 </p>
                 <div className="flex items-center gap-[7px]">
                   <input
+                    data-tour="mystudents-drive-link"
                     value={folderLinkDraft}
                     onChange={(e) => setFolderLinkDraft(e.target.value)}
                     placeholder="https://drive.google.com/..."
                     className="h-9 min-w-0 flex-1 rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
                   />
                   <button
+                    data-tour="mystudents-drive-save"
                     onClick={onSaveFolderLink}
                     disabled={folderLinkDraft === (folderLink ?? "") || savingFolderLink}
                     className="flex h-9 flex-none items-center gap-[5px] rounded-[8px] bg-[var(--brand)] px-[11px] text-[12px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
@@ -1519,6 +1527,7 @@ export function StudentsContent({ role }: { role: Role }) {
                 </div>
                 {folderLink && (
                   <a
+                    data-tour="mystudents-drive-send"
                     href={`https://wa.me/${(viewMoreStudent.guardianPhone ?? "").replace(/[^\d]/g, "")}?text=${encodeURIComponent(
                       `Hi! Here's the link to ${viewMoreStudent.name}'s reports folder: ${folderLink}`
                     )}`}
