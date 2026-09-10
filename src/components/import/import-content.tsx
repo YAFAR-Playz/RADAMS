@@ -282,6 +282,7 @@ export function ImportContent() {
             ) : (
               <div className="flex h-[42px] max-w-[300px] items-center rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3">
                 <select
+                  data-tour="import-course"
                   value={offeringId ?? ""}
                   onChange={(e) => setOfferingId(e.target.value)}
                   className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[13.5px] font-medium text-[var(--text)] outline-none"
@@ -316,6 +317,7 @@ export function ImportContent() {
                 }}
               />
               <button
+                data-tour="import-browse"
                 onClick={() => fileInputRef.current?.click()}
                 className="mt-1 flex items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-4 py-[9px] text-[13px] font-semibold text-[var(--brandfg)]"
               >

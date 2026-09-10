@@ -691,6 +691,7 @@ export function StudentsContent({ role }: { role: Role }) {
               return (
                 <button
                   key={value}
+                  data-tour={value === "installments" ? "students-payment-filter" : undefined}
                   onClick={() => setPaymentFilter(value)}
                   className="rounded-full border px-3 py-[7px] text-[12.5px] font-semibold"
                   style={
@@ -941,6 +942,7 @@ export function StudentsContent({ role }: { role: Role }) {
                     )}
                     {canEdit && (
                       <button
+                        data-tour={rowIndex === 0 ? "students-edit" : undefined}
                         onClick={() => openEdit(st)}
                         title="Edit student"
                         className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]"
@@ -1134,10 +1136,11 @@ export function StudentsContent({ role }: { role: Role }) {
                   ) : (
                     <div className="flex flex-col gap-[6px]">
                       {editEnrollments.length === 0 && <div className="text-[12.5px] text-[var(--subtle)]">Not enrolled in any course.</div>}
-                      {editEnrollments.map((e) => (
+                      {editEnrollments.map((e, enrollIndex) => (
                         <div key={e.enrollmentId} className="flex items-center gap-[8px] rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] p-[8px_10px]">
                           <span className="flex-1 text-[12.5px] font-semibold text-[var(--text)]">{e.label}</span>
                           <button
+                            data-tour={enrollIndex === 0 ? "students-remove-course" : undefined}
                             onClick={() => onRemoveEnrollment(e.enrollmentId)}
                             disabled={enrollmentBusy}
                             className="flex h-7 w-7 flex-none items-center justify-center rounded-[7px] border border-[var(--border)] bg-[var(--surface)] text-[var(--subtle)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] hover:text-[var(--danger)] disabled:opacity-60"
@@ -1149,6 +1152,7 @@ export function StudentsContent({ role }: { role: Role }) {
                       <div className="flex items-center gap-[8px]">
                         <div className="flex h-9 flex-1 items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[9px]">
                           <select
+                            data-tour="students-add-course"
                             value={addOfferingId}
                             onChange={(e) => setAddOfferingId(e.target.value)}
                             className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[12.5px] font-semibold text-[var(--text)] outline-none"
@@ -1164,6 +1168,7 @@ export function StudentsContent({ role }: { role: Role }) {
                           </select>
                         </div>
                         <button
+                          data-tour="students-add-course-confirm"
                           onClick={() => onAddEnrollment(editDraft.studentId)}
                           disabled={!addOfferingId || enrollmentBusy}
                           className="flex h-9 flex-none items-center gap-[6px] rounded-[8px] bg-[var(--brand)] px-[12px] text-[12.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
@@ -1225,6 +1230,7 @@ export function StudentsContent({ role }: { role: Role }) {
                   </div>
                 </div>
                 <button
+                  data-tour="students-mark-left"
                   onClick={() => setEditDraft((d) => d && { ...d, left: !d.left })}
                   role="switch"
                   aria-checked={editDraft.left}
@@ -1246,6 +1252,7 @@ export function StudentsContent({ role }: { role: Role }) {
                 Cancel
               </button>
               <button
+                data-tour="students-save-edit"
                 onClick={onSaveEdit}
                 disabled={savingEdit || !editDraft.name.trim()}
                 className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
