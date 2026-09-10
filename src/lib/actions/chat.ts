@@ -34,15 +34,25 @@ function offeringLabel(o: { session: string; unit: string | null; courses: { nam
   return [course?.name, o.session, o.unit].filter(Boolean).join(" · ");
 }
 
+// The demo template org — colleague profiles seeded there are shared across
+// every cloned demo, never duplicated per clone (see start_onboarding_demo
+// in supabase/migrations), so a tourer's own real coworkers still carry the
+// TEMPLATE org's org_id, not their disposable clone's. A plain
+// `org_id = my org` filter below would always come back empty for a
+// tourer — matching this constant back in too is what makes "Start a
+// conversation" actually list anyone.
+const DEMO_TEMPLATE_ORG_ID = "8cfc8e75-4211-427e-b1b7-09d3b786c1ac";
+
 // Every other staff member in the org — the pool available to start a new DM.
 export async function listStaffDirectory(): Promise<StaffDirectoryEntry[]> {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org) return [];
   const supabase = await createClient();
+  const orgIds = profile.isTouringDemo ? [profile.org.id, DEMO_TEMPLATE_ORG_ID] : [profile.org.id];
   const { data } = await supabase
     .from("profiles")
     .select("id, full_name, initials, role")
-    .eq("org_id", profile.org.id)
+    .in("org_id", orgIds)
     .is("left_at", null)
     .neq("id", profile.id)
     .order("full_name", { ascending: true });
