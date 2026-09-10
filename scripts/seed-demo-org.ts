@@ -326,6 +326,63 @@ async function main() {
   ]);
   if (salaryError) throw new Error(`Failed to create salary lines: ${salaryError.message}`);
 
+  // Finance's Evaluations tab (listEvaluationSubmissions) reads straight from
+  // this table — it was never seeded at all before, so that tab was always
+  // "No evaluations match these filters" in every demo clone. These two
+  // mirror the bonus/deduction reasons already on the salary lines above
+  // (same assistant, same offering, same period) so the two screens agree
+  // with each other, plus a third (current period, no lines) for variety.
+  console.log("Creating evaluations (mirroring the seeded salary bonus/deduction)...");
+  const { data: priyaEval, error: priyaEvalError } = await supabase
+    .from("evaluations")
+    .insert({
+      org_id: DEMO_ORG_ID,
+      head_id: heads[0],
+      assistant_id: priya,
+      offering_id: offerings[0].id,
+      period: priorPeriod,
+      base_amount: 1248,
+      notes: "Covered an extra weekend session for the group — great initiative.",
+      rating: "exceeds",
+      status: "submitted",
+    })
+    .select("id")
+    .single();
+  if (priyaEvalError) throw new Error(`Failed to create Priya's evaluation: ${priyaEvalError.message}`);
+  const { data: fatimaEval, error: fatimaEvalError } = await supabase
+    .from("evaluations")
+    .insert({
+      org_id: DEMO_ORG_ID,
+      head_id: heads[0],
+      assistant_id: fatima,
+      offering_id: offerings[2].id,
+      period: priorPeriod,
+      base_amount: 980,
+      notes: "A couple of late submissions this month — otherwise solid work.",
+      rating: "meets",
+      status: "submitted",
+    })
+    .select("id")
+    .single();
+  if (fatimaEvalError) throw new Error(`Failed to create Fatima's evaluation: ${fatimaEvalError.message}`);
+  const { error: evalLinesError } = await supabase.from("evaluation_lines").insert([
+    { evaluation_id: priyaEval.id, kind: "extra", category: "Weekend cover", amount: 100 },
+    { evaluation_id: fatimaEval.id, kind: "deduction", category: "Late submission", qty: "2", amount: 30 },
+  ]);
+  if (evalLinesError) throw new Error(`Failed to create evaluation lines: ${evalLinesError.message}`);
+  const { error: samEvalError } = await supabase.from("evaluations").insert({
+    org_id: DEMO_ORG_ID,
+    head_id: heads[0],
+    assistant_id: sam,
+    offering_id: offerings[1].id,
+    period,
+    base_amount: 0,
+    notes: "Consistently thorough feedback on every paper this month.",
+    rating: "outstanding",
+    status: "submitted",
+  });
+  if (samEvalError) throw new Error(`Failed to create Sam's evaluation: ${samEvalError.message}`);
+
   console.log("Creating pay categories/brackets/other rates...");
   const { error: categoriesError } = await supabase.from("pay_categories").insert([
     { org_id: DEMO_ORG_ID, kind: "extra", label: "Weekend cover", mode: "fixed", rate: 100, sort_order: 0 },
@@ -339,9 +396,16 @@ async function main() {
   // per-offering (see 0022_add_offering_id_to_pay_brackets.sql) — a null
   // offering_id here would make them permanently invisible in the UI,
   // which getBracketSlots() always filters `.in("offering_id", ...)`.
+  // ALSO scoped to offerings[0] (Physics · June · Unit 1) — that's the
+  // first course in every course picker (Categories, Salaries, etc. list
+  // offerings in creation order with no explicit ORDER BY), so a Finance
+  // tourer who just opens the page and picks the first course must see
+  // real bracket data too, not "No brackets yet for these courses."
   await supabase.from("pay_brackets").insert([
     { org_id: DEMO_ORG_ID, offering_id: offerings[2].id, name: "Bracket A (under 120)", lo: 0, hi: 119, pay: 800, sort_order: 0 },
     { org_id: DEMO_ORG_ID, offering_id: offerings[2].id, name: "Bracket B (120-160)", lo: 120, hi: 160, pay: 980, sort_order: 1 },
+    { org_id: DEMO_ORG_ID, offering_id: offerings[0].id, name: "Bracket A (under 120)", lo: 0, hi: 119, pay: 800, sort_order: 0 },
+    { org_id: DEMO_ORG_ID, offering_id: offerings[0].id, name: "Bracket B (120-160)", lo: 120, hi: 160, pay: 980, sort_order: 1 },
   ]);
   // Label must be "Office hour" (singular) — every app code path
   // (getOfficeHourOrgDefault, resolveOfficeHourRate, etc. in

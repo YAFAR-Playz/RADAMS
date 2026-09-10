@@ -116,12 +116,16 @@ function CategoryGroup({
         {cats.length === 0 && <div className="p-3 text-center text-[12.5px] text-[var(--subtle)]">No categories yet.</div>}
         {cats.map((c, catIndex) => {
           const draft = categoryDrafts[c.id] ?? { label: c.label, rate: String(c.rate ?? 0) };
-          const isFirstExtra = kind === "extra" && catIndex === 0;
+          // Targets the most-recently-added extra category, not the first —
+          // the Finance tour adds a new one (always appended, so always
+          // last) then points at it to name/price it, which only makes
+          // sense pointing at that same new row.
+          const isNewestExtra = kind === "extra" && catIndex === cats.length - 1;
           return (
             <div key={c.id} className="m-1 rounded-[10px] border border-[var(--border2)] p-[11px]">
               <div className="flex items-center gap-[10px]">
                 <input
-                  data-tour={isFirstExtra ? "categories-label" : undefined}
+                  data-tour={isNewestExtra ? "categories-label" : undefined}
                   value={draft.label}
                   onChange={(e) => onDraftCategory(c.id, { label: e.target.value })}
                   className="flex-1 border-none bg-transparent text-[13.5px] font-semibold text-[var(--text)] outline-none"
@@ -154,7 +158,7 @@ function CategoryGroup({
                   <div className="ml-auto flex h-8 w-[84px] flex-none items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[9px]">
                     <span className="text-[12px] font-semibold text-[var(--subtle)]">{sym}</span>
                     <input
-                      data-tour={isFirstExtra ? "categories-rate" : undefined}
+                      data-tour={isNewestExtra ? "categories-rate" : undefined}
                       value={draft.rate}
                       onChange={(e) => onDraftCategory(c.id, { rate: e.target.value.replace(/[^0-9]/g, "") })}
                       inputMode="numeric"

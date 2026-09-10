@@ -714,6 +714,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                   <div className="flex flex-wrap gap-[9px]">
                     <div className="flex h-9 min-w-[160px] flex-1 items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px]">
                       <select
+                        data-tour="settings-course-picker"
                         value={coursePickId}
                         onChange={(e) => setCoursePickId(e.target.value)}
                         className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[12.5px] font-semibold text-[var(--text)] outline-none"
@@ -727,6 +728,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                     </div>
                     <div className="flex h-9 min-w-[150px] flex-1 items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px]">
                       <select
+                        data-tour="settings-course-method"
                         value={coursePickMethod}
                         onChange={(e) => setCoursePickMethod(e.target.value as CalcMethod)}
                         className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[12.5px] font-semibold text-[var(--text)] outline-none"
@@ -743,6 +745,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                     </div>
                   </div>
                   <button
+                    data-tour="settings-course-apply"
                     onClick={onApplyToCourse}
                     disabled={applyingToCourse || !coursePickId}
                     className="flex h-9 items-center justify-center gap-[7px] rounded-[8px] bg-[var(--brand)] text-[12.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
