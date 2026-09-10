@@ -365,6 +365,7 @@ export function AttendanceContent({ role }: { role: Role }) {
               <div className="flex h-[38px] min-w-[240px] max-w-[320px] items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3">
                 <Icon name="book" size={15} className="text-[var(--subtle)]" />
                 <select
+                  data-tour="attendance-course-select"
                   value={offeringId ?? ""}
                   onChange={(e) => setOfferingId(e.target.value)}
                   className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[13px] font-semibold text-[var(--text)] outline-none"
@@ -452,6 +453,7 @@ export function AttendanceContent({ role }: { role: Role }) {
                     {canEdit && (
                       <div className="flex flex-none items-center gap-[4px]">
                         <button
+                          data-tour={sessionIndex === 0 ? "attendance-edit-session" : undefined}
                           onClick={(e) => {
                             e.stopPropagation();
                             openEditSession(s);
@@ -529,6 +531,7 @@ export function AttendanceContent({ role }: { role: Role }) {
             {canEdit ? (
               <div className="flex gap-[7px]">
                 <button
+                  data-tour="attendance-all-present"
                   onClick={() => setConfirmAllPresent(true)}
                   disabled={!sessionId || markingAll}
                   className="flex items-center gap-[6px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[11px] py-[7px] text-[12px] font-semibold text-[var(--ok)] hover:bg-[var(--oks)] disabled:opacity-60"
@@ -603,12 +606,13 @@ export function AttendanceContent({ role }: { role: Role }) {
                     </div>
                     {canEdit ? (
                       <div className="ml-auto flex flex-none flex-wrap gap-[6px]">
-                        {STATUS_OPTS.map((o) => {
+                        {STATUS_OPTS.map((o, statusIndex) => {
                           const active = r.status === o.key;
                           const tc = toneColors(o.tone);
                           return (
                             <button
                               key={o.key}
+                              data-tour={rowIndex === 0 && statusIndex === 0 ? "attendance-mark-status" : undefined}
                               onClick={() => onMark(r.studentId, o.key)}
                               title={o.label}
                               className="flex min-h-[38px] items-center gap-[5px] rounded-[8px] border px-[11px] text-[12px] font-semibold"
@@ -782,6 +786,7 @@ export function AttendanceContent({ role }: { role: Role }) {
               <div>
                 <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Session title</label>
                 <input
+                  data-tour="attendance-new-session-title"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   placeholder="e.g. Week 7 — Lecture"
@@ -821,6 +826,7 @@ export function AttendanceContent({ role }: { role: Role }) {
                 Cancel
               </button>
               <button
+                data-tour="attendance-new-session-create"
                 onClick={onCreateSession}
                 disabled={creating}
                 className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
@@ -968,6 +974,7 @@ export function AttendanceContent({ role }: { role: Role }) {
                 Cancel
               </button>
               <button
+                data-tour="attendance-all-present-confirm"
                 onClick={onConfirmAllPresent}
                 disabled={markingAll}
                 className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--ok)] text-[13.5px] font-semibold text-white disabled:opacity-60"

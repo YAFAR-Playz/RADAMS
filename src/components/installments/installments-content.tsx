@@ -156,6 +156,7 @@ export function InstallmentsContent() {
         <div className="flex h-10 min-w-[200px] max-w-[300px] flex-1 items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-3">
           <Icon name="search" size={16} className="text-[var(--subtle)]" />
           <input
+            data-tour="installments-search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search students by name or ID…"
@@ -189,6 +190,7 @@ export function InstallmentsContent() {
             return (
               <button
                 key={value}
+                data-tour={value === "installments" ? "installments-filter" : undefined}
                 onClick={() => setStatusFilter(value)}
                 className="rounded-full border px-3 py-[7px] text-[12.5px] font-semibold"
                 style={
@@ -217,13 +219,14 @@ export function InstallmentsContent() {
             {search ? "No students match this search." : "No payment plans yet — they're created when Registration enrolls a student."}
           </div>
         ) : (
-          filtered.map((p) => {
+          filtered.map((p, planIndex) => {
             const expanded = !!open[p.studentId];
             const outstanding = p.totalAmount - p.paidAmount;
             const pct = p.totalAmount ? Math.round((p.paidAmount / p.totalAmount) * 100) : 0;
             return (
               <div key={p.studentId} className="border-b border-[var(--border2)] last:border-b-0">
                 <div
+                  data-tour={planIndex === 0 ? "installments-row-expand" : undefined}
                   onClick={() => setOpen((prev) => ({ ...prev, [p.studentId]: !prev[p.studentId] }))}
                   className="flex flex-wrap items-center gap-3 p-[12px_18px] cursor-pointer hover:bg-[var(--surface2)]"
                 >
@@ -256,6 +259,7 @@ export function InstallmentsContent() {
                         <div className="mb-[5px] text-[10.5px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Plan</div>
                         <div className="flex h-9 items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px]">
                           <select
+                            data-tour={planIndex === 0 ? "installments-plan-type" : undefined}
                             value={p.planType ?? "full"}
                             disabled={savingPlanId === p.planId || p.paidAmount > 0}
                             onClick={(e) => e.stopPropagation()}
@@ -272,6 +276,7 @@ export function InstallmentsContent() {
                         <div className="mb-[5px] text-[10.5px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Discount (%)</div>
                         <div className="flex h-9 items-center gap-[2px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px]">
                           <input
+                            data-tour={planIndex === 0 ? "installments-discount" : undefined}
                             defaultValue={p.discountPct}
                             onClick={(e) => e.stopPropagation()}
                             onBlur={(e) => onSetDiscount(p.planId, Number(e.target.value.replace(/[^0-9]/g, "")) || 0)}
@@ -288,13 +293,14 @@ export function InstallmentsContent() {
                       <div className="h-full rounded-full bg-[var(--ok)] transition-[width]" style={{ width: `${pct}%` }} />
                     </div>
                     <div className="flex flex-col gap-[6px]">
-                      {p.installments.map((inst) => (
+                      {p.installments.map((inst, instIndex) => (
                         <div key={inst.id} className="flex flex-wrap items-center gap-[10px] rounded-[9px] bg-[var(--surface)] p-[9px_12px]">
                           <span className="w-[90px] flex-none text-[12.5px] font-semibold text-[var(--text)]">Payment {inst.seq}</span>
                           <span className="flex-1 font-mono text-[13px] font-bold text-[var(--text)]">{fmt(inst.amount)}</span>
                           <span className="flex-none text-[12px] text-[var(--subtle)]">{inst.dueDate ? `Due ${inst.dueDate}` : "—"}</span>
                           {togglingId === inst.id && <Spinner size={13} className="flex-none text-[var(--subtle)]" />}
                           <button
+                            data-tour={planIndex === 0 && instIndex === 0 ? "installments-mark-paid" : undefined}
                             onClick={() => onToggleInstallment(inst.id, inst.status !== "paid")}
                             disabled={togglingId === inst.id}
                             className="flex flex-none items-center gap-[6px] rounded-[8px] border px-[11px] py-[6px] text-[12px] font-semibold disabled:opacity-60"

@@ -187,6 +187,7 @@ export function RegistrationsContent() {
               ) : (
                 <div className="flex h-[42px] items-center rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3">
                   <select
+                    data-tour="registrations-course"
                     value={offeringId ?? ""}
                     onChange={(e) => setOfferingId(e.target.value)}
                     className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[13.5px] font-medium text-[var(--text)] outline-none"
@@ -205,6 +206,7 @@ export function RegistrationsContent() {
                 Student name <span className="text-[var(--danger)]">*</span>
               </label>
               <input
+                data-tour="registrations-name"
                 value={form.name}
                 onChange={(e) => updateForm({ name: e.target.value })}
                 placeholder="e.g. Liam Carter"
@@ -215,6 +217,7 @@ export function RegistrationsContent() {
               <div>
                 <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Phone</label>
                 <input
+                  data-tour="registrations-phone"
                   value={form.phone}
                   onChange={(e) => updateForm({ phone: e.target.value })}
                   placeholder="7700 900000"
@@ -271,6 +274,7 @@ export function RegistrationsContent() {
                     return (
                       <button
                         key={opt.value}
+                        data-tour={opt.value === "installments" ? "registrations-plan-installments" : undefined}
                         onClick={() => setForm((f) => ({ ...f, planType: opt.value }))}
                         className="flex flex-col items-start gap-1 rounded-[var(--rad-sm)] border-[1.5px] p-[11px_13px] text-left"
                         style={{ borderColor: active ? "var(--brand)" : "var(--border)", background: active ? "var(--brands)" : "var(--surface)" }}
@@ -314,6 +318,7 @@ export function RegistrationsContent() {
               </div>
             ) : (
               <button
+                data-tour="registrations-submit"
                 onClick={onSubmit}
                 disabled={!canSubmit || submitting}
                 className="flex h-[44px] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
@@ -332,6 +337,7 @@ export function RegistrationsContent() {
             <div className="flex h-9 min-w-[180px] max-w-[260px] items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3">
               <Icon name="search" size={14} className="text-[var(--subtle)]" />
               <input
+                data-tour="registrations-search"
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);
