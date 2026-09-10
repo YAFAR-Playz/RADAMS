@@ -136,6 +136,7 @@ export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform"
           {(["messages", "assignment-types"] as const).map((t) => (
             <button
               key={t}
+              data-tour={t === "assignment-types" ? "templates-tab-assignment-types" : undefined}
               onClick={() => setTab(t)}
               className="h-9 flex-1 rounded-[8px] text-[12.5px] font-semibold"
               style={tab === t ? { background: "var(--surface)", color: "var(--text)", boxShadow: "var(--shadow)" } : { color: "var(--muted)" }}
@@ -188,7 +189,7 @@ export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform"
                 ))}
               </div>
             ) : (
-              TEMPLATE_CATEGORY_DEFS.map((c) => (
+              TEMPLATE_CATEGORY_DEFS.map((c, catIndex) => (
                 <div key={c.category} className="mb-[6px]">
                   <div className="flex items-center gap-[10px] p-[9px_11px_5px]">
                     <div className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-[7px] bg-[var(--surface2)] text-[var(--muted)]">
@@ -207,6 +208,7 @@ export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform"
                       return (
                         <button
                           key={key}
+                          data-tour={catIndex === 0 && r === "student" ? "templates-select-category" : undefined}
                           onClick={() => selectTemplate(key)}
                           className="relative flex-1 rounded-[8px] border px-[10px] py-[7px] text-left text-[12px] font-semibold"
                           style={{
@@ -261,6 +263,7 @@ export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform"
                 <span className="text-[11px] text-[var(--subtle)]">{draft.length} chars</span>
               </div>
               <textarea
+                data-tour="templates-editor"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 className="h-[170px] w-full resize-y rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-3 text-[13.5px] leading-[1.6] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
@@ -269,9 +272,10 @@ export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform"
             <div>
               <div className="mb-[7px] text-[11.5px] font-semibold text-[var(--muted)]">Insert a variable</div>
               <div className="flex flex-wrap gap-[6px]">
-                {current.vars.map((v) => (
+                {current.vars.map((v, vIndex) => (
                   <button
                     key={v}
+                    data-tour={vIndex === 0 ? "templates-insert-var" : undefined}
                     onClick={() => setDraft((d) => d + v)}
                     className="inline-flex items-center gap-[5px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[10px] py-[5px] font-mono text-[11.5px] font-semibold text-[var(--brand)] hover:bg-[var(--brands)]"
                   >
@@ -290,6 +294,7 @@ export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform"
               </div>
             </div>
             <button
+              data-tour="templates-save"
               onClick={onSave}
               disabled={saving}
               className="flex h-11 items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"

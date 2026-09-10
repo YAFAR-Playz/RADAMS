@@ -8,6 +8,15 @@ import { logActivity } from "@/lib/actions/activity-log";
 const ALLOWED_RECEIPT_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/webp"];
 const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
 
+// The demo template org — colleague profiles seeded there are shared across
+// every cloned demo, never duplicated per clone (see start_onboarding_demo
+// in supabase/migrations), so a tourer's own real coworkers still carry the
+// TEMPLATE org's org_id, not their disposable clone's. Matching this back in
+// is what lets the admin-only "Add" button in Salaries list real candidates
+// (see the identical pattern/comment in src/lib/actions/chat.ts's
+// listStaffDirectory).
+const DEMO_TEMPLATE_ORG_ID = "8cfc8e75-4211-427e-b1b7-09d3b786c1ac";
+
 export type SalaryLineRow = {
   id: string;
   offeringId: string | null;
@@ -391,9 +400,10 @@ export async function listMissingPayeesForPeriod(period: string): Promise<Missin
   const orgId = profile.org.id;
   const supabase = await createClient();
 
+  const orgIds = profile.isTouringDemo ? [orgId, DEMO_TEMPLATE_ORG_ID] : [orgId];
   const [{ data: existingLines }, { data: staff }] = await Promise.all([
     supabase.from("salary_lines").select("payee_id").eq("org_id", orgId).eq("period", period),
-    supabase.from("profiles").select("id, full_name, initials, role").eq("org_id", orgId).in("role", ["assistant", "head"]).is("left_at", null),
+    supabase.from("profiles").select("id, full_name, initials, role").in("org_id", orgIds).in("role", ["assistant", "head"]).is("left_at", null),
   ]);
   const existingIds = new Set((existingLines ?? []).map((l) => l.payee_id));
   const candidates = (staff ?? []).filter((s) => !existingIds.has(s.id));

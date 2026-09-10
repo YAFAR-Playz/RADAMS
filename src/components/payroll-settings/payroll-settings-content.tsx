@@ -463,7 +463,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                 </div>
               ) : (
                 <div className="flex flex-col gap-[9px]">
-                  {FEATURE_TOGGLE_DEFS.map((t) => {
+                  {FEATURE_TOGGLE_DEFS.map((t, tIndex) => {
                     const on = settings[t.key];
                     const { bg, fg } = toneColors(t.tone);
                     return (
@@ -477,6 +477,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                         </div>
                         {savingKey === t.key && <Spinner size={13} className="flex-none text-[var(--subtle)]" />}
                         <button
+                          data-tour={tIndex === 0 ? "settings-feature-toggle" : undefined}
                           onClick={() => onFeatureToggle(t.key)}
                           role="switch"
                           aria-checked={on}
@@ -510,7 +511,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                 </div>
               ) : (
                 <div className="flex flex-col gap-[9px]">
-                  {REPORT_TOGGLE_DEFS.map((t) => {
+                  {REPORT_TOGGLE_DEFS.map((t, tIndex) => {
                     const on = reportSettings[t.key];
                     const { bg, fg } = toneColors(t.tone);
                     return (
@@ -524,6 +525,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                         </div>
                         {savingReport && <Spinner size={13} className="flex-none text-[var(--subtle)]" />}
                         <button
+                          data-tour={tIndex === 0 ? "settings-report-toggle" : undefined}
                           onClick={() => onToggleReportSetting(t.key)}
                           disabled={savingReport}
                           role="switch"
@@ -553,6 +555,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
               </p>
               <div className="mb-[11px] flex gap-[8px]">
                 <input
+                  data-tour="settings-notify-email-input"
                   value={newNotifyEmail}
                   onChange={(e) => setNewNotifyEmail(e.target.value)}
                   onKeyDown={(e) => {
@@ -566,6 +569,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                   className="h-10 flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[12px] text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                 />
                 <button
+                  data-tour="settings-notify-email-add"
                   onClick={onAddNotifyEmail}
                   disabled={!newNotifyEmail.trim() || savingNotifyEmails}
                   className="flex h-10 flex-none items-center gap-[6px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[14px] text-[13px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
@@ -777,6 +781,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                   <div className="flex flex-col gap-[9px]">
                     <div className="flex h-9 min-w-[150px] items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px]">
                       <select
+                        data-tour="settings-org-default-method"
                         value={orgDefaultMethod}
                         onChange={(e) => setOrgDefaultMethod(e.target.value as CalcMethod)}
                         className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[12.5px] font-semibold text-[var(--text)] outline-none"
@@ -789,6 +794,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                       </select>
                     </div>
                     <button
+                      data-tour="settings-org-default-apply"
                       onClick={onApplyOrgDefault}
                       disabled={applyingOrgDefault}
                       className="flex h-9 items-center justify-center gap-[7px] rounded-[8px] bg-[var(--brand)] text-[12.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"

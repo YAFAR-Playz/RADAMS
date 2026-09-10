@@ -199,6 +199,7 @@ export function BrandingContent() {
             <div className="mt-4">
               <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Brand name</label>
               <input
+                data-tour="branding-name"
                 value={draft.name}
                 onChange={(e) => setDraft((d) => d && { ...d, name: e.target.value })}
                 className="h-11 w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[13px] text-[14px] font-medium text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
@@ -217,11 +218,12 @@ export function BrandingContent() {
                   <span className="font-mono text-[12px] text-[var(--muted)]">{draft.primary}</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {PRIMARIES.map((c) => {
+                  {PRIMARIES.map((c, cIndex) => {
                     const active = c.toLowerCase() === draft.primary.toLowerCase();
                     return (
                       <button
                         key={c}
+                        data-tour={cIndex === 0 ? "branding-color-primary" : undefined}
                         onClick={() => setDraft((d) => d && { ...d, primary: c })}
                         title={c}
                         className="flex h-9 w-9 items-center justify-center rounded-[10px] border-2"
@@ -272,11 +274,12 @@ export function BrandingContent() {
             <h3 className="m-0 mb-[14px] text-[14px] font-semibold text-[var(--text)]">Typography &amp; shape</h3>
             <label className="mb-2 block text-[12.5px] font-semibold text-[var(--text)]">Font family</label>
             <div className="flex flex-col gap-2">
-              {FONTS.map((f) => {
+              {FONTS.map((f, fIndex) => {
                 const active = f.value === draft.font;
                 return (
                   <button
                     key={f.value}
+                    data-tour={fIndex === 0 ? "branding-font" : undefined}
                     onClick={() => setDraft((d) => d && { ...d, font: f.value })}
                     className="flex items-center justify-between gap-[10px] rounded-[var(--rad-sm)] border-[1.5px] p-[11px_14px] text-left"
                     style={{ borderColor: active ? "var(--brand)" : "var(--border)", background: active ? "var(--brands)" : "var(--surface)" }}
@@ -298,11 +301,12 @@ export function BrandingContent() {
             </div>
             <label className="mb-2 mt-4 block text-[12.5px] font-semibold text-[var(--text)]">Corner radius</label>
             <div className="flex gap-2">
-              {CORNERS.map((c) => {
+              {CORNERS.map((c, cornerIndex) => {
                 const active = c.value === draft.corner;
                 return (
                   <button
                     key={c.value}
+                    data-tour={cornerIndex === 0 ? "branding-corner" : undefined}
                     onClick={() => setDraft((d) => d && { ...d, corner: c.value })}
                     className="flex flex-1 flex-col items-center gap-2 rounded-[10px] border-[1.5px] p-[13px]"
                     style={{ borderColor: active ? "var(--brand)" : "var(--border)", background: active ? "var(--brands)" : "var(--surface)" }}
@@ -342,6 +346,7 @@ export function BrandingContent() {
                 )}
               </button>
               <button
+                data-tour="branding-staff-report-toggle"
                 onClick={() => onToggleStaffReportBranding(true)}
                 disabled={staffReportPrefSaving}
                 className="flex items-center justify-between gap-[10px] rounded-[var(--rad-sm)] border-[1.5px] p-[11px_14px] text-left disabled:opacity-60"
@@ -455,6 +460,7 @@ export function BrandingContent() {
             Reset to system default
           </button>
           <button
+            data-tour="branding-save"
             onClick={onSave}
             disabled={!dirty || saving}
             className="flex items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[17px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)] disabled:opacity-60"

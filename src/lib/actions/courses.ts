@@ -36,12 +36,22 @@ export type CourseInput = {
 
 export type ScheduleRow = { seq: number; amount: number; dueDate: string | null };
 
+// The demo template org — colleague profiles seeded there are shared across
+// every cloned demo, never duplicated per clone (see start_onboarding_demo
+// in supabase/migrations), so a tourer's own real coworkers still carry the
+// TEMPLATE org's org_id, not their disposable clone's. Matching this back in
+// is what lets a tourer actually assign a head when creating a course (see
+// the identical pattern/comment in src/lib/actions/chat.ts's
+// listStaffDirectory).
+const DEMO_TEMPLATE_ORG_ID = "8cfc8e75-4211-427e-b1b7-09d3b786c1ac";
+
 export async function listHeadsForOrg(): Promise<HeadOption[]> {
   const profile = await getCurrentProfile();
   const orgId = profile?.org?.id;
   if (!orgId) return [];
   const supabase = await createClient();
-  const { data } = await supabase.from("profiles").select("id, full_name").eq("org_id", orgId).eq("role", "head").is("left_at", null);
+  const orgIds = profile?.isTouringDemo ? [orgId, DEMO_TEMPLATE_ORG_ID] : [orgId];
+  const { data } = await supabase.from("profiles").select("id, full_name").in("org_id", orgIds).eq("role", "head").is("left_at", null);
   return (data ?? []).map((p) => ({ id: p.id, name: p.full_name }));
 }
 
