@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { logActivity } from "@/lib/actions/activity-log";
+import { getPayrollSettings, type PayrollSettings } from "@/lib/actions/payroll-settings";
 
 const ALLOWED_RECEIPT_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/webp"];
 const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
@@ -61,6 +62,21 @@ export async function listPeriods(): Promise<string[]> {
   const supabase = await createClient();
   const { data } = await supabase.from("salary_lines").select("period").eq("org_id", orgId);
   return Array.from(new Set((data ?? []).map((d) => d.period))).sort((a, b) => (a < b ? 1 : -1));
+}
+
+// Bundles the Salaries tab's initial load into one server round trip:
+// listPeriods + getPayrollSettings run in parallel, then — since which
+// period's lines to fetch depends on that result — listSalariesForPeriod
+// for the default (most recent) period runs right after, all still inside
+// this one action call. A client-side Promise.all of the first two doesn't
+// actually parallelize over the network (each Server Function dispatches as
+// its own request), and the third call was a separate round trip after that
+// regardless — this collapses what was 2 sequential client round trips into 1.
+export async function getSalariesTabBootstrap(): Promise<{ periods: string[]; settings: PayrollSettings | null; defaultPeriod: string | null; assistants: AssistantSalary[] }> {
+  const [periods, settings] = await Promise.all([listPeriods(), getPayrollSettings()]);
+  const defaultPeriod = periods[0] ?? null;
+  const assistants = defaultPeriod ? await listSalariesForPeriod(defaultPeriod) : [];
+  return { periods, settings, defaultPeriod, assistants };
 }
 
 export async function listSalariesForPeriod(period: string): Promise<AssistantSalary[]> {
@@ -178,6 +194,8 @@ export async function updateSalaryLine(
   id: string,
   patch: { base?: number; bonus?: number; deduction?: number; bonusReason?: string; deductionReason?: string }
 ) {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");
   const supabase = await createClient();
   const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (patch.base !== undefined) payload.base = patch.base;

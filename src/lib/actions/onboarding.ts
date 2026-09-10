@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { roleHasOnboardingTour } from "@/lib/onboarding-roles";
 
@@ -37,6 +38,13 @@ export async function exitOnboardingDemo(markCompleted: boolean): Promise<void> 
 export async function markOnboardingSkipped(): Promise<void> {
   const profile = await getCurrentProfile();
   if (!profile || profile.isTouringDemo) return;
-  const supabase = await createClient();
-  await supabase.from("profiles").update({ onboarding_tour_status: "skipped" }).eq("id", profile.id);
+  // profiles has no RLS UPDATE policy (by design — role/org_id must stay
+  // service-role-only, see the identical note in settings.ts's
+  // updateMyProfile), so this went through the session-scoped client and
+  // silently updated zero rows — "Skip" looked like it worked but never
+  // actually persisted, making it behave exactly like "Maybe later"
+  // (session-only dismissal) instead of permanently stopping the prompt.
+  const admin = createAdminClient();
+  const { error } = await admin.from("profiles").update({ onboarding_tour_status: "skipped" }).eq("id", profile.id);
+  if (error) throw new Error(error.message);
 }

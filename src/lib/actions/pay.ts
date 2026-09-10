@@ -55,16 +55,11 @@ export async function getMyPay(period?: string): Promise<MyPay | null> {
   const profile = await getCurrentProfile();
   if (!profile) return null;
   const supabase = await createClient();
-  const { data: org } = profile.org
-    ? await supabase.from("organizations").select("currency").eq("id", profile.org.id).single()
-    : { data: null };
+  const [{ data: org }, { data: allLines }] = await Promise.all([
+    profile.org ? supabase.from("organizations").select("currency").eq("id", profile.org.id).single() : Promise.resolve({ data: null }),
+    supabase.from("salary_lines").select("period").eq("payee_id", profile.id).order("period", { ascending: false }),
+  ]);
   const currency = currencySymbol(org?.currency);
-
-  const { data: allLines } = await supabase
-    .from("salary_lines")
-    .select("period")
-    .eq("payee_id", profile.id)
-    .order("period", { ascending: false });
   const periods = Array.from(new Set((allLines ?? []).map((l) => l.period)));
   const targetPeriod = period ?? periods[0];
   if (!targetPeriod)

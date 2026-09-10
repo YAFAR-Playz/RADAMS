@@ -211,6 +211,14 @@ export async function getOrCreateOfferingChannel(offeringId: string): Promise<st
   if (!profile || !profile.org) throw new Error("Not authenticated");
   const supabase = await createClient();
 
+  // find_group_conversation_id is SECURITY DEFINER (bypasses RLS) precisely
+  // so a not-yet-member caller can still resolve/create their offering's
+  // channel — which also means it would happily resolve/create a channel for
+  // an offeringId belonging to a completely different org if this weren't
+  // checked explicitly first.
+  const { data: offering } = await supabase.from("course_offerings").select("org_id").eq("id", offeringId).maybeSingle();
+  if (!offering || offering.org_id !== profile.org.id) throw new Error("Course not found in your organization");
+
   // Plain SELECT would require is_chat_member(id) — but the person opening
   // this for the first time (e.g. a newly assigned assistant) isn't a member
   // yet, which is exactly the case this needs to handle. RPC bypasses RLS.

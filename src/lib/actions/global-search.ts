@@ -20,8 +20,13 @@ export async function globalSearch(rawQuery: string): Promise<SearchResult[]> {
   const supabase = await createClient();
   // Student IDs are plain digits in the database but shown with a leading
   // "#" in the UI — strip it so searching "#1042" still matches student_code
-  // "1042", on top of the usual name/phone match.
-  const like = `%${q.replace(/[%_#]/g, "")}%`;
+  // "1042", on top of the usual name/phone match. Also strip `,`/`(`/`)` —
+  // syntax characters PostgREST's .or() filter string parses as condition
+  // separators/grouping, which an unescaped search value could otherwise use
+  // to inject extra OR conditions into the query (still bounded by the
+  // .eq("org_id", orgId) filter alongside it, but not a legitimate search
+  // character for any name/code/email/phone here regardless).
+  const like = `%${q.replace(/[%_#,()]/g, "")}%`;
   const results: SearchResult[] = [];
 
   const studentsNav = findNavItem(profile.role, "students");

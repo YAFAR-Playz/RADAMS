@@ -21,7 +21,7 @@ import {
   type AttendanceRosterRow,
   type AttendanceStatus,
 } from "@/lib/actions/attendance";
-import { getEffectiveTemplate, getOrgBrandName } from "@/lib/actions/templates";
+import { getEffectiveTemplates, getOrgBrandName } from "@/lib/actions/templates";
 import { applyTemplateVars } from "@/lib/message-vars";
 import { downloadCsv } from "@/lib/csv-export";
 import { pickerOnlyDateProps } from "@/lib/date-input";
@@ -86,9 +86,9 @@ export function AttendanceContent({ role }: { role: Role }) {
         setOfferingId(data[0]?.id ?? null);
       });
     });
-    Promise.all([getEffectiveTemplate("attendance_student"), getEffectiveTemplate("attendance_parent"), getOrgBrandName()]).then(([tplS, tplP, org]) => {
-      setTemplateStudent(tplS);
-      setTemplateParent(tplP);
+    Promise.all([getEffectiveTemplates(["attendance_student", "attendance_parent"]), getOrgBrandName()]).then(([tpl, org]) => {
+      setTemplateStudent(tpl.attendance_student);
+      setTemplateParent(tpl.attendance_parent);
       setOrgName(org);
     });
   }, []);
@@ -98,9 +98,9 @@ export function AttendanceContent({ role }: { role: Role }) {
   // them sending a stale message.
   useEffect(() => {
     if (!waId) return;
-    Promise.all([getEffectiveTemplate("attendance_student"), getEffectiveTemplate("attendance_parent")]).then(([tplS, tplP]) => {
-      setTemplateStudent(tplS);
-      setTemplateParent(tplP);
+    getEffectiveTemplates(["attendance_student", "attendance_parent"]).then((tpl) => {
+      setTemplateStudent(tpl.attendance_student);
+      setTemplateParent(tpl.attendance_parent);
     });
   }, [waId]);
 

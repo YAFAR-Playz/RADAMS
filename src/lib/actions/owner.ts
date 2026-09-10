@@ -338,7 +338,9 @@ export async function listAllStaff(params: { page?: number; search?: string; rol
     .order("full_name", { ascending: true });
 
   if (params.search?.trim()) {
-    const term = params.search.trim();
+    // Strip PostgREST .or() filter syntax characters (wildcards + condition/
+    // grouping separators) so a search value can't inject extra conditions.
+    const term = params.search.trim().replace(/[%_,()]/g, "");
     query = query.or(`full_name.ilike.%${term}%,email.ilike.%${term}%`);
   }
   if (params.role && params.role !== "all") query = query.eq("role", params.role);

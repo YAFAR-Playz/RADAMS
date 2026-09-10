@@ -1,12 +1,12 @@
 "use client";
 
-import { startTransition, useEffect, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
 import { PageHeader } from "@/components/ui/page-header";
-import { getPayrollSettings } from "@/lib/actions/payroll-settings";
 import {
+  getSalariesTabBootstrap,
   listPeriods,
   listSalariesForPeriod,
   updateSalaryLine,
@@ -318,6 +318,16 @@ function periodLabel(period: string) {
   return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
+// Pure — moved to module scope (rather than redefined every render) so the
+// useMemo calls below that call them can safely omit them from their
+// dependency arrays.
+function subtotal(l: { base: number; bonus: number; deduction: number }) {
+  return l.base + l.bonus - l.deduction;
+}
+function total(a: AssistantSalary) {
+  return a.lines.reduce((sum, l) => sum + subtotal(l), 0);
+}
+
 export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) {
   const isAdmin = role === "admin";
   const [periods, setPeriods] = useState<string[] | null>(null);
@@ -358,18 +368,35 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
   const [addOfferingId, setAddOfferingId] = useState("");
   const [adding, setAdding] = useState(false);
 
+  // The initial bootstrap already includes the default period's salary
+  // lines (fetched server-side, right after determining that default) — this
+  // ref lets the [period] effect below skip the one redundant refetch that
+  // would otherwise fire when setPeriod(defaultPeriod) runs here, while still
+  // reloading normally on every later, genuinely-user-driven period change.
+  const skipNextReload = useRef(false);
+
   useEffect(() => {
     (() => {
       const handoff = consumeSearchHandoff();
       if (handoff) setSearch(handoff);
     })();
     (async () => {
-      const [p, settings] = await Promise.all([listPeriods(), getPayrollSettings()]);
+      const { periods: p, settings, defaultPeriod, assistants: initialAssistants } = await getSalariesTabBootstrap();
       setPeriods(p);
-      setPeriod(p[0] ?? null);
       if (settings) {
         setCurrency(settings.currency);
         setHeadFixedPerAssistantEnabled(settings.headFixedPerAssistantEnabled);
+      }
+      if (defaultPeriod) {
+        skipNextReload.current = true;
+        startTransition(() => {
+          setAssistants(initialAssistants);
+          setLoading(false);
+          setPeriod(defaultPeriod);
+        });
+      } else {
+        setAssistants([]);
+        setLoading(false);
       }
     })();
   }, []);
@@ -389,6 +416,10 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
   }
 
   useEffect(() => {
+    if (skipNextReload.current) {
+      skipNextReload.current = false;
+      return;
+    }
     (async () => {
       if (!period) {
         setAssistants([]);
@@ -400,8 +431,6 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
 
   const sym = CURRENCY_SYMBOL[currency] ?? "£";
   const fmt = (n: number) => `${n < 0 ? "−" : ""}${sym}${Math.abs(Math.round(n)).toLocaleString("en-US")}`;
-  const subtotal = (l: { base: number; bonus: number; deduction: number }) => l.base + l.bonus - l.deduction;
-  const total = (a: AssistantSalary) => a.lines.reduce((sum, l) => sum + subtotal(l), 0);
   // Distinct courses this assistant has a real (offeringId-bearing) line for
   // this period — office hours get billed against one of those courses,
   // since the rate can now vary by course.
@@ -687,17 +716,24 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
     }
   }
 
+  // These stay above the early return below — hooks can't follow a
+  // conditional return, since that would change how many hooks run between
+  // renders depending on loading state.
+  const totalPayroll = useMemo(() => (assistants ?? []).reduce((sum, a) => sum + total(a), 0), [assistants]);
+  const paidAmt = useMemo(
+    () => (assistants ?? []).filter((a) => a.status === "paid").reduce((sum, a) => sum + total(a), 0),
+    [assistants]
+  );
+  const pendingCount = useMemo(() => (assistants ?? []).filter((a) => a.status !== "paid").length, [assistants]);
+  const unreleasedCount = useMemo(() => (assistants ?? []).filter((a) => !a.released).length, [assistants]);
+  const q = search.trim().toLowerCase();
+  const visibleAssistants = useMemo(
+    () => (assistants ?? []).filter((a) => !q || a.name.toLowerCase().includes(q) || a.lines.some((l) => l.offering.toLowerCase().includes(q))),
+    [assistants, q]
+  );
+
   const salariesReady = periods !== null && (periods.length === 0 || assistants !== null);
   if (!salariesReady && !error) return <TabLoader label="Loading salaries…" />;
-
-  const totalPayroll = (assistants ?? []).reduce((sum, a) => sum + total(a), 0);
-  const paidAmt = (assistants ?? []).filter((a) => a.status === "paid").reduce((sum, a) => sum + total(a), 0);
-  const pendingCount = (assistants ?? []).filter((a) => a.status !== "paid").length;
-  const unreleasedCount = (assistants ?? []).filter((a) => !a.released).length;
-  const q = search.trim().toLowerCase();
-  const visibleAssistants = (assistants ?? []).filter(
-    (a) => !q || a.name.toLowerCase().includes(q) || a.lines.some((l) => l.offering.toLowerCase().includes(q))
-  );
 
   return (
     <div className="flex flex-col gap-4">

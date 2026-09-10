@@ -19,7 +19,7 @@ import {
   type AssignmentOption,
   type RosterStudent,
 } from "@/lib/actions/assignments";
-import { getEffectiveTemplate, getOrgBrandName } from "@/lib/actions/templates";
+import { getEffectiveTemplates, getOrgBrandName } from "@/lib/actions/templates";
 import { applyTemplateVars } from "@/lib/message-vars";
 import { matchesStudentQuery } from "@/lib/student-search";
 
@@ -111,9 +111,9 @@ export function AssignmentsContent() {
         setOfferingId(data[0]?.id ?? null);
       });
     });
-    Promise.all([getEffectiveTemplate("assignment_student"), getEffectiveTemplate("assignment_parent"), getOrgBrandName()]).then(([tplS, tplP, org]) => {
-      setTemplateStudent(tplS);
-      setTemplateParent(tplP);
+    Promise.all([getEffectiveTemplates(["assignment_student", "assignment_parent"]), getOrgBrandName()]).then(([tpl, org]) => {
+      setTemplateStudent(tpl.assignment_student);
+      setTemplateParent(tpl.assignment_parent);
       setOrgName(org);
     });
   }, []);
@@ -123,9 +123,9 @@ export function AssignmentsContent() {
   // them sending a stale message.
   useEffect(() => {
     if (!modalId) return;
-    Promise.all([getEffectiveTemplate("assignment_student"), getEffectiveTemplate("assignment_parent")]).then(([tplS, tplP]) => {
-      setTemplateStudent(tplS);
-      setTemplateParent(tplP);
+    getEffectiveTemplates(["assignment_student", "assignment_parent"]).then((tpl) => {
+      setTemplateStudent(tpl.assignment_student);
+      setTemplateParent(tpl.assignment_parent);
     });
   }, [modalId]);
 

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Role } from "@/lib/roles";
 
@@ -53,7 +54,13 @@ export async function getOrgBranding(orgId: string): Promise<CurrentProfile["org
   };
 }
 
-export async function getCurrentProfile(): Promise<CurrentProfile | null> {
+// Called from layout + page on every navigation, and again independently at
+// the top of nearly every server action — wrapped in React's request-scoped
+// cache() so repeated calls within the same render/action invocation collapse
+// into a single auth + profile round trip instead of re-resolving identity
+// from scratch each time. Safe: it takes no arguments and every call within
+// one request reads the same session.
+export const getCurrentProfile = cache(async (): Promise<CurrentProfile | null> => {
   const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) return null;
@@ -83,4 +90,4 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
     onboardingTourStatus: (profile.onboarding_tour_status as OnboardingTourStatus | null) ?? "pending",
     isTouringDemo: profile.pre_demo_org_id !== null,
   };
-}
+});

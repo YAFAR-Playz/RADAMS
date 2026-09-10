@@ -17,11 +17,20 @@ export const metadata: Metadata = {
   description: "The operating system for your tutoring center.",
 };
 
+// "auto" resolves by local clock — dark from 6pm to 6am, light the rest of
+// the day — same boundary the ThemeToggle component re-applies every minute
+// client-side (see app-shell.tsx) so a session open across either boundary
+// switches live without needing a reload.
 const THEME_SCRIPT = `
 (function () {
   try {
-    var theme = localStorage.getItem("radams-theme") || "light";
-    document.documentElement.setAttribute("data-theme", theme);
+    var mode = localStorage.getItem("radams-theme") || "light";
+    var resolved = mode;
+    if (mode === "auto") {
+      var hour = new Date().getHours();
+      resolved = (hour >= 18 || hour < 6) ? "dark" : "light";
+    }
+    document.documentElement.setAttribute("data-theme", resolved);
   } catch (e) {}
 })();
 `;
