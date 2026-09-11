@@ -1539,19 +1539,47 @@ export async function getAssistantDetailedExport(): Promise<{ detail: AssistantD
   const orgId = profile.org.id;
   const supabase = await createClient();
 
-  const { data: lines } = await supabase
-    .from("salary_lines")
-    .select(
-      "id, payee_id, offering_id, period, method, calc_method, base, bonus, deduction, bonus_reason, deduction_reason, status, pay_method, profiles(full_name, email, phone), course_offerings!salary_lines_offering_id_fkey(session, unit, courses(name))"
-    )
-    .eq("org_id", orgId)
-    .order("period", { ascending: false });
-  if (!lines || lines.length === 0) return { detail: [], summary: [] };
+  // Paginated: an org that's accumulated enough salary lines (many
+  // assistants × many months × multiple courses) can exceed Postgrest's
+  // 1000-row cap on a plain unbounded select, which would silently drop
+  // whichever rows sort past the cutoff — for a period-descending order,
+  // that means older periods quietly vanish from this export/summary.
+  const fetchLinesPage = (from: number, to: number) =>
+    supabase
+      .from("salary_lines")
+      .select(
+        "id, payee_id, offering_id, period, method, calc_method, base, bonus, deduction, bonus_reason, deduction_reason, status, pay_method, profiles(full_name, email, phone), course_offerings!salary_lines_offering_id_fkey(session, unit, courses(name))"
+      )
+      .eq("org_id", orgId)
+      .order("period", { ascending: false })
+      .range(from, to);
+  type SalaryLineRow = NonNullable<Awaited<ReturnType<typeof fetchLinesPage>>["data"]>[number];
+  const lines: SalaryLineRow[] = [];
+  const LINES_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += LINES_PAGE_SIZE) {
+    const { data: page } = await fetchLinesPage(from, from + LINES_PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    lines.push(...page);
+    if (page.length < LINES_PAGE_SIZE) break;
+  }
+  if (lines.length === 0) return { detail: [], summary: [] };
 
-  const { data: evals } = await supabase
-    .from("evaluations")
-    .select("id, assistant_id, offering_id, period, rating, notes, evaluation_lines(kind, amount)")
-    .eq("org_id", orgId);
+  // Same cap risk for an org's full evaluation history.
+  const fetchEvalsPage = (from: number, to: number) =>
+    supabase
+      .from("evaluations")
+      .select("id, assistant_id, offering_id, period, rating, notes, evaluation_lines(kind, amount)")
+      .eq("org_id", orgId)
+      .range(from, to);
+  type EvalRow = NonNullable<Awaited<ReturnType<typeof fetchEvalsPage>>["data"]>[number];
+  const evals: EvalRow[] = [];
+  const EVALS_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += EVALS_PAGE_SIZE) {
+    const { data: page } = await fetchEvalsPage(from, from + EVALS_PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    evals.push(...page);
+    if (page.length < EVALS_PAGE_SIZE) break;
+  }
 
   const evalKey = (assistantId: string, offeringId: string | null, period: string) => `${assistantId}::${offeringId}::${period}`;
   const evalByKey = new Map<string, { rating: string | null; notes: string | null; extraTotal: number; deductionTotal: number }>();
