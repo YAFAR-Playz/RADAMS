@@ -56,6 +56,18 @@ export async function listSessions(offeringId: string): Promise<SessionSummary[]
   // roster, regardless of course size.
   const leftStudentsQuery = supabase.from("enrollments").select("student_id").eq("offering_id", offeringId).not("left_at", "is", null);
 
+  // An assistant's own present-count needs their own student IDs too — the
+  // presentRecords fetch below is otherwise offering-wide (matching
+  // getSessionRoster's roster, which IS scoped, would otherwise pair a
+  // whole-course numerator like 863 against this assistant's own /31
+  // denominator from enrollmentCountQuery above). One assistant's own
+  // roster is always small, so this doesn't need pagination the way the
+  // present-records fetch does.
+  const assistantStudentsQuery =
+    profile?.role === "assistant"
+      ? supabase.from("enrollments").select("student_id").eq("offering_id", offeringId).eq("assistant_id", profile.id).is("left_at", null)
+      : null;
+
   // Filtering to present/late at the DB level (rather than fetching every
   // record, including "absent" ones, and filtering in JS) keeps this well
   // under Postgrest's default 1000-row cap for the common case — a course
@@ -65,7 +77,7 @@ export async function listSessions(offeringId: string): Promise<SessionSummary[]
   // for a course with a genuinely huge number of people marked present.
   const presentRecords: { session_id: string; student_id: string }[] = [];
   const PRESENT_PAGE_SIZE = 1000;
-  const [, { count: total }, { data: leftStudentRows }] = await Promise.all([
+  const [, { count: total }, { data: leftStudentRows }, { data: assistantStudentRows }] = await Promise.all([
     (async () => {
       for (let from = 0; ; from += PRESENT_PAGE_SIZE) {
         const { data: page } = await supabase
@@ -81,12 +93,15 @@ export async function listSessions(offeringId: string): Promise<SessionSummary[]
     })(),
     enrollmentCountQuery,
     leftStudentsQuery,
+    assistantStudentsQuery ?? Promise.resolve({ data: null }),
   ]);
   const leftStudentIds = new Set((leftStudentRows ?? []).map((r) => r.student_id));
+  const assistantStudentIds = assistantStudentRows ? new Set(assistantStudentRows.map((r) => r.student_id)) : null;
 
   const presentBySession = new Map<string, number>();
   for (const r of presentRecords) {
     if (leftStudentIds.has(r.student_id)) continue;
+    if (assistantStudentIds && !assistantStudentIds.has(r.student_id)) continue;
     presentBySession.set(r.session_id, (presentBySession.get(r.session_id) ?? 0) + 1);
   }
 

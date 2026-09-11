@@ -591,15 +591,29 @@ async function countCheckedPapers(
   const mockIds = mockExamEnabled ? dueThisMonth.filter((a) => a.mock_exam).map((a) => a.id) : [];
   if (!regularIds.length && !mockIds.length) return { papers: 0, assignments: 0, mockPapers: 0 };
 
-  const { data: logs } = await supabase
-    .from("assignment_logs")
-    .select("id, assignment_id")
-    .in("assignment_id", [...regularIds, ...mockIds])
-    .eq("logged_by", assistantId)
-    .eq("status", "checked");
+  // Paginated: this directly computes pay (per_paper/fixed_per_paper/bracket
+  // base), so a plain unbounded select silently truncating at Postgrest's
+  // 1000-row cap would mean a genuine underpayment, not just a display bug —
+  // realistic for an assistant with a large roster (see the 1,116-enrollment
+  // offering that exposed this same cap elsewhere) checking multiple
+  // assignments in one month.
+  const logs: { id: string; assignment_id: string }[] = [];
+  const LOGS_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += LOGS_PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("assignment_logs")
+      .select("id, assignment_id")
+      .in("assignment_id", [...regularIds, ...mockIds])
+      .eq("logged_by", assistantId)
+      .eq("status", "checked")
+      .range(from, from + LOGS_PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    logs.push(...page);
+    if (page.length < LOGS_PAGE_SIZE) break;
+  }
   const mockIdSet = new Set(mockIds);
-  const papers = (logs ?? []).filter((l) => !mockIdSet.has(l.assignment_id)).length;
-  const mockPapers = (logs ?? []).filter((l) => mockIdSet.has(l.assignment_id)).length;
+  const papers = logs.filter((l) => !mockIdSet.has(l.assignment_id)).length;
+  const mockPapers = logs.filter((l) => mockIdSet.has(l.assignment_id)).length;
   // The denominator is every counts-in-salary REGULAR assignment due this
   // month, not just the ones this assistant happened to check at least one
   // paper in — an assignment they skipped entirely should still pull the
@@ -1026,8 +1040,26 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
   created += await generateFixedSalaryLinesForPeriod(supabase, orgId, period, autoReleasedAt);
 
   for (const offering of offerings ?? []) {
-    const [{ data: enrollments }, { data: assigned }, { data: headRows }] = await Promise.all([
-      supabase.from("enrollments").select("assistant_id").eq("offering_id", offering.id).not("assistant_id", "is", null),
+    // Paginated: an offering can have 1,000+ active enrollments (confirmed on
+    // a real 1,116-enrollment course), and an unbounded select here would
+    // silently drop rows past Postgrest's cap — risking an assistant whose
+    // enrollments happen to sort entirely past the cutoff never becoming a
+    // salary-line candidate for this offering at all, not just being
+    // undercounted.
+    const enrollments: { assistant_id: string | null }[] = [];
+    const ENROLLMENT_CANDIDATE_PAGE_SIZE = 1000;
+    for (let from = 0; ; from += ENROLLMENT_CANDIDATE_PAGE_SIZE) {
+      const { data: page } = await supabase
+        .from("enrollments")
+        .select("assistant_id")
+        .eq("offering_id", offering.id)
+        .not("assistant_id", "is", null)
+        .range(from, from + ENROLLMENT_CANDIDATE_PAGE_SIZE - 1);
+      if (!page || page.length === 0) break;
+      enrollments.push(...page);
+      if (page.length < ENROLLMENT_CANDIDATE_PAGE_SIZE) break;
+    }
+    const [{ data: assigned }, { data: headRows }] = await Promise.all([
       supabase.from("offering_assistants").select("assistant_id").eq("offering_id", offering.id),
       supabase.from("offering_heads").select("head_id").eq("offering_id", offering.id),
     ]);
