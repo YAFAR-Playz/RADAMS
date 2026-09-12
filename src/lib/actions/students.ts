@@ -306,17 +306,39 @@ export async function getCourseLabelsForStudents(studentIds: string[]): Promise<
   return result;
 }
 
-export type EnrollmentDetail = { enrollmentId: string; offeringId: string; label: string };
+export type EnrollmentDetail = { enrollmentId: string; offeringId: string; label: string; left: boolean };
 
+// Deactivated courses are dropped entirely (a Head can't manage — or even see
+// — a course that's no longer selectable anywhere else in the app), and a
+// Head only ever sees/toggles the courses they actually head, never a
+// student's other courses. Admin/registration see and can toggle every
+// active enrollment.
 export async function getStudentEnrollments(studentId: string): Promise<EnrollmentDetail[]> {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org) return [];
+
   const supabase = await createClient();
-  const { data } = await supabase
+
+  const { data: student } = await supabase.from("students").select("org_id").eq("id", studentId).maybeSingle();
+  if (!student || student.org_id !== profile.org.id) return [];
+
+  let query = supabase
     .from("enrollments")
-    .select("id, offering_id, course_offerings(session, unit, courses(name))")
-    .eq("student_id", studentId);
+    .select("id, offering_id, left_at, course_offerings!inner(active, session, unit, courses(name))")
+    .eq("student_id", studentId)
+    .eq("course_offerings.active", true);
+
+  if (profile.role === "head") {
+    const { data: headLinks } = await supabase.from("offering_heads").select("offering_id").eq("head_id", profile.id);
+    const headOfferingIds = (headLinks ?? []).map((h) => h.offering_id);
+    if (!headOfferingIds.length) return [];
+    query = query.in("offering_id", headOfferingIds);
+  }
+
+  const { data } = await query;
   return (data ?? []).map((r) => {
     const offering = Array.isArray(r.course_offerings) ? r.course_offerings[0] : r.course_offerings;
-    return { enrollmentId: r.id, offeringId: r.offering_id, label: offeringLabel(offering) };
+    return { enrollmentId: r.id, offeringId: r.offering_id, label: offeringLabel(offering), left: !!r.left_at };
   });
 }
 

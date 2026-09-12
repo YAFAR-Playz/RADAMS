@@ -202,16 +202,22 @@ export async function importStudents(offeringId: string, rows: ImportRow[], conf
     }
   }
 
-  // Skip anyone already enrolled in this exact offering — enrollments has a
-  // unique (student_id, offering_id) constraint, and re-importing the same
-  // student for the same course they're already on should be a no-op, not
-  // a crash for the whole batch.
+  // enrollments has a unique (student_id, offering_id) constraint, so a
+  // student who previously left THIS offering (or was re-imported before)
+  // already holds that slot via their existing — possibly left — row.
+  // Fetching left_at too (not just existence) lets a left row be reactivated
+  // instead of silently skipped: the old behavior treated "a row exists" as
+  // "already properly enrolled" regardless of left_at, so re-importing
+  // someone who'd left this exact course never re-added them and they
+  // stayed marked left forever. Mirrors addStudentEnrollment's fix for the
+  // same case in the single-student "add to course" flow.
   const uniqueIds = Array.from(new Set(studentIds));
-  const { data: alreadyEnrolledData } = uniqueIds.length
-    ? await supabase.from("enrollments").select("student_id").eq("offering_id", offeringId).in("student_id", uniqueIds)
-    : { data: [] as { student_id: string }[] };
-  const alreadyEnrolled = new Set((alreadyEnrolledData ?? []).map((e) => e.student_id));
-  const toEnroll = uniqueIds.filter((id) => !alreadyEnrolled.has(id));
+  const { data: existingEnrollmentRows } = uniqueIds.length
+    ? await supabase.from("enrollments").select("id, student_id, left_at").eq("offering_id", offeringId).in("student_id", uniqueIds)
+    : { data: [] as { id: string; student_id: string; left_at: string | null }[] };
+  const existingByStudent = new Map((existingEnrollmentRows ?? []).map((e) => [e.student_id, e]));
+  const toEnroll = uniqueIds.filter((id) => !existingByStudent.has(id));
+  const toReactivate = uniqueIds.filter((id) => existingByStudent.get(id)?.left_at);
 
   if (toEnroll.length) {
     const { error: enrollError } = await supabase
@@ -222,6 +228,14 @@ export async function importStudents(offeringId: string, rows: ImportRow[], conf
     for (const studentId of toEnroll) {
       await createPaymentPlan({ studentId, offeringId, planType: "full" });
     }
+  }
+
+  if (toReactivate.length) {
+    const { error: reactivateError } = await supabase
+      .from("enrollments")
+      .update({ left_at: null })
+      .in("id", toReactivate.map((studentId) => existingByStudent.get(studentId)!.id));
+    if (reactivateError) throw new Error(reactivateError.message);
   }
 
   await logActivity(

@@ -72,8 +72,8 @@ export async function listOrgsOverview(): Promise<OrgOverview[]> {
     fetchAllRows<{ org_id: string; role: string }>((from, to) =>
       supabase.from("profiles").select("org_id, role").in("org_id", orgIds).range(from, to)
     ),
-    fetchAllRows<{ id: string; org_id: string }>((from, to) =>
-      supabase.from("course_offerings").select("id, org_id").in("org_id", orgIds).range(from, to)
+    fetchAllRows<{ id: string; org_id: string; active: boolean }>((from, to) =>
+      supabase.from("course_offerings").select("id, org_id, active").in("org_id", orgIds).range(from, to)
     ),
     fetchAllRows<{ id: string; offering_id: string }>((from, to) =>
       supabase.from("assignments").select("id, offering_id").range(from, to)
@@ -85,33 +85,70 @@ export async function listOrgsOverview(): Promise<OrgOverview[]> {
     const existing = adminByOrg.get(a.org_id);
     if (!existing || (a.is_main_admin && !existing.is_main_admin)) adminByOrg.set(a.org_id, a);
   }
-  // One count-only query per org rather than fetching every student row for
-  // every org — an unbounded select here silently truncated at Supabase's
-  // default 1000-row cap once total students across orgs passed that count.
-  const studentCounts = new Map<string, number>();
-  await Promise.all(
-    orgIds.map(async (id) => {
-      const { count } = await supabase.from("students").select("id", { count: "exact", head: true }).eq("org_id", id);
-      studentCounts.set(id, count ?? 0);
-    })
-  );
-  const assistantCounts = new Map<string, number>();
   const headCounts = new Map<string, number>();
   for (const p of profiles ?? []) {
-    if (p.role === "assistant") assistantCounts.set(p.org_id, (assistantCounts.get(p.org_id) ?? 0) + 1);
     if (p.role === "head") headCounts.set(p.org_id, (headCounts.get(p.org_id) ?? 0) + 1);
   }
+  // A deactivated course is dropped from every metric below it feeds — its
+  // own count, and any student/assistant whose only tie to this org was
+  // that course. `offeringOrgById` (all offerings) still backs the
+  // assignments count, which isn't scoped to active/inactive.
   const courseCounts = new Map<string, number>();
   const offeringOrgById = new Map<string, string>();
+  const activeOfferingOrgById = new Map<string, string>();
   for (const o of offerings ?? []) {
-    courseCounts.set(o.org_id, (courseCounts.get(o.org_id) ?? 0) + 1);
     offeringOrgById.set(o.id, o.org_id);
+    if (o.active) {
+      courseCounts.set(o.org_id, (courseCounts.get(o.org_id) ?? 0) + 1);
+      activeOfferingOrgById.set(o.id, o.org_id);
+    }
   }
   const assignmentCounts = new Map<string, number>();
   for (const a of assignments ?? []) {
     const orgId = offeringOrgById.get(a.offering_id);
     if (!orgId) continue;
     assignmentCounts.set(orgId, (assignmentCounts.get(orgId) ?? 0) + 1);
+  }
+
+  // "students"/"assistants" count each PERSON once, only via an active
+  // course — a student or assistant whose only enrollment/assignment was on
+  // a course that's since been deactivated no longer counts, but one with
+  // another active course still does (via that course). Batched by offering
+  // id (a `.in()` filter with one UUID per offering can itself run past a
+  // URL-safe length on a large platform) with each batch's own row
+  // pagination, matching the pattern already used in import.ts's dedup fetch.
+  const activeOfferingIds = Array.from(activeOfferingOrgById.keys());
+  const ID_BATCH_SIZE = 200;
+  const studentOrgPairs = new Set<string>();
+  const assistantOrgPairs = new Set<string>();
+  for (let i = 0; i < activeOfferingIds.length; i += ID_BATCH_SIZE) {
+    const idBatch = activeOfferingIds.slice(i, i + ID_BATCH_SIZE);
+    const [enrollmentRows, assistantRows] = await Promise.all([
+      fetchAllRows<{ offering_id: string; student_id: string }>((from, to) =>
+        supabase.from("enrollments").select("offering_id, student_id").in("offering_id", idBatch).is("left_at", null).range(from, to)
+      ),
+      fetchAllRows<{ offering_id: string; assistant_id: string }>((from, to) =>
+        supabase.from("offering_assistants").select("offering_id, assistant_id").in("offering_id", idBatch).range(from, to)
+      ),
+    ]);
+    for (const r of enrollmentRows) {
+      const orgId = activeOfferingOrgById.get(r.offering_id);
+      if (orgId) studentOrgPairs.add(`${orgId}::${r.student_id}`);
+    }
+    for (const r of assistantRows) {
+      const orgId = activeOfferingOrgById.get(r.offering_id);
+      if (orgId) assistantOrgPairs.add(`${orgId}::${r.assistant_id}`);
+    }
+  }
+  const studentCounts = new Map<string, number>();
+  for (const pair of studentOrgPairs) {
+    const orgId = pair.slice(0, pair.indexOf("::"));
+    studentCounts.set(orgId, (studentCounts.get(orgId) ?? 0) + 1);
+  }
+  const assistantCounts = new Map<string, number>();
+  for (const pair of assistantOrgPairs) {
+    const orgId = pair.slice(0, pair.indexOf("::"));
+    assistantCounts.set(orgId, (assistantCounts.get(orgId) ?? 0) + 1);
   }
 
   return orgs.map((o) => {

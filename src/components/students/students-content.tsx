@@ -51,14 +51,12 @@ const PAGE_SIZE = 20;
 
 type EditDraft = {
   studentId: string;
-  enrollmentId: string;
   initials: string;
   name: string;
   email: string;
   phone: string;
   guardianName: string;
   guardianPhone: string;
-  left: boolean;
 };
 
 export function StudentsContent({ role }: { role: Role }) {
@@ -238,7 +236,8 @@ export function StudentsContent({ role }: { role: Role }) {
   const filtered = useMemo(() => {
     if (!students) return [];
     const rows = students.filter((s) => {
-      if (!matchesStudentQuery(search, s.name, s.studentCode)) return false;
+      const matchesAssistant = search.trim() !== "" && (s.assistantName ?? "").toLowerCase().includes(search.trim().toLowerCase());
+      if (!matchesStudentQuery(search, s.name, s.studentCode) && !matchesAssistant) return false;
       if (canFilterUnassigned && unassignedOnly && (s.assistantId || s.leftAt)) return false;
       if (isRegistration && paymentFilter !== "all") {
         const payment = paymentByStudent[s.studentId];
@@ -373,20 +372,21 @@ export function StudentsContent({ role }: { role: Role }) {
   function openEdit(s: StudentRow) {
     setEditDraft({
       studentId: s.studentId,
-      enrollmentId: s.enrollmentId,
       initials: s.initials,
       name: s.name,
       email: s.email ?? "",
       phone: s.phone ?? "",
       guardianName: s.guardianName ?? "",
       guardianPhone: s.guardianPhone ?? "",
-      left: !!s.leftAt,
     });
-    if (canEditCourses) {
-      setEditEnrollments(null);
-      getStudentEnrollments(s.studentId).then(setEditEnrollments);
-      if (!allOfferings) listAllOfferingsForOrg().then(setAllOfferings);
-    }
+    // Fetched for everyone who can edit (not just canEditCourses) — a Head
+    // can't add/remove courses but still needs to see and toggle "left" for
+    // the courses they head; getStudentEnrollments itself scopes which
+    // enrollments come back (active courses only, and a Head's own courses
+    // only) so this is always safe to show.
+    setEditEnrollments(null);
+    getStudentEnrollments(s.studentId).then(setEditEnrollments);
+    if (canEditCourses && !allOfferings) listAllOfferingsForOrg().then(setAllOfferings);
     setStudentAttendance(null);
     getStudentAttendance(s.studentId).then(setStudentAttendance);
   }
@@ -441,7 +441,7 @@ export function StudentsContent({ role }: { role: Role }) {
     try {
       const { enrollmentId } = await addStudentEnrollment(studentId, addOfferingId);
       const label = allOfferings?.find((o) => o.id === addOfferingId)?.label ?? "—";
-      setEditEnrollments((prev) => (prev ? [...prev, { enrollmentId, offeringId: addOfferingId, label }] : prev));
+      setEditEnrollments((prev) => (prev ? [...prev, { enrollmentId, offeringId: addOfferingId, label, left: false }] : prev));
       setAddOfferingId("");
       if (offeringId) await reload(offeringId);
     } catch {
@@ -449,6 +449,10 @@ export function StudentsContent({ role }: { role: Role }) {
     } finally {
       setEnrollmentBusy(false);
     }
+  }
+
+  function onToggleEnrollmentLeft(enrollmentId: string) {
+    setEditEnrollments((prev) => (prev ? prev.map((e) => (e.enrollmentId === enrollmentId ? { ...e, left: !e.left } : e)) : prev));
   }
 
   async function onRemoveEnrollment(enrollmentId: string) {
@@ -476,10 +480,12 @@ export function StudentsContent({ role }: { role: Role }) {
           guardianName: editDraft.guardianName,
           guardianPhone: editDraft.guardianPhone,
         }),
-        // "Left" belongs to this specific course's enrollment, not the
-        // student record — marking someone left here must never affect
-        // any other course they're enrolled in.
-        setEnrollmentLeftStatus(editDraft.enrollmentId, editDraft.left),
+        // "Left" belongs to each course's own enrollment, not the student
+        // record — one toggle per course shown, so every course visible in
+        // this modal gets its own left status saved independently; a course
+        // this viewer can't see (a Head's non-owned course, or a deactivated
+        // one) was never listed here and so is never touched.
+        ...(editEnrollments ?? []).map((e) => setEnrollmentLeftStatus(e.enrollmentId, e.left)),
       ]);
       setEditDraft(null);
       await reload(offeringId);
@@ -1128,27 +1134,49 @@ export function StudentsContent({ role }: { role: Role }) {
                   className="h-[42px] w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[13px] text-[13.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                 />
               </div>
-              {canEditCourses && (
-                <div>
-                  <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Courses enrolled</label>
-                  {editEnrollments === null ? (
-                    <SkeletonRow className="h-[60px]" />
-                  ) : (
-                    <div className="flex flex-col gap-[6px]">
-                      {editEnrollments.length === 0 && <div className="text-[12.5px] text-[var(--subtle)]">Not enrolled in any course.</div>}
-                      {editEnrollments.map((e, enrollIndex) => (
-                        <div key={e.enrollmentId} className="flex items-center gap-[8px] rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] p-[8px_10px]">
-                          <span className="flex-1 text-[12.5px] font-semibold text-[var(--text)]">{e.label}</span>
+              <div>
+                <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Courses enrolled</label>
+                {editEnrollments === null ? (
+                  <SkeletonRow className="h-[60px]" />
+                ) : (
+                  <div className="flex flex-col gap-[6px]">
+                    {editEnrollments.length === 0 && (
+                      <div className="text-[12.5px] text-[var(--subtle)]">
+                        {canEditCourses ? "Not enrolled in any active course." : "None of your courses have this student enrolled."}
+                      </div>
+                    )}
+                    {editEnrollments.map((e, enrollIndex) => (
+                      <div key={e.enrollmentId} className="flex items-center gap-[10px] rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] p-[8px_10px]">
+                        <span className="min-w-0 flex-1 text-[12.5px] font-semibold text-[var(--text)]">{e.label}</span>
+                        <button
+                          data-tour={enrollIndex === 0 ? "students-mark-left" : undefined}
+                          onClick={() => onToggleEnrollmentLeft(e.enrollmentId)}
+                          role="switch"
+                          aria-checked={e.left}
+                          title={e.left ? "Marked as left in this course — click to restore" : "Mark as left in this course"}
+                          className="relative h-5 w-9 flex-none rounded-full transition-colors"
+                          style={{ background: e.left ? "var(--danger)" : "var(--border)" }}
+                        >
+                          <span className="absolute top-[2px] h-4 w-4 rounded-full bg-white transition-[left]" style={{ left: e.left ? "18px" : "2px" }} />
+                        </button>
+                        <span
+                          className="w-[38px] flex-none text-[10.5px] font-semibold uppercase tracking-wide"
+                          style={{ color: e.left ? "var(--danger)" : "var(--subtle)" }}
+                        >
+                          {e.left ? "Left" : "Active"}
+                        </span>
+                        {canEditCourses && (
                           <button
-                            data-tour={enrollIndex === 0 ? "students-remove-course" : undefined}
                             onClick={() => onRemoveEnrollment(e.enrollmentId)}
                             disabled={enrollmentBusy}
                             className="flex h-7 w-7 flex-none items-center justify-center rounded-[7px] border border-[var(--border)] bg-[var(--surface)] text-[var(--subtle)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] hover:text-[var(--danger)] disabled:opacity-60"
                           >
                             <Icon name="x" size={13} />
                           </button>
-                        </div>
-                      ))}
+                        )}
+                      </div>
+                    ))}
+                    {canEditCourses && (
                       <div className="flex items-center gap-[8px]">
                         <div className="flex h-9 flex-1 items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[9px]">
                           <select
@@ -1177,10 +1205,10 @@ export function StudentsContent({ role }: { role: Role }) {
                           Add
                         </button>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                )}
+              </div>
               <div>
                 <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Attendance</label>
                 {studentAttendance === null ? (
@@ -1217,31 +1245,6 @@ export function StudentsContent({ role }: { role: Role }) {
                     </div>
                   </div>
                 )}
-              </div>
-              <div
-                className="flex items-center gap-[11px] rounded-[var(--rad-sm)] border p-[12px_13px]"
-                style={{ background: editDraft.left ? "var(--dangers)" : "var(--surface2)", borderColor: editDraft.left ? "var(--danger)" : "var(--border)" }}
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="text-[13px] font-semibold text-[var(--text)]">Mark as left — {current?.label ?? "this course"}</div>
-                  <div className="text-[11.5px] leading-[1.4] text-[var(--subtle)]">
-                    Applies to this course only — they stay active in any other course they&apos;re enrolled in. Stops new
-                    assignments and removes them from this course&apos;s active roster. History is kept.
-                  </div>
-                </div>
-                <button
-                  data-tour="students-mark-left"
-                  onClick={() => setEditDraft((d) => d && { ...d, left: !d.left })}
-                  role="switch"
-                  aria-checked={editDraft.left}
-                  className="relative h-6 w-[42px] flex-none rounded-full transition-colors"
-                  style={{ background: editDraft.left ? "var(--danger)" : "var(--border)" }}
-                >
-                  <span
-                    className="absolute top-[2px] h-5 w-5 rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,.2)] transition-[left]"
-                    style={{ left: editDraft.left ? "20px" : "2px" }}
-                  />
-                </button>
               </div>
             </div>
             <div className="flex gap-[10px] border-t border-[var(--border2)] p-[14px_18px]">
