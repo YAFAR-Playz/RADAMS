@@ -535,28 +535,32 @@ export function HeadAssignmentsContent() {
                 </div>
               )}
 
-              {!editId && showGradeScheme && (
+              {showGradeScheme && (!editId || form.gradeScheme === "numeric") && (
                 <div>
-                  <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Grade scheme</label>
-                  <div className="mb-[9px] flex gap-[7px]">
-                    {(["numeric", "letter"] as const).map((v) => {
-                      const active = form.gradeScheme === v;
-                      return (
-                        <button
-                          key={v}
-                          onClick={() => setForm((f) => ({ ...f, gradeScheme: v }))}
-                          className="h-10 flex-1 rounded-[8px] border-[1.5px] text-[13px] font-semibold"
-                          style={
-                            active
-                              ? { borderColor: "var(--brand)", background: "var(--brand)", color: "var(--brandfg)" }
-                              : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
-                          }
-                        >
-                          {v === "numeric" ? "Out of N" : "Letter grades"}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {!editId && (
+                    <>
+                      <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Grade scheme</label>
+                      <div className="mb-[9px] flex gap-[7px]">
+                        {(["numeric", "letter"] as const).map((v) => {
+                          const active = form.gradeScheme === v;
+                          return (
+                            <button
+                              key={v}
+                              onClick={() => setForm((f) => ({ ...f, gradeScheme: v }))}
+                              className="h-10 flex-1 rounded-[8px] border-[1.5px] text-[13px] font-semibold"
+                              style={
+                                active
+                                  ? { borderColor: "var(--brand)", background: "var(--brand)", color: "var(--brandfg)" }
+                                  : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
+                              }
+                            >
+                              {v === "numeric" ? "Out of N" : "Letter grades"}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
                   {form.gradeScheme === "numeric" ? (
                     <div className="flex h-[42px] items-center gap-[9px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3">
                       <span className="flex-none text-[13px] font-medium text-[var(--muted)]">Marks out of</span>
