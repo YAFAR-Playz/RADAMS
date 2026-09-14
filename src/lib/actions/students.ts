@@ -256,9 +256,25 @@ export async function getStudentsTabBootstrap(): Promise<StudentsTabBootstrap> {
 export async function getEnrollmentCounts(studentIds: string[]): Promise<Record<string, number>> {
   if (!studentIds.length) return {};
   const supabase = await createClient();
-  const { data } = await supabase.from("enrollments").select("student_id").in("student_id", studentIds);
+  // Batched in URL-safe chunks and paginated per batch, same as
+  // getCourseLabelsForStudents below — a caller passing a large student set
+  // (e.g. a whole org's roster) risks both a URL-length failure on `.in()`
+  // and clearing Postgrest's default 1000-row cap on the enrollment rows
+  // themselves (one student can have several enrollments).
+  const data: { student_id: string }[] = [];
+  const ID_BATCH_SIZE = 200;
+  const PAGE_SIZE = 1000;
+  for (let i = 0; i < studentIds.length; i += ID_BATCH_SIZE) {
+    const idBatch = studentIds.slice(i, i + ID_BATCH_SIZE);
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data: page } = await supabase.from("enrollments").select("student_id").in("student_id", idBatch).range(from, from + PAGE_SIZE - 1);
+      if (!page || page.length === 0) break;
+      data.push(...page);
+      if (page.length < PAGE_SIZE) break;
+    }
+  }
   const counts: Record<string, number> = {};
-  for (const row of data ?? []) {
+  for (const row of data) {
     counts[row.student_id] = (counts[row.student_id] ?? 0) + 1;
   }
   return counts;

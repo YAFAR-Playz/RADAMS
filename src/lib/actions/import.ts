@@ -211,11 +211,29 @@ export async function importStudents(offeringId: string, rows: ImportRow[], conf
   // someone who'd left this exact course never re-added them and they
   // stayed marked left forever. Mirrors addStudentEnrollment's fix for the
   // same case in the single-student "add to course" flow.
+  // Batched in URL-safe chunks and paginated per batch — a large import run
+  // (or a course with many prior imports) can push `uniqueIds` past both a
+  // URL-safe `.in()` length and Postgrest's default 1000-row cap, same as
+  // fetchDedupCandidates above.
   const uniqueIds = Array.from(new Set(studentIds));
-  const { data: existingEnrollmentRows } = uniqueIds.length
-    ? await supabase.from("enrollments").select("id, student_id, left_at").eq("offering_id", offeringId).in("student_id", uniqueIds)
-    : { data: [] as { id: string; student_id: string; left_at: string | null }[] };
-  const existingByStudent = new Map((existingEnrollmentRows ?? []).map((e) => [e.student_id, e]));
+  const existingEnrollmentRows: { id: string; student_id: string; left_at: string | null }[] = [];
+  const ID_BATCH_SIZE = 200;
+  const ENROLLMENT_PAGE_SIZE = 1000;
+  for (let i = 0; i < uniqueIds.length; i += ID_BATCH_SIZE) {
+    const idBatch = uniqueIds.slice(i, i + ID_BATCH_SIZE);
+    for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
+      const { data: page } = await supabase
+        .from("enrollments")
+        .select("id, student_id, left_at")
+        .eq("offering_id", offeringId)
+        .in("student_id", idBatch)
+        .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
+      if (!page || page.length === 0) break;
+      existingEnrollmentRows.push(...page);
+      if (page.length < ENROLLMENT_PAGE_SIZE) break;
+    }
+  }
+  const existingByStudent = new Map(existingEnrollmentRows.map((e) => [e.student_id, e]));
   const toEnroll = uniqueIds.filter((id) => !existingByStudent.has(id));
   const toReactivate = uniqueIds.filter((id) => existingByStudent.get(id)?.left_at);
 

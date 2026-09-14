@@ -33,13 +33,25 @@ async function getMissingAssignmentsAlerts(
 ): Promise<NotificationItem[]> {
   if (!offeringIds.length) return [];
 
-  let enrollmentQuery = supabase.from("enrollments").select("student_id, students(name)").in("offering_id", offeringIds);
-  if (assistantId) enrollmentQuery = enrollmentQuery.eq("assistant_id", assistantId);
-  const { data: enrollments } = await enrollmentQuery;
-  const studentIds = Array.from(new Set((enrollments ?? []).map((e) => e.student_id)));
+  // Paginated: a head's offerings can clear Postgrest's default 1000-row cap
+  // on enrollments alone (one offering has 1,151 active enrollments), which
+  // a single unpaginated select silently truncated.
+  type MissingEnrollmentRow = { student_id: string; students: { name: string } | { name: string }[] | null };
+  const enrollments: MissingEnrollmentRow[] = [];
+  const ENROLLMENT_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
+    let page = supabase.from("enrollments").select("student_id, students(name)").in("offering_id", offeringIds).order("student_id").range(from, from + ENROLLMENT_PAGE_SIZE - 1);
+    if (assistantId) page = page.eq("assistant_id", assistantId);
+    const { data } = await page;
+    if (!data || data.length === 0) break;
+    enrollments.push(...data);
+    if (data.length < ENROLLMENT_PAGE_SIZE) break;
+  }
+  const studentIdSet = new Set(enrollments.map((e) => e.student_id));
+  const studentIds = Array.from(studentIdSet);
   if (!studentIds.length) return [];
   const nameByStudent = new Map(
-    (enrollments ?? []).map((e) => {
+    enrollments.map((e) => {
       const s = Array.isArray(e.students) ? e.students[0] : e.students;
       return [e.student_id, s?.name ?? "—"];
     })
@@ -49,15 +61,31 @@ async function getMissingAssignmentsAlerts(
   const assignmentIds = (assignments ?? []).map((a) => a.id);
   if (!assignmentIds.length) return [];
 
-  const { data: logs } = await supabase
-    .from("assignment_logs")
-    .select("student_id")
-    .in("assignment_id", assignmentIds)
-    .in("student_id", studentIds)
-    .eq("status", "missing");
+  // Scoped to assignment_id alone (not also `.in("student_id", studentIds)`)
+  // to avoid a URL-length failure for a large course — one UUID per enrolled
+  // student can run well past what a GET request's URL can carry (same class
+  // of bug fixed in attendance.ts). Filtered down to `studentIdSet` in JS
+  // below instead, which also keeps the assistant-scoped case (studentIds
+  // narrowed to one assistant's own students) exact. Paginated since
+  // assignments × students for a large course can also clear Postgrest's
+  // default 1000-row cap on its own.
+  const logs: { student_id: string; status: string | null }[] = [];
+  const LOGS_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += LOGS_PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("assignment_logs")
+      .select("student_id, status")
+      .in("assignment_id", assignmentIds)
+      .eq("status", "missing")
+      .range(from, from + LOGS_PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    logs.push(...page);
+    if (page.length < LOGS_PAGE_SIZE) break;
+  }
 
   const missingByStudent = new Map<string, number>();
-  for (const l of logs ?? []) {
+  for (const l of logs) {
+    if (!studentIdSet.has(l.student_id)) continue;
     missingByStudent.set(l.student_id, (missingByStudent.get(l.student_id) ?? 0) + 1);
   }
 
@@ -189,20 +217,41 @@ async function getHeadNotifications(orgId: string, headId: string): Promise<Noti
   const assignmentById = new Map((assignments ?? []).map((a) => [a.id, a]));
 
   if (assignmentIds.length) {
-    const { data: logs } = await supabase
-      .from("assignment_logs")
-      .select("assignment_id, status, sent_at, updated_at")
-      .in("assignment_id", assignmentIds)
-      .gte("updated_at", since);
+    // Paginated: assignments × students across every offering a head runs
+    // can clear Postgrest's default 1000-row cap on their own, which a
+    // single unpaginated select silently truncated.
+    const LOGS_PAGE_SIZE = 1000;
+    const logs: { assignment_id: string; status: string | null; sent_at: string | null; updated_at: string }[] = [];
+    for (let from = 0; ; from += LOGS_PAGE_SIZE) {
+      const { data: page } = await supabase
+        .from("assignment_logs")
+        .select("assignment_id, status, sent_at, updated_at")
+        .in("assignment_id", assignmentIds)
+        .gte("updated_at", since)
+        .range(from, from + LOGS_PAGE_SIZE - 1);
+      if (!page || page.length === 0) break;
+      logs.push(...page);
+      if (page.length < LOGS_PAGE_SIZE) break;
+    }
 
     const checkedByAssignment = new Map<string, number>();
     const sentByAssignment = new Map<string, number>();
-    for (const l of logs ?? []) {
+    for (const l of logs) {
       if (l.status === "checked") checkedByAssignment.set(l.assignment_id, (checkedByAssignment.get(l.assignment_id) ?? 0) + 1);
     }
-    const { data: allLogs } = await supabase.from("assignment_logs").select("assignment_id, sent_at").in("assignment_id", assignmentIds);
+    const allLogs: { assignment_id: string; sent_at: string | null }[] = [];
+    for (let from = 0; ; from += LOGS_PAGE_SIZE) {
+      const { data: page } = await supabase
+        .from("assignment_logs")
+        .select("assignment_id, sent_at")
+        .in("assignment_id", assignmentIds)
+        .range(from, from + LOGS_PAGE_SIZE - 1);
+      if (!page || page.length === 0) break;
+      allLogs.push(...page);
+      if (page.length < LOGS_PAGE_SIZE) break;
+    }
     const totalByAssignment = new Map<string, number>();
-    for (const l of allLogs ?? []) {
+    for (const l of allLogs) {
       totalByAssignment.set(l.assignment_id, (totalByAssignment.get(l.assignment_id) ?? 0) + 1);
       if (l.sent_at) sentByAssignment.set(l.assignment_id, (sentByAssignment.get(l.assignment_id) ?? 0) + 1);
     }
