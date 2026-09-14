@@ -85,11 +85,13 @@ export async function listAssignmentsWithProgress(offeringId: string): Promise<A
   // "Left" is tracked per enrollment (setEnrollmentLeftStatus in
   // students.ts), so this filters directly on the enrollment row.
   //
-  // Paginated: this offering's own active enrollments can clear PostgREST's
+  // Paginated: this offering's own active enrollments can clear Postgrest's
   // default 1000-row cap on their own (one offering has 1,151 active
-  // enrollments), same as the assignment_logs fetch below — an unpaginated
-  // select here silently truncated the roster, producing wrong
-  // checked/total counts for assistants whose students sorted past the cap.
+  // enrollments) — an unpaginated select here silently truncated the
+  // roster, so whichever assistant's students happened to sort past the
+  // cutoff showed a wrong, much-too-low "total" (and correspondingly wrong
+  // "logged") for every assignment — exactly the "33 real students but
+  // shows 1/1" pattern reported live.
   const enrollments: { student_id: string; assistant_id: string | null }[] = [];
   const ENROLLMENT_PAGE_SIZE = 1000;
   for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {

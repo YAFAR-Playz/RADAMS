@@ -4,13 +4,15 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
 
 export type CalcMethod = "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant";
-// "fixed" is deliberately excluded — it's a flat, courseless monthly amount
-// for the whole person (see generateFixedSalaryLinesForPeriod in
-// finance-salaries.ts), so it can't be set as a per-course override. A
-// person whose own default IS "fixed" keeps earning it for any course that
-// has no override at all; individual courses only ever override AWAY from
-// it onto a method that's actually anchored to that course.
-export type OfferingCalcMethod = "paper" | "category" | "fixed_per_paper" | "fixed_per_assistant";
+// A per-course override can be "fixed" too, but it means something distinct
+// from staff_pay_settings' own "fixed": that one is a flat, courseless
+// monthly amount for the whole person (generateFixedSalaryLinesForPeriod in
+// finance-salaries.ts) — this one is a flat amount for just THIS course,
+// with its own amount (staff_offering_pay_settings.fixed_salary), prorated
+// by that course's own join/leave window like every other per-course
+// method. A person whose own default IS "fixed" keeps earning the
+// courseless flat amount for any course that has no override at all.
+export type OfferingCalcMethod = "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant";
 
 async function getOrgDefaultCalcMethod(supabase: Awaited<ReturnType<typeof createClient>>, orgId: string): Promise<CalcMethod> {
   const { data } = await supabase.from("organizations").select("default_assistant_calc_method").eq("id", orgId).single();
@@ -204,67 +206,98 @@ export async function bulkSetCalcMethodForOffering(offeringId: string, calcMetho
   return { updated: assistantIds.length };
 }
 
-// Every head/assistant currently assigned to one course, with their calc
-// method for THIS course specifically. `override` is null when the course
-// has no row of its own yet (i.e. it's inheriting the person's default).
-// `fallback` is what applies if the override were cleared (staff default,
-// or the org default) — deliberately distinct from `effective` (what
-// actually applies right now, i.e. override ?? fallback) so a "Use default"
-// menu option can honestly say what picking it would switch them TO, rather
-// than echoing back the override itself once one is set.
-export type OfferingCalcMethodRow = {
-  profileId: string;
-  name: string;
+// Every course one specific head/assistant is on, with their calc method
+// for each course individually — the Payments tab's per-assistant "Courses"
+// list (deliberately per-PERSON here, not per-course: a course can have 30+
+// assistants, which reads terribly as a flat list, but a person is rarely on
+// more than a handful of courses). `override` is null when that course has
+// no row of its own yet (inheriting the person's own default). `fallback` is
+// what applies if the override were cleared — deliberately distinct from
+// `effective` (what actually applies right now, i.e. override ?? fallback)
+// so a "Use default" menu option can honestly say what picking it would
+// switch them TO, rather than echoing back the override itself once set.
+export type AssistantOfferingRow = {
+  offeringId: string;
+  courseLabel: string;
   role: "head" | "assistant";
   override: OfferingCalcMethod | null;
+  fixedSalary: number | null;
   fallback: CalcMethod;
   effective: CalcMethod;
 };
 
-export async function getOfferingCalcMethods(offeringId: string): Promise<OfferingCalcMethodRow[]> {
+export async function getAssistantOfferings(profileId: string): Promise<AssistantOfferingRow[]> {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");
   const supabase = await createClient();
 
-  const { data: offering } = await supabase.from("course_offerings").select("org_id").eq("id", offeringId).maybeSingle();
-  if (!offering || offering.org_id !== profile.org.id) throw new Error("Course not found");
+  const { data: person } = await supabase.from("profiles").select("org_id, role").eq("id", profileId).maybeSingle();
+  if (!person || person.org_id !== profile.org.id) throw new Error("Staff member not found");
 
   const [{ data: assistantRows }, { data: headRows }] = await Promise.all([
-    supabase.from("offering_assistants").select("assistant_id").eq("offering_id", offeringId),
-    supabase.from("offering_heads").select("head_id").eq("offering_id", offeringId),
+    supabase
+      .from("offering_assistants")
+      .select("offering_id, course_offerings(session, unit, courses(name))")
+      .eq("assistant_id", profileId),
+    supabase.from("offering_heads").select("offering_id, course_offerings(session, unit, courses(name))").eq("head_id", profileId),
   ]);
-  const people: { id: string; role: "head" | "assistant" }[] = [
-    ...(assistantRows ?? []).map((r) => ({ id: r.assistant_id, role: "assistant" as const })),
-    ...(headRows ?? []).map((r) => ({ id: r.head_id, role: "head" as const })),
+  type JoinedOffering = { session: string; unit: string | null; courses: { name: string } | { name: string }[] | null };
+  function label(o: JoinedOffering | JoinedOffering[] | null): string {
+    const offering = Array.isArray(o) ? o[0] : o;
+    if (!offering) return "—";
+    const course = Array.isArray(offering.courses) ? offering.courses[0] : offering.courses;
+    return [course?.name, offering.session, offering.unit].filter(Boolean).join(" · ");
+  }
+  const offerings: { offeringId: string; courseLabel: string; role: "head" | "assistant" }[] = [
+    ...(assistantRows ?? []).map((r) => ({ offeringId: r.offering_id, courseLabel: label(r.course_offerings), role: "assistant" as const })),
+    ...(headRows ?? []).map((r) => ({ offeringId: r.offering_id, courseLabel: label(r.course_offerings), role: "head" as const })),
   ];
-  if (!people.length) return [];
-  const ids = people.map((p) => p.id);
+  if (!offerings.length) return [];
 
-  const [{ data: profiles }, { data: settings }, { data: overrides }, orgDefault] = await Promise.all([
-    supabase.from("profiles").select("id, full_name").in("id", ids),
-    supabase.from("staff_pay_settings").select("profile_id, calc_method").in("profile_id", ids),
-    supabase.from("staff_offering_pay_settings").select("profile_id, calc_method").eq("offering_id", offeringId).in("profile_id", ids),
+  const [{ data: setting }, { data: overrides }, orgDefault] = await Promise.all([
+    supabase.from("staff_pay_settings").select("calc_method").eq("profile_id", profileId).maybeSingle(),
+    supabase
+      .from("staff_offering_pay_settings")
+      .select("offering_id, calc_method, fixed_salary")
+      .eq("profile_id", profileId)
+      .in(
+        "offering_id",
+        offerings.map((o) => o.offeringId)
+      ),
     getOrgDefaultCalcMethod(supabase, profile.org.id),
   ]);
-  const nameById = new Map((profiles ?? []).map((p) => [p.id, p.full_name as string]));
-  const staffDefaultById = new Map((settings ?? []).map((s) => [s.profile_id, s.calc_method as CalcMethod]));
-  const overrideById = new Map((overrides ?? []).map((o) => [o.profile_id, o.calc_method as OfferingCalcMethod]));
+  const fallback = (setting?.calc_method as CalcMethod | undefined) ?? orgDefault;
+  const overrideByOffering = new Map((overrides ?? []).map((o) => [o.offering_id, o]));
 
-  return people
-    .map((p) => {
-      const override = overrideById.get(p.id) ?? null;
-      const fallback = staffDefaultById.get(p.id) ?? orgDefault;
-      const effective = override ?? fallback;
-      return { profileId: p.id, name: nameById.get(p.id) ?? "—", role: p.role, override, fallback, effective };
+  return offerings
+    .map((o) => {
+      const row = overrideByOffering.get(o.offeringId);
+      const override = (row?.calc_method as OfferingCalcMethod | undefined) ?? null;
+      return {
+        offeringId: o.offeringId,
+        courseLabel: o.courseLabel,
+        role: o.role,
+        override,
+        fixedSalary: row?.fixed_salary != null ? Number(row.fixed_salary) : null,
+        fallback,
+        effective: override ?? fallback,
+      };
     })
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => a.courseLabel.localeCompare(b.courseLabel));
 }
 
 // Sets (or, with null, clears) one assistant's calc-method override for one
 // specific course — the targeted counterpart to bulkSetCalcMethodForOffering
 // above, for the common case of a single exception rather than a whole
-// course's worth of assistants.
-export async function setOfferingCalcMethodForAssistant(offeringId: string, profileId: string, calcMethod: OfferingCalcMethod | null): Promise<void> {
+// course's worth of assistants. `fixedSalary` only matters (and is only
+// stored) when calcMethod is "fixed" — this course's own flat amount,
+// distinct from the person-level fixed_salary in staff_pay_settings.
+export async function setOfferingCalcMethodForAssistant(
+  offeringId: string,
+  profileId: string,
+  calcMethod: OfferingCalcMethod | null,
+  fixedSalary?: number | null
+): Promise<void> {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");
   const supabase = await createClient();
@@ -279,7 +312,14 @@ export async function setOfferingCalcMethodForAssistant(offeringId: string, prof
   }
 
   const { error } = await supabase.from("staff_offering_pay_settings").upsert(
-    { profile_id: profileId, offering_id: offeringId, org_id: profile.org.id, calc_method: calcMethod, updated_at: new Date().toISOString() },
+    {
+      profile_id: profileId,
+      offering_id: offeringId,
+      org_id: profile.org.id,
+      calc_method: calcMethod,
+      fixed_salary: calcMethod === "fixed" ? (fixedSalary ?? null) : null,
+      updated_at: new Date().toISOString(),
+    },
     { onConflict: "profile_id,offering_id" }
   );
   if (error) throw new Error(error.message);

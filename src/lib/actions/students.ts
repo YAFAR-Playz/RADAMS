@@ -50,9 +50,15 @@ type OfferingEnrollmentRow = {
   profiles: { id: string; full_name: string; student_whatsapp_link: string | null } | { id: string; full_name: string; student_whatsapp_link: string | null }[] | null;
 };
 
-export async function getStudentsForOffering(offeringId: string): Promise<StudentRow[]> {
+export async function getStudentsForOffering(offeringId: string, options?: { leftOnly?: boolean }): Promise<StudentRow[]> {
   const profile = await getCurrentProfile();
   if (!profile) return [];
+  const leftOnly = !!options?.leftOnly;
+  // The left-only roster (Students tab's "Left students" toggle) is a
+  // head/admin-specific tool for reviewing and potentially re-including a
+  // student — not something assistants or registration have a UI for, so
+  // it's rejected here too rather than only hidden client-side.
+  if (leftOnly && profile.role !== "head" && profile.role !== "admin") throw new Error("Not authorized");
   const supabase = await createClient();
 
   function buildQuery(from: number, to: number) {
@@ -68,12 +74,16 @@ export async function getStudentsForOffering(offeringId: string): Promise<Studen
     }
 
     // "Left" is per-enrollment (a student can leave one course and stay
-    // active in another) — see setEnrollmentLeftStatus. Heads and assistants
-    // work this list day-to-day (progress, grading, messaging) — a student
-    // who's already left THIS course shouldn't clutter that view. Admin and
-    // registration still see left students here (dimmed, with a badge) since
-    // they're the ones who manage the left/restored status.
-    if (profile!.role === "head" || profile!.role === "assistant") {
+    // active in another) — see setEnrollmentLeftStatus. The default roster
+    // (leftOnly false) excludes anyone who's already left THIS course for
+    // every role — Head/Assistant work this list day-to-day and a left
+    // student would just clutter it, and Admin now only ever sees left
+    // students through the dedicated "Left students" toggle below rather
+    // than mixed in, dimmed, among active ones. Registration is the one
+    // exception left alone here since it wasn't part of that toggle's ask.
+    if (leftOnly) {
+      query = query.not("left_at", "is", null);
+    } else if (profile!.role !== "registration") {
       query = query.is("left_at", null);
     }
 
@@ -172,6 +182,16 @@ export async function getStudentsForOffering(offeringId: string): Promise<Studen
       };
     })
     .filter((x): x is StudentRow => !!x);
+}
+
+// Students who've left this specific course — behind the Students tab's
+// "Left students" toggle (Head/Admin only, see getStudentsForOffering's
+// authorization check). Deliberately just the roster: assistants/grade
+// scale/WhatsApp link don't change based on this filter, so the caller
+// reuses whatever it already has from getStudentsTabForOffering rather than
+// this refetching them too.
+export async function getLeftStudentsForOffering(offeringId: string): Promise<StudentRow[]> {
+  return getStudentsForOffering(offeringId, { leftOnly: true });
 }
 
 export type StudentsTabForOffering = {
