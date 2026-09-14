@@ -23,7 +23,11 @@ import {
   updatePaySettings,
   bulkSetCalcMethodForOffering,
   setOrgDefaultCalcMethod,
+  getOfferingCalcMethods,
+  setOfferingCalcMethodForAssistant,
   type CalcMethod,
+  type OfferingCalcMethod,
+  type OfferingCalcMethodRow,
 } from "@/lib/actions/staff-payments";
 import { listAllOfferingsForOrg, type OfferingChoice } from "@/lib/actions/students";
 import { getTrafficLightBands, setTrafficLightBands, type GradeBand } from "@/lib/actions/traffic-light";
@@ -36,6 +40,18 @@ const CALC_METHOD_OPTS: { value: CalcMethod; label: string }[] = [
   { value: "fixed_per_paper", label: "Fixed + per paper" },
   { value: "fixed_per_assistant", label: "Fixed + per assistant" },
 ];
+
+// "Fixed salary" is excluded here — it's a flat, courseless monthly amount
+// for the whole person (see OfferingCalcMethod in staff-payments.ts), so it
+// can't be set as a per-course override.
+const OFFERING_CALC_METHOD_OPTS: { value: OfferingCalcMethod; label: string }[] = CALC_METHOD_OPTS.filter(
+  (m) => m.value !== "fixed"
+) as { value: OfferingCalcMethod; label: string }[];
+
+const CALC_METHOD_LABEL: Record<CalcMethod, string> = Object.fromEntries(CALC_METHOD_OPTS.map((m) => [m.value, m.label])) as Record<
+  CalcMethod,
+  string
+>;
 
 const TOGGLE_DEFS: { key: keyof PayrollFlags; label: string; desc: string; icon: IconName; tone: Tone }[] = [
   {
@@ -146,8 +162,15 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
   const [savingStaffDefault, setSavingStaffDefault] = useState(false);
 
   const [coursePickId, setCoursePickId] = useState("");
-  const [coursePickMethod, setCoursePickMethod] = useState<CalcMethod>("paper");
+  const [coursePickMethod, setCoursePickMethod] = useState<OfferingCalcMethod>("paper");
   const [applyingToCourse, setApplyingToCourse] = useState(false);
+
+  // Per-assistant override for the course picked above — a lighter-weight
+  // alternative to "Apply to a whole course" for the common case of one
+  // exception rather than reassigning everyone. Reloaded whenever coursePickId
+  // changes, and again after any save/clear so the list reflects reality.
+  const [courseAssistants, setCourseAssistants] = useState<OfferingCalcMethodRow[] | null>(null);
+  const [savingOverrideId, setSavingOverrideId] = useState<string | null>(null);
 
   const [orgDefaultMethod, setOrgDefaultMethod] = useState<CalcMethod>("paper");
   const [applyingOrgDefault, setApplyingOrgDefault] = useState(false);
@@ -199,6 +222,37 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function reloadCourseAssistants(offeringId: string) {
+    getOfferingCalcMethods(offeringId)
+      .then((data) => startTransition(() => setCourseAssistants(data)))
+      .catch(() => setCourseAssistants([]));
+  }
+
+  useEffect(() => {
+    (() => {
+      if (!coursePickId) {
+        setCourseAssistants(null);
+        return;
+      }
+      setCourseAssistants(null);
+      reloadCourseAssistants(coursePickId);
+    })();
+  }, [coursePickId]);
+
+  async function onSetOfferingOverride(profileId: string, method: OfferingCalcMethod | null) {
+    if (!coursePickId) return;
+    setSavingOverrideId(profileId);
+    setError(null);
+    try {
+      await setOfferingCalcMethodForAssistant(coursePickId, profileId, method);
+      reloadCourseAssistants(coursePickId);
+    } catch {
+      setError("Couldn't save this override — try again.");
+    } finally {
+      setSavingOverrideId(null);
+    }
+  }
 
   async function saveNotifyEmails(next: string[]) {
     setNotifyEmails(next);
@@ -298,19 +352,16 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
     setApplyingToCourse(true);
     setError(null);
     try {
-      const { updated, skippedFixed } = await bulkSetCalcMethodForOffering(coursePickId, coursePickMethod);
+      const { updated } = await bulkSetCalcMethodForOffering(coursePickId, coursePickMethod);
       const courseName = offerings?.find((o) => o.id === coursePickId)?.label;
-      const skippedPart = skippedFixed ? ` (${skippedFixed} on a fixed salary left untouched)` : "";
       setNotice(
         updated
-          ? `Applied to ${updated} assistant${updated === 1 ? "" : "s"} on ${courseName ?? "this course"}.${skippedPart}`
-          : skippedFixed
-            ? `Everyone on ${courseName ?? "this course"} is already on a fixed salary — nothing to change.`
-            : `No assistants are currently assigned to ${courseName ?? "this course"}.`
+          ? `Set as the calc method on ${courseName ?? "this course"} for ${updated} assistant${updated === 1 ? "" : "s"} — their default on any other course is unaffected.`
+          : `No assistants are currently assigned to ${courseName ?? "this course"}.`
       );
-      if (updated) listStaffForCalcMethod().then(setStaffList); // keep the per-staff picker's cached defaults in sync
+      if (updated) reloadCourseAssistants(coursePickId); // keep the per-assistant override list below in sync
     } catch {
-      setError("Couldn't apply this default — try again.");
+      setError("Couldn't apply this to the course — try again.");
     } finally {
       setApplyingToCourse(false);
     }
@@ -637,8 +688,9 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
           <section className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
             <h3 className="m-0 mb-1 text-[14px] font-semibold text-[var(--text)]">Default calc method</h3>
             <p className="m-0 mb-[13px] text-[12px] text-[var(--subtle)]">
-              How an assistant&apos;s pay is worked out when nothing&apos;s been set on their salary line yet. A per-line override in
-              Salaries always wins over this.
+              How an assistant&apos;s pay is worked out when nothing&apos;s been set on their salary line yet. Priority: a per-line
+              override in Salaries wins first, then a course-specific override below (so the same person can be on a different
+              method per course), then their own default, then the org-wide default.
             </p>
 
             {notice && (
@@ -734,13 +786,13 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                       <select
                         data-tour="settings-course-method"
                         value={coursePickMethod}
-                        onChange={(e) => setCoursePickMethod(e.target.value as CalcMethod)}
+                        onChange={(e) => setCoursePickMethod(e.target.value as OfferingCalcMethod)}
                         className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[12.5px] font-semibold text-[var(--text)] outline-none"
                       >
                         {/* Bulk-apply only ever touches offering_assistants — Heads
                             aren't eligible here, so fixed_per_assistant never
                             belongs in this picker regardless of the org toggle. */}
-                        {CALC_METHOD_OPTS.filter((m) => m.value !== "fixed_per_assistant").map((m) => (
+                        {OFFERING_CALC_METHOD_OPTS.filter((m) => m.value !== "fixed_per_assistant").map((m) => (
                           <option key={m.value} value={m.value}>
                             {m.label}
                           </option>
@@ -758,9 +810,55 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                     Apply to all assistants on this course
                   </button>
                   <p className="m-0 text-[11px] leading-[1.4] text-[var(--subtle)]">
-                    Sets the default for every assistant currently assigned to this course. Doesn&apos;t change salary lines already
-                    generated — edit those individually in Salaries. Anyone already on a fixed salary is left untouched.
+                    Sets the calc method for this course only, for every assistant currently assigned to it — their default on any
+                    other course is unaffected. Doesn&apos;t change salary lines already generated — edit those individually in
+                    Salaries.
                   </p>
+
+                  {/* PER-ASSISTANT OVERRIDE FOR THIS SAME COURSE */}
+                  <div className="mt-2 border-t border-[var(--border)] pt-[13px]">
+                    <div className="mb-[9px] text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">
+                      Or override just one assistant on this course
+                    </div>
+                    {courseAssistants === null ? (
+                      <SkeletonRow className="h-[52px]" />
+                    ) : courseAssistants.length === 0 ? (
+                      <p className="m-0 text-[12.5px] text-[var(--muted)]">No heads or assistants on this course yet.</p>
+                    ) : (
+                      <div className="flex flex-col gap-[7px]">
+                        {courseAssistants.map((a) => (
+                          <div
+                            key={a.profileId}
+                            className="flex flex-wrap items-center gap-[9px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] p-[8px_10px]"
+                          >
+                            <div className="min-w-[120px] flex-1 text-[12.5px] font-semibold text-[var(--text)]">
+                              {a.name} <span className="font-normal text-[var(--subtle)]">({a.role === "head" ? "Head" : "Assistant"})</span>
+                            </div>
+                            <div className="flex h-8 min-w-[170px] items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[9px]">
+                              <select
+                                value={a.override ?? "__default__"}
+                                disabled={savingOverrideId === a.profileId}
+                                onChange={(e) =>
+                                  onSetOfferingOverride(a.profileId, e.target.value === "__default__" ? null : (e.target.value as OfferingCalcMethod))
+                                }
+                                className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[12px] font-medium text-[var(--text)] outline-none disabled:opacity-60"
+                              >
+                                <option value="__default__">Use default ({CALC_METHOD_LABEL[a.fallback]})</option>
+                                {OFFERING_CALC_METHOD_OPTS.filter(
+                                  (m) => m.value !== "fixed_per_assistant" || (!!settings?.headFixedPerAssistantEnabled && a.role === "head")
+                                ).map((m) => (
+                                  <option key={m.value} value={m.value}>
+                                    {m.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            {savingOverrideId === a.profileId && <Spinner size={13} />}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

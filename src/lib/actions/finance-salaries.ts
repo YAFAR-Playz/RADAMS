@@ -948,34 +948,93 @@ async function defaultMethodForOffering(supabase: Awaited<ReturnType<typeof crea
   return count && count > 0 ? "bracket" : "per_paper";
 }
 
-// A staff member's own default (set in Payroll Settings, or bulk-applied to
-// a whole course) takes priority over the org-wide default, which in turn
-// takes priority over the offering's bracket-presence-based default — that
-// offering-level default only exists as a last-resort fallback for an org
-// that's never set one either. Plain "fixed" (a flat recurring salary with
-// no course/paper basis at all) is handled entirely OUTSIDE this function —
-// see generateFixedSalaryLinesForPeriod and the isFixedSalaryPerson guard in
-// generateSalariesForPeriod/backfillDepartedSalaryLine — since it produces
-// one line per person per period, not one per course the way every method
-// this function resolves to does. When the effective default resolves to
-// "fixed", this function still returns a per-course fallback (so a caller
-// that doesn't check isFixedSalaryPerson gets a sane label), but that return
-// value is never actually used for base computation in that case.
-// "fixed_per_paper" IS wired in as a real per-course method, since — unlike
-// plain "fixed" — it's still anchored to a specific course's own rates.
+// A per-course override (staff_offering_pay_settings — set one-at-a-time or
+// bulk-applied to a whole course in Payroll Settings) takes priority over the
+// staff member's own org-wide default, which takes priority over the
+// org-wide default, which in turn takes priority over the offering's
+// bracket-presence-based default — that offering-level default only exists
+// as a last-resort fallback for an org that's never set one either. This is
+// what lets the same assistant be paid "fixed + per paper" on one course and
+// plain "per paper" on another: the override is keyed on (profile, offering),
+// while staffDefault/orgDefault are keyed on the profile alone. Plain "fixed"
+// (a flat recurring salary with no course/paper basis at all) is handled
+// entirely OUTSIDE this function — see generateFixedSalaryLinesForPeriod and
+// the isFixedSalaryPerson guard in generateSalariesForPeriod/
+// backfillDepartedSalaryLine — since it produces one line per person per
+// period, not one per course the way every method this function resolves to
+// does; it also can't be set as a per-course override (see OfferingCalcMethod
+// in staff-payments.ts) so `offeringOverride` is never "fixed". When the
+// effective default (after considering any override) resolves to "fixed",
+// this function still returns a per-course fallback (so a caller that
+// doesn't check isFixedSalaryPerson gets a sane label), but that return value
+// is never actually used for base computation in that case. "fixed_per_paper"
+// IS wired in as a real per-course method, since — unlike plain "fixed" —
+// it's still anchored to a specific course's own rates.
 async function resolveMethodForAssistant(
   supabase: Awaited<ReturnType<typeof createClient>>,
   offeringId: string,
   assistantId: string,
   staffDefault: "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant" | undefined,
-  orgDefault: "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant" = "paper"
+  orgDefault: "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant" = "paper",
+  offeringOverride?: "paper" | "category" | "fixed_per_paper" | "fixed_per_assistant"
 ): Promise<"per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant"> {
-  const effective = staffDefault ?? orgDefault;
+  const effective = offeringOverride ?? staffDefault ?? orgDefault;
   if (effective === "paper") return "per_paper";
   if (effective === "category") return "bracket";
   if (effective === "fixed_per_paper") return "fixed_per_paper";
   if (effective === "fixed_per_assistant") return "fixed_per_assistant";
   return defaultMethodForOffering(supabase, offeringId);
+}
+
+// A person whose own default is "fixed" still only actually gets the flat
+// line if at least one of their currently active offerings is genuinely
+// falling through to that default — if EVERY course they're on has its own
+// staff_offering_pay_settings override (which, by construction, is never
+// "fixed" itself — see OfferingCalcMethod), none of them are actually paying
+// under "fixed" at all, and adding the flat amount on top would double-pay
+// them for whichever course they think of as their "real" one. Someone with
+// no active offering right now (a pure retainer, or between assignments)
+// still counts as fixed — that's the normal, pre-existing meaning of a flat
+// salary with no course tied to it. Batched IN queries since a large org's
+// full assistant/head roster can exceed a single request's URL length.
+async function computeFullyOverriddenAwayFromFixed(supabase: Awaited<ReturnType<typeof createClient>>, candidateIds: string[]): Promise<Set<string>> {
+  if (!candidateIds.length) return new Set();
+  const ID_BATCH_SIZE = 200;
+  const activeOfferingsByProfile = new Map<string, Set<string>>();
+  const overriddenOfferingsByProfile = new Map<string, Set<string>>();
+
+  for (let i = 0; i < candidateIds.length; i += ID_BATCH_SIZE) {
+    const batch = candidateIds.slice(i, i + ID_BATCH_SIZE);
+    const [{ data: assistantRows }, { data: headRows }, { data: overrideRows }] = await Promise.all([
+      supabase.from("offering_assistants").select("assistant_id, offering_id").in("assistant_id", batch),
+      supabase.from("offering_heads").select("head_id, offering_id").in("head_id", batch),
+      supabase.from("staff_offering_pay_settings").select("profile_id, offering_id").in("profile_id", batch),
+    ]);
+    for (const r of assistantRows ?? []) {
+      const set = activeOfferingsByProfile.get(r.assistant_id) ?? new Set<string>();
+      set.add(r.offering_id);
+      activeOfferingsByProfile.set(r.assistant_id, set);
+    }
+    for (const r of headRows ?? []) {
+      const set = activeOfferingsByProfile.get(r.head_id) ?? new Set<string>();
+      set.add(r.offering_id);
+      activeOfferingsByProfile.set(r.head_id, set);
+    }
+    for (const r of overrideRows ?? []) {
+      const set = overriddenOfferingsByProfile.get(r.profile_id) ?? new Set<string>();
+      set.add(r.offering_id);
+      overriddenOfferingsByProfile.set(r.profile_id, set);
+    }
+  }
+
+  const fullyOverridden = new Set<string>();
+  for (const profileId of candidateIds) {
+    const active = activeOfferingsByProfile.get(profileId);
+    if (!active || active.size === 0) continue;
+    const overridden = overriddenOfferingsByProfile.get(profileId);
+    if (overridden && Array.from(active).every((id) => overridden.has(id))) fullyOverridden.add(profileId);
+  }
+  return fullyOverridden;
 }
 
 // One flat salary_line per (org, payee, period) for anyone whose effective
@@ -1017,11 +1076,23 @@ async function generateFixedSalaryLinesForPeriod(
   const orgDefault = (org?.default_assistant_calc_method as "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant") ?? "paper";
   const settingByProfile = new Map((settings ?? []).map((s) => [s.profile_id, s]));
 
+  const fixedCandidateIds = staffIds.filter((id) => {
+    const setting = settingByProfile.get(id);
+    const effective = (setting?.calc_method as typeof orgDefault | undefined) ?? orgDefault;
+    const fixedSalary = setting?.fixed_salary != null ? Number(setting.fixed_salary) : 0;
+    return effective === "fixed" && fixedSalary > 0;
+  });
+  const overriddenAwayIds = await computeFullyOverriddenAwayFromFixed(supabase, fixedCandidateIds);
+
   let created = 0;
   for (const profileId of staffIds) {
     const setting = settingByProfile.get(profileId);
     const effective = (setting?.calc_method as typeof orgDefault | undefined) ?? orgDefault;
     const fixedSalary = setting?.fixed_salary != null ? Number(setting.fixed_salary) : 0;
+    // Every course this person is on has its own override away from
+    // "fixed" — none of them are actually paying under the flat default, so
+    // it's treated as not-fixed here too (see computeFullyOverriddenAwayFromFixed).
+    const stillFixed = effective === "fixed" && !overriddenAwayIds.has(profileId);
 
     const { data: existing } = await supabase
       .from("salary_lines")
@@ -1040,7 +1111,7 @@ async function generateFixedSalaryLinesForPeriod(
     if (existing?.released_at || existing?.status === "paid") continue;
     if (existing?.calc_method === "manual" && Number(existing.base) !== 0) continue;
 
-    if (effective !== "fixed" || fixedSalary <= 0) {
+    if (!stillFixed || fixedSalary <= 0) {
       // No longer fixed-salary (or the amount was cleared) — this line no
       // longer has anything justifying it, so it's cleared rather than left
       // sitting around showing a stale amount.
@@ -1207,7 +1278,10 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
     const payeeIds = Array.from(new Set([...assistantCandidates, ...headCandidates]));
     if (!payeeIds.length) continue;
 
-    const { data: staffSettings } = await supabase.from("staff_pay_settings").select("profile_id, calc_method, fixed_salary").in("profile_id", payeeIds);
+    const [{ data: staffSettings }, { data: offeringOverrides }] = await Promise.all([
+      supabase.from("staff_pay_settings").select("profile_id, calc_method, fixed_salary").in("profile_id", payeeIds),
+      supabase.from("staff_offering_pay_settings").select("profile_id, calc_method").eq("offering_id", offering.id).in("profile_id", payeeIds),
+    ]);
     const staffDefaultByPayee = new Map(
       (staffSettings ?? []).map((s) => [s.profile_id, s.calc_method as "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant"])
     );
@@ -1218,6 +1292,13 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
     // nothing to replace it, making them silently unpayable and invisible
     // in Salaries. Only someone with a real amount set counts as fixed here.
     const fixedSalaryByPayee = new Map((staffSettings ?? []).map((s) => [s.profile_id, s.fixed_salary != null ? Number(s.fixed_salary) : 0]));
+    // This course's own override, if Finance set one for this specific
+    // assistant/head — takes priority over their own default (see
+    // resolveMethodForAssistant) so the same person can be "fixed_per_paper"
+    // here and plain "per_paper" on another course.
+    const offeringOverrideByPayee = new Map(
+      (offeringOverrides ?? []).map((o) => [o.profile_id, o.calc_method as "paper" | "category" | "fixed_per_paper" | "fixed_per_assistant"])
+    );
 
     for (const payeeId of payeeIds) {
       const { data: existing } = await supabase
@@ -1252,9 +1333,15 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
       // evaluation bonus/deduction, never an auto-computed per_paper/bracket
       // base (so their fixed amount can never be paid twice just for being
       // assigned to more than one course), and never a bare "Manual $0"
-      // placeholder either — see needsHeadFallback below.
-      const isFixedSalaryPerson = (staffDefaultByPayee.get(payeeId) ?? orgDefault) === "fixed" && (fixedSalaryByPayee.get(payeeId) ?? 0) > 0;
-      let method = await resolveMethodForAssistant(supabase, offering.id, payeeId, staffDefaultByPayee.get(payeeId), orgDefault);
+      // placeholder either — see needsHeadFallback below. This course having
+      // its own override rules out "fixed" entirely for it (an override is
+      // never "fixed" itself — see OfferingCalcMethod), even if the person's
+      // own default IS fixed — that's exactly what lets the same assistant
+      // be fixed on one course and, say, fixed_per_paper on another.
+      const offeringOverride = offeringOverrideByPayee.get(payeeId);
+      const isFixedSalaryPerson =
+        !offeringOverride && (staffDefaultByPayee.get(payeeId) ?? orgDefault) === "fixed" && (fixedSalaryByPayee.get(payeeId) ?? 0) > 0;
+      let method = await resolveMethodForAssistant(supabase, offering.id, payeeId, staffDefaultByPayee.get(payeeId), orgDefault, offeringOverride);
       // fixed_per_assistant only makes sense for a head (it's keyed on the
       // course's assistant count, not anything an assistant themselves
       // produces) — a staff_pay_settings row that somehow has it set for a
@@ -1482,13 +1569,15 @@ export async function backfillDepartedSalaryLine(payeeId: string, offeringId: st
   if (existing?.released_at || existing?.status === "paid") return { created: false };
   if (existing?.calc_method === "manual" && Number(existing.base) !== 0) return { created: false };
 
-  const [{ data: person }, { data: staffSetting }, { data: evalRows }] = await Promise.all([
+  const [{ data: person }, { data: staffSetting }, { data: offeringSetting }, { data: evalRows }] = await Promise.all([
     supabase.from("profiles").select("full_name, role").eq("id", payeeId).single(),
     supabase.from("staff_pay_settings").select("calc_method").eq("profile_id", payeeId).maybeSingle(),
+    supabase.from("staff_offering_pay_settings").select("calc_method").eq("profile_id", payeeId).eq("offering_id", offeringId).maybeSingle(),
     supabase.from("evaluations").select("evaluation_lines(kind, amount)").eq("org_id", orgId).eq("assistant_id", payeeId).eq("offering_id", offeringId).eq("period", period),
   ]);
   if (!person) throw new Error("Staff member not found");
   const isHead = person.role === "head";
+  const offeringOverride = offeringSetting?.calc_method as "paper" | "category" | "fixed_per_paper" | "fixed_per_assistant" | undefined;
 
   const checkedCount = await countCheckedPapers(supabase, offeringId, payeeId, period);
   // A departed fixed-salary person's final prorated month is a manual call
@@ -1496,13 +1585,17 @@ export async function backfillDepartedSalaryLine(payeeId: string, offeringId: st
   // and a flat fixed salary isn't tied to one course) — same as any other
   // fixed-salary person's per-course line, this must never get an
   // auto-computed per_paper/bracket number just because resolveMethodForAssistant
-  // falls back to the course default for "fixed".
-  const isFixedSalaryPerson = staffSetting?.calc_method === "fixed";
+  // falls back to the course default for "fixed". This course having its own
+  // override rules "fixed" out for it even if the person's own default is
+  // fixed — same reasoning as generateSalariesForPeriod.
+  const isFixedSalaryPerson = !offeringOverride && staffSetting?.calc_method === "fixed";
   let method = await resolveMethodForAssistant(
     supabase,
     offeringId,
     payeeId,
-    staffSetting?.calc_method as "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant" | undefined
+    staffSetting?.calc_method as "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant" | undefined,
+    undefined,
+    offeringOverride
   );
   if (method === "fixed_per_assistant" && !isHead) method = await defaultMethodForOffering(supabase, offeringId);
 
