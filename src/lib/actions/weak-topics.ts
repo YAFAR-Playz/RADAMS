@@ -162,11 +162,26 @@ export async function getAssistantFillingProgress(offeringId: string, period: st
   await requireHeadOrAdmin();
   const supabase = await createClient();
 
-  const { data: enrollments } = await supabase
-    .from("enrollments")
-    .select("student_id, assistant_id, profiles(full_name)")
-    .eq("offering_id", offeringId)
-    .is("left_at", null);
+  // Paginated: this offering's own active enrollments can clear Postgrest's
+  // default 1000-row cap on their own (one offering has 1,151 active
+  // enrollments), which a single unpaginated select silently truncated,
+  // undercounting totalStudents/filled for whichever assistant's rows sorted
+  // past the cutoff.
+  type FillingEnrollmentRow = { student_id: string; assistant_id: string | null; profiles: { full_name: string } | { full_name: string }[] | null };
+  const enrollments: FillingEnrollmentRow[] = [];
+  const ENROLLMENT_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("enrollments")
+      .select("student_id, assistant_id, profiles(full_name)")
+      .eq("offering_id", offeringId)
+      .is("left_at", null)
+      .order("student_id")
+      .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    enrollments.push(...page);
+    if (page.length < ENROLLMENT_PAGE_SIZE) break;
+  }
 
   const { data: submissions } = await supabase
     .from("student_topic_submissions")
@@ -177,7 +192,7 @@ export async function getAssistantFillingProgress(offeringId: string, period: st
   const filledStudentIds = new Set((submissions ?? []).map((s) => s.student_id));
 
   const byAssistant = new Map<string, { assistantName: string; totalStudents: number; filled: number }>();
-  for (const e of enrollments ?? []) {
+  for (const e of enrollments) {
     if (!e.assistant_id) continue;
     const assistant = Array.isArray(e.profiles) ? e.profiles[0] : e.profiles;
     const entry = byAssistant.get(e.assistant_id) ?? { assistantName: assistant?.full_name ?? "Unassigned", totalStudents: 0, filled: 0 };
@@ -255,11 +270,28 @@ export async function listAllStudentTopicsForOffering(offeringId: string, period
   await requireHeadOrAdmin();
   const supabase = await createClient();
 
-  const { data: enrollments } = await supabase
-    .from("enrollments")
-    .select("student_id, students!inner(id, name), profiles(full_name)")
-    .eq("offering_id", offeringId)
-    .is("left_at", null);
+  // Paginated: this offering's own active enrollments can clear Postgrest's
+  // default 1000-row cap on their own (one offering has 1,151 active
+  // enrollments), which a single unpaginated select silently truncated.
+  type AllTopicsEnrollmentRow = {
+    student_id: string;
+    students: { id: string; name: string } | { id: string; name: string }[] | null;
+    profiles: { full_name: string } | { full_name: string }[] | null;
+  };
+  const enrollments: AllTopicsEnrollmentRow[] = [];
+  const ENROLLMENT_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("enrollments")
+      .select("student_id, students!inner(id, name), profiles(full_name)")
+      .eq("offering_id", offeringId)
+      .is("left_at", null)
+      .order("student_id")
+      .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    enrollments.push(...page);
+    if (page.length < ENROLLMENT_PAGE_SIZE) break;
+  }
 
   const { data: submissions } = await supabase
     .from("student_topic_submissions")
@@ -267,7 +299,7 @@ export async function listAllStudentTopicsForOffering(offeringId: string, period
     .eq("offering_id", offeringId)
     .eq("period", period);
 
-  return (enrollments ?? [])
+  return enrollments
     .map((e) => {
       const s = Array.isArray(e.students) ? e.students[0] : e.students;
       if (!s) return null;
