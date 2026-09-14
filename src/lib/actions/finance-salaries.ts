@@ -735,15 +735,11 @@ function formatBasis(
   count: CheckedPapersCount,
   prorationNote: string | null
 ): string {
-  // Bracket ignores mock-exam papers for pay entirely, so make that explicit
-  // rather than implying (like the "+" phrasing for per_paper/fixed_per_paper
-  // does) that they added to the total.
-  const mockPart =
-    count.mockPapers === 0
-      ? ""
-      : method === "bracket"
-        ? ` (${count.mockPapers} mock exam, not counted)`
-        : ` (+${count.mockPapers} mock exam)`;
+  // Mock-exam papers count toward pay in every method — bracket via its
+  // per-assignment average, per_paper/fixed_per_paper via their own
+  // (possibly different) mock rate — so the same "+" phrasing applies
+  // everywhere.
+  const mockPart = count.mockPapers === 0 ? "" : ` (+${count.mockPapers} mock exam)`;
   // Unlike per_paper/bracket, a fixed_per_paper line still has something to
   // show (its fixed base) even with zero papers checked, so it never falls
   // into the "no papers" short-circuit below.
@@ -923,8 +919,12 @@ async function computeBaseForMethod(
     // perfectly normal pace. Averaging already accounts for a partial
     // period (fewer assignments were open to check), so no separate
     // date-based adjustment is needed here — the pay itself still only
-    // gets prorated by the actual active fraction below.
-    const avgPerAssignment = checkedCount.assignments > 0 ? checkedCount.papers / checkedCount.assignments : checkedCount.papers;
+    // gets prorated by the actual active fraction below. Mock-exam papers
+    // count toward the numerator same as regular ones — the denominator
+    // (regular counts-in-salary assignments due this period) is unaffected,
+    // since mock assignments never enter it in the first place.
+    const totalPapersForAverage = checkedCount.papers + checkedCount.mockPapers;
+    const avgPerAssignment = checkedCount.assignments > 0 ? totalPapersForAverage / checkedCount.assignments : totalPapersForAverage;
 
     // Brackets step up, they don't cap out — someone whose average clears
     // the top bracket's lo but exceeds its hi should still earn at least
