@@ -23,6 +23,7 @@ import { InstallmentsContent } from "@/components/installments/installments-cont
 import { StaffPaymentsContent } from "@/components/staff-payments/staff-payments-content";
 import { PayCategoriesContent } from "@/components/pay-categories/pay-categories-content";
 import { FinanceSalariesContent } from "@/components/finance-salaries/finance-salaries-content";
+import { PapersContent } from "@/components/papers/papers-content";
 import { HrRequestsContent } from "@/components/hr-requests/hr-requests-content";
 import { HiringContent } from "@/components/hiring/hiring-content";
 import { HeadCheckingContent } from "@/components/head-checking/head-checking-content";
@@ -184,6 +185,10 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
 
   if (key === "salaries" && (profile.role === "finance" || profile.role === "admin")) {
     return <FinanceSalariesContent role={profile.role} />;
+  }
+
+  if (key === "papers" && profile.role === "admin") {
+    return <PapersContent />;
   }
 
   if (key === "payments" && profile.role === "finance") {

@@ -47,6 +47,7 @@ const NAV_DEF: Record<Role, NavItem[]> = {
     { icon: "users", label: "Staff", key: "staff" },
     { icon: "book", label: "Courses", key: "courses" },
     { icon: "wallet", label: "Salaries", key: "salaries" },
+    { icon: "check2", label: "Papers", key: "papers" },
     { icon: "chart", label: "Evaluations", key: "evaluations" },
     { icon: "settings", label: "Organization settings", key: "payroll" },
     { icon: "mail", label: "Templates", key: "templates" },
