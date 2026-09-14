@@ -84,7 +84,27 @@ export async function listAssignmentsWithProgress(offeringId: string): Promise<A
   // expected/logged totals for assignment progress once they're gone.
   // "Left" is tracked per enrollment (setEnrollmentLeftStatus in
   // students.ts), so this filters directly on the enrollment row.
-  const { data: enrollments } = await supabase.from("enrollments").select("student_id, assistant_id").eq("offering_id", offeringId).is("left_at", null);
+  // Paginated: this offering's own active enrollments can clear Postgrest's
+  // default 1000-row cap on their own (one offering in this org has 1,150+)
+  // — an unbounded select here silently truncated the roster, so whichever
+  // assistant's students happened to sort past the cutoff showed a wrong,
+  // much-too-low "total" (and correspondingly wrong "logged") for every
+  // assignment, while assistants whose students sorted early looked fine —
+  // exactly the "33 real students but shows 1/1" pattern reported live.
+  const enrollments: { student_id: string; assistant_id: string | null }[] = [];
+  const ENROLLMENT_PAGE_SIZE = 1000;
+  for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("enrollments")
+      .select("student_id, assistant_id")
+      .eq("offering_id", offeringId)
+      .is("left_at", null)
+      .order("student_id", { ascending: true })
+      .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    enrollments.push(...page);
+    if (page.length < ENROLLMENT_PAGE_SIZE) break;
+  }
 
   // A course with several assignment categories easily logs assignments ×
   // roster-size rows across the whole offering — comfortably past

@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
@@ -254,6 +254,13 @@ export function OversightContent() {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [exporting, setExporting] = useState(false);
+  // Guards against a stale-response race: switching offerings (or the
+  // recipient filter) fires a new fetch before the previous one resolves —
+  // a big course's summary query is much slower than a small one, so
+  // clicking a large offering then quickly clicking back to a small one can
+  // let the large offering's slow response land AFTER the small one's fast
+  // response and silently overwrite it with the wrong offering's numbers.
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     listHeadOfferings()
@@ -268,6 +275,7 @@ export function OversightContent() {
 
   useEffect(() => {
     (async () => {
+      const requestId = ++requestIdRef.current;
       if (!offeringId) {
         setStats(null);
         setAssistants(null);
@@ -277,13 +285,14 @@ export function OversightContent() {
       setOpen({});
       try {
         const { stats, assistants } = await getOversightSummary(offeringId, recipientFilter);
+        if (requestIdRef.current !== requestId) return;
         startTransition(() => {
           setStats(stats);
           setAssistants(assistants);
           setSummaryLoading(false);
         });
       } catch {
-        setSummaryLoading(false);
+        if (requestIdRef.current === requestId) setSummaryLoading(false);
       }
     })();
   }, [offeringId, recipientFilter]);
