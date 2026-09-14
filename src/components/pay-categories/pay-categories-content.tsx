@@ -657,48 +657,54 @@ export function PayCategoriesContent() {
         eyebrow="Finance"
         title="Pay categories & rates"
         subtitle="Define the extra-work and deduction categories Heads choose from in evaluations, plus per-course and bracket pay rates. Adding/removing items happens instantly; edited values are saved with the button below once you're ready."
-      >
-        <div className="flex flex-wrap items-center gap-[9px]">
-          <span className="text-[12.5px] font-semibold text-[var(--muted)]">Rates &amp; brackets apply to</span>
-          <div className="relative min-w-[240px]">
-            <button
-              data-tour="categories-scope-toggle"
-              onClick={() => setScopeMenuOpen((p) => !p)}
-              className="flex h-10 w-full items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3"
-            >
-              <Icon name="book" size={15} className="flex-none text-[var(--subtle)]" />
-              <span className={`flex-1 truncate text-left text-[13px] font-semibold ${courseScope.length ? "text-[var(--text)]" : "text-[var(--subtle)]"}`}>
-                {scopeLabel}
-              </span>
-              <Icon name="chevron-down" size={14} className="flex-none text-[var(--subtle)]" style={{ transform: scopeMenuOpen ? "rotate(180deg)" : "none" }} />
-            </button>
-            {scopeMenuOpen && (
-              <div className="absolute left-0 right-0 top-[46px] z-20 max-h-[240px] overflow-y-auto rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] p-[6px] shadow-[0_12px_36px_rgba(8,12,22,.18)]">
-                {(courseRates ?? []).map((c, scopeIndex) => {
-                  const sel = courseScope.includes(c.offeringId);
-                  return (
-                    <button
-                      key={c.offeringId}
-                      data-tour={scopeIndex === 0 ? "categories-scope-option" : undefined}
-                      onClick={() => toggleScope(c.offeringId)}
-                      className="flex w-full items-center gap-[10px] rounded-[8px] p-[9px_10px] hover:bg-[var(--surface2)]"
+      />
+
+      {/* Rendered as a sibling of PageHeader rather than inside it —
+          PageHeader's own wrapper is `overflow-hidden` (needed to clip its
+          decorative background glow to the card's rounded corners), which
+          silently clipped this dropdown's popover the moment it grew taller
+          than the header card itself, instead of overlaying the content
+          below it like a dropdown should. */}
+      <div className="flex flex-wrap items-center gap-[9px]">
+        <span className="text-[12.5px] font-semibold text-[var(--muted)]">Rates &amp; brackets apply to</span>
+        <div className="relative min-w-[240px]">
+          <button
+            data-tour="categories-scope-toggle"
+            onClick={() => setScopeMenuOpen((p) => !p)}
+            className="flex h-10 w-full items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3"
+          >
+            <Icon name="book" size={15} className="flex-none text-[var(--subtle)]" />
+            <span className={`flex-1 truncate text-left text-[13px] font-semibold ${courseScope.length ? "text-[var(--text)]" : "text-[var(--subtle)]"}`}>
+              {scopeLabel}
+            </span>
+            <Icon name="chevron-down" size={14} className="flex-none text-[var(--subtle)]" style={{ transform: scopeMenuOpen ? "rotate(180deg)" : "none" }} />
+          </button>
+          {scopeMenuOpen && (
+            <div className="absolute left-0 right-0 top-[46px] z-20 max-h-[240px] overflow-y-auto rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] p-[6px] shadow-[0_12px_36px_rgba(8,12,22,.18)]">
+              {(courseRates ?? []).map((c, scopeIndex) => {
+                const sel = courseScope.includes(c.offeringId);
+                return (
+                  <button
+                    key={c.offeringId}
+                    data-tour={scopeIndex === 0 ? "categories-scope-option" : undefined}
+                    onClick={() => toggleScope(c.offeringId)}
+                    className="flex w-full items-center gap-[10px] rounded-[8px] p-[9px_10px] hover:bg-[var(--surface2)]"
+                  >
+                    <div
+                      className="flex h-5 w-5 flex-none items-center justify-center rounded-[6px] border-[1.5px]"
+                      style={{ borderColor: sel ? "var(--brand)" : "var(--border)", background: sel ? "var(--brand)" : "transparent", color: "var(--brandfg)" }}
                     >
-                      <div
-                        className="flex h-5 w-5 flex-none items-center justify-center rounded-[6px] border-[1.5px]"
-                        style={{ borderColor: sel ? "var(--brand)" : "var(--border)", background: sel ? "var(--brand)" : "transparent", color: "var(--brandfg)" }}
-                      >
-                        {sel && <Icon name="check" size={13} />}
-                      </div>
-                      <span className="text-[13px] font-semibold text-[var(--text)]">{c.label}</span>
-                    </button>
-                  );
-                })}
-                {(courseRates ?? []).length === 0 && <div className="p-3 text-center text-[12.5px] text-[var(--subtle)]">No courses yet.</div>}
-              </div>
-            )}
-          </div>
+                      {sel && <Icon name="check" size={13} />}
+                    </div>
+                    <span className="text-[13px] font-semibold text-[var(--text)]">{c.label}</span>
+                  </button>
+                );
+              })}
+              {(courseRates ?? []).length === 0 && <div className="p-3 text-center text-[12.5px] text-[var(--subtle)]">No courses yet.</div>}
+            </div>
+          )}
         </div>
-      </PageHeader>
+      </div>
 
       {loading && !categories ? (
         <>
