@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/icons";
-import { SkeletonRow } from "@/components/ui/spinner";
+import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
@@ -24,18 +24,36 @@ export function PapersContent() {
   const [offeringId, setOfferingId] = useState("");
   const [period, setPeriod] = useState(currentPeriod());
   const [rows, setRows] = useState<PapersCheckedRow[] | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Guards against a race: switching month/course twice in quick succession
+  // fires two overlapping fetches, and without this an earlier, slower
+  // response could land after (and overwrite) a newer one.
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     listAllOfferingsForOrg().then(setOfferings);
   }, []);
 
+  // `loading` is tracked separately from `rows` so switching month/course
+  // always shows a loading state even though the table keeps the previous
+  // rows underneath (rather than being wiped to a skeleton) — a
+  // stale-but-labeled table reads better than a flash of empty skeleton for
+  // what's usually a quick refetch.
   function reload() {
-    setRows(null);
+    const requestId = ++requestIdRef.current;
+    setLoading(true);
     setError(null);
     getPapersCheckedReport(period, offeringId || null)
-      .then(setRows)
-      .catch(() => setError("Couldn't load this report — try again."));
+      .then((data) => {
+        if (requestIdRef.current === requestId) setRows(data);
+      })
+      .catch(() => {
+        if (requestIdRef.current === requestId) setError("Couldn't load this report — try again.");
+      })
+      .finally(() => {
+        if (requestIdRef.current === requestId) setLoading(false);
+      });
   }
 
   useEffect(() => {
@@ -60,7 +78,8 @@ export function PapersContent() {
             <select
               value={offeringId}
               onChange={(e) => setOfferingId(e.target.value)}
-              className="h-10 max-w-[220px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13px] text-[var(--text)] outline-none"
+              disabled={loading}
+              className="h-10 max-w-[220px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13px] text-[var(--text)] outline-none disabled:opacity-60"
             >
               <option value="">All courses</option>
               {(offerings ?? []).map((o) => (
@@ -74,9 +93,11 @@ export function PapersContent() {
               value={period}
               max={currentPeriod()}
               onChange={(e) => setPeriod(e.target.value)}
+              disabled={loading}
               {...pickerOnlyDateProps}
-              className="h-10 w-[110px] cursor-pointer rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13px] text-[var(--text)] outline-none"
+              className="h-10 w-[110px] cursor-pointer rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13px] text-[var(--text)] outline-none disabled:opacity-60"
             />
+            {loading && <Spinner size={16} />}
           </>
         }
       />
@@ -90,7 +111,14 @@ export function PapersContent() {
         </div>
       )}
 
-      <SectionCard title={rows ? `${rows.length} assistant${rows.length === 1 ? "" : "s"} · ${totalPapers} papers checked` : "Papers checked"}>
+      <SectionCard
+        title={
+          <span className="flex items-center gap-2">
+            {loading && <Spinner size={13} />}
+            {rows ? `${rows.length} assistant${rows.length === 1 ? "" : "s"} · ${totalPapers} papers checked` : "Papers checked"}
+          </span>
+        }
+      >
         {rows === null ? (
           <div className="flex flex-col gap-2 p-[14px_18px]">
             {Array.from({ length: 4 }, (_, i) => (
@@ -98,12 +126,20 @@ export function PapersContent() {
             ))}
           </div>
         ) : rows.length === 0 ? (
-          <div className="p-10 text-center text-[13.5px] text-[var(--muted)]">
-            No papers checked toward salary for {periodLabel(period)}
-            {offeringId ? " in this course" : ""} yet.
-          </div>
+          loading ? (
+            <div className="flex flex-col gap-2 p-[14px_18px]">
+              {Array.from({ length: 4 }, (_, i) => (
+                <SkeletonRow key={i} className="h-[48px]" />
+              ))}
+            </div>
+          ) : (
+            <div className="p-10 text-center text-[13.5px] text-[var(--muted)]">
+              No papers checked toward salary for {periodLabel(period)}
+              {offeringId ? " in this course" : ""} yet.
+            </div>
+          )
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto transition-opacity" style={{ opacity: loading ? 0.5 : 1 }}>
             <table className="w-full border-collapse text-[13px]">
               <thead>
                 <tr className="border-b border-[var(--border)] text-left text-[11.5px] font-semibold uppercase tracking-[0.03em] text-[var(--subtle)]">
