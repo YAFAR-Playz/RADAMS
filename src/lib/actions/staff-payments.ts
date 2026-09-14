@@ -4,6 +4,13 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/current-profile";
 
 export type CalcMethod = "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant";
+// "fixed" is deliberately excluded — it's a flat, courseless monthly amount
+// for the whole person (see generateFixedSalaryLinesForPeriod in
+// finance-salaries.ts), so it can't be set as a per-course override. A
+// person whose own default IS "fixed" keeps earning it for any course that
+// has no override at all; individual courses only ever override AWAY from
+// it onto a method that's actually anchored to that course.
+export type OfferingCalcMethod = "paper" | "category" | "fixed_per_paper" | "fixed_per_assistant";
 
 async function getOrgDefaultCalcMethod(supabase: Awaited<ReturnType<typeof createClient>>, orgId: string): Promise<CalcMethod> {
   const { data } = await supabase.from("organizations").select("default_assistant_calc_method").eq("id", orgId).single();
@@ -169,11 +176,13 @@ export async function listStaffForCalcMethod(): Promise<{ id: string; name: stri
 // course offering — the one-at-a-time picker (here and on the Staff payments
 // page) is fine for occasional exceptions, but reassigning a whole course's
 // worth of assistants to a new default (e.g. after switching that course to
-// bracket-based pay) shouldn't take N separate clicks. Anyone already on a
-// real fixed salary (calc_method "fixed" with a nonzero fixed_salary) is
-// skipped entirely — Finance set that number deliberately, and a bulk
-// default apply must never silently knock them off it.
-export async function bulkSetCalcMethodForOffering(offeringId: string, calcMethod: CalcMethod): Promise<{ updated: number; skippedFixed: number }> {
+// bracket-based pay) shouldn't take N separate clicks. Writes into
+// staff_offering_pay_settings (this COURSE only) rather than staff_pay_settings
+// — an assistant's default for every OTHER course they're on is untouched, so
+// this is now safe to run even for someone on a real fixed salary elsewhere:
+// it just gives this one course its own override, same as the single-assistant
+// setOfferingCalcMethodForAssistant below.
+export async function bulkSetCalcMethodForOffering(offeringId: string, calcMethod: OfferingCalcMethod): Promise<{ updated: number }> {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");
   const supabase = await createClient();
@@ -183,22 +192,97 @@ export async function bulkSetCalcMethodForOffering(offeringId: string, calcMetho
 
   const { data: assistants } = await supabase.from("offering_assistants").select("assistant_id").eq("offering_id", offeringId);
   const assistantIds = (assistants ?? []).map((a) => a.assistant_id);
-  if (!assistantIds.length) return { updated: 0, skippedFixed: 0 };
-
-  const { data: settings } = await supabase.from("staff_pay_settings").select("profile_id, calc_method, fixed_salary").in("profile_id", assistantIds);
-  const settingByProfile = new Map((settings ?? []).map((s) => [s.profile_id, s]));
-  const targetIds = assistantIds.filter((id) => !isProtectedFixedSalary(settingByProfile.get(id)));
-  const skippedFixed = assistantIds.length - targetIds.length;
-  if (!targetIds.length) return { updated: 0, skippedFixed };
+  if (!assistantIds.length) return { updated: 0 };
 
   const now = new Date().toISOString();
-  const { error } = await supabase.from("staff_pay_settings").upsert(
-    targetIds.map((profile_id) => ({ profile_id, org_id: profile.org!.id, calc_method: calcMethod, updated_at: now })),
-    { onConflict: "profile_id", ignoreDuplicates: false }
+  const { error } = await supabase.from("staff_offering_pay_settings").upsert(
+    assistantIds.map((profile_id) => ({ profile_id, offering_id: offeringId, org_id: profile.org!.id, calc_method: calcMethod, updated_at: now })),
+    { onConflict: "profile_id,offering_id", ignoreDuplicates: false }
   );
   if (error) throw new Error(error.message);
 
-  return { updated: targetIds.length, skippedFixed };
+  return { updated: assistantIds.length };
+}
+
+// Every head/assistant currently assigned to one course, with their calc
+// method for THIS course specifically. `override` is null when the course
+// has no row of its own yet (i.e. it's inheriting the person's default).
+// `fallback` is what applies if the override were cleared (staff default,
+// or the org default) — deliberately distinct from `effective` (what
+// actually applies right now, i.e. override ?? fallback) so a "Use default"
+// menu option can honestly say what picking it would switch them TO, rather
+// than echoing back the override itself once one is set.
+export type OfferingCalcMethodRow = {
+  profileId: string;
+  name: string;
+  role: "head" | "assistant";
+  override: OfferingCalcMethod | null;
+  fallback: CalcMethod;
+  effective: CalcMethod;
+};
+
+export async function getOfferingCalcMethods(offeringId: string): Promise<OfferingCalcMethodRow[]> {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");
+  const supabase = await createClient();
+
+  const { data: offering } = await supabase.from("course_offerings").select("org_id").eq("id", offeringId).maybeSingle();
+  if (!offering || offering.org_id !== profile.org.id) throw new Error("Course not found");
+
+  const [{ data: assistantRows }, { data: headRows }] = await Promise.all([
+    supabase.from("offering_assistants").select("assistant_id").eq("offering_id", offeringId),
+    supabase.from("offering_heads").select("head_id").eq("offering_id", offeringId),
+  ]);
+  const people: { id: string; role: "head" | "assistant" }[] = [
+    ...(assistantRows ?? []).map((r) => ({ id: r.assistant_id, role: "assistant" as const })),
+    ...(headRows ?? []).map((r) => ({ id: r.head_id, role: "head" as const })),
+  ];
+  if (!people.length) return [];
+  const ids = people.map((p) => p.id);
+
+  const [{ data: profiles }, { data: settings }, { data: overrides }, orgDefault] = await Promise.all([
+    supabase.from("profiles").select("id, full_name").in("id", ids),
+    supabase.from("staff_pay_settings").select("profile_id, calc_method").in("profile_id", ids),
+    supabase.from("staff_offering_pay_settings").select("profile_id, calc_method").eq("offering_id", offeringId).in("profile_id", ids),
+    getOrgDefaultCalcMethod(supabase, profile.org.id),
+  ]);
+  const nameById = new Map((profiles ?? []).map((p) => [p.id, p.full_name as string]));
+  const staffDefaultById = new Map((settings ?? []).map((s) => [s.profile_id, s.calc_method as CalcMethod]));
+  const overrideById = new Map((overrides ?? []).map((o) => [o.profile_id, o.calc_method as OfferingCalcMethod]));
+
+  return people
+    .map((p) => {
+      const override = overrideById.get(p.id) ?? null;
+      const fallback = staffDefaultById.get(p.id) ?? orgDefault;
+      const effective = override ?? fallback;
+      return { profileId: p.id, name: nameById.get(p.id) ?? "—", role: p.role, override, fallback, effective };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Sets (or, with null, clears) one assistant's calc-method override for one
+// specific course — the targeted counterpart to bulkSetCalcMethodForOffering
+// above, for the common case of a single exception rather than a whole
+// course's worth of assistants.
+export async function setOfferingCalcMethodForAssistant(offeringId: string, profileId: string, calcMethod: OfferingCalcMethod | null): Promise<void> {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");
+  const supabase = await createClient();
+
+  const { data: offering } = await supabase.from("course_offerings").select("org_id").eq("id", offeringId).maybeSingle();
+  if (!offering || offering.org_id !== profile.org.id) throw new Error("Course not found");
+
+  if (calcMethod === null) {
+    const { error } = await supabase.from("staff_offering_pay_settings").delete().eq("offering_id", offeringId).eq("profile_id", profileId);
+    if (error) throw new Error(error.message);
+    return;
+  }
+
+  const { error } = await supabase.from("staff_offering_pay_settings").upsert(
+    { profile_id: profileId, offering_id: offeringId, org_id: profile.org.id, calc_method: calcMethod, updated_at: new Date().toISOString() },
+    { onConflict: "profile_id,offering_id" }
+  );
+  if (error) throw new Error(error.message);
 }
 
 // Sets the org-wide fallback calc method (new hires, and anyone who's never
