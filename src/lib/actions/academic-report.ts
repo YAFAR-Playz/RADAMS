@@ -135,6 +135,31 @@ async function fetchAllAssignmentLogs(
   return logs;
 }
 
+// Same PostgREST 1000-row cap as fetchAllAssignmentLogs above, but hit
+// directly by the enrollment roster itself — one offering has 1,151 active
+// enrollments on its own, so an unpaginated select here silently truncated
+// the roster before assignment logs even entered the picture.
+async function fetchAllActiveEnrollments(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  offeringId: string
+): Promise<{ student_id: string; students: { id: string; name: string; student_code: string } | { id: string; name: string; student_code: string }[] | null }[]> {
+  const enrollments: { student_id: string; students: { id: string; name: string; student_code: string } | { id: string; name: string; student_code: string }[] | null }[] = [];
+  const PAGE_SIZE = 1000;
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("enrollments")
+      .select("student_id, students!inner(id, name, student_code)")
+      .eq("offering_id", offeringId)
+      .is("left_at", null)
+      .order("student_id")
+      .range(from, from + PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    enrollments.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
+  return enrollments;
+}
+
 function monthRange(period: string) {
   const [y, m] = period.split("-").map(Number);
   const start = `${period}-01`;
@@ -330,12 +355,8 @@ export async function getAcademicMonthlyReport(offeringId: string, period: strin
     })
   );
 
-  const { data: enrollments } = await supabase
-    .from("enrollments")
-    .select("student_id, students!inner(id, name, student_code)")
-    .eq("offering_id", offeringId)
-    .is("left_at", null);
-  if (!enrollments || enrollments.length === 0) return [];
+  const enrollments = await fetchAllActiveEnrollments(supabase, offeringId);
+  if (enrollments.length === 0) return [];
 
   const studentIds = enrollments.map((e) => e.student_id);
 
@@ -459,12 +480,8 @@ export async function generateMonthlyAcademicReport(
 
   const gradeScale = await getGradeScale(offeringId);
 
-  const { data: enrollments } = await supabase
-    .from("enrollments")
-    .select("student_id, students!inner(id, name, student_code)")
-    .eq("offering_id", offeringId)
-    .is("left_at", null);
-  if (!enrollments || enrollments.length === 0) throw new Error("No students enrolled in this course.");
+  const enrollments = await fetchAllActiveEnrollments(supabase, offeringId);
+  if (enrollments.length === 0) throw new Error("No students enrolled in this course.");
 
   const studentIds = enrollments.map((e) => e.student_id);
   const assignmentIds = selection.map((s) => s.assignmentId);
@@ -624,10 +641,27 @@ export async function getGeneratedReport(offeringId: string, period: string): Pr
   // Also carries this offering's own left_at so a student who left THIS
   // course after the report was already generated stops showing up on it
   // too, without needing to regenerate.
+  // Paginated: a generated report snapshot can cover this offering's whole
+  // roster, which on its own can clear PostgREST's default 1000-row cap
+  // (one offering has 1,151 active enrollments) even with the student_id
+  // filter applied.
   const studentIds = (rows ?? []).map((r) => r.student_id);
-  const { data: enrollmentRows } = studentIds.length
-    ? await supabase.from("enrollments").select("student_id, left_at, profiles(full_name)").eq("offering_id", offeringId).in("student_id", studentIds)
-    : { data: [] as { student_id: string; left_at: string | null; profiles: { full_name: string } | { full_name: string }[] | null }[] };
+  const enrollmentRows: { student_id: string; left_at: string | null; profiles: { full_name: string } | { full_name: string }[] | null }[] = [];
+  const ENROLLMENT_PAGE_SIZE = 1000;
+  if (studentIds.length) {
+    for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
+      const { data: page } = await supabase
+        .from("enrollments")
+        .select("student_id, left_at, profiles(full_name)")
+        .eq("offering_id", offeringId)
+        .in("student_id", studentIds)
+        .order("student_id")
+        .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
+      if (!page || page.length === 0) break;
+      enrollmentRows.push(...page);
+      if (page.length < ENROLLMENT_PAGE_SIZE) break;
+    }
+  }
   const assistantNameByStudent = new Map(
     (enrollmentRows ?? []).map((e) => {
       const assistant = Array.isArray(e.profiles) ? e.profiles[0] : e.profiles;

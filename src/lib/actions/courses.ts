@@ -226,11 +226,27 @@ export async function updateCourseDates(id: string, start: string, end: string) 
 
 export async function getEnrolledStudents(offeringId: string): Promise<EnrolledStudent[]> {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("enrollments")
-    .select("students(name, initials), profiles(full_name)")
-    .eq("offering_id", offeringId);
-  return (data ?? [])
+  // Paginated: this offering's own enrollments can clear Postgrest's default
+  // 1000-row cap on their own (one offering in this org has 1,151 active
+  // enrollments), which a single unpaginated select silently truncated.
+  type EnrolledRow = {
+    students: { name: string; initials: string } | { name: string; initials: string }[] | null;
+    profiles: { full_name: string } | { full_name: string }[] | null;
+  };
+  const data: EnrolledRow[] = [];
+  const PAGE_SIZE = 1000;
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("enrollments")
+      .select("students(name, initials), profiles(full_name)")
+      .eq("offering_id", offeringId)
+      .order("student_id")
+      .range(from, from + PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    data.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
+  return data
     .map((e) => {
       const s = Array.isArray(e.students) ? e.students[0] : e.students;
       const a = Array.isArray(e.profiles) ? e.profiles[0] : e.profiles;

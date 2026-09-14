@@ -118,11 +118,23 @@ export async function getRegistrationEnrollmentTrend(days = 14): Promise<Enrollm
   since.setDate(since.getDate() - (days - 1));
   since.setHours(0, 0, 0, 0);
 
-  const { data: rows } = await supabase
-    .from("enrollments")
-    .select("created_at")
-    .in("offering_id", offeringIds)
-    .gte("created_at", since.toISOString());
+  // Paginated: org-wide enrollments across a busy signup window (e.g. start
+  // of term, across every offering) can clear Postgrest's default 1000-row
+  // cap on their own, which a single unpaginated select silently truncated.
+  const rows: { created_at: string }[] = [];
+  const PAGE_SIZE = 1000;
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from("enrollments")
+      .select("created_at")
+      .in("offering_id", offeringIds)
+      .gte("created_at", since.toISOString())
+      .order("created_at")
+      .range(from, from + PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
 
   const countByDate = new Map<string, number>();
   for (const r of rows ?? []) {

@@ -38,10 +38,22 @@ export async function globalSearch(rawQuery: string): Promise<SearchResult[]> {
     } else if (profile.role === "head") {
       const { data: heads } = await supabase.from("offering_heads").select("offering_id").eq("head_id", profile.id);
       const offeringIds = (heads ?? []).map((h) => h.offering_id);
-      const { data } = offeringIds.length
-        ? await supabase.from("enrollments").select("student_id").in("offering_id", offeringIds)
-        : { data: [] as { student_id: string }[] };
-      allowedStudentIds = new Set((data ?? []).map((e) => e.student_id));
+      // Paginated: a head's offerings can clear Postgrest's default 1000-row
+      // cap on enrollments alone (one offering has 1,151 active
+      // enrollments), which a single unpaginated select silently truncated —
+      // a student past the cutoff would drop out of `allowedStudentIds` and
+      // become unsearchable even though the head is allowed to see them.
+      const rows: { student_id: string }[] = [];
+      const PAGE_SIZE = 1000;
+      if (offeringIds.length) {
+        for (let from = 0; ; from += PAGE_SIZE) {
+          const { data: page } = await supabase.from("enrollments").select("student_id").in("offering_id", offeringIds).range(from, from + PAGE_SIZE - 1);
+          if (!page || page.length === 0) break;
+          rows.push(...page);
+          if (page.length < PAGE_SIZE) break;
+        }
+      }
+      allowedStudentIds = new Set(rows.map((e) => e.student_id));
     }
 
     const { data: students } = await supabase
