@@ -622,6 +622,114 @@ async function countCheckedPapers(
   return { papers, assignments: regularIds.length, mockPapers };
 }
 
+export type PapersCheckedRow = {
+  assistantId: string;
+  assistantName: string;
+  papers: number;
+  mockPapers: number;
+  assignmentsChecked: number;
+};
+
+// Admin-facing "Papers" tab — one row per assistant who checked at least one
+// paper in the selected month, org-wide (or narrowed to one course).
+// Deliberately reuses the exact same due-date-window and regular/mock split
+// logic as countCheckedPapers above (the function that actually determines
+// per_paper/fixed_per_paper/bracket pay) rather than a second, independently
+// written definition of "papers checked" — the two must never disagree.
+// Selecting the current, still-in-progress month naturally shows counts
+// "as of today": nothing beyond today has been logged yet, so no separate
+// date-capping is needed.
+export async function getPapersCheckedReport(period: string, offeringId?: string | null): Promise<PapersCheckedRow[]> {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org || profile.role !== "admin") throw new Error("Not authorized");
+  const orgId = profile.org.id;
+  const supabase = await createClient();
+
+  const [y, m] = period.split("-").map(Number);
+  const monthStart = `${period}-01`;
+  const monthEnd = new Date(y, m, 1).toISOString().slice(0, 10);
+
+  let offeringQuery = supabase.from("course_offerings").select("id, organizations(mock_exam_enabled)").eq("org_id", orgId);
+  if (offeringId) offeringQuery = offeringQuery.eq("id", offeringId);
+  const { data: offerings } = await offeringQuery;
+  if (!offerings || !offerings.length) return [];
+  const offeringIds = offerings.map((o) => o.id);
+  const orgRow = Array.isArray(offerings[0].organizations) ? offerings[0].organizations[0] : offerings[0].organizations;
+  const mockExamEnabled = !!orgRow?.mock_exam_enabled;
+
+  // Batched by offering id (a `.in()` filter with one UUID per offering can
+  // itself run past a URL-safe length on an org with many courses) with each
+  // batch's own row pagination — the same pattern used in import.ts's dedup
+  // fetch and owner.ts's active-course rollups.
+  const ID_BATCH_SIZE = 200;
+  const PAGE_SIZE = 1000;
+  async function fetchAllRows<T>(fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null }>): Promise<T[]> {
+    const rows: T[] = [];
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data } = await fetchPage(from, from + PAGE_SIZE - 1);
+      if (!data || data.length === 0) break;
+      rows.push(...data);
+      if (data.length < PAGE_SIZE) break;
+    }
+    return rows;
+  }
+
+  const assignments: { id: string; due_date: string | null; created_at: string; mock_exam: boolean }[] = [];
+  for (let i = 0; i < offeringIds.length; i += ID_BATCH_SIZE) {
+    const idBatch = offeringIds.slice(i, i + ID_BATCH_SIZE);
+    const rows = await fetchAllRows<{ id: string; due_date: string | null; created_at: string; mock_exam: boolean }>((from, to) =>
+      supabase.from("assignments").select("id, due_date, created_at, mock_exam").in("offering_id", idBatch).eq("counts_salary", true).range(from, to)
+    );
+    assignments.push(...rows);
+  }
+  const dueThisMonth = assignments.filter((a) => {
+    const d = a.due_date ?? a.created_at.slice(0, 10);
+    return d >= monthStart && d < monthEnd;
+  });
+  if (!dueThisMonth.length) return [];
+
+  const mockIds = mockExamEnabled ? dueThisMonth.filter((a) => a.mock_exam).map((a) => a.id) : [];
+  const mockIdSet = new Set(mockIds);
+  const allAssignmentIds = dueThisMonth.filter((a) => !mockExamEnabled || !a.mock_exam || mockIdSet.has(a.id)).map((a) => a.id);
+
+  const logs: { assignment_id: string; logged_by: string | null }[] = [];
+  for (let i = 0; i < allAssignmentIds.length; i += ID_BATCH_SIZE) {
+    const idBatch = allAssignmentIds.slice(i, i + ID_BATCH_SIZE);
+    const rows = await fetchAllRows<{ assignment_id: string; logged_by: string | null }>((from, to) =>
+      supabase.from("assignment_logs").select("assignment_id, logged_by").in("assignment_id", idBatch).eq("status", "checked").range(from, to)
+    );
+    logs.push(...rows);
+  }
+
+  const byAssistant = new Map<string, { papers: number; mockPapers: number; assignmentIds: Set<string> }>();
+  for (const log of logs) {
+    if (!log.logged_by) continue;
+    const entry = byAssistant.get(log.logged_by) ?? { papers: 0, mockPapers: 0, assignmentIds: new Set<string>() };
+    if (mockIdSet.has(log.assignment_id)) entry.mockPapers++;
+    else entry.papers++;
+    entry.assignmentIds.add(log.assignment_id);
+    byAssistant.set(log.logged_by, entry);
+  }
+
+  const assistantIds = Array.from(byAssistant.keys());
+  if (!assistantIds.length) return [];
+  const { data: assistantProfiles } = await supabase.from("profiles").select("id, full_name").in("id", assistantIds);
+  const nameById = new Map((assistantProfiles ?? []).map((p) => [p.id, p.full_name]));
+
+  return assistantIds
+    .map((id) => {
+      const e = byAssistant.get(id)!;
+      return {
+        assistantId: id,
+        assistantName: nameById.get(id) ?? "Unknown",
+        papers: e.papers,
+        mockPapers: e.mockPapers,
+        assignmentsChecked: e.assignmentIds.size,
+      };
+    })
+    .sort((a, b) => b.papers - a.papers);
+}
+
 function formatBasis(
   method: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant",
   count: CheckedPapersCount,
