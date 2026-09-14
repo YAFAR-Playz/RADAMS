@@ -13,6 +13,7 @@ import { type AssistantOption } from "@/lib/actions/head-assignments";
 import {
   getStudentsTabBootstrap,
   getStudentsTabForOffering,
+  getLeftStudentsForOffering,
   getStudentsRegistrationExtras,
   reassignStudentAssistant,
   updateStudent,
@@ -75,6 +76,7 @@ export function StudentsContent({ role }: { role: Role }) {
   const [sortBy, setSortBy] = useState<"enroll" | "name">("enroll");
   const [paymentFilter, setPaymentFilter] = useState<"all" | "paid" | "pending" | "installments">("all");
   const [unassignedOnly, setUnassignedOnly] = useState(false);
+  const [leftOnly, setLeftOnly] = useState(false);
   const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -98,7 +100,11 @@ export function StudentsContent({ role }: { role: Role }) {
   const [exporting, setExporting] = useState(false);
   const isRegistration = role === "registration";
   const canEditCourses = role === "admin" || role === "registration";
-  const canViewMore = role === "head" || role === "assistant";
+  // Admin doesn't otherwise have a "View more" panel — added narrowly for
+  // the "Left students" view only, so a left student's assignments/
+  // attendance are actually visible from there per the feature ask, without
+  // changing Admin's normal active-roster experience.
+  const canViewMore = role === "head" || role === "assistant" || (role === "admin" && leftOnly);
   const [sym, setSym] = useState("£");
   const [viewMoreStudent, setViewMoreStudent] = useState<StudentRow | null>(null);
   const [viewMoreAttendance, setViewMoreAttendance] = useState<StudentAttendanceSummary | null>(null);
@@ -211,6 +217,40 @@ export function StudentsContent({ role }: { role: Role }) {
     }
   }
 
+  // Left-only students are a genuinely different fetch, not a client-side
+  // filter over the same rows — getStudentsForOffering now excludes left
+  // students from the default roster entirely (for Head/Admin), so there's
+  // nothing to filter client-side once a student has left. Assistants/grade
+  // scale/WhatsApp link don't depend on this toggle, so only the roster
+  // itself is refetched when it flips; offeringId changes still go through
+  // the full bundled reload(). Keyed on both so switching offerings while
+  // "Left students" is active re-fetches the new offering's left roster too.
+  async function reloadLeftStudents(id: string) {
+    setLoading(true);
+    setTrafficLight({});
+    try {
+      const rows = await getLeftStudentsForOffering(id);
+      if (offeringIdRef.current !== id) return;
+      startTransition(() => {
+        setStudents(rows);
+        setLoading(false);
+      });
+    } catch {
+      setError("Couldn't load left students for this course.");
+      setLoading(false);
+    }
+  }
+
+  // Every mutation below (editing a student, adding/removing an enrollment,
+  // auto-assigning) needs to refresh whichever roster is actually on screen
+  // — reload() always fetches the ACTIVE roster, which would silently swap
+  // the table's contents out from under the still-highlighted "Left
+  // students" toggle if called directly while it's on.
+  async function reloadCurrent(id: string) {
+    if (leftOnly) await reloadLeftStudents(id);
+    else await reload(id);
+  }
+
   useEffect(() => {
     (async () => {
       if (!offeringId) {
@@ -220,9 +260,10 @@ export function StudentsContent({ role }: { role: Role }) {
         return;
       }
       setPage(0);
-      await reload(offeringId);
+      await reloadCurrent(offeringId);
     })();
-  }, [offeringId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offeringId, leftOnly]);
 
   function formatGrade(avgGrade: number | null): string {
     return formatGradeByScale(avgGrade, gradeScale);
@@ -232,6 +273,7 @@ export function StudentsContent({ role }: { role: Role }) {
   const current = offerings?.find((o) => o.id === offeringId) ?? null;
 
   const canFilterUnassigned = role === "admin" || role === "head" || role === "registration";
+  const canFilterLeft = role === "admin" || role === "head";
 
   const filtered = useMemo(() => {
     if (!students) return [];
@@ -343,7 +385,7 @@ export function StudentsContent({ role }: { role: Role }) {
       }
       await headAddStudent({ ...addForm, existingStudentId: duplicateMatch?.id });
       setAddStudentOpen(false);
-      if (offeringId) await reload(offeringId);
+      if (offeringId) await reloadCurrent(offeringId);
     } catch {
       setAddStudentError("Couldn't add this student — try again.");
     } finally {
@@ -360,7 +402,7 @@ export function StudentsContent({ role }: { role: Role }) {
       // again would just find the same match and loop back here.
       await headAddStudent({ ...addForm, existingStudentId: sameStudent ? duplicateMatch.id : undefined });
       setAddStudentOpen(false);
-      if (offeringId) await reload(offeringId);
+      if (offeringId) await reloadCurrent(offeringId);
     } catch {
       setAddStudentError(sameStudent ? "Couldn't enroll this student — try again." : "Couldn't add this student — try again.");
     } finally {
@@ -443,7 +485,7 @@ export function StudentsContent({ role }: { role: Role }) {
       const label = allOfferings?.find((o) => o.id === addOfferingId)?.label ?? "—";
       setEditEnrollments((prev) => (prev ? [...prev, { enrollmentId, offeringId: addOfferingId, label, left: false }] : prev));
       setAddOfferingId("");
-      if (offeringId) await reload(offeringId);
+      if (offeringId) await reloadCurrent(offeringId);
     } catch {
       setError("Couldn't enroll this student — try again.");
     } finally {
@@ -460,7 +502,7 @@ export function StudentsContent({ role }: { role: Role }) {
     try {
       await removeStudentEnrollment(enrollmentId);
       setEditEnrollments((prev) => (prev ? prev.filter((e) => e.enrollmentId !== enrollmentId) : prev));
-      if (offeringId) await reload(offeringId);
+      if (offeringId) await reloadCurrent(offeringId);
     } catch {
       setError("Couldn't remove this enrollment — try again.");
     } finally {
@@ -488,7 +530,7 @@ export function StudentsContent({ role }: { role: Role }) {
         ...(editEnrollments ?? []).map((e) => setEnrollmentLeftStatus(e.enrollmentId, e.left)),
       ]);
       setEditDraft(null);
-      await reload(offeringId);
+      await reloadCurrent(offeringId);
     } catch {
       setError("Couldn't save changes — try again.");
     } finally {
@@ -658,6 +700,7 @@ export function StudentsContent({ role }: { role: Role }) {
             data-tour="students-unassigned-toggle"
             onClick={() => {
               setUnassignedOnly((v) => !v);
+              setLeftOnly(false);
               setPage(0);
             }}
             className="flex flex-none items-center gap-[6px] rounded-full border px-3 py-[7px] text-[12.5px] font-semibold"
@@ -681,6 +724,25 @@ export function StudentsContent({ role }: { role: Role }) {
                 {unassignedCount}
               </span>
             )}
+          </button>
+        )}
+        {canFilterLeft && (
+          <button
+            data-tour="students-left-toggle"
+            onClick={() => {
+              setLeftOnly((v) => !v);
+              setUnassignedOnly(false);
+              setPage(0);
+            }}
+            className="flex flex-none items-center gap-[6px] rounded-full border px-3 py-[7px] text-[12.5px] font-semibold"
+            style={
+              leftOnly
+                ? { borderColor: "var(--danger)", background: "var(--danger)", color: "var(--brandfg)" }
+                : { borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }
+            }
+          >
+            <Icon name="logout" size={13} />
+            Left students
           </button>
         )}
         {isRegistration ? (
@@ -1276,7 +1338,7 @@ export function StudentsContent({ role }: { role: Role }) {
           onClose={() => setAutoOpen(false)}
           onDone={async () => {
             setAutoOpen(false);
-            await reload(offeringId);
+            await reloadCurrent(offeringId);
           }}
         />
       )}
