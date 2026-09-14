@@ -70,6 +70,7 @@ export async function getFullExport(offeringId: string): Promise<FullExportRow[]
       .from("enrollments")
       .select("student_id, created_at, left_at, students(student_code, name), profiles(full_name)")
       .eq("offering_id", offeringId)
+      .order("student_id", { ascending: true })
       .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
     if (!page || page.length === 0) break;
     enrollments.push(...page);
@@ -93,6 +94,7 @@ export async function getFullExport(offeringId: string): Promise<FullExportRow[]
         .from("assignment_logs")
         .select("student_id, status")
         .in("assignment_id", assignmentIds)
+        .order("student_id", { ascending: true })
         .range(from, from + LOGS_PAGE_SIZE - 1);
       if (!page || page.length === 0) break;
       logs.push(...page);
@@ -115,6 +117,7 @@ export async function getFullExport(offeringId: string): Promise<FullExportRow[]
         .from("attendance_records")
         .select("student_id, status")
         .in("session_id", sessionIds)
+        .order("student_id", { ascending: true })
         .range(from, from + ATTENDANCE_PAGE_SIZE - 1);
       if (!page || page.length === 0) break;
       attendance.push(...page);
