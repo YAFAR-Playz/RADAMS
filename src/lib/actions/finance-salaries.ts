@@ -731,10 +731,13 @@ export async function getPapersCheckedReport(period: string, offeringId?: string
 }
 
 function formatBasis(
-  method: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant",
+  method: "per_paper" | "bracket" | "fixed" | "fixed_per_paper" | "fixed_per_assistant",
   count: CheckedPapersCount,
   prorationNote: string | null
 ): string {
+  // "fixed" (a per-course fixed amount) always sets its own basisOverride in
+  // computeBaseForMethod, so this branch is never actually reached for it —
+  // included only so the type stays accurate at the call sites below.
   // Mock-exam papers count toward pay in every method — bracket via its
   // per-assignment average, per_paper/fixed_per_paper via their own
   // (possibly different) mock rate — so the same "+" phrasing applies
@@ -825,14 +828,20 @@ async function computeBaseForMethod(
   method: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant" | "fixed",
   checkedCount: CheckedPapersCount
 ): Promise<{ base: number; methodLabel: string; prorationNote: string | null; basisOverride?: string }> {
-  // Plain "fixed" is one flat monthly amount for the whole person (stored
-  // once on staff_pay_settings, not per course) — unlike fixed_per_paper/
-  // fixed_per_assistant below, it never reads per_paper_rates and doesn't
-  // depend on offeringId at all. Callers only reach this branch from the
-  // dedicated generateFixedSalaryLinesForPeriod path, never from the normal
+  // Plain "fixed" with no offeringId is the legacy flat monthly amount for
+  // the whole person (stored once on staff_pay_settings, not per course) —
+  // it never reads per_paper_rates and doesn't depend on any one course.
+  // Callers only reach this branch (empty offeringId) from the dedicated
+  // generateFixedSalaryLinesForPeriod path, never from the normal
   // per-offering loop, so a fixed-salary person assigned to multiple courses
-  // is never paid this amount more than once.
-  if (method === "fixed") {
+  // is never paid this amount more than once. "fixed" WITH a real offeringId
+  // is a different thing entirely — a per-course override (only ever set via
+  // staff_offering_pay_settings, see OfferingCalcMethod) with its own amount
+  // for just this course — handled below, alongside fixed_per_paper/bracket/
+  // per_paper, since it prorates the same way every other per-course method
+  // does (the offering's own join/leave window, not the person's org-wide
+  // left_at).
+  if (method === "fixed" && !offeringId) {
     const { data: setting } = await supabase.from("staff_pay_settings").select("fixed_salary").eq("profile_id", assistantId).maybeSingle();
     const fixedSalary = setting?.fixed_salary != null ? Number(setting.fixed_salary) : 0;
     const { data: person } = await supabase.from("profiles").select("left_at").eq("id", assistantId).maybeSingle();
@@ -886,10 +895,23 @@ async function computeBaseForMethod(
   // below for why), so it doesn't naturally zero out the way the fixed
   // portion does.
   if (fraction === 0) {
-    const methodLabel = method === "fixed_per_paper" ? "Fixed + per paper" : method === "bracket" ? "Bracket" : "Per paper";
+    const methodLabel =
+      method === "fixed_per_paper" ? "Fixed + per paper" : method === "bracket" ? "Bracket" : method === "fixed" ? "Fixed salary" : "Per paper";
     return { base: 0, methodLabel, prorationNote: null, basisOverride: "Not active during this period" };
   }
 
+  if (method === "fixed") {
+    const { data: rateRow } = await supabase
+      .from("staff_offering_pay_settings")
+      .select("fixed_salary")
+      .eq("profile_id", assistantId)
+      .eq("offering_id", offeringId)
+      .maybeSingle();
+    const fixedSalary = rateRow?.fixed_salary != null ? Number(rateRow.fixed_salary) : 0;
+    const base = Math.round(fixedSalary * fraction);
+    const basisOverride = `Fixed monthly salary for this course${prorationNote ? ` · ${prorationNote}` : ""}`;
+    return { base, methodLabel: "Fixed salary", prorationNote, basisOverride };
+  }
   if (method === "fixed_per_paper") {
     const { data: rateRow } = await supabase
       .from("per_paper_rates")
@@ -949,35 +971,39 @@ async function defaultMethodForOffering(supabase: Awaited<ReturnType<typeof crea
 }
 
 // A per-course override (staff_offering_pay_settings — set one-at-a-time or
-// bulk-applied to a whole course in Payroll Settings) takes priority over the
-// staff member's own org-wide default, which takes priority over the
-// org-wide default, which in turn takes priority over the offering's
+// bulk-applied to a whole course in Payroll Settings/Payments) takes priority
+// over the staff member's own org-wide default, which takes priority over
+// the org-wide default, which in turn takes priority over the offering's
 // bracket-presence-based default — that offering-level default only exists
 // as a last-resort fallback for an org that's never set one either. This is
 // what lets the same assistant be paid "fixed + per paper" on one course and
 // plain "per paper" on another: the override is keyed on (profile, offering),
-// while staffDefault/orgDefault are keyed on the profile alone. Plain "fixed"
-// (a flat recurring salary with no course/paper basis at all) is handled
-// entirely OUTSIDE this function — see generateFixedSalaryLinesForPeriod and
-// the isFixedSalaryPerson guard in generateSalariesForPeriod/
-// backfillDepartedSalaryLine — since it produces one line per person per
-// period, not one per course the way every method this function resolves to
-// does; it also can't be set as a per-course override (see OfferingCalcMethod
-// in staff-payments.ts) so `offeringOverride` is never "fixed". When the
-// effective default (after considering any override) resolves to "fixed",
-// this function still returns a per-course fallback (so a caller that
-// doesn't check isFixedSalaryPerson gets a sane label), but that return value
-// is never actually used for base computation in that case. "fixed_per_paper"
-// IS wired in as a real per-course method, since — unlike plain "fixed" —
-// it's still anchored to a specific course's own rates.
+// while staffDefault/orgDefault are keyed on the profile alone.
+//
+// "fixed" is ambiguous as a plain string but never as a VALUE HERE: when it
+// comes from `offeringOverride`, it unambiguously means a per-course fixed
+// amount (staff_offering_pay_settings.fixed_salary for this one course,
+// prorated by this course's own join/leave window — see computeBaseForMethod)
+// since an override can only ever be set that way. When it comes from
+// staffDefault/orgDefault instead (no override on this course), it means
+// the legacy person-level flat salary — handled entirely OUTSIDE this
+// function via generateFixedSalaryLinesForPeriod and the isFixedSalaryPerson
+// guard in generateSalariesForPeriod/backfillDepartedSalaryLine, since THAT
+// one produces a single line per person per period, not one per course. This
+// function still returns a per-course fallback for that case (so a caller
+// that doesn't check isFixedSalaryPerson gets a sane label), but that return
+// value is never actually used for base computation then.
 async function resolveMethodForAssistant(
   supabase: Awaited<ReturnType<typeof createClient>>,
   offeringId: string,
   assistantId: string,
   staffDefault: "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant" | undefined,
   orgDefault: "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant" = "paper",
-  offeringOverride?: "paper" | "category" | "fixed_per_paper" | "fixed_per_assistant"
-): Promise<"per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant"> {
+  offeringOverride?: "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant"
+): Promise<"per_paper" | "bracket" | "fixed" | "fixed_per_paper" | "fixed_per_assistant"> {
+  // Unambiguous: an override is only ever set through staff_offering_pay_settings,
+  // so "fixed" here always means the per-course amount, never the legacy flat one.
+  if (offeringOverride === "fixed") return "fixed";
   const effective = offeringOverride ?? staffDefault ?? orgDefault;
   if (effective === "paper") return "per_paper";
   if (effective === "category") return "bracket";
@@ -1297,7 +1323,7 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
     // resolveMethodForAssistant) so the same person can be "fixed_per_paper"
     // here and plain "per_paper" on another course.
     const offeringOverrideByPayee = new Map(
-      (offeringOverrides ?? []).map((o) => [o.profile_id, o.calc_method as "paper" | "category" | "fixed_per_paper" | "fixed_per_assistant"])
+      (offeringOverrides ?? []).map((o) => [o.profile_id, o.calc_method as "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant"])
     );
 
     for (const payeeId of payeeIds) {
@@ -1353,7 +1379,8 @@ export async function generateSalariesForPeriod(period: string): Promise<{ creat
       // compute that would just come out to the same $0 anyway.
       const mockCounts = method !== "bracket" && checkedCount.mockPapers > 0;
       const wouldComputeSomething =
-        !isFixedSalaryPerson && (checkedCount.papers > 0 || mockCounts || method === "fixed_per_paper" || method === "fixed_per_assistant");
+        !isFixedSalaryPerson &&
+        (checkedCount.papers > 0 || mockCounts || method === "fixed_per_paper" || method === "fixed_per_assistant" || method === "fixed");
       // A head NOT on a fixed salary is paid a set amount Finance decides
       // each month with no formula behind it at all — they need some row to
       // type that number into, or they could never be paid through this
@@ -1577,7 +1604,7 @@ export async function backfillDepartedSalaryLine(payeeId: string, offeringId: st
   ]);
   if (!person) throw new Error("Staff member not found");
   const isHead = person.role === "head";
-  const offeringOverride = offeringSetting?.calc_method as "paper" | "category" | "fixed_per_paper" | "fixed_per_assistant" | undefined;
+  const offeringOverride = offeringSetting?.calc_method as "paper" | "category" | "fixed" | "fixed_per_paper" | "fixed_per_assistant" | undefined;
 
   const checkedCount = await countCheckedPapers(supabase, offeringId, payeeId, period);
   // A departed fixed-salary person's final prorated month is a manual call
@@ -1604,7 +1631,7 @@ export async function backfillDepartedSalaryLine(payeeId: string, offeringId: st
   let methodLabel = "Manual";
   let calcMethod: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant" | "fixed" | "manual" = "manual";
   let basis = isHead ? "Final month — set manually" : "No checked papers this period";
-  if (!isFixedSalaryPerson && (checkedCount.papers > 0 || mockCounts || method === "fixed_per_paper" || method === "fixed_per_assistant")) {
+  if (!isFixedSalaryPerson && (checkedCount.papers > 0 || mockCounts || method === "fixed_per_paper" || method === "fixed_per_assistant" || method === "fixed")) {
     const computed = await computeBaseForMethod(supabase, offeringId, payeeId, period, method, checkedCount);
     base = computed.base;
     methodLabel = computed.methodLabel;

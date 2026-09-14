@@ -6,7 +6,16 @@ import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
 import { PageHeader } from "@/components/ui/page-header";
 import { getPayrollSettings } from "@/lib/actions/payroll-settings";
-import { listStaffPayments, updatePaySettings, type StaffPaymentRow, type CalcMethod } from "@/lib/actions/staff-payments";
+import {
+  listStaffPayments,
+  updatePaySettings,
+  getAssistantOfferings,
+  setOfferingCalcMethodForAssistant,
+  type StaffPaymentRow,
+  type CalcMethod,
+  type OfferingCalcMethod,
+  type AssistantOfferingRow,
+} from "@/lib/actions/staff-payments";
 
 const PAGE_SIZE = 8;
 const CURRENCY_SYMBOL: Record<string, string> = { GBP: "£", USD: "$", EUR: "€", EGP: "E£", AED: "د.إ" };
@@ -36,6 +45,64 @@ export function StaffPaymentsContent() {
   const [filter, setFilter] = useState<"all" | "head" | "assistant">("all");
   const [page, setPage] = useState(0);
   const [headFixedPerAssistantEnabled, setHeadFixedPerAssistantEnabled] = useState(false);
+
+  // Per-course overrides are shown collapsed under each staff card, lazily
+  // loaded on first expand — a person's own course list is usually small
+  // (1-3 courses), unlike the equivalent per-COURSE list this replaced,
+  // which listed every assistant on a course (30+ on a large one) and read
+  // terribly as a flat list.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [coursesByStaff, setCoursesByStaff] = useState<Record<string, AssistantOfferingRow[] | undefined>>({});
+  const [savingCourseKey, setSavingCourseKey] = useState<string | null>(null);
+
+  function reloadCourses(profileId: string) {
+    getAssistantOfferings(profileId)
+      .then((data) => startTransition(() => setCoursesByStaff((prev) => ({ ...prev, [profileId]: data }))))
+      .catch(() => setError("Couldn't load this person's courses — try again."));
+  }
+
+  function onToggleCourses(profileId: string) {
+    const next = expandedId === profileId ? null : profileId;
+    setExpandedId(next);
+    if (next && !coursesByStaff[next]) reloadCourses(next);
+  }
+
+  async function onChangeCourseMethod(profileId: string, offeringId: string, value: string) {
+    const key = `${profileId}:${offeringId}`;
+    setSavingCourseKey(key);
+    setError(null);
+    try {
+      if (value === "__default__") {
+        await setOfferingCalcMethodForAssistant(offeringId, profileId, null);
+      } else {
+        const method = value as OfferingCalcMethod;
+        const current = coursesByStaff[profileId]?.find((c) => c.offeringId === offeringId);
+        // Switching TO "fixed" keeps whatever amount was already there (0 if
+        // none) rather than clearing it — the amount field revealed right
+        // after this still lets Finance type the real number in immediately.
+        await setOfferingCalcMethodForAssistant(offeringId, profileId, method, method === "fixed" ? (current?.fixedSalary ?? 0) : undefined);
+      }
+      reloadCourses(profileId);
+    } catch {
+      setError("Couldn't save this override — try again.");
+    } finally {
+      setSavingCourseKey(null);
+    }
+  }
+
+  async function onBlurCourseFixedSalary(profileId: string, offeringId: string, amount: number) {
+    const key = `${profileId}:${offeringId}`;
+    setSavingCourseKey(key);
+    setError(null);
+    try {
+      await setOfferingCalcMethodForAssistant(offeringId, profileId, "fixed", amount);
+      reloadCourses(profileId);
+    } catch {
+      setError("Couldn't save this amount — try again.");
+    } finally {
+      setSavingCourseKey(null);
+    }
+  }
 
   async function reload() {
     setLoading(true);
@@ -267,6 +334,74 @@ export function StaffPaymentsContent() {
                     <div className="text-[11px] text-[var(--subtle)]">{r.paymentsCount} payments</div>
                   </div>
                 </div>
+
+                {/* PER-COURSE OVERRIDES */}
+                <button
+                  onClick={() => onToggleCourses(r.id)}
+                  className="flex items-center justify-between gap-[6px] rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-3 py-[8px] text-[12px] font-semibold text-[var(--muted)] hover:bg-[var(--surface)]"
+                >
+                  <span className="flex items-center gap-[6px]">
+                    <Icon name="book" size={13} />
+                    Per-course overrides
+                  </span>
+                  <Icon name="cr" size={14} style={{ transform: expandedId === r.id ? "rotate(90deg)" : "none" }} />
+                </button>
+                {expandedId === r.id && (
+                  <div className="flex flex-col gap-[7px] rounded-[8px] border border-[var(--border2)] bg-[var(--surface2)] p-[9px]">
+                    {coursesByStaff[r.id] === undefined ? (
+                      <SkeletonRow className="h-[40px]" />
+                    ) : coursesByStaff[r.id]!.length === 0 ? (
+                      <p className="m-0 p-1 text-[12px] text-[var(--muted)]">Not assigned to any course yet.</p>
+                    ) : (
+                      coursesByStaff[r.id]!.map((c) => {
+                        const key = `${r.id}:${c.offeringId}`;
+                        const busy = savingCourseKey === key;
+                        return (
+                          <div key={c.offeringId} className="flex flex-col gap-[6px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] p-[8px_9px]">
+                            <div className="flex flex-wrap items-center gap-[8px]">
+                              <div className="min-w-[110px] flex-1 text-[12px] font-semibold text-[var(--text)]">{c.courseLabel}</div>
+                              <div className="flex h-8 min-w-[160px] items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[8px]">
+                                <select
+                                  value={c.override ?? "__default__"}
+                                  disabled={busy}
+                                  onChange={(e) => onChangeCourseMethod(r.id, c.offeringId, e.target.value)}
+                                  className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[11.5px] font-medium text-[var(--text)] outline-none disabled:opacity-60"
+                                >
+                                  <option value="__default__">Use default ({METHOD_OPTS.find((m) => m.value === c.fallback)?.label ?? c.fallback})</option>
+                                  {METHOD_OPTS.filter((m) => m.value !== "fixed_per_assistant" || (headFixedPerAssistantEnabled && c.role === "head")).map(
+                                    (m) => (
+                                      <option key={m.value} value={m.value}>
+                                        {m.label}
+                                      </option>
+                                    )
+                                  )}
+                                </select>
+                              </div>
+                              {busy && <Spinner size={13} />}
+                            </div>
+                            {c.override === "fixed" && (
+                              <div className="flex h-8 max-w-[140px] items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[8px]">
+                                <span className="text-[11.5px] font-semibold text-[var(--subtle)]">{sym}</span>
+                                <input
+                                  key={c.fixedSalary ?? 0}
+                                  defaultValue={c.fixedSalary ?? ""}
+                                  disabled={busy}
+                                  onBlur={(e) => {
+                                    const v = Number(e.target.value.replace(/[^0-9]/g, "")) || 0;
+                                    onBlurCourseFixedSalary(r.id, c.offeringId, v);
+                                  }}
+                                  inputMode="numeric"
+                                  placeholder="Amount for this course"
+                                  className="h-full w-full border-none bg-transparent font-mono text-[12px] font-bold text-[var(--text)] outline-none placeholder:font-sans placeholder:font-normal placeholder:text-[var(--subtle)]"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
               </div>
             ))}
         {!loading && rows && pageRows.length === 0 && (
