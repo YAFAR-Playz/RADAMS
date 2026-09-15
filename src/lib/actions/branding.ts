@@ -1,5 +1,7 @@
 "use server";
 
+import { createClient as createBareClient } from "@supabase/supabase-js";
+import { unstable_cache, updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/current-profile";
@@ -157,9 +159,29 @@ export async function setStaffReportBrandingPreference(usePlatformDefault: boole
   if (error) throw new Error(error.message);
 }
 
+const PLATFORM_BRANDING_TAG = "platform-branding";
+
+// The public landing pages (/, /ar) and /login all read this on every
+// visit, but they get there through createClient()'s cookie-bound Supabase
+// SSR client — calling cookies() anywhere in a request makes Next treat the
+// whole request as dynamic, which disables its automatic fetch caching for
+// everything else in that request too, even data this generic (one
+// platform-wide row that changes maybe a few times a year). A bare
+// anon-key client sidesteps cookies() entirely (platform_settings is
+// publicly readable via RLS), so unstable_cache can actually cache it
+// across requests/visitors — tagged so an owner's branding edit invalidates
+// it instantly instead of waiting out the revalidate window.
+const getCachedPlatformDefaults = unstable_cache(
+  async (): Promise<BrandingDraft> => {
+    const bare = createBareClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!);
+    return getPlatformDefaults(bare);
+  },
+  ["platform-default-branding"],
+  { revalidate: 300, tags: [PLATFORM_BRANDING_TAG] }
+);
+
 export async function getPlatformDefaultBranding(): Promise<BrandingDraft> {
-  const supabase = await createClient();
-  return getPlatformDefaults(supabase);
+  return getCachedPlatformDefaults();
 }
 
 export async function savePlatformDefaultBranding(draft: Omit<BrandingDraft, "logoUrl">) {
@@ -177,6 +199,7 @@ export async function savePlatformDefaultBranding(draft: Omit<BrandingDraft, "lo
     })
     .eq("id", true);
   if (error) throw new Error(error.message);
+  updateTag(PLATFORM_BRANDING_TAG);
 }
 
 export async function uploadPlatformDefaultLogo(formData: FormData): Promise<{ url: string }> {
@@ -196,6 +219,7 @@ export async function uploadPlatformDefaultLogo(formData: FormData): Promise<{ u
   const url = withCacheBust(publicUrl.publicUrl);
   const { error: updateError } = await admin.from("platform_settings").update({ default_logo_url: url }).eq("id", true);
   if (updateError) throw new Error(updateError.message);
+  updateTag(PLATFORM_BRANDING_TAG);
 
   return { url };
 }
@@ -207,4 +231,5 @@ export async function removePlatformDefaultLogo() {
   await removeStalePrefixed(admin, "", "platform-default");
   const { error } = await admin.from("platform_settings").update({ default_logo_url: null }).eq("id", true);
   if (error) throw new Error(error.message);
+  updateTag(PLATFORM_BRANDING_TAG);
 }

@@ -8,7 +8,7 @@ import { LANDING_COPY } from "@/lib/landing-copy";
 export async function generateMetadata() {
   const branding = await getPlatformDefaultBranding();
   return {
-    title: `${branding.name} — أدر السنتر التعليمي بالكامل من شاشة واحدة`,
+    title: branding.name,
     description: "الواجبات والتقييمات والرواتب — منظمة بالطريقة التي يعمل بها فريقك بالفعل.",
   };
 }
