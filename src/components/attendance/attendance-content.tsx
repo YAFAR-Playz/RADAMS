@@ -26,6 +26,8 @@ import { applyTemplateVars } from "@/lib/message-vars";
 import { downloadCsv } from "@/lib/csv-export";
 import { pickerOnlyDateProps } from "@/lib/date-input";
 import { matchesStudentQuery } from "@/lib/student-search";
+import { getAttendanceIdMatchingEnabled } from "@/lib/actions/payroll-settings";
+import { ImportAttendanceModal } from "@/components/attendance/import-attendance-modal";
 
 const PAGE_SIZE = 20;
 const SESSION_PAGE_SIZE = 10;
@@ -73,6 +75,8 @@ export function AttendanceContent({ role }: { role: Role }) {
   const [editTime, setEditTime] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<SessionSummary | null>(null);
+  const [importTarget, setImportTarget] = useState<SessionSummary | null>(null);
+  const [attendanceIdEnabled, setAttendanceIdEnabled] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [templateStudent, setTemplateStudent] = useState<string | null>(null);
   const [templateParent, setTemplateParent] = useState<string | null>(null);
@@ -86,6 +90,7 @@ export function AttendanceContent({ role }: { role: Role }) {
         setOfferingId(data[0]?.id ?? null);
       });
     });
+    if (canEdit) getAttendanceIdMatchingEnabled().then((enabled) => startTransition(() => setAttendanceIdEnabled(enabled)));
     Promise.all([getEffectiveTemplates(["attendance_student", "attendance_parent"]), getOrgBrandName()]).then(([tpl, org]) => {
       setTemplateStudent(tpl.attendance_student);
       setTemplateParent(tpl.attendance_parent);
@@ -452,6 +457,18 @@ export function AttendanceContent({ role }: { role: Role }) {
                     </div>
                     {canEdit && (
                       <div className="flex flex-none items-center gap-[4px]">
+                        {attendanceIdEnabled && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setImportTarget(s);
+                            }}
+                            title="Import attendance"
+                            className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]"
+                          >
+                            <Icon name="file-up" size={14} />
+                          </button>
+                        )}
                         <button
                           data-tour={sessionIndex === 0 ? "attendance-edit-session" : undefined}
                           onClick={(e) => {
@@ -940,6 +957,19 @@ export function AttendanceContent({ role }: { role: Role }) {
             </div>
           </div>
         </div>
+      )}
+
+      {importTarget && offeringId && (
+        <ImportAttendanceModal
+          sessionId={importTarget.id}
+          offeringId={offeringId}
+          sessionTitle={importTarget.title}
+          onClose={() => setImportTarget(null)}
+          onImported={() => {
+            refreshSessionCounts(offeringId);
+            if (importTarget.id === sessionId) getSessionRoster(importTarget.id).then(setRoster);
+          }}
+        />
       )}
 
       {confirmAllPresent && (

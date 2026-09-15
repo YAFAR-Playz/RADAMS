@@ -7,10 +7,11 @@ import { TabLoader } from "@/components/ui/tab-loader";
 import { PageHeader } from "@/components/ui/page-header";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import { importStudents, previewExistingMatches, type MatchInfo } from "@/lib/actions/import";
+import { getAttendanceIdMatchingEnabled } from "@/lib/actions/payroll-settings";
 
-type FieldKey = "name" | "phone" | "email" | "guardianName" | "guardianPhone" | "ignore";
+type FieldKey = "name" | "phone" | "email" | "guardianName" | "guardianPhone" | "attendanceId" | "ignore";
 
-const FIELD_OPTIONS: { value: FieldKey; label: string }[] = [
+const BASE_FIELD_OPTIONS: { value: FieldKey; label: string }[] = [
   { value: "name", label: "Student name" },
   { value: "phone", label: "Phone" },
   { value: "email", label: "Email" },
@@ -19,8 +20,14 @@ const FIELD_OPTIONS: { value: FieldKey; label: string }[] = [
   { value: "ignore", label: "- Ignore -" },
 ];
 
-function guessField(header: string): FieldKey {
+// Only offered when the org has turned on Attendance ID matching (Organization
+// settings → Feature toggles) — invisible otherwise, matching how the field
+// itself is invisible everywhere except this flow and attendance import.
+const ATTENDANCE_ID_OPTION: { value: FieldKey; label: string } = { value: "attendanceId", label: "Attendance ID" };
+
+function guessField(header: string, attendanceIdEnabled: boolean): FieldKey {
   const h = header.toLowerCase();
+  if (attendanceIdEnabled && h.includes("attendance") && h.includes("id")) return "attendanceId";
   if (h.includes("name") && h.includes("guardian")) return "guardianName";
   if (h.includes("name")) return "name";
   if (h.includes("guardian") && h.includes("phone")) return "guardianPhone";
@@ -59,6 +66,11 @@ function looksLikeGarbledText(text: string): boolean {
 export function ImportContent() {
   const [offerings, setOfferings] = useState<OfferingOption[] | null>(null);
   const [offeringId, setOfferingId] = useState<string | null>(null);
+  const [attendanceIdEnabled, setAttendanceIdEnabled] = useState(false);
+  const fieldOptions = useMemo(
+    () => (attendanceIdEnabled ? [...BASE_FIELD_OPTIONS.slice(0, -1), ATTENDANCE_ID_OPTION, BASE_FIELD_OPTIONS[BASE_FIELD_OPTIONS.length - 1]] : BASE_FIELD_OPTIONS),
+    [attendanceIdEnabled]
+  );
 
   const [step, setStep] = useState(0);
   const [fileName, setFileName] = useState("");
@@ -80,6 +92,7 @@ export function ImportContent() {
         setOfferingId(data[0]?.id ?? null);
       });
     });
+    getAttendanceIdMatchingEnabled().then((enabled) => startTransition(() => setAttendanceIdEnabled(enabled)));
   }, []);
 
   const current = offerings?.find((o) => o.id === offeringId) ?? null;
@@ -111,7 +124,7 @@ export function ImportContent() {
       setHeaders(headers);
       setRawRows(rows);
       const initialMapping: Record<string, FieldKey> = {};
-      headers.forEach((h) => (initialMapping[h] = guessField(h)));
+      headers.forEach((h) => (initialMapping[h] = guessField(h, attendanceIdEnabled)));
       setMapping(initialMapping);
     };
     reader.readAsText(file);
@@ -139,12 +152,13 @@ export function ImportContent() {
       const email = idxByField.email != null ? row[idxByField.email] ?? "" : "";
       const guardianName = idxByField.guardianName != null ? row[idxByField.guardianName] ?? "" : "";
       const guardianPhone = idxByField.guardianPhone != null ? row[idxByField.guardianPhone] ?? "" : "";
+      const attendanceId = idxByField.attendanceId != null ? row[idxByField.attendanceId] ?? "" : "";
       const errorReason = !name.trim() ? "Missing student name" : !guardianPhone.trim() ? "Missing guardian phone" : null;
       // readyIndex mirrors the position this row will have in `readyRows`, which is
       // the exact index `importStudents` uses internally — this keeps match lookups
       // and confirmed-merge selections aligned with what actually gets imported.
       const readyIndex = errorReason ? null : readyCounter++;
-      return { n: i + 1, name, phone, email, guardianName, guardianPhone, error: errorReason, readyIndex };
+      return { n: i + 1, name, phone, email, guardianName, guardianPhone, attendanceId, error: errorReason, readyIndex };
     });
   }, [headers, rawRows, mapping]);
 
@@ -155,7 +169,7 @@ export function ImportContent() {
   useEffect(() => {
     if (step !== 2 || !readyRows.length) return;
     let cancelled = false;
-    previewExistingMatches(readyRows.map((r) => ({ name: r.name, phone: r.phone, email: r.email, guardianName: r.guardianName, guardianPhone: r.guardianPhone }))).then(
+    previewExistingMatches(readyRows.map((r) => ({ name: r.name, phone: r.phone, email: r.email, guardianName: r.guardianName, guardianPhone: r.guardianPhone, attendanceId: r.attendanceId }))).then(
       (found) => {
         if (!cancelled) setMatches(found);
       }
@@ -176,7 +190,7 @@ export function ImportContent() {
       try {
         const { imported, merged } = await importStudents(
           offeringId,
-          readyRows.map((r) => ({ name: r.name, phone: r.phone, email: r.email, guardianName: r.guardianName, guardianPhone: r.guardianPhone })),
+          readyRows.map((r) => ({ name: r.name, phone: r.phone, email: r.email, guardianName: r.guardianName, guardianPhone: r.guardianPhone, attendanceId: r.attendanceId })),
           Array.from(confirmedMerges)
         );
         setResult({ imported, merged, errors: errorRows.length });
@@ -369,7 +383,7 @@ export function ImportContent() {
                       onChange={(e) => setMapping((m) => ({ ...m, [h]: e.target.value as FieldKey }))}
                       className="h-full w-full cursor-pointer appearance-none border-none bg-transparent text-[13px] font-medium text-[var(--text)] outline-none"
                     >
-                      {FIELD_OPTIONS.map((f) => (
+                      {fieldOptions.map((f) => (
                         <option key={f.value} value={f.value}>
                           {f.label}
                         </option>

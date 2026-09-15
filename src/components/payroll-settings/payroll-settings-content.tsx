@@ -14,6 +14,7 @@ import {
   setCurrency,
   getStaffingNotifyEmails,
   setStaffingNotifyEmails,
+  setAttendanceThresholds,
   type PayrollFlags,
   type OrgFeatureFlags,
   type PayrollSettings,
@@ -100,6 +101,13 @@ const FEATURE_TOGGLE_DEFS: { key: keyof OrgFeatureFlags; label: string; desc: st
     icon: "wallet",
     tone: "brand",
   },
+  {
+    key: "attendanceIdMatchingEnabled",
+    label: "Attendance ID matching",
+    desc: "Adds an Attendance ID column when importing students, and an \"Import attendance\" option on each session in Registration's Attendance tab, matching students by that ID instead of by name.",
+    icon: "cal-check",
+    tone: "info",
+  },
 ];
 
 const REPORT_TOGGLE_DEFS: { key: keyof ReportSettings; label: string; desc: string; icon: IconName; tone: Tone }[] = [
@@ -172,6 +180,10 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
   const [newNotifyEmail, setNewNotifyEmail] = useState("");
   const [savingNotifyEmails, setSavingNotifyEmails] = useState(false);
 
+  const [presentPctDraft, setPresentPctDraft] = useState(75);
+  const [latePctDraft, setLatePctDraft] = useState(40);
+  const [savingThresholds, setSavingThresholds] = useState(false);
+
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -179,7 +191,11 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
         const s = await getPayrollSettings();
         startTransition(() => {
           setSettings(s);
-          if (s) setOrgDefaultMethod(s.defaultAssistantCalcMethod as CalcMethod);
+          if (s) {
+            setOrgDefaultMethod(s.defaultAssistantCalcMethod as CalcMethod);
+            setPresentPctDraft(s.attendancePresentThresholdPct);
+            setLatePctDraft(s.attendanceLateThresholdPct);
+          }
           setLoading(false);
         });
       } catch {
@@ -368,6 +384,19 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
     }
   }
 
+  async function onSaveThresholds() {
+    setSavingThresholds(true);
+    try {
+      await setAttendanceThresholds(presentPctDraft, latePctDraft);
+      setSettings((prev) => (prev ? { ...prev, attendancePresentThresholdPct: presentPctDraft, attendanceLateThresholdPct: latePctDraft } : prev));
+      setNotice("Attendance thresholds saved.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't save these thresholds - try again.");
+    } finally {
+      setSavingThresholds(false);
+    }
+  }
+
   async function onCurrency(code: string) {
     if (!settings) return;
     setSettings({ ...settings, currency: code });
@@ -498,6 +527,56 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                       </div>
                     );
                   })}
+                  {settings.attendanceIdMatchingEnabled && (
+                    <div className="mt-[4px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[13px]">
+                      <div className="mb-[10px] text-[13px] font-semibold text-[var(--text)]">Attendance import thresholds</div>
+                      <p className="m-0 mb-[11px] text-[11.5px] leading-[1.4] text-[var(--muted)]">
+                        When importing attendance from a CSV, a student is marked Present at or above the first percentage of the
+                        session&apos;s length, Late at or above the second, and Absent below that.
+                      </p>
+                      <div className="flex flex-wrap items-end gap-[12px]">
+                        <div>
+                          <label className="mb-[6px] block text-[11.5px] font-semibold text-[var(--text)]">Present at ≥</label>
+                          <div className="flex h-9 w-[100px] items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px]">
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              value={presentPctDraft}
+                              onChange={(e) => setPresentPctDraft(Number(e.target.value))}
+                              className="w-full border-none bg-transparent text-[13px] font-medium text-[var(--text)] outline-none"
+                            />
+                            <span className="text-[12px] text-[var(--subtle)]">%</span>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="mb-[6px] block text-[11.5px] font-semibold text-[var(--text)]">Late at ≥</label>
+                          <div className="flex h-9 w-[100px] items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px]">
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              value={latePctDraft}
+                              onChange={(e) => setLatePctDraft(Number(e.target.value))}
+                              className="w-full border-none bg-transparent text-[13px] font-medium text-[var(--text)] outline-none"
+                            />
+                            <span className="text-[12px] text-[var(--subtle)]">%</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={onSaveThresholds}
+                          disabled={
+                            savingThresholds ||
+                            (presentPctDraft === settings.attendancePresentThresholdPct && latePctDraft === settings.attendanceLateThresholdPct)
+                          }
+                          className="flex h-9 items-center gap-[6px] rounded-[8px] bg-[var(--brand)] px-[13px] text-[12.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+                        >
+                          {savingThresholds ? <Spinner size={13} /> : <Icon name="check" size={13} />}
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </section>

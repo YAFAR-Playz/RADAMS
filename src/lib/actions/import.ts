@@ -11,6 +11,12 @@ export type ImportRow = {
   email: string;
   guardianName: string;
   guardianPhone: string;
+  // Only ever populated when the org has "Attendance ID matching" enabled
+  // (see payroll-settings.ts) — an external id (e.g. a Zoom registration
+  // id) later used to match attendance-session imports back to this
+  // student. Empty string when not mapped, same convention as the other
+  // optional fields here.
+  attendanceId: string;
 };
 
 export type ImportOutcome = { imported: number; merged: number };
@@ -25,7 +31,7 @@ function initialsOf(name: string) {
     .toUpperCase();
 }
 
-type ExistingStudent = { id: string; name: string; phone: string | null; email: string | null; guardian_phone: string | null };
+type ExistingStudent = { id: string; name: string; phone: string | null; email: string | null; guardian_phone: string | null; attendance_id: string | null };
 
 // "strong": name + the student's own email/phone match — safe to auto-merge.
 // "weak": name + only the guardian phone match — a shared guardian phone
@@ -35,6 +41,13 @@ type ExistingStudent = { id: string; name: string; phone: string | null; email: 
 export type MatchConfidence = "strong" | "weak";
 export type MatchInfo = { id: string; name: string; confidence: MatchConfidence };
 
+// Attendance id is never a match key here — matching still works exactly
+// like it did before this field existed (name + email/phone/guardian
+// phone). The id only ever flows the other way: once a row is matched by
+// name as usual, and that existing student doesn't have an id yet, the
+// id from the sheet gets backfilled onto them (see the patch logic in
+// importStudents below). This is what actually lets an org backfill ids
+// onto its whole existing roster via a single admin-provided CSV.
 function findMatch(row: ImportRow, existing: ExistingStudent[]): MatchInfo | null {
   const name = row.name.trim().toLowerCase();
   const email = row.email.trim().toLowerCase();
@@ -70,7 +83,7 @@ async function fetchDedupCandidates(supabase: Awaited<ReturnType<typeof createCl
   for (let from = 0; ; from += STUDENT_PAGE_SIZE) {
     const { data: page } = await supabase
       .from("students")
-      .select("id, name, phone, email, guardian_phone")
+      .select("id, name, phone, email, guardian_phone, attendance_id")
       .eq("org_id", orgId)
       .range(from, from + STUDENT_PAGE_SIZE - 1);
     if (!page || page.length === 0) break;
@@ -169,6 +182,7 @@ export async function importStudents(offeringId: string, rows: ImportRow[], conf
           email: r.email || null,
           guardian_name: r.guardianName || null,
           guardian_phone: r.guardianPhone || null,
+          attendance_id: r.attendanceId.trim() || null,
         }))
       )
       .select("id");
@@ -193,6 +207,7 @@ export async function importStudents(offeringId: string, rows: ImportRow[], conf
       if (existingStudent && !existingStudent.phone && r.phone.trim()) patch.phone = r.phone.trim();
       if (existingStudent && !existingStudent.email && r.email.trim()) patch.email = r.email.trim();
       if (existingStudent && !existingStudent.guardian_phone && r.guardianPhone.trim()) patch.guardian_phone = r.guardianPhone.trim();
+      if (existingStudent && !existingStudent.attendance_id && r.attendanceId.trim()) patch.attendance_id = r.attendanceId.trim();
       if (Object.keys(patch).length) {
         await supabase.from("students").update(patch).eq("id", match.id);
       }
