@@ -65,7 +65,7 @@ export function LoginHeroCards({ brand }: { brand: string }) {
 
       {/* Stat card */}
       <div
-        className="absolute left-[6%] top-[8%] w-[240px] rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-[18px] shadow-[0_18px_36px_rgba(16,23,41,0.12)]"
+        className="absolute left-[6%] top-[8%] w-[clamp(175px,40%,240px)] rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-[18px] shadow-[0_18px_36px_rgba(16,23,41,0.12)]"
         style={{ transform: "rotate(-6deg)" }}
       >
         <div style={fade}>
@@ -96,7 +96,7 @@ export function LoginHeroCards({ brand }: { brand: string }) {
 
       {/* Bars card */}
       <div
-        className="absolute right-[2%] top-[30%] w-[210px] rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-[18px] shadow-[0_18px_36px_rgba(16,23,41,0.12)]"
+        className="absolute right-[2%] top-[30%] w-[clamp(155px,35%,210px)] rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-[18px] shadow-[0_18px_36px_rgba(16,23,41,0.12)]"
         style={{ transform: "rotate(4deg)" }}
       >
         <div style={fade}>
@@ -126,7 +126,7 @@ export function LoginHeroCards({ brand }: { brand: string }) {
 
       {/* People card */}
       <div
-        className="absolute bottom-[6%] left-[16%] w-[220px] rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-[18px] shadow-[0_18px_36px_rgba(16,23,41,0.12)]"
+        className="absolute bottom-[6%] left-[16%] w-[clamp(160px,37%,220px)] rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-[18px] shadow-[0_18px_36px_rgba(16,23,41,0.12)]"
         style={{ transform: "rotate(-3deg)" }}
       >
         <div style={fade}>

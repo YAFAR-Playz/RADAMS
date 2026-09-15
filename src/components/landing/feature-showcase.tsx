@@ -161,12 +161,12 @@ export function FeatureShowcase({ copy, brand }: { copy: LandingCopy; brand: str
               transition={{ duration: 0.5, ease: "easeOut" }}
               className="flex flex-col gap-[16px]"
             >
-              <div className="h-[220px]">
-                <FeatureVisual feature={key} brand={brand} />
-              </div>
               <div>
                 <h3 className="m-0 mb-[6px] text-[17px] font-bold tracking-[-0.01em] text-[var(--text)]">{item.title}</h3>
                 <p className="m-0 text-[13.5px] leading-[1.6] text-[var(--muted)]">{item.body}</p>
+              </div>
+              <div className="h-[220px]">
+                <FeatureVisual feature={key} brand={brand} />
               </div>
             </motion.div>
           );
