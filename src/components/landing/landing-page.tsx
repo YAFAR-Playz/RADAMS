@@ -94,7 +94,8 @@ export function LandingPage({
           <div className="ms-auto flex items-center gap-[10px] md:ms-0">
             <Link
               href="/login"
-              className="hidden h-[38px] flex-none items-center rounded-[9px] border border-[var(--border)] px-[16px] text-[13px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)] sm:flex"
+              className="hidden h-[38px] flex-none items-center rounded-[9px] border px-[16px] text-[13px] font-semibold sm:flex"
+              style={{ borderColor: brand, color: brand, background: "var(--brands)" }}
             >
               {copy.nav.signIn}
             </Link>
@@ -116,7 +117,11 @@ export function LandingPage({
                 {l.label}
               </a>
             ))}
-            <Link href="/login" className="rounded-[8px] px-3 py-[10px] text-[14px] font-semibold text-[var(--brand)]">
+            <Link
+              href="/login"
+              className="rounded-[8px] px-3 py-[10px] text-[14px] font-semibold"
+              style={{ color: brand, background: "var(--brands)" }}
+            >
               {copy.nav.signIn}
             </Link>
             <Link href={altHref} className="rounded-[8px] px-3 py-[10px] text-[14px] font-medium text-[var(--muted)]">
@@ -180,7 +185,8 @@ export function LandingPage({
             </a>
             <Link
               href="/login"
-              className="flex h-[50px] items-center rounded-[12px] border border-[var(--border)] bg-[var(--surface)] px-[26px] text-[15px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]"
+              className="flex h-[50px] items-center rounded-[12px] border-2 px-[26px] text-[15px] font-semibold"
+              style={{ borderColor: brand, color: brand, background: "var(--brands)" }}
             >
               {copy.hero.secondaryCta}
             </Link>
