@@ -58,7 +58,7 @@ export function StaffPaymentsContent() {
   function reloadCourses(profileId: string) {
     getAssistantOfferings(profileId)
       .then((data) => startTransition(() => setCoursesByStaff((prev) => ({ ...prev, [profileId]: data }))))
-      .catch(() => setError("Couldn't load this person's courses — try again."));
+      .catch(() => setError("Couldn't load this person's courses - try again."));
   }
 
   function onToggleCourses(profileId: string) {
@@ -84,7 +84,7 @@ export function StaffPaymentsContent() {
       }
       reloadCourses(profileId);
     } catch {
-      setError("Couldn't save this override — try again.");
+      setError("Couldn't save this override - try again.");
     } finally {
       setSavingCourseKey(null);
     }
@@ -98,7 +98,7 @@ export function StaffPaymentsContent() {
       await setOfferingCalcMethodForAssistant(offeringId, profileId, "fixed", amount);
       reloadCourses(profileId);
     } catch {
-      setError("Couldn't save this amount — try again.");
+      setError("Couldn't save this amount - try again.");
     } finally {
       setSavingCourseKey(null);
     }
@@ -152,7 +152,7 @@ export function StaffPaymentsContent() {
     try {
       await updatePaySettings(id, apiPatch);
     } catch {
-      setError("Couldn't save this change — try again.");
+      setError("Couldn't save this change - try again.");
     } finally {
       setSavingId(null);
     }
@@ -183,7 +183,7 @@ export function StaffPaymentsContent() {
       <PageHeader
         eyebrow="Finance"
         title="Staff payments"
-        subtitle="Every head & assistant — payment method, last payment, lifetime earnings, and how their salary is calculated."
+        subtitle="Every head & assistant - payment method, last payment, lifetime earnings, and how their salary is calculated."
       >
         <div className="flex flex-wrap items-center gap-[10px]">
           <div className="flex h-10 min-w-[200px] max-w-[320px] flex-1 items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3">
@@ -325,7 +325,7 @@ export function StaffPaymentsContent() {
                 <div className="flex gap-[10px] rounded-[var(--rad-sm)] border border-[var(--border2)] bg-[var(--surface2)] p-[10px_12px]">
                   <div className="flex-1">
                     <div className="text-[10.5px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Last payment</div>
-                    <div className="mt-[2px] font-mono text-[13.5px] font-bold text-[var(--text)]">{r.lastAmount != null ? fmt(r.lastAmount) : "—"}</div>
+                    <div className="mt-[2px] font-mono text-[13.5px] font-bold text-[var(--text)]">{r.lastAmount != null ? fmt(r.lastAmount) : "-"}</div>
                     <div className="text-[11px] text-[var(--subtle)]">{r.lastDate ? new Date(r.lastDate).toLocaleDateString() : "No payments yet"}</div>
                   </div>
                   <div className="flex-1 border-l border-[var(--border)] pl-3">

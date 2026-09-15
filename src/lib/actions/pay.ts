@@ -46,7 +46,7 @@ export type MyPay = {
 };
 
 function offeringLabel(o: { session: string; unit: string | null; courses: { name: string } | { name: string }[] | null } | null) {
-  if (!o) return "—";
+  if (!o) return "-";
   const course = Array.isArray(o.courses) ? o.courses[0] : o.courses;
   return [course?.name, o.session, o.unit].filter(Boolean).join(" · ");
 }

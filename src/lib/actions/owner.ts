@@ -453,7 +453,7 @@ export async function getSystemOverview(): Promise<SystemOverview> {
 
   const recentSignups = (profiles ?? []).slice(0, 8).map((p) => {
     const org = Array.isArray(p.organizations) ? p.organizations[0] : p.organizations;
-    return { name: p.full_name, role: roleLabel[p.role] ?? p.role, orgName: org?.name ?? "—", createdAt: p.created_at };
+    return { name: p.full_name, role: roleLabel[p.role] ?? p.role, orgName: org?.name ?? "-", createdAt: p.created_at };
   });
 
   return { usersByRole, orgsByStatus, recentSignups };

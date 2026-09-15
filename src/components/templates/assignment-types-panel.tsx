@@ -24,8 +24,8 @@ const REPORT_GROUP_OPTS: { value: ReportGroup; label: string; desc: string }[] =
 
 function describe(t: { hasGrade: boolean; hasComment: boolean }) {
   if (t.hasGrade && t.hasComment) return "Status, grade, and a comment";
-  if (t.hasGrade) return "Status and a grade — no comment";
-  if (t.hasComment) return "Status and a comment — no grade";
+  if (t.hasGrade) return "Status and a grade - no comment";
+  if (t.hasComment) return "Status and a comment - no grade";
   return "Status only";
 }
 
@@ -69,7 +69,7 @@ export function AssignmentTypesPanel() {
       setEditingId(null);
       reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't save this assignment type — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't save this assignment type - try again.");
     } finally {
       setSaving(false);
     }
@@ -83,7 +83,7 @@ export function AssignmentTypesPanel() {
       setConfirmDeleteId(null);
       reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't delete this assignment type — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't delete this assignment type - try again.");
     } finally {
       setDeleting(false);
     }
@@ -128,7 +128,7 @@ export function AssignmentTypesPanel() {
             ))}
           </div>
         ) : templates.length === 0 ? (
-          <div className="p-10 text-center text-[13.5px] text-[var(--muted)]">No assignment types yet — add one to get started.</div>
+          <div className="p-10 text-center text-[13.5px] text-[var(--muted)]">No assignment types yet - add one to get started.</div>
         ) : (
           <div className="divide-y divide-[var(--border)]">
             {templates.map((t) => (
@@ -251,7 +251,7 @@ export function AssignmentTypesPanel() {
                 </button>
               </div>
               <p className="m-0 text-[11.5px] leading-[1.5] text-[var(--subtle)]">
-                Status (logged / not logged) always applies — these two toggles control what else shows up next to it.
+                Status (logged / not logged) always applies - these two toggles control what else shows up next to it.
               </p>
               <div>
                 <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Monthly report section</label>

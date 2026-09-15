@@ -65,7 +65,7 @@ const TOGGLE_DEFS: { key: keyof PayrollFlags; label: string; desc: string; icon:
   {
     key: "assistantSeeBreakdown",
     label: "Assistants see full breakdown",
-    desc: "Assistants view the per-course method, bonuses and deductions — not just the total.",
+    desc: "Assistants view the per-course method, bonuses and deductions - not just the total.",
     icon: "users",
     tone: "ok",
   },
@@ -106,7 +106,7 @@ const REPORT_TOGGLE_DEFS: { key: keyof ReportSettings; label: string; desc: stri
   {
     key: "groupByType",
     label: "Group by assignment type",
-    desc: "Homeworks get a simple title + status list; each Quiz gets its own Status/Grade/Mark table — matches assignment types set in Assignment logging types.",
+    desc: "Homeworks get a simple title + status list; each Quiz gets its own Status/Grade/Mark table - matches assignment types set in Assignment logging types.",
     icon: "chart",
     tone: "info",
   },
@@ -127,7 +127,7 @@ const REPORT_TOGGLE_DEFS: { key: keyof ReportSettings; label: string; desc: stri
   {
     key: "showAverageGrade",
     label: "Show average grade",
-    desc: "Include the computed average grade — both in PDFs viewed on the site and PDFs sent to Drive. Off hides it everywhere.",
+    desc: "Include the computed average grade - both in PDFs viewed on the site and PDFs sent to Drive. Off hides it everywhere.",
     icon: "trend",
     tone: "ok",
   },
@@ -216,7 +216,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
     try {
       await setStaffingNotifyEmails(next);
     } catch {
-      setError("Couldn't save notification emails — try again.");
+      setError("Couldn't save notification emails - try again.");
       setNotifyEmails(notifyEmails);
     } finally {
       setSavingNotifyEmails(false);
@@ -249,7 +249,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
     try {
       await setReportSettings(next);
     } catch {
-      setError("Couldn't save report settings — try again.");
+      setError("Couldn't save report settings - try again.");
       setReportSettingsState(reportSettings);
     } finally {
       setSavingReport(false);
@@ -275,7 +275,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
       setBands(sorted);
       setNotice("Traffic light grade bands saved.");
     } catch {
-      setError("Couldn't save these bands — try again.");
+      setError("Couldn't save these bands - try again.");
     } finally {
       setSavingBands(false);
     }
@@ -297,7 +297,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
       const name = staffList?.find((s) => s.id === staffPickId)?.name;
       setNotice(`Default calc method saved for ${name ?? "this staff member"}.`);
     } catch {
-      setError("Couldn't save this default — try again.");
+      setError("Couldn't save this default - try again.");
     } finally {
       setSavingStaffDefault(false);
     }
@@ -312,11 +312,11 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
       const courseName = offerings?.find((o) => o.id === coursePickId)?.label;
       setNotice(
         updated
-          ? `Set as the calc method on ${courseName ?? "this course"} for ${updated} assistant${updated === 1 ? "" : "s"} — their default on any other course is unaffected.`
+          ? `Set as the calc method on ${courseName ?? "this course"} for ${updated} assistant${updated === 1 ? "" : "s"} - their default on any other course is unaffected.`
           : `No assistants are currently assigned to ${courseName ?? "this course"}.`
       );
     } catch {
-      setError("Couldn't apply this to the course — try again.");
+      setError("Couldn't apply this to the course - try again.");
     } finally {
       setApplyingToCourse(false);
     }
@@ -332,7 +332,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
       setSettings((prev) => (prev ? { ...prev, defaultAssistantCalcMethod: orgDefaultMethod } : prev));
       listStaffForCalcMethod().then(setStaffList);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't save the org default — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't save the org default - try again.");
     } finally {
       setApplyingOrgDefault(false);
     }
@@ -346,7 +346,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
     try {
       await setPayrollFlag(key, next);
     } catch {
-      setError("Couldn't save this setting — try again.");
+      setError("Couldn't save this setting - try again.");
       setSettings((prev) => (prev ? { ...prev, [key]: !next } : prev));
     } finally {
       setSavingKey(null);
@@ -361,7 +361,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
     try {
       await setOrgFeatureFlag(key, next);
     } catch {
-      setError("Couldn't save this setting — try again.");
+      setError("Couldn't save this setting - try again.");
       setSettings((prev) => (prev ? { ...prev, [key]: !next } : prev));
     } finally {
       setSavingKey(null);
@@ -375,7 +375,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
     try {
       await setCurrency(code);
     } catch {
-      setError("Couldn't save currency — try again.");
+      setError("Couldn't save currency - try again.");
     } finally {
       setSavingKey(null);
     }
@@ -459,7 +459,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
             <section className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
               <h3 className="m-0 mb-1 text-[14px] font-semibold text-[var(--text)]">Feature toggles</h3>
               <p className="m-0 mb-[13px] text-[12px] text-[var(--subtle)]">
-                Admin-only. Off by default — nothing changes for your organization until you turn one on.
+                Admin-only. Off by default - nothing changes for your organization until you turn one on.
               </p>
               {loading || !settings ? (
                 <div className="flex flex-col gap-2">
@@ -507,7 +507,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
             <section className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
               <h3 className="m-0 mb-1 text-[14px] font-semibold text-[var(--text)]">Monthly report look</h3>
               <p className="m-0 mb-[13px] max-w-[560px] text-[12px] leading-[1.5] text-[var(--subtle)]">
-                Admin-only. Controls what a generated monthly report includes — PDFs viewed on the site and PDFs sent to Drive alike.
+                Admin-only. Controls what a generated monthly report includes - PDFs viewed on the site and PDFs sent to Drive alike.
               </p>
               {reportSettings === null ? (
                 <div className="flex flex-col gap-2">
@@ -556,7 +556,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
             <section className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
               <h3 className="m-0 mb-1 text-[14px] font-semibold text-[var(--text)]">Staffing request notifications</h3>
               <p className="m-0 mb-[13px] max-w-[560px] text-[12px] leading-[1.5] text-[var(--subtle)]">
-                Admin-only. Add/remove/replace requests already email every HR and Admin account automatically — addresses added
+                Admin-only. Add/remove/replace requests already email every HR and Admin account automatically - addresses added
                 here get included on that same email too, for anyone who needs visibility without a RadAMS account.
               </p>
               <div className="mb-[11px] flex gap-[8px]">
@@ -587,7 +587,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
               {notifyEmails === null ? (
                 <SkeletonRow className="h-[42px]" />
               ) : notifyEmails.length === 0 ? (
-                <p className="m-0 text-[12.5px] text-[var(--subtle)]">No extra addresses yet — only HR/Admin accounts are notified.</p>
+                <p className="m-0 text-[12.5px] text-[var(--subtle)]">No extra addresses yet - only HR/Admin accounts are notified.</p>
               ) : (
                 <div className="flex flex-col gap-[7px]">
                   {notifyEmails.map((email) => (
@@ -765,8 +765,8 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                     Apply to all assistants on this course
                   </button>
                   <p className="m-0 text-[11px] leading-[1.4] text-[var(--subtle)]">
-                    Sets the calc method for this course only, for every assistant currently assigned to it — their default on any
-                    other course is unaffected. Doesn&apos;t change salary lines already generated — edit those individually in
+                    Sets the calc method for this course only, for every assistant currently assigned to it - their default on any
+                    other course is unaffected. Doesn&apos;t change salary lines already generated - edit those individually in
                     Salaries. To override just one assistant on a course (including a per-course fixed amount), use Finance &rarr;
                     Payments instead.
                   </p>
@@ -908,7 +908,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                   <div className="flex h-[38px] w-[38px] items-center justify-center rounded-[10px] bg-[var(--surface2)] text-[var(--subtle)]">
                     <Icon name="shield" size={19} />
                   </div>
-                  <span className="text-[12px] leading-[1.45] text-[var(--muted)]">Hidden — Heads fill categories and notes only.</span>
+                  <span className="text-[12px] leading-[1.45] text-[var(--muted)]">Hidden - Heads fill categories and notes only.</span>
                 </div>
               )}
             </div>

@@ -141,7 +141,7 @@ export async function getFullExport(offeringId: string): Promise<FullExportRow[]
       return {
         studentCode: student.student_code,
         studentName: student.name,
-        assistantName: assistant?.full_name ?? "—",
+        assistantName: assistant?.full_name ?? "-",
         enrolledAt: e.created_at,
         leftAt: e.left_at,
         assignmentsChecked: checkedByStudent.get(e.student_id) ?? 0,
@@ -344,7 +344,7 @@ export async function getAssistantComments(offeringId: string, assistantId: stri
         studentId: log.student_id,
         studentName: student.name,
         initials: student.initials,
-        assignment: titleById.get(log.assignment_id) ?? "—",
+        assignment: titleById.get(log.assignment_id) ?? "-",
         status: log.status as AssignmentStatus | null,
         grade: log.grade,
         comment: log.comment,

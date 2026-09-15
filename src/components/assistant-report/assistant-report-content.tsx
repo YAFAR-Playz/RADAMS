@@ -99,7 +99,7 @@ export function AssistantReportContent() {
       <PageHeader
         eyebrow="Monthly Reports"
         title="My students' reports"
-        subtitle="View, share, download, or print each of your students' monthly reports — available once the head generates the report for that month."
+        subtitle="View, share, download, or print each of your students' monthly reports - available once the head generates the report for that month."
       >
         <div className="flex flex-wrap items-center gap-[10px]">
           <select

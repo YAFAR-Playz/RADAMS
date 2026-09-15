@@ -165,7 +165,7 @@ export function LoginForm() {
                     />
                   </div>
                   <p className="mt-2 text-[12.5px] text-[var(--subtle)]">
-                    Phone sign-in isn&apos;t available yet — please use email for now.
+                    Phone sign-in isn&apos;t available yet - please use email for now.
                   </p>
                 </>
               )}
@@ -202,7 +202,7 @@ export function LoginForm() {
               Enter your password
             </h1>
             <p className="m-0 mb-[22px] text-[14.5px] text-[var(--muted)] leading-relaxed">
-              Almost there — enter your password to finish signing in.
+              Almost there - enter your password to finish signing in.
             </p>
             <label className="text-[13px] font-semibold text-[var(--text)] block mb-2">Password</label>
             <div className="flex items-center gap-[9px] bg-[var(--surface)] border border-[var(--border)] rounded-[var(--rad-sm)] px-[13px] h-[50px] focus-within:border-[var(--brand)] focus-within:shadow-[0_0_0_3px_var(--brands)]">

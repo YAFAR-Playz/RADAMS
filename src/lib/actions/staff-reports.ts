@@ -119,7 +119,7 @@ export async function deleteStaffContract(contractId: string) {
 }
 
 function offeringLabel(o: { session: string; unit: string | null; courses: { name: string } | { name: string }[] | null } | null) {
-  if (!o) return "—";
+  if (!o) return "-";
   const course = Array.isArray(o.courses) ? o.courses[0] : o.courses;
   return [course?.name, o.session, o.unit].filter(Boolean).join(" · ");
 }
@@ -747,7 +747,7 @@ async function appendFileSection(canvas: ReportCanvas, label: string, file: Embe
       const pages = await canvas.doc.copyPages(src, src.getPageIndices());
       for (const p of pages) canvas.doc.addPage(p);
     } catch {
-      canvas.text("(Couldn't read this PDF file to embed it here — it's still on file in the app.)", { color: DANGER });
+      canvas.text("(Couldn't read this PDF file to embed it here - it's still on file in the app.)", { color: DANGER });
     }
     return;
   }
@@ -762,11 +762,11 @@ async function appendFileSection(canvas: ReportCanvas, label: string, file: Embe
       const h = image.height * scale;
       page.drawImage(image, { x: (PAGE_WIDTH - w) / 2, y: (PAGE_HEIGHT - h) / 2, width: w, height: h });
     } catch {
-      canvas.text("(Couldn't read this image file to embed it here — it's still on file in the app.)", { color: DANGER });
+      canvas.text("(Couldn't read this image file to embed it here - it's still on file in the app.)", { color: DANGER });
     }
     return;
   }
-  canvas.text("(This file type can't be embedded in the PDF — it's still on file in the app.)", { color: TEXT_MUTED });
+  canvas.text("(This file type can't be embedded in the PDF - it's still on file in the app.)", { color: TEXT_MUTED });
 }
 
 // Follows the org's existing "Salary Details" PDF style: a bordered header
@@ -790,7 +790,7 @@ async function buildStaffReportPdf(
   canvas.sectionLabel("Staff details");
   const details: { label: string; value: string; full?: boolean }[] = [
     { label: "Email", value: data.email },
-    { label: "Phone", value: data.phone ?? "—" },
+    { label: "Phone", value: data.phone ?? "-" },
     ...(data.hiredAt ? [{ label: "Hired", value: new Date(data.hiredAt).toLocaleDateString() }] : []),
     ...(data.leftAt ? [{ label: "Left", value: new Date(data.leftAt).toLocaleDateString() }] : []),
     { label: "Courses", value: data.offeringLabels.join(", "), full: true },
@@ -821,11 +821,11 @@ async function buildStaffReportPdf(
 
       canvas.listRows(
         "Extra work",
-        c.extraItems.map((item) => ({ left: `${item.category ?? "Extra"}${item.note ? ` — ${item.note}` : ""}`, right: `+${money(item.amount)}`, color: OK }))
+        c.extraItems.map((item) => ({ left: `${item.category ?? "Extra"}${item.note ? ` - ${item.note}` : ""}`, right: `+${money(item.amount)}`, color: OK }))
       );
       canvas.listRows(
         "Deductions breakdown",
-        c.deductionItems.map((item) => ({ left: `${item.category ?? "Deduction"}${item.note ? ` — ${item.note}` : ""}`, right: `-${money(item.amount)}`, color: DANGER }))
+        c.deductionItems.map((item) => ({ left: `${item.category ?? "Deduction"}${item.note ? ` - ${item.note}` : ""}`, right: `-${money(item.amount)}`, color: DANGER }))
       );
       canvas.y -= 14;
     }
@@ -848,7 +848,7 @@ async function buildStaffReportPdf(
 
   for (const p of data.periods) {
     const receipt = data.receiptsByPeriod[p.period];
-    if (receipt) await appendFileSection(canvas, `Receipt — ${periodLabel(p.period)}`, receipt);
+    if (receipt) await appendFileSection(canvas, `Receipt - ${periodLabel(p.period)}`, receipt);
   }
 
   canvas.finalizeFooters();

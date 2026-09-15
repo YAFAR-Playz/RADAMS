@@ -70,7 +70,7 @@ export const TEMPLATE_CATEGORY_DEFS: TemplateCategoryDef[] = [
   },
   {
     category: "critical_alert",
-    label: "Traffic light — Red tier (Critical Alert)",
+    label: "Traffic light - Red tier (Critical Alert)",
     usage: "Sent by Heads/Assistants when a student drops to Red",
     icon: "alert",
     vars: ["{student}", "{grade}", "{target_grade}", "{org}", "{course}", "{month}"],
@@ -83,7 +83,7 @@ export const TEMPLATE_CATEGORY_DEFS: TemplateCategoryDef[] = [
   },
   {
     category: "caution_flag",
-    label: "Traffic light — Yellow tier (Caution Flag)",
+    label: "Traffic light - Yellow tier (Caution Flag)",
     usage: "Sent by Heads/Assistants when a student drops to Yellow",
     icon: "alert",
     vars: ["{student}", "{grade}", "{target_grade}", "{org}", "{course}"],

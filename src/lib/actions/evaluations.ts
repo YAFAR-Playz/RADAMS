@@ -410,9 +410,9 @@ export async function listEvaluationSubmissions(filters: {
       return {
         id: e.id,
         period: e.period,
-        headName: head?.full_name ?? "—",
-        assistantName: assistant?.full_name ?? "—",
-        offeringLabel: offering ? [course?.name, offering.session, offering.unit].filter(Boolean).join(" · ") : "—",
+        headName: head?.full_name ?? "-",
+        assistantName: assistant?.full_name ?? "-",
+        offeringLabel: offering ? [course?.name, offering.session, offering.unit].filter(Boolean).join(" · ") : "-",
         rating: e.rating as EvalRating | null,
         notes: e.notes ?? "",
         status: e.status as "draft" | "submitted",

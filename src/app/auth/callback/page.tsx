@@ -38,5 +38,5 @@ export default async function AuthCallbackPage({ searchParams }: { searchParams:
 
 export async function generateMetadata({ searchParams }: { searchParams: SearchParams }) {
   const branding = await resolveBranding(searchParams);
-  return { title: `Signing in — ${branding.brandName}` };
+  return { title: `Signing in - ${branding.brandName}` };
 }

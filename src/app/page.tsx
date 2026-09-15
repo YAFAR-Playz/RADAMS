@@ -10,7 +10,7 @@ export async function generateMetadata() {
   const branding = await getPlatformDefaultBranding();
   return {
     title: branding.name,
-    description: "Assignments, evaluations and payroll — organized the way your team actually works.",
+    description: "Assignments, evaluations and payroll - organized the way your team actually works.",
   };
 }
 

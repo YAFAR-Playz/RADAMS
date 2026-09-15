@@ -370,7 +370,7 @@ export function PayCategoriesContent() {
     try {
       await fn();
     } catch {
-      setError("Couldn't save this change — try again.");
+      setError("Couldn't save this change - try again.");
     } finally {
       setBusyId(null);
     }
@@ -381,7 +381,7 @@ export function PayCategoriesContent() {
     try {
       await fn();
     } catch {
-      setError("Couldn't add this — try again.");
+      setError("Couldn't add this - try again.");
     } finally {
       setAddingId(null);
     }
@@ -480,7 +480,7 @@ export function PayCategoriesContent() {
       });
       await refetchLists();
     } catch {
-      setError("Couldn't clear this override — try again.");
+      setError("Couldn't clear this override - try again.");
     } finally {
       setBusyId(null);
     }
@@ -513,7 +513,7 @@ export function PayCategoriesContent() {
       });
       await refetchCategoryRates(courseScope);
     } catch {
-      setError("Couldn't clear this override — try again.");
+      setError("Couldn't clear this override - try again.");
     } finally {
       setBusyId(null);
     }
@@ -593,7 +593,7 @@ export function PayCategoriesContent() {
       await refetchCategoryRates(courseScope);
       await refetchOfficeHoursDefaults(courseScope);
     } catch {
-      setError("Couldn't save your changes — try again.");
+      setError("Couldn't save your changes - try again.");
     } finally {
       setSaving(false);
     }
@@ -766,7 +766,7 @@ export function PayCategoriesContent() {
             <header className="border-b border-[var(--border2)] p-[14px_16px]">
               <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Per-paper rate & fixed salary by course</h3>
               <p className="m-0 mt-[2px] text-[12px] text-[var(--muted)]">
-                The fixed salary is used by the &quot;Fixed + per paper&quot; calc method — a flat base plus this course&apos;s per-paper rate.
+                The fixed salary is used by the &quot;Fixed + per paper&quot; calc method - a flat base plus this course&apos;s per-paper rate.
               </p>
             </header>
             {courseScope.length === 0 ? (
@@ -809,7 +809,7 @@ export function PayCategoriesContent() {
                           <input
                             value={courseMockExamRateDrafts[c.offeringId] ?? String(c.mockExamRate ?? "")}
                             onChange={(e) => draftCourseMockExamRate(c.offeringId, e.target.value.replace(/[^0-9]/g, ""))}
-                            placeholder="—"
+                            placeholder="-"
                             inputMode="numeric"
                             className="w-full border-none bg-transparent font-mono text-[13px] font-bold text-[var(--info)] outline-none"
                           />
@@ -818,7 +818,7 @@ export function PayCategoriesContent() {
                     )}
                     {headFixedPerAssistantEnabled && (
                       <>
-                        <div className="mt-[2px] text-[10.5px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Head — fixed + per assistant</div>
+                        <div className="mt-[2px] text-[10.5px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Head - fixed + per assistant</div>
                         <div className="flex items-center gap-[10px]">
                           <span className="w-[80px] flex-none text-[11.5px] text-[var(--subtle)]">fixed salary</span>
                           <div className="flex h-[34px] w-[88px] flex-none items-center rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] px-[9px]">
@@ -826,7 +826,7 @@ export function PayCategoriesContent() {
                             <input
                               value={courseHeadFixedSalaryDrafts[c.offeringId] ?? String(c.headFixedSalary ?? "")}
                               onChange={(e) => draftCourseHeadFixedSalary(c.offeringId, e.target.value.replace(/[^0-9]/g, ""))}
-                              placeholder="—"
+                              placeholder="-"
                               inputMode="numeric"
                               className="w-full border-none bg-transparent font-mono text-[13px] font-bold text-[var(--brand)] outline-none"
                             />
@@ -839,7 +839,7 @@ export function PayCategoriesContent() {
                             <input
                               value={courseHeadPerAssistantRateDrafts[c.offeringId] ?? String(c.headPerAssistantRate ?? "")}
                               onChange={(e) => draftCourseHeadPerAssistantRate(c.offeringId, e.target.value.replace(/[^0-9]/g, ""))}
-                              placeholder="—"
+                              placeholder="-"
                               inputMode="numeric"
                               className="w-full border-none bg-transparent font-mono text-[13px] font-bold text-[var(--info)] outline-none"
                             />
@@ -898,7 +898,7 @@ export function PayCategoriesContent() {
                       <button
                         onClick={() => onClearOfficeHourOverride(c.offeringId)}
                         disabled={busyId === c.offeringId}
-                        title="Clear override — use org default instead"
+                        title="Clear override - use org default instead"
                         className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-[7px] border border-[var(--border)] bg-[var(--surface)] text-[var(--subtle)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] hover:text-[var(--danger)] disabled:opacity-60"
                       >
                         {busyId === c.offeringId ? <Spinner size={12} /> : <Icon name="x" size={13} />}
@@ -972,7 +972,7 @@ export function PayCategoriesContent() {
                             <button
                               onClick={() => onClearCategoryOverride(r.categoryId, r.offeringId, r.kind, r.label)}
                               disabled={busyId === `${r.categoryId}::${r.offeringId}`}
-                              title="Clear override — use org default instead"
+                              title="Clear override - use org default instead"
                               className="flex h-[28px] w-[28px] flex-none items-center justify-center rounded-[7px] border border-[var(--border)] bg-[var(--surface)] text-[var(--subtle)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] hover:text-[var(--danger)] disabled:opacity-60"
                             >
                               {busyId === `${r.categoryId}::${r.offeringId}` ? <Spinner size={11} /> : <Icon name="x" size={12} />}
@@ -995,7 +995,7 @@ export function PayCategoriesContent() {
           <section className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
             <header className="border-b border-[var(--border2)] p-[14px_16px]">
               <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Fixed office hours per assistant</h3>
-              <p className="m-0 mt-1 text-[12px] text-[var(--muted)]">Auto-applied to Salaries each month once set — still editable per period there.</p>
+              <p className="m-0 mt-1 text-[12px] text-[var(--muted)]">Auto-applied to Salaries each month once set - still editable per period there.</p>
             </header>
             {courseScope.length === 0 ? (
               <div className="p-[30px] text-center text-[13px] text-[var(--muted)]">Select one or more courses above to assign fixed office hours.</div>
@@ -1019,7 +1019,7 @@ export function PayCategoriesContent() {
                                 <span className="text-[11.5px] text-[var(--subtle)]">hrs/mo</span>
                                 <input
                                   value={officeHoursDefaultDrafts[key] ?? (a.hours != null ? String(a.hours) : "")}
-                                  placeholder="—"
+                                  placeholder="-"
                                   onChange={(e) => draftOfficeHoursDefault(offeringId, a.assistantId, e.target.value.replace(/[^0-9]/g, ""))}
                                   inputMode="numeric"
                                   className="h-8 w-16 rounded-[7px] border border-[var(--border)] bg-[var(--surface2)] text-center font-mono text-[12.5px] font-bold text-[var(--text)] outline-none"

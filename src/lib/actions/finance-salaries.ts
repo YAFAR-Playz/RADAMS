@@ -50,7 +50,7 @@ export type AssistantSalary = {
 };
 
 function offeringLabel(o: { session: string; unit: string | null; courses: { name: string } | { name: string }[] | null } | null) {
-  if (!o) return "—";
+  if (!o) return "-";
   const course = Array.isArray(o.courses) ? o.courses[0] : o.courses;
   return [course?.name, o.session, o.unit].filter(Boolean).join(" · ");
 }
@@ -395,7 +395,7 @@ export async function removePayeeFromPeriod(payeeId: string, period: string) {
     .eq("period", period);
   if (!lines || !lines.length) return;
   if (lines.some((l) => l.status === "paid" || l.released_at)) {
-    throw new Error("Can't remove — some lines are already paid or released. Unmark those first.");
+    throw new Error("Can't remove - some lines are already paid or released. Unmark those first.");
   }
 
   const { data: payee } = await supabase.from("profiles").select("full_name").eq("id", payeeId).maybeSingle();
@@ -805,7 +805,7 @@ function formatProrationNote(period: string, joinedAt: string | null, leftAt: st
     const j = new Date(joinedAt);
     if (j.getUTCFullYear() === y && j.getUTCMonth() + 1 === m) notes.push(`joined ${j.toISOString().slice(0, 10)}`);
   }
-  return `prorated ${activeDays}/${n}${notes.length ? ` — ${notes.join(", ")}` : ""}`;
+  return `prorated ${activeDays}/${n}${notes.length ? ` - ${notes.join(", ")}` : ""}`;
 }
 
 async function getActivityWindow(
@@ -1630,7 +1630,7 @@ export async function backfillDepartedSalaryLine(payeeId: string, offeringId: st
   let base = 0;
   let methodLabel = "Manual";
   let calcMethod: "per_paper" | "bracket" | "fixed_per_paper" | "fixed_per_assistant" | "fixed" | "manual" = "manual";
-  let basis = isHead ? "Final month — set manually" : "No checked papers this period";
+  let basis = isHead ? "Final month - set manually" : "No checked papers this period";
   if (!isFixedSalaryPerson && (checkedCount.papers > 0 || mockCounts || method === "fixed_per_paper" || method === "fixed_per_assistant" || method === "fixed")) {
     const computed = await computeBaseForMethod(supabase, offeringId, payeeId, period, method, checkedCount);
     base = computed.base;
@@ -1829,7 +1829,7 @@ export async function getAssistantDetailedExport(): Promise<{ detail: AssistantD
     if (!payee) continue;
     const offering = Array.isArray(l.course_offerings) ? l.course_offerings[0] : l.course_offerings;
     const course = offering ? (Array.isArray(offering.courses) ? offering.courses[0] : offering.courses) : null;
-    const offeringLabel2 = offering ? [course?.name, offering.session, offering.unit].filter(Boolean).join(" · ") : "—";
+    const offeringLabel2 = offering ? [course?.name, offering.session, offering.unit].filter(Boolean).join(" · ") : "-";
 
     const papersChecked = l.offering_id ? (await countCheckedPapers(supabase, l.offering_id, l.payee_id, l.period)).papers : 0;
     const ev = evalByKey.get(evalKey(l.payee_id, l.offering_id, l.period));

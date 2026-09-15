@@ -198,7 +198,7 @@ export async function createStaffMember(input: { name: string; email: string; ph
       return { id: existing.id, merged: true };
     }
     if (existing.role !== input.role) {
-      throw new Error(`This email already belongs to a ${existing.role} in your organization — can't also add them as ${input.role}.`);
+      throw new Error(`This email already belongs to a ${existing.role} in your organization - can't also add them as ${input.role}.`);
     }
     return { id: existing.id, merged: true };
   }
@@ -217,7 +217,7 @@ export async function createStaffMember(input: { name: string; email: string; ph
     // clear, so it's worth spelling out here.
     if (createError?.code === "email_exists" || createError?.message?.toLowerCase().includes("already been registered")) {
       throw new Error(
-        `${input.email.trim()} is already registered to a different account — most likely someone in another organization on this platform. Ask the candidate for a different email, or double-check this is the right address.`
+        `${input.email.trim()} is already registered to a different account - most likely someone in another organization on this platform. Ask the candidate for a different email, or double-check this is the right address.`
       );
     }
     throw new Error(createError?.message ?? "Failed to create account");
@@ -299,7 +299,7 @@ export async function updateStaffMember(id: string, patch: { name: string; phone
         before.role !== patch.role ? `role "${before.role}" → "${patch.role}"` : null,
       ].filter((x): x is string => !!x)
     : [];
-  await logActivity("staff", `Updated ${patch.name.trim()}'s profile${changes.length ? ` — ${changes.join(", ")}` : ""}`);
+  await logActivity("staff", `Updated ${patch.name.trim()}'s profile${changes.length ? ` - ${changes.join(", ")}` : ""}`);
 }
 
 // Deactivates rather than deletes: salary_lines, evaluations, and
@@ -337,7 +337,7 @@ export async function removeStaffMember(id: string, leaveDate?: string, gaveNoti
     leave_date: resolvedLeaveDate,
     gave_notice: gaveNotice ?? null,
   });
-  await logActivity("staff", `Removed ${target.full_name} (${target.role})${gaveNotice ? " — gave notice" : ""}`);
+  await logActivity("staff", `Removed ${target.full_name} (${target.role})${gaveNotice ? " - gave notice" : ""}`);
 }
 
 // A remove/replace request is scoped to one course — it should only take
@@ -370,7 +370,7 @@ export async function removeAssistantFromOffering(
     const { data: assistant } = await supabase.from("profiles").select("full_name").eq("id", assistantId).single();
     await logActivity(
       "staff",
-      `Removed ${assistant?.full_name ?? "an assistant"} from one course — still active on ${count} other${count === 1 ? "" : "s"}`
+      `Removed ${assistant?.full_name ?? "an assistant"} from one course - still active on ${count} other${count === 1 ? "" : "s"}`
     );
   }
 }
@@ -435,7 +435,7 @@ export async function resolveStaffingRequest(
       let newAssistantId: string | undefined;
       if (request.kind === "add" || request.kind === "replace") {
         if (!request.candidate_name?.trim() || !request.candidate_email?.trim()) {
-          return { ok: false, error: "This request is missing the candidate's name or email — can't add them yet." };
+          return { ok: false, error: "This request is missing the candidate's name or email - can't add them yet." };
         }
         // createStaffMember already dedupes by email — reusing an existing
         // profile (whether from a partial-retry after an earlier crash, or
@@ -475,7 +475,7 @@ export async function resolveStaffingRequest(
     }
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Couldn't resolve this request — try again." };
+    return { ok: false, error: err instanceof Error ? err.message : "Couldn't resolve this request - try again." };
   }
 }
 
@@ -508,7 +508,7 @@ async function notifyRequesterOfResolution(
 
   await sendEmail({
     to: [requester.email],
-    subject: `${kindLabel} ${approved ? "approved" : "declined"} — ${offeringLbl}`,
+    subject: `${kindLabel} ${approved ? "approved" : "declined"} - ${offeringLbl}`,
     fromName: brandName,
     html: renderBrandedEmail({
       brandName,

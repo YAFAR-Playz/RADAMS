@@ -45,7 +45,7 @@ const PAGE_SIZE = 8;
 const STUDENT_PAGE_SIZE = 12;
 
 function fmt(n: number | null, sym: string) {
-  return n != null ? `${sym}${n.toLocaleString("en-US")}` : "—";
+  return n != null ? `${sym}${n.toLocaleString("en-US")}` : "-";
 }
 
 const emptyForm: CourseInput = {
@@ -125,7 +125,7 @@ export function CoursesContent() {
         setLoading(false);
       });
     } catch {
-      setError("Couldn't load courses — try again.");
+      setError("Couldn't load courses - try again.");
       setLoading(false);
     }
   }
@@ -251,7 +251,7 @@ export function CoursesContent() {
       setModalOpen(false);
       await reload();
     } catch {
-      setError("Couldn't save this course — try again.");
+      setError("Couldn't save this course - try again.");
     } finally {
       setSaving(false);
     }
@@ -263,7 +263,7 @@ export function CoursesContent() {
     try {
       await toggleCourseActive(c.id, !c.active);
     } catch {
-      setError("Couldn't update this course — try again.");
+      setError("Couldn't update this course - try again.");
     } finally {
       setTogglingId(null);
     }
@@ -277,7 +277,7 @@ export function CoursesContent() {
       const rows = data.rows.map((r) => [r.assistantName, r.studentName, r.studentCode, ...r.cells, r.comment, r.weakTopics]);
       await downloadXlsx(data.courseLabel, headers, rows);
     } catch {
-      setError("Couldn't export this course — try again.");
+      setError("Couldn't export this course - try again.");
     } finally {
       setExportingId(null);
     }
@@ -291,7 +291,7 @@ export function CoursesContent() {
     try {
       await updateCourseDates(c.id, nextStart, nextEnd);
     } catch {
-      setError("Couldn't save dates — try again.");
+      setError("Couldn't save dates - try again.");
     } finally {
       setSavingDatesId(null);
     }
@@ -796,7 +796,7 @@ export function CoursesContent() {
               </div>
               <div className="min-w-0 flex-1">
                 <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">This course has {editingStudentCount} enrolled student{editingStudentCount === 1 ? "" : "s"}</h3>
-                <div className="text-[12px] text-[var(--muted)]">You changed the price or installment plan — what should happen to students already enrolled?</div>
+                <div className="text-[12px] text-[var(--muted)]">You changed the price or installment plan - what should happen to students already enrolled?</div>
               </div>
             </div>
             <div className="flex flex-col gap-[10px] p-[16px_18px]">

@@ -193,7 +193,7 @@ export function HeadAssignmentsContent() {
       setModalOpen(false);
       await reload(offeringId);
     } catch {
-      setError("Couldn't save this assignment — try again.");
+      setError("Couldn't save this assignment - try again.");
     } finally {
       setSaving(false);
     }
@@ -206,7 +206,7 @@ export function HeadAssignmentsContent() {
       await toggleAssignmentClosed(a.id, !a.closedAt);
       await reload(offeringId);
     } catch {
-      setError("Couldn't update this assignment — try again.");
+      setError("Couldn't update this assignment - try again.");
     } finally {
       setClosingId(null);
     }
@@ -220,7 +220,7 @@ export function HeadAssignmentsContent() {
       setDeleteTarget(null);
       await reload(offeringId);
     } catch {
-      setError("Couldn't delete this assignment — try again.");
+      setError("Couldn't delete this assignment - try again.");
     } finally {
       setDeleting(false);
     }
@@ -298,7 +298,7 @@ export function HeadAssignmentsContent() {
         title={
           <span className="flex items-center gap-2">
             {listLoading && <Spinner size={13} />}
-            {current?.label ?? "—"} · {assignments?.length ?? 0} assignments
+            {current?.label ?? "-"} · {assignments?.length ?? 0} assignments
           </span>
         }
       >
@@ -311,7 +311,7 @@ export function HeadAssignmentsContent() {
           </div>
         ) : !assignments || assignments.length === 0 ? (
           <div className="p-10 text-center text-[13.5px] text-[var(--muted)]">
-            No assignments yet for this offering — create one to get started.
+            No assignments yet for this offering - create one to get started.
           </div>
         ) : (
           assignments.map((a) => {
@@ -414,7 +414,7 @@ export function HeadAssignmentsContent() {
                     })}
                     <div className="flex items-center justify-between gap-[10px] border-t border-[var(--border2)] p-[11px_18px]">
                       <span className="text-[11.5px] leading-[1.4] text-[var(--subtle)]">
-                        Stays open past the due date until every student is logged — or close it manually.
+                        Stays open past the due date until every student is logged - or close it manually.
                       </span>
                       {canClose && (
                         <button
@@ -474,7 +474,7 @@ export function HeadAssignmentsContent() {
                   data-tour="assignment-form-title"
                   value={form.title}
                   onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                  placeholder="e.g. Paper 4 — Alternative to Practical"
+                  placeholder="e.g. Paper 4 - Alternative to Practical"
                   className="h-11 w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[13px] text-[13.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                 />
               </div>
@@ -497,7 +497,7 @@ export function HeadAssignmentsContent() {
                   {templates === null ? (
                     <SkeletonRow className="h-[60px]" />
                   ) : templates.length === 0 ? (
-                    <div className="text-[12.5px] text-[var(--subtle)]">No assignment types set up yet — ask your admin to add one under Admin → Assignment types.</div>
+                    <div className="text-[12.5px] text-[var(--subtle)]">No assignment types set up yet - ask your admin to add one under Admin → Assignment types.</div>
                   ) : (
                     <div className="flex flex-col gap-[7px]">
                       {templates.map((t) => {
@@ -505,9 +505,9 @@ export function HeadAssignmentsContent() {
                         const desc = t.hasGrade && t.hasComment
                           ? "Status, grade, and a comment"
                           : t.hasGrade
-                            ? "Status and a grade — no comment"
+                            ? "Status and a grade - no comment"
                             : t.hasComment
-                              ? "Status and a comment — no grade"
+                              ? "Status and a comment - no grade"
                               : "Status only";
                         return (
                           <button
@@ -590,7 +590,7 @@ export function HeadAssignmentsContent() {
                   <textarea
                     value={form.defaultComment}
                     onChange={(e) => setForm((f) => ({ ...f, defaultComment: e.target.value }))}
-                    placeholder="Pre-fills each student's comment field — assistants can still edit it per student."
+                    placeholder="Pre-fills each student's comment field - assistants can still edit it per student."
                     rows={2}
                     className="w-full resize-none rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[10px_12px] text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
                   />
@@ -628,7 +628,7 @@ export function HeadAssignmentsContent() {
                     <div className="text-[11.5px] leading-[1.4] text-[var(--subtle)]">
                       {form.countsSalary
                         ? "Papers checked here are paid at the course's mock-exam rate instead of the normal rate."
-                        : "Turn on \"Counts toward salary\" first — mock exam only affects paid papers."}
+                        : "Turn on \"Counts toward salary\" first - mock exam only affects paid papers."}
                     </div>
                   </div>
                   <button
@@ -651,7 +651,7 @@ export function HeadAssignmentsContent() {
                 <Icon name="message" size={15} className="mt-[1px] flex-none text-[var(--subtle)]" />
                 <p className="m-0 text-[12px] leading-[1.5] text-[var(--muted)]">
                   Status updates for this assignment are sent using the Assignment update message set up in{" "}
-                  <span className="font-semibold text-[var(--text)]">Admin → Templates</span> — edit the wording there, not per assignment.
+                  <span className="font-semibold text-[var(--text)]">Admin → Templates</span> - edit the wording there, not per assignment.
                 </p>
               </div>
 

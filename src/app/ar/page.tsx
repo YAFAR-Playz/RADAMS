@@ -9,7 +9,7 @@ export async function generateMetadata() {
   const branding = await getPlatformDefaultBranding();
   return {
     title: branding.name,
-    description: "الواجبات والتقييمات والرواتب — منظمة بالطريقة التي يعمل بها فريقك بالفعل.",
+    description: "الواجبات والتقييمات والرواتب - منظمة بالطريقة التي يعمل بها فريقك بالفعل.",
   };
 }
 

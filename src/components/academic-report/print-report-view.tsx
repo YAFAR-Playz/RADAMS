@@ -53,7 +53,7 @@ function GradeBlocks({ items }: { items: { title: string; status: string | null;
               </tr>
               <tr className="border-b border-[#ddd]">
                 <td className="py-[6px] pr-2 font-semibold">Grade</td>
-                <td className="py-[6px]">{markFraction(a.grade, a.maxMarks) ?? a.grade ?? "—"}</td>
+                <td className="py-[6px]">{markFraction(a.grade, a.maxMarks) ?? a.grade ?? "-"}</td>
               </tr>
             </tbody>
           </table>
@@ -118,7 +118,7 @@ export function PrintReportView({
       const blob = await renderElementToPdfBlob(containerRef.current);
       downloadBlob(blob, fileName());
     } catch {
-      setActionError("Couldn't build the PDF — try again.");
+      setActionError("Couldn't build the PDF - try again.");
     } finally {
       setBusy(null);
     }
@@ -131,7 +131,7 @@ export function PrintReportView({
     try {
       await shareOrDownloadPdf(containerRef.current, fileName());
     } catch {
-      setActionError("Couldn't share the PDF — try again.");
+      setActionError("Couldn't share the PDF - try again.");
     } finally {
       setBusy(null);
     }
@@ -232,7 +232,7 @@ export function PrintReportView({
                       <span className="font-bold">Course:</span> {courseName}
                     </div>
                     <div>
-                      <span className="font-bold">Assistant:</span> {s.assistantName ?? "—"}
+                      <span className="font-bold">Assistant:</span> {s.assistantName ?? "-"}
                     </div>
                     <div>
                       <span className="font-bold">Month:</span> {periodLabel(meta.period)}
@@ -316,7 +316,7 @@ export function PrintReportView({
                             <tr key={i} className="border-b border-[#eee]">
                               <td className="py-[6px] pr-2 font-medium">{a.title}</td>
                               <td className="py-[6px] pr-2 capitalize">{a.status ?? "not logged"}</td>
-                              <td className="py-[6px]">{a.grade ?? "—"}</td>
+                              <td className="py-[6px]">{a.grade ?? "-"}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -345,7 +345,7 @@ export function PrintReportView({
                           <tr key={i} className="border-b border-[#eee]">
                             <td className="py-[6px] pr-2 font-medium">{a.title}</td>
                             <td className="py-[6px] pr-2 capitalize">{a.status ?? "not logged"}</td>
-                            <td className="py-[6px]">{a.grade ?? "—"}</td>
+                            <td className="py-[6px]">{a.grade ?? "-"}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -366,7 +366,7 @@ export function PrintReportView({
                           <span className="font-medium">{t.label}</span>
                           {t.materials.length > 0 && (
                             <span className="text-[#555]">
-                              {" — "}
+                              {" - "}
                               {t.materials.map((m) => `${m.label?.trim() || MATERIAL_KIND_LABEL[m.kind]}${m.duration ? ` (${m.duration})` : ""}`).join(", ")}
                             </span>
                           )}

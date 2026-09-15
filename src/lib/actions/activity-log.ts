@@ -59,7 +59,7 @@ export async function listRecentActivityAcrossOrgs(limit = 8): Promise<PlatformA
       category: r.category as ActivityCategory,
       summary: r.summary,
       createdAt: r.created_at,
-      orgName: org?.name ?? "—",
+      orgName: org?.name ?? "-",
     };
   });
 }
@@ -91,7 +91,7 @@ export async function listPlatformActivityLog(orgId?: string, category?: Activit
       category: r.category as ActivityCategory,
       summary: r.summary,
       createdAt: r.created_at,
-      orgName: org?.name ?? "—",
+      orgName: org?.name ?? "-",
     };
   });
 }

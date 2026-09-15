@@ -81,7 +81,7 @@ export function OwnerUsersContent() {
     try {
       await updateAnyStaffRole(id, role);
     } catch {
-      setError("Couldn't update this user's role — try again.");
+      setError("Couldn't update this user's role - try again.");
       await reload();
     } finally {
       setSavingId(null);
@@ -96,7 +96,7 @@ export function OwnerUsersContent() {
       setRows((prev) => (prev ? prev.filter((u) => u.id !== id) : prev));
       setTotal((t) => Math.max(0, t - 1));
     } catch {
-      setError("Couldn't remove this user — try again.");
+      setError("Couldn't remove this user - try again.");
     } finally {
       setRemovingId(null);
     }
@@ -109,7 +109,7 @@ export function OwnerUsersContent() {
       const { url } = await getOwnerLoginAsLink(id, redirectTo);
       window.location.assign(url);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't sign in as this user — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't sign in as this user - try again.");
       setLoginAsId(null);
     }
   }

@@ -20,14 +20,14 @@ function buildOutreachMessage(lead: Lead, brandName: string): string {
   const parts = [
     `Hi ${lead.name}! \u{1F44B}`,
     "",
-    `Thanks for your interest in ${brandName} — we'd love to help ${lead.organization} run things more smoothly.`,
+    `Thanks for your interest in ${brandName} - we'd love to help ${lead.organization} run things more smoothly.`,
     "",
     `We work with tutoring centers in ${lead.country} managing around ${lead.studentRange} students, so this should be a great fit.`,
   ];
   if (lead.message) {
-    parts.push("", `You mentioned: "${lead.message}" — happy to dig into that.`);
+    parts.push("", `You mentioned: "${lead.message}" - happy to dig into that.`);
   }
-  parts.push("", "Let us know if you have any questions or would like a quick walkthrough!", "", `— The ${brandName} team`);
+  parts.push("", "Let us know if you have any questions or would like a quick walkthrough!", "", `- The ${brandName} team`);
   return parts.join("\n");
 }
 
@@ -64,7 +64,7 @@ export function OwnerLeadsContent() {
       await updateLeadStatus(lead.id, nextStatus);
       setLeads((prev) => (prev ? prev.map((l) => (l.id === lead.id ? { ...l, status: nextStatus } : l)) : prev));
     } catch {
-      setError("Couldn't update this lead's status — try again.");
+      setError("Couldn't update this lead's status - try again.");
     } finally {
       setBusyId(null);
     }
@@ -118,7 +118,7 @@ export function OwnerLeadsContent() {
           Array.from({ length: 3 }, (_, i) => <SkeletonRow key={i} className="h-[110px]" />)
         ) : leads.length === 0 ? (
           <div className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-10 text-center text-[13.5px] text-[var(--muted)] shadow-[var(--shadow)]">
-            No leads yet — they&apos;ll show up here as soon as someone submits the contact form.
+            No leads yet - they&apos;ll show up here as soon as someone submits the contact form.
           </div>
         ) : (
           leads.map((lead) => {

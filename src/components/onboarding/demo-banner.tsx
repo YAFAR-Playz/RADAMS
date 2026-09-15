@@ -31,7 +31,7 @@ export function DemoBanner() {
     // including this banner.
     <div className="sticky top-0 z-[110] flex items-center justify-center gap-[10px] bg-[var(--brand)] px-4 py-[9px] text-[13px] font-semibold text-[var(--brandfg)]">
       <Icon name="target" size={15} />
-      You&apos;re viewing a demo — nothing here is real, and it&apos;s thrown away when you exit.
+      You&apos;re viewing a demo - nothing here is real, and it&apos;s thrown away when you exit.
       <button
         onClick={onExit}
         disabled={exiting}

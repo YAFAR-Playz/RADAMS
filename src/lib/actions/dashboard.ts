@@ -138,7 +138,7 @@ export async function getAdminDashboard(): Promise<AdminDashboard> {
     getStaffCountTrend(),
     getSalaryStatsForPeriod(supabase, orgId),
   ]);
-  const salaryPeriodLabel = salaryStats.period ? periodLabel(salaryStats.period) : "—";
+  const salaryPeriodLabel = salaryStats.period ? periodLabel(salaryStats.period) : "-";
 
   const kpis: Kpi[] = [
     { icon: "grad", value: String(studentsCount ?? 0), label: "Students", tone: "brand", trend: studentTrend },
@@ -634,15 +634,15 @@ export async function getRegistrationDashboard(): Promise<RegistrationDashboard>
   const recentEnrollments: RecentEnrollment[] = (recentRows ?? []).map((e) => {
     const s = Array.isArray(e.students) ? e.students[0] : e.students;
     return {
-      name: s?.name ?? "—",
-      initials: s?.initials ?? "—",
-      offering: labelById.get(e.offering_id) ?? "—",
+      name: s?.name ?? "-",
+      initials: s?.initials ?? "-",
+      offering: labelById.get(e.offering_id) ?? "-",
       enrolledAt: e.created_at,
     };
   });
 
   const unassigned: UnassignedSummary[] = Array.from(unassignedByOffering.entries()).map(([id, count]) => ({
-    offering: labelById.get(id) ?? "—",
+    offering: labelById.get(id) ?? "-",
     count,
   }));
   const unassignedCount = (unassignedRows ?? []).length;
@@ -731,7 +731,7 @@ async function getSalaryStatsForPeriod(supabase: Awaited<ReturnType<typeof creat
     .map(([offeringId, m]) => {
       const values = Array.from(m.values());
       const sum = values.reduce((s, v) => s + v, 0);
-      return { label: offeringLabelById.get(offeringId) ?? "—", average: values.length ? Math.round(sum / values.length) : 0, count: values.length };
+      return { label: offeringLabelById.get(offeringId) ?? "-", average: values.length ? Math.round(sum / values.length) : 0, count: values.length };
     })
     .filter((c) => c.count > 0)
     .sort((a, b) => b.average - a.average);
@@ -805,7 +805,7 @@ export async function getFinanceDashboard(): Promise<FinanceDashboard> {
     getFinancePayrollTrend(),
     getSalaryStatsForPeriod(supabase, orgId),
   ]);
-  const salaryPeriodLabel = salaryStats.period ? periodLabel(salaryStats.period) : "—";
+  const salaryPeriodLabel = salaryStats.period ? periodLabel(salaryStats.period) : "-";
 
   const totalMethodCount = Array.from(methodCounts.values()).reduce((s, n) => s + n, 0);
   const paymentMethods: PaymentMethodSlice[] = Array.from(methodCounts.entries())
@@ -976,7 +976,7 @@ export async function getAssistantCheckRates(): Promise<AssistantCheckRateRow[]>
       assistantName: assistant.full_name,
       assistantInitials: assistant.initials,
       offeringId: link.offering_id,
-      courseLabel: labelById.get(link.offering_id) ?? "—",
+      courseLabel: labelById.get(link.offering_id) ?? "-",
       studentCount,
       checked,
       total,

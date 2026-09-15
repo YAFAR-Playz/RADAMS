@@ -119,7 +119,7 @@ export function SendReportMessageButton({
               </div>
               {!driveFolderLink && (
                 <div className="mb-[11px] rounded-[var(--rad-sm)] border border-[var(--warn)] bg-[var(--warns)] p-[9px_11px] text-[12px] font-medium text-[var(--warn)]">
-                  This student hasn&apos;t been sent to Drive yet — the report link won&apos;t be included until you use Send to Drive.
+                  This student hasn&apos;t been sent to Drive yet - the report link won&apos;t be included until you use Send to Drive.
                 </div>
               )}
               <div className="mb-[7px] text-[12px] font-semibold text-[var(--muted)]">Message preview</div>

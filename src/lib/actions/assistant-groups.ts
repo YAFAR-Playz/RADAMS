@@ -335,7 +335,7 @@ async function notifyHrAndAdminOfPendingRequest(
 
   await sendEmail({
     to: emails,
-    subject: `${kindLabel} pending approval — ${offeringLabel}`,
+    subject: `${kindLabel} pending approval - ${offeringLabel}`,
     fromName: brandName,
     html: renderBrandedEmail({
       brandName,

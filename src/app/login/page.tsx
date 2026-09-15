@@ -65,7 +65,7 @@ export default async function LoginPage() {
             Run your tutoring center from one screen.
           </h2>
           <p className="m-0 max-w-[360px] text-[14px] leading-[1.55] text-[var(--muted)]">
-            Assignments, evaluations and payroll — organized the way your team actually works.
+            Assignments, evaluations and payroll - organized the way your team actually works.
           </p>
         </div>
 

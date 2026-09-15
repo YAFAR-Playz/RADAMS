@@ -24,7 +24,7 @@ export function OnboardingPrompt() {
       await startOnboardingDemo();
       window.location.href = "/dashboard";
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't start the tour — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't start the tour - try again.");
       setStarting(false);
     }
   }
@@ -48,7 +48,7 @@ export function OnboardingPrompt() {
         <div className="min-w-0">
           <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Want a quick tour?</h3>
           <p className="m-0 mt-[2px] text-[12.5px] leading-relaxed text-[var(--muted)]">
-            A few minutes, guided step by step, in a demo you can&apos;t break — real screens, real data, thrown away when you&apos;re done.
+            A few minutes, guided step by step, in a demo you can&apos;t break - real screens, real data, thrown away when you&apos;re done.
           </p>
         </div>
       </div>

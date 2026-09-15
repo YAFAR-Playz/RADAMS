@@ -198,7 +198,7 @@ export function AttendanceContent({ role }: { role: Role }) {
       await markAttendance(sessionId, studentId, status);
       await refreshSessionCounts(offeringId!);
     } catch {
-      setError("Couldn't save attendance — try again.");
+      setError("Couldn't save attendance - try again.");
     } finally {
       setSavingId(null);
     }
@@ -213,7 +213,7 @@ export function AttendanceContent({ role }: { role: Role }) {
       await markAllPresent(sessionId);
       await refreshSessionCounts(offeringId!);
     } catch {
-      setError("Couldn't mark all present — try again.");
+      setError("Couldn't mark all present - try again.");
     } finally {
       setMarkingAll(false);
     }
@@ -243,7 +243,7 @@ export function AttendanceContent({ role }: { role: Role }) {
       setNewTitle("");
       await reloadSessions(offeringId, id);
     } catch {
-      setError("Couldn't create this session — try again.");
+      setError("Couldn't create this session - try again.");
     } finally {
       setCreating(false);
     }
@@ -264,7 +264,7 @@ export function AttendanceContent({ role }: { role: Role }) {
       setEditTarget(null);
       await reloadSessions(offeringId, sessionId ?? undefined);
     } catch {
-      setError("Couldn't update this session — try again.");
+      setError("Couldn't update this session - try again.");
     } finally {
       setSavingEdit(false);
     }
@@ -278,7 +278,7 @@ export function AttendanceContent({ role }: { role: Role }) {
       setDeleteTarget(null);
       await reloadSessions(offeringId);
     } catch {
-      setError("Couldn't delete this session — try again.");
+      setError("Couldn't delete this session - try again.");
     } finally {
       setDeleting(false);
     }
@@ -514,7 +514,7 @@ export function AttendanceContent({ role }: { role: Role }) {
         <section className="min-w-0 flex-[2_1_380px] overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
           <header className="flex flex-wrap items-center justify-between gap-[10px] border-b border-[var(--border2)] p-[14px_18px]">
             <div>
-              <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">{activeSession?.title ?? "—"}</h3>
+              <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">{activeSession?.title ?? "-"}</h3>
               <p className="m-0 mt-[2px] flex items-center gap-[6px] text-[12px] text-[var(--subtle)]">
                 {rosterLoading ? (
                   <>
@@ -789,7 +789,7 @@ export function AttendanceContent({ role }: { role: Role }) {
                   data-tour="attendance-new-session-title"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="e.g. Week 7 — Lecture"
+                  placeholder="e.g. Week 7 - Lecture"
                   className="h-11 w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[13px] text-[13.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                 />
               </div>
@@ -861,7 +861,7 @@ export function AttendanceContent({ role }: { role: Role }) {
                 <input
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
-                  placeholder="e.g. Week 7 — Lecture"
+                  placeholder="e.g. Week 7 - Lecture"
                   className="h-11 w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[13px] text-[13.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                 />
               </div>
@@ -963,7 +963,7 @@ export function AttendanceContent({ role }: { role: Role }) {
             <div className="p-[18px]">
               <p className="m-0 text-[13.5px] leading-[1.55] text-[var(--text)]">
                 This overwrites the current status for all {activeSession?.total ?? 0} student
-                {activeSession?.total === 1 ? "" : "s"} in this session to Present — including anyone already marked Late or Absent.
+                {activeSession?.total === 1 ? "" : "s"} in this session to Present - including anyone already marked Late or Absent.
               </p>
             </div>
             <div className="flex gap-[10px] border-t border-[var(--border2)] p-[14px_18px]">

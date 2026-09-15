@@ -49,7 +49,7 @@ export function PapersContent() {
         if (requestIdRef.current === requestId) setRows(data);
       })
       .catch(() => {
-        if (requestIdRef.current === requestId) setError("Couldn't load this report — try again.");
+        if (requestIdRef.current === requestId) setError("Couldn't load this report - try again.");
       })
       .finally(() => {
         if (requestIdRef.current === requestId) setLoading(false);

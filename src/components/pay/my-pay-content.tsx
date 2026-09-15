@@ -51,7 +51,7 @@ export function MyPayContent() {
       if (url) window.open(url, "_blank", "noopener,noreferrer");
       else setError("No receipt was attached for this period.");
     } catch {
-      setError("Couldn't open the receipt — try again.");
+      setError("Couldn't open the receipt - try again.");
     } finally {
       setReceiptLoading(false);
     }
@@ -67,7 +67,7 @@ export function MyPayContent() {
           setLoading(false);
         });
       } catch {
-        setError("Couldn't load your pay — try again.");
+        setError("Couldn't load your pay - try again.");
         setLoading(false);
       }
     })();
@@ -83,7 +83,7 @@ export function MyPayContent() {
     try {
       setData(await getMyPay(period));
     } catch {
-      setError("Couldn't load that period — try again.");
+      setError("Couldn't load that period - try again.");
     } finally {
       setLoading(false);
     }
@@ -99,7 +99,7 @@ export function MyPayContent() {
       setSent(true);
       setTimeout(() => setSent(false), 1200);
     } catch {
-      setError("Couldn't send your message — try again.");
+      setError("Couldn't send your message - try again.");
     } finally {
       setSending(false);
     }
@@ -122,7 +122,7 @@ export function MyPayContent() {
   }
 
   const stats = [
-    { value: data.released ? fmt(data.total, data.currency) : "—", label: "Total this month" },
+    { value: data.released ? fmt(data.total, data.currency) : "-", label: "Total this month" },
     { value: String(data.courses.length), label: "Courses" },
     { value: data.paid ? "Paid" : "Pending", label: "Payment status" },
   ];
@@ -223,8 +223,8 @@ export function MyPayContent() {
                 </span>
                 <span className="min-w-[110px] flex-1 text-[12.5px] text-[var(--muted)]">{c.basis}</span>
                 <span className="w-[78px] flex-none text-right font-mono text-[12.5px] text-[var(--text)]">{fmt(c.base, data.currency)}</span>
-                <span className="w-[64px] flex-none text-right font-mono text-[12.5px] text-[var(--ok)]">{c.bonus ? `+${fmt(c.bonus, data.currency)}` : "—"}</span>
-                <span className="w-[72px] flex-none text-right font-mono text-[12.5px] text-[var(--danger)]">{c.deduction ? `−${fmt(c.deduction, data.currency)}` : "—"}</span>
+                <span className="w-[64px] flex-none text-right font-mono text-[12.5px] text-[var(--ok)]">{c.bonus ? `+${fmt(c.bonus, data.currency)}` : "-"}</span>
+                <span className="w-[72px] flex-none text-right font-mono text-[12.5px] text-[var(--danger)]">{c.deduction ? `−${fmt(c.deduction, data.currency)}` : "-"}</span>
                 <span className="w-[84px] flex-none text-right font-mono text-[12.5px] font-bold text-[var(--text)]">{fmt(c.subtotal, data.currency)}</span>
               </div>
               {(c.extraItems.length > 0 || c.deductionItems.length > 0 || c.bonusReason || c.deductionReason) && (
@@ -236,7 +236,7 @@ export function MyPayContent() {
                           className="inline-flex items-center gap-[5px] rounded-full bg-[var(--oks)] px-[9px] py-[3px] text-[11px] font-medium text-[var(--ok)]"
                         >
                           <Icon name="trend" size={11} />
-                          {[it.category, it.note].filter(Boolean).join(" — ") || "Extra work"} (+{fmt(it.amount, data.currency)})
+                          {[it.category, it.note].filter(Boolean).join(" - ") || "Extra work"} (+{fmt(it.amount, data.currency)})
                         </span>
                       ))
                     : c.bonusReason && (
@@ -252,7 +252,7 @@ export function MyPayContent() {
                           className="inline-flex items-center gap-[5px] rounded-full bg-[var(--dangers)] px-[9px] py-[3px] text-[11px] font-medium text-[var(--danger)]"
                         >
                           <Icon name="minus" size={11} />
-                          {[it.category, it.note].filter(Boolean).join(" — ") || "Deduction"} (−{fmt(it.amount, data.currency)})
+                          {[it.category, it.note].filter(Boolean).join(" - ") || "Deduction"} (−{fmt(it.amount, data.currency)})
                         </span>
                       ))
                     : c.deductionReason && (

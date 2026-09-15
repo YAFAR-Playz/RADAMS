@@ -20,7 +20,7 @@ const emptyForm = { name: "", phone: "", email: "", guardianName: "", guardianPh
 export function RegistrationsContent() {
   const [offerings, setOfferings] = useState<OfferingOption[] | null>(null);
   const [sym, setSym] = useState("£");
-  const fmt = (n: number | null) => (n != null ? `${sym}${n.toLocaleString("en-US")}` : "—");
+  const fmt = (n: number | null) => (n != null ? `${sym}${n.toLocaleString("en-US")}` : "-");
   const [offeringId, setOfferingId] = useState<string | null>(null);
   const [registrations, setRegistrations] = useState<RegistrationRow[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -111,7 +111,7 @@ export function RegistrationsContent() {
       // proxy.ts's getUser() fix) — surfacing it (rather than always the
       // same generic banner) tells the user to refresh/log back in instead
       // of retrying the same broken submit.
-      setError(e instanceof Error && e.message ? e.message : "Couldn't register this student — try again.");
+      setError(e instanceof Error && e.message ? e.message : "Couldn't register this student - try again.");
     } finally {
       setSubmitting(false);
     }
@@ -128,7 +128,7 @@ export function RegistrationsContent() {
       await reload();
       setTimeout(() => setSuccess(null), 3000);
     } catch (e) {
-      setError(e instanceof Error && e.message ? e.message : "Couldn't register this student — try again.");
+      setError(e instanceof Error && e.message ? e.message : "Couldn't register this student - try again.");
     } finally {
       setSubmitting(false);
       setDuplicateMatch(null);
@@ -369,7 +369,7 @@ export function RegistrationsContent() {
                     <div className="text-[13.5px] font-semibold text-[var(--text)]">{r.name}</div>
                     <div className="text-[12px] text-[var(--subtle)]">{r.offering}</div>
                   </div>
-                  <span className="flex-none font-mono text-[12px] text-[var(--muted)]">{r.phone ?? "—"}</span>
+                  <span className="flex-none font-mono text-[12px] text-[var(--muted)]">{r.phone ?? "-"}</span>
                 </div>
               ))
             )}

@@ -182,7 +182,7 @@ function HeadPanels({ data }: { data: HeadDashboard }) {
     <>
       <Card
         title="Assistant message completion"
-        subtitle={data.offeringLabel ? `${data.offeringLabel} — messages sent vs pending` : "No course assigned yet"}
+        subtitle={data.offeringLabel ? `${data.offeringLabel} - messages sent vs pending` : "No course assigned yet"}
         action={<ViewAllButton href="/oversight" />}
       >
         <div className="px-2 py-[7px]">
@@ -255,7 +255,7 @@ function AssistantPanels({ data }: { data: AssistantDashboard }) {
       >
         <div className="px-2 py-[7px]">
           {data.pendingStudents.length === 0 ? (
-            <EmptyRow>Nothing pending — you&apos;re all caught up.</EmptyRow>
+            <EmptyRow>Nothing pending - you&apos;re all caught up.</EmptyRow>
           ) : (
             data.pendingStudents.map((p) => (
               <div key={p.name + p.offering} className="flex items-center gap-3 rounded-[10px] p-[10px_11px] hover:bg-[var(--surface2)]">
@@ -362,7 +362,7 @@ function HrPanels({ data }: { data: HrDashboard }) {
             <EmptyRow>No pending requests.</EmptyRow>
           ) : (
             data.pendingRequests.map((r) => {
-              const name = r.candidateName ?? r.targetName ?? "—";
+              const name = r.candidateName ?? r.targetName ?? "-";
               return (
                 <Link
                   key={r.id}
@@ -375,7 +375,7 @@ function HrPanels({ data }: { data: HrDashboard }) {
                   <div className="min-w-[130px] flex-1">
                     <div className="text-[13.5px] font-semibold text-[var(--text)]">{name}</div>
                     <div className="text-[12px] text-[var(--subtle)]">{r.offeringLabel}</div>
-                    <div className="mt-[1px] text-[11.5px] text-[var(--subtle)]">by {r.requestedByName ?? "—"}</div>
+                    <div className="mt-[1px] text-[11.5px] text-[var(--subtle)]">by {r.requestedByName ?? "-"}</div>
                   </div>
                   <Badge text="Pending" tone="warn" icon="clock" />
                 </Link>
@@ -576,7 +576,7 @@ function AssistantCheckRateCard({ rows, showCourseFilter }: { rows: AssistantChe
   return (
     <Card
       title="Assistant checking rates"
-      subtitle="Papers checked vs. expected, per assistant subgroup — higher is better"
+      subtitle="Papers checked vs. expected, per assistant subgroup - higher is better"
       action={
         <div className="flex flex-wrap items-center gap-[8px]">
           {showCourseFilter && courses.length > 1 && (
