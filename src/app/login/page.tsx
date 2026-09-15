@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { LoginForm } from "@/components/login/login-form";
 import { LoginHeroCards } from "@/components/login/login-hero-cards";
 import { getPlatformDefaultBranding } from "@/lib/actions/branding";
+import { Icon } from "@/components/icons";
 
 export default async function LoginPage() {
   const branding = await getPlatformDefaultBranding();
@@ -20,6 +22,14 @@ export default async function LoginPage() {
         backgroundImage: `radial-gradient(70% 50% at 85% -10%, color-mix(in srgb, ${brand} 10%, transparent) 0%, transparent 100%)`,
       }}
     >
+      <Link
+        href="/"
+        className="absolute left-5 top-5 z-10 flex items-center gap-[6px] text-[13px] font-medium text-[var(--muted)] hover:text-[var(--text)] sm:left-8 sm:top-8"
+      >
+        <Icon name="chev-left" size={16} />
+        Back to home
+      </Link>
+
       {/* BRAND PANEL — desktop only */}
       <div
         className="relative hidden w-1/2 flex-col overflow-hidden border-r border-[var(--border)] p-[54px] lg:flex"

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { motion, useMotionValueEvent, useScroll, AnimatePresence } from "motion/react";
+import { motion, useMotionValueEvent, useScroll } from "motion/react";
 import { FeatureVisual } from "@/components/landing/feature-visuals";
 import { TiltCard } from "@/components/landing/tilt-card";
 import type { FeatureKey, LandingCopy } from "@/lib/landing-copy";
@@ -28,7 +28,11 @@ export function FeatureShowcase({ copy, brand }: { copy: LandingCopy; brand: str
     <>
       {/* Desktop pinned showcase */}
       <div ref={containerRef} className="relative hidden lg:block" style={{ height: `${ORDER.length * 85}vh` }}>
-        <div className="sticky top-0 flex h-screen items-center overflow-hidden">
+        {/* top-[64px]/h-[calc(100vh-64px)] (not top-0/h-screen) so this sticks
+            just below the sticky header instead of underneath it — otherwise
+            the header's own sticky layer covers whatever centers near the
+            top of this box, clipping the first item behind it. */}
+        <div className="sticky top-[64px] flex h-[calc(100vh-64px)] items-center overflow-hidden">
           <div className="mx-auto grid w-full max-w-[1080px] grid-cols-2 items-center gap-[56px] px-10">
             <div className="flex flex-col gap-[6px]">
               {ORDER.map((key, i) => {
@@ -56,21 +60,28 @@ export function FeatureShowcase({ copy, brand }: { copy: LandingCopy; brand: str
                 );
               })}
             </div>
+            {/* All 6 visuals stay mounted, stacked, and crossfade by opacity
+                rather than an AnimatePresence mount/unmount swap — that swap
+                queues exit-then-enter per key change (mode="wait"), which
+                falls behind and looks broken under rapid/bidirectional
+                scroll-scrubbing where `active` can flip several times before
+                a single transition finishes. Independent per-layer opacity
+                has no such queue: each layer just animates to its own target
+                whenever `active` changes, in either direction. */}
             <div className="relative h-[300px]">
-              <AnimatePresence mode="wait">
+              {ORDER.map((key, i) => (
                 <motion.div
-                  key={active}
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -16 }}
-                  transition={{ duration: 0.32, ease: "easeOut" }}
+                  key={key}
+                  animate={{ opacity: i === active ? 1 : 0 }}
+                  transition={{ duration: 0.35, ease: "easeOut" }}
                   className="absolute inset-0"
+                  style={{ pointerEvents: i === active ? "auto" : "none" }}
                 >
                   <TiltCard className="h-full w-full [transform-style:preserve-3d]">
-                    <FeatureVisual feature={ORDER[active]} brand={brand} />
+                    <FeatureVisual feature={key} brand={brand} />
                   </TiltCard>
                 </motion.div>
-              </AnimatePresence>
+              ))}
             </div>
           </div>
         </div>
