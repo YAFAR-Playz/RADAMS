@@ -76,7 +76,7 @@ const en: LandingCopy = {
   features: {
     eyebrow: "Features",
     title: "Everything your team already does, finally in one place",
-    subtitle: "Not generic project-management software - built specifically around how a tutoring center actually runs.",
+    subtitle: "Built specifically around how a tutoring center actually runs - attendance, grading, payroll and reports, all in one place.",
     items: {
       attendance: { title: "Attendance, tracked automatically", body: "Every session logged per student, with live present/late/absent breakdowns your heads can act on immediately." },
       assignments: { title: "Assignment checking that scales", body: "Assistants log grading in seconds; heads see checked/missing/late status across every course at a glance." },
@@ -142,7 +142,7 @@ const ar: LandingCopy = {
   features: {
     eyebrow: "المميزات",
     title: "كل ما يفعله فريقك بالفعل، في مكان واحد أخيرًا",
-    subtitle: "ليس برنامج إدارة مشاريع عام - مصمم خصيصًا حول طريقة عمل السنتر التعليمي الفعلية.",
+    subtitle: "مصمم خصيصًا حول طريقة عمل السنتر التعليمي الفعلية - الحضور، والتصحيح، والرواتب، والتقارير، كل ذلك في مكان واحد.",
     items: {
       attendance: { title: "حضور يُسجَّل تلقائيًا", body: "كل حصة مسجلة لكل طالب، مع تفاصيل حضور/تأخير/غياب فورية يمكن للرؤساء التصرف بناءً عليها فورًا." },
       assignments: { title: "تصحيح واجبات يتوسع مع فريقك", body: "المساعدون يسجلون التصحيح خلال ثوانٍ؛ والرؤساء يرون حالة كل واجب في كل كورس بنظرة واحدة." },
