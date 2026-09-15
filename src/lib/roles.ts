@@ -34,6 +34,7 @@ const NAV_DEF: Record<Role, NavItem[]> = {
   owner: [
     { icon: "dashboard", label: "Dashboard", key: "dashboard" },
     { icon: "building", label: "Organizations", key: "orgs" },
+    { icon: "megaphone", label: "Leads", key: "leads" },
     { icon: "users", label: "Users", key: "users" },
     { icon: "palette", label: "Branding", key: "branding" },
     { icon: "mail", label: "Templates", key: "templates" },

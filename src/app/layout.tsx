@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { headers } from "next/headers";
 import { getCurrentProfile } from "@/lib/current-profile";
 import "./globals.css";
 
@@ -47,10 +48,13 @@ export default async function RootLayout({
   // showing a stale org's icon indefinitely across logins.
   const profile = await getCurrentProfile();
   const iconHref = `/org-icon?org=${profile?.org?.id ?? "default"}`;
+  const pathname = (await headers()).get("x-pathname") ?? "";
+  const isArabicRoute = pathname === "/ar" || pathname.startsWith("/ar/");
 
   return (
     <html
-      lang="en"
+      lang={isArabicRoute ? "ar" : "en"}
+      dir={isArabicRoute ? "rtl" : "ltr"}
       data-theme="light"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >

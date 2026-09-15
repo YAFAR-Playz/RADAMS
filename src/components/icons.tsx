@@ -52,6 +52,7 @@ import {
   Download,
   Printer,
   RefreshCw,
+  Megaphone,
   type LucideIcon,
 } from "lucide-react";
 
@@ -108,6 +109,7 @@ export const ICONS = {
   download: Download,
   printer: Printer,
   refresh: RefreshCw,
+  megaphone: Megaphone,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;

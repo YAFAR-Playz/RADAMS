@@ -1,10 +1,18 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/reset-password", "/auth/callback"];
+const PUBLIC_PATHS = ["/", "/ar", "/login", "/reset-password", "/auth/callback"];
 const NO_AUTO_REDIRECT_PATHS = ["/reset-password", "/auth/callback"];
 
 export async function proxy(request: NextRequest) {
+  // The root layout needs to know whether it's rendering the /ar route to
+  // set <html lang>/<dir> correctly — Next's App Router has no built-in way
+  // to read the current pathname from a server component, so it's passed
+  // through as a request header here instead. Set on the request (not the
+  // response) before any NextResponse.next({ request }) call, so it's part
+  // of what actually reaches the page render, not just the browser response.
+  request.headers.set("x-pathname", request.nextUrl.pathname);
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
