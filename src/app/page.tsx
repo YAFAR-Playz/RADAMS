@@ -9,7 +9,7 @@ import { LANDING_COPY } from "@/lib/landing-copy";
 export async function generateMetadata() {
   const branding = await getPlatformDefaultBranding();
   return {
-    title: `${branding.name} — Run your tutoring center from one screen`,
+    title: branding.name,
     description: "Assignments, evaluations and payroll — organized the way your team actually works.",
   };
 }

@@ -1,28 +1,91 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { motion, useMotionValueEvent, useScroll } from "motion/react";
+import { motion, useMotionValueEvent, useScroll, useTransform, type MotionValue } from "motion/react";
 import { FeatureVisual } from "@/components/landing/feature-visuals";
 import { TiltCard } from "@/components/landing/tilt-card";
 import type { FeatureKey, LandingCopy } from "@/lib/landing-copy";
 
 const ORDER: FeatureKey[] = ["attendance", "assignments", "payroll", "weakTopics", "messaging", "reports"];
+const CARD_GAP = 190;
 
-// Desktop: a pinned/sticky scroll-driven showcase — the visual on the right
-// stays fixed in the viewport while the feature list on the left scrolls
-// past it, with the active item (and its visual) advancing based on scroll
-// position within this section. Mobile falls back to a plain stacked grid
-// below — a 500vh scroll-jacked two-column layout doesn't translate to a
-// narrow screen, so it isn't worth forcing.
+// Each card's position is a pure function of continuous scroll progress via
+// useTransform chains — Framer Motion applies these directly without going
+// through React state/re-renders, so the wheel moves smoothly every scroll
+// frame without the cost (and the "one step behind" feel) of a React
+// setState-per-frame loop. `active` (used only for the dot rail below)
+// still exists as real state, but it only actually changes 6 times total —
+// React bails out on a same-value setState, so it doesn't fight this.
+function useOffset(scrollYProgress: MotionValue<number>, index: number) {
+  return useTransform(scrollYProgress, (v) => index - v * ORDER.length);
+}
+
+// The front/active card (offset ≈ 0) stays sharp, full-size and fully
+// opaque; neighbors recede clearly — smaller, dimmer, and tilted away on
+// the X axis like they're rolling around a wheel behind the front card,
+// not just fading in place next to it at equal weight.
+function VisualCard({ scrollYProgress, index, brand, featureKey }: { scrollYProgress: MotionValue<number>; index: number; brand: string; featureKey: FeatureKey }) {
+  const offset = useOffset(scrollYProgress, index);
+  const y = useTransform(offset, (o) => o * CARD_GAP);
+  const rotateX = useTransform(offset, (o) => Math.max(-48, Math.min(48, o * -34)));
+  const opacity = useTransform(offset, (o) => Math.max(0, 1 - Math.abs(o) * 0.62));
+  const scale = useTransform(offset, (o) => Math.max(0.52, 1 - Math.abs(o) * 0.34));
+  const zIndex = useTransform(offset, (o) => Math.round((1 - Math.min(Math.abs(o), 1)) * 10));
+  const pointerEvents = useTransform(offset, (o) => (Math.abs(o) < 0.5 ? "auto" : "none"));
+
+  return (
+    <motion.div style={{ y, opacity, scale, rotateX, zIndex, pointerEvents }} className="absolute inset-0 [transform-style:preserve-3d]">
+      <TiltCard className="h-full w-full [transform-style:preserve-3d]">
+        <FeatureVisual feature={featureKey} brand={brand} />
+      </TiltCard>
+    </motion.div>
+  );
+}
+
+function TextBlock({ scrollYProgress, index, title, body, brand }: { scrollYProgress: MotionValue<number>; index: number; title: string; body: string; brand: string }) {
+  const offset = useOffset(scrollYProgress, index);
+  const y = useTransform(offset, (o) => o * 22);
+  const opacity = useTransform(offset, (o) => Math.max(0, 1 - Math.abs(o) * 2.4));
+  const pointerEvents = useTransform(offset, (o) => (Math.abs(o) < 0.5 ? "auto" : "none"));
+
+  return (
+    <motion.div
+      style={{ y, opacity, pointerEvents }}
+      className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center"
+    >
+      <h3 className="m-0 mb-[14px] text-[30px] font-bold leading-[1.2] tracking-[-0.01em]" style={{ color: brand }}>
+        {title}
+      </h3>
+      <p className="m-0 max-w-[420px] text-[15px] leading-[1.65] text-[var(--muted)]">{body}</p>
+    </motion.div>
+  );
+}
+
+// Desktop: a pinned/sticky scroll-driven showcase. The mockups on the right
+// sit in a vertical wheel/carousel — the active one centered and in front,
+// with the previous and next ones peeking from behind above and below,
+// continuously sliding as you scroll (in either direction). A centered text
+// block on the left tracks the same continuous position. A vertical dot
+// rail on the side lets you jump straight to any feature. Mobile falls back
+// to a plain stacked grid below — a 500vh scroll-jacked layout doesn't
+// translate to a narrow screen, so it isn't worth forcing.
 export function FeatureShowcase({ copy, brand }: { copy: LandingCopy; brand: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
   const { scrollYProgress } = useScroll({ target: containerRef, offset: ["start start", "end end"] });
 
   useMotionValueEvent(scrollYProgress, "change", (v) => {
-    const idx = Math.min(ORDER.length - 1, Math.floor(v * ORDER.length));
+    const idx = Math.min(ORDER.length - 1, Math.max(0, Math.floor(v * ORDER.length)));
     setActive(idx);
   });
+
+  function jumpTo(i: number) {
+    const el = containerRef.current;
+    if (!el) return;
+    const progress = (i + 0.5) / ORDER.length;
+    const top = el.offsetTop + progress * (el.offsetHeight - window.innerHeight);
+    window.scrollTo({ top, behavior: "smooth" });
+  }
 
   return (
     <>
@@ -32,55 +95,53 @@ export function FeatureShowcase({ copy, brand }: { copy: LandingCopy; brand: str
             just below the sticky header instead of underneath it — otherwise
             the header's own sticky layer covers whatever centers near the
             top of this box, clipping the first item behind it. */}
-        <div className="sticky top-[64px] flex h-[calc(100vh-64px)] items-center overflow-hidden">
-          <div className="mx-auto grid w-full max-w-[1080px] grid-cols-2 items-center gap-[56px] px-10">
-            <div className="flex flex-col gap-[6px]">
-              {ORDER.map((key, i) => {
-                const item = copy.features.items[key];
-                const isActive = i === active;
-                return (
-                  <div
+        <div className="sticky top-[64px] flex h-[calc(100vh-64px)] items-center justify-center overflow-hidden px-10 xl:px-16">
+          {/* Dots are a normal flex sibling with their own reserved width
+              (not absolutely positioned over the grid), so they can never
+              overlap the wheel at narrower "lg" widths — the grid just
+              shrinks to fit next to them. */}
+          <div className="flex w-full max-w-[1360px] items-center gap-[28px]">
+            <div className="grid flex-1 grid-cols-2 items-center gap-[64px] overflow-hidden">
+              <div className="relative h-[260px]">
+                {ORDER.map((key, i) => (
+                  <TextBlock
                     key={key}
-                    className="rounded-[16px] p-[18px] transition-colors duration-300"
-                    style={{ background: isActive ? "var(--brands)" : "transparent" }}
-                  >
-                    <h3
-                      className="m-0 mb-[6px] text-[19px] font-bold tracking-[-0.01em] transition-colors duration-300"
-                      style={{ color: isActive ? brand : "var(--text)" }}
-                    >
-                      {item.title}
-                    </h3>
-                    <p
-                      className="m-0 max-w-[380px] text-[13.5px] leading-[1.6] transition-opacity duration-300"
-                      style={{ color: "var(--muted)", opacity: isActive ? 1 : 0.55 }}
-                    >
-                      {item.body}
-                    </p>
-                  </div>
-                );
-              })}
+                    scrollYProgress={scrollYProgress}
+                    index={i}
+                    title={copy.features.items[key].title}
+                    body={copy.features.items[key].body}
+                    brand={brand}
+                  />
+                ))}
+              </div>
+              <div className="relative h-[420px]" style={{ perspective: 1400 }}>
+                {ORDER.map((key, i) => (
+                  <VisualCard key={key} scrollYProgress={scrollYProgress} index={i} brand={brand} featureKey={key} />
+                ))}
+              </div>
             </div>
-            {/* All 6 visuals stay mounted, stacked, and crossfade by opacity
-                rather than an AnimatePresence mount/unmount swap — that swap
-                queues exit-then-enter per key change (mode="wait"), which
-                falls behind and looks broken under rapid/bidirectional
-                scroll-scrubbing where `active` can flip several times before
-                a single transition finishes. Independent per-layer opacity
-                has no such queue: each layer just animates to its own target
-                whenever `active` changes, in either direction. */}
-            <div className="relative h-[300px]">
+
+            {/* Vertical dot rail — one per feature, click to jump straight
+                there instead of scrolling through every one in between. */}
+            <div className="flex flex-none flex-col items-center gap-[16px]">
               {ORDER.map((key, i) => (
-                <motion.div
+                <button
                   key={key}
-                  animate={{ opacity: i === active ? 1 : 0 }}
-                  transition={{ duration: 0.35, ease: "easeOut" }}
-                  className="absolute inset-0"
-                  style={{ pointerEvents: i === active ? "auto" : "none" }}
+                  type="button"
+                  onClick={() => jumpTo(i)}
+                  aria-label={copy.features.items[key].title}
+                  aria-current={i === active}
+                  className="flex h-[18px] w-[18px] items-center justify-center"
                 >
-                  <TiltCard className="h-full w-full [transform-style:preserve-3d]">
-                    <FeatureVisual feature={key} brand={brand} />
-                  </TiltCard>
-                </motion.div>
+                  <span
+                    className="rounded-full transition-all duration-300"
+                    style={{
+                      background: i === active ? brand : "var(--border)",
+                      width: i === active ? 10 : 7,
+                      height: i === active ? 10 : 7,
+                    }}
+                  />
+                </button>
               ))}
             </div>
           </div>

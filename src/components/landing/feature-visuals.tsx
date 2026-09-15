@@ -12,7 +12,7 @@ import type { FeatureKey } from "@/lib/landing-copy";
 
 function Chrome({ children }: { children: React.ReactNode }) {
   return (
-    <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--surface)] p-[14px] shadow-[0_1px_2px_rgba(16,23,41,0.04),0_18px_40px_rgba(16,23,41,0.10)]">
+    <div className="relative flex h-full w-full flex-col justify-center gap-[10px] overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--surface)] p-[22px] shadow-[0_1px_2px_rgba(16,23,41,0.04),0_18px_40px_rgba(16,23,41,0.10)]">
       {children}
     </div>
   );
