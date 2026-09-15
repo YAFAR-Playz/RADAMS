@@ -28,6 +28,7 @@ import { HrRequestsContent } from "@/components/hr-requests/hr-requests-content"
 import { HiringContent } from "@/components/hiring/hiring-content";
 import { HeadCheckingContent } from "@/components/head-checking/head-checking-content";
 import { OwnerOrgsContent } from "@/components/owner-orgs/owner-orgs-content";
+import { OwnerLeadsContent } from "@/components/owner-leads/owner-leads-content";
 import { OwnerBrandingContent } from "@/components/owner-branding/owner-branding-content";
 import { SettingsContent } from "@/components/settings/settings-content";
 import { OwnerUsersContent } from "@/components/owner-users/owner-users-content";
@@ -81,6 +82,10 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
 
   if (key === "orgs" && profile.role === "owner") {
     return <OwnerOrgsContent />;
+  }
+
+  if (key === "leads" && profile.role === "owner") {
+    return <OwnerLeadsContent />;
   }
 
   if (key === "users" && profile.role === "owner") {
