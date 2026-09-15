@@ -13,7 +13,7 @@ import { roleHasOnboardingTour } from "@/lib/onboarding-roles";
 export async function startOnboardingDemo(): Promise<void> {
   const profile = await getCurrentProfile();
   if (!profile) throw new Error("Not authenticated");
-  if (profile.isTouringDemo) throw new Error("Already touring a demo — exit it first");
+  if (profile.isTouringDemo) throw new Error("Already touring a demo - exit it first");
   if (!roleHasOnboardingTour(profile.role)) throw new Error("The guided tour isn't available for your role yet");
 
   const supabase = await createClient();

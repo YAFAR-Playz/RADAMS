@@ -56,13 +56,13 @@ export function StaffReportModal({ staffId, staffName, onClose }: { staffId: str
       // receipts) never has to round-trip through the Server Action itself.
       const { fileName, url, driveFolderUrl, driveError } = await generateStaffReport(staffId, selected);
       const res = await fetch(url);
-      if (!res.ok) throw new Error("Couldn't download the generated report — try again.");
+      if (!res.ok) throw new Error("Couldn't download the generated report - try again.");
       downloadBlob(await res.blob(), fileName);
       setDone(driveFolderUrl ? `Downloaded ${fileName} and sent it to Drive.` : `Downloaded ${fileName}.`);
       if (driveError) setDriveWarning(`Downloaded fine, but couldn't deliver to Drive: ${driveError}`);
       await reloadHistory();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't generate the report — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't generate the report - try again.");
     } finally {
       setGenerating(false);
     }
@@ -76,7 +76,7 @@ export function StaffReportModal({ staffId, staffName, onClose }: { staffId: str
             <Icon name="printer" size={19} />
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Generate report — {staffName}</h3>
+            <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Generate report - {staffName}</h3>
             <div className="text-[12px] text-[var(--muted)]">Contract, receipts, and pay/workload history for the course(s) you pick</div>
           </div>
           <button onClick={onClose} className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]">

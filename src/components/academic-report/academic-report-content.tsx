@@ -166,7 +166,7 @@ export function AcademicReportContent({ viewerRole }: { viewerRole: "admin" | "h
       setGenerateOpen(false);
       reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't generate the report — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't generate the report - try again.");
     } finally {
       setGenerating(false);
     }
@@ -202,10 +202,10 @@ export function AcademicReportContent({ viewerRole }: { viewerRole: "admin" | "h
       setDriveResult(
         failed.length === 0
           ? `Delivered ${allResults.length} report${allResults.length === 1 ? "" : "s"} to Drive.`
-          : `Delivered ${allResults.length - failed.length}/${allResults.length} — ${failed.length} failed. Click Send to Drive again to retry just the rest (delivered ones are skipped, not redone). If the tab or app gets closed partway through, the same thing applies — reopen and click Send to Drive again to pick up where it left off.`
+          : `Delivered ${allResults.length - failed.length}/${allResults.length} - ${failed.length} failed. Click Send to Drive again to retry just the rest (delivered ones are skipped, not redone). If the tab or app gets closed partway through, the same thing applies - reopen and click Send to Drive again to pick up where it left off.`
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't deliver reports to Drive — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't deliver reports to Drive - try again.");
     } finally {
       setSendingToDrive(false);
       setDriveProgress(null);
@@ -225,9 +225,9 @@ export function AcademicReportContent({ viewerRole }: { viewerRole: "admin" | "h
       const [result] = await deliverDriveReportsChunk(offeringId, period, [studentId]);
       if (!result?.ok) throw new Error(result?.error || "Couldn't resend this report to Drive.");
       setStudents((prev) => prev?.map((s) => (s.studentId === studentId ? { ...s, driveFolderLink: result.folderUrl ?? s.driveFolderLink } : s)) ?? prev);
-      setDriveResult(`Resent to Drive — the link is refreshed for this student.`);
+      setDriveResult(`Resent to Drive - the link is refreshed for this student.`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't resend this report to Drive — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't resend this report to Drive - try again.");
     } finally {
       setResendingId(null);
     }
@@ -260,10 +260,10 @@ export function AcademicReportContent({ viewerRole }: { viewerRole: "admin" | "h
       setDriveResult(
         failed.length === 0
           ? `Deleted ${deletedCount} PDF${deletedCount === 1 ? "" : "s"} from Drive for ${periodLabel(period)}.`
-          : `Deleted ${deletedCount} — ${failed.length} failed. Click Delete from Drive again to retry.`
+          : `Deleted ${deletedCount} - ${failed.length} failed. Click Delete from Drive again to retry.`
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't delete reports from Drive — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't delete reports from Drive - try again.");
     } finally {
       setDeletingFromDrive(false);
       setDeleteProgress(null);
@@ -295,7 +295,7 @@ export function AcademicReportContent({ viewerRole }: { viewerRole: "admin" | "h
       setScaleOpen(false);
       reload();
     } catch {
-      setError("Couldn't save the grade scale — try again.");
+      setError("Couldn't save the grade scale - try again.");
     } finally {
       setScaleSaving(false);
     }
@@ -312,7 +312,7 @@ export function AcademicReportContent({ viewerRole }: { viewerRole: "admin" | "h
       "Student code",
       "Student",
       "Avg grade",
-      ...assignmentTitles.flatMap((t) => [`${t} — Status`, `${t} — Grade`]),
+      ...assignmentTitles.flatMap((t) => [`${t} - Status`, `${t} - Grade`]),
       "Assistant comment",
       "Weak topics",
     ];
@@ -390,7 +390,7 @@ export function AcademicReportContent({ viewerRole }: { viewerRole: "admin" | "h
                 data-tour="report-delete-drive"
                 onClick={() => setDeleteConfirmOpen(true)}
                 disabled={!meta || !students || students.length === 0 || deletingFromDrive}
-                title="Delete this course's PDFs for this month from Drive — folders are left in place"
+                title="Delete this course's PDFs for this month from Drive - folders are left in place"
                 className="flex h-10 flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--danger)] bg-[var(--surface)] px-[14px] text-[13px] font-semibold text-[var(--danger)] hover:bg-[var(--dangers)] disabled:opacity-60"
               >
                 {deletingFromDrive ? <Spinner size={14} /> : <Icon name="trash" size={16} />}
@@ -530,7 +530,7 @@ export function AcademicReportContent({ viewerRole }: { viewerRole: "admin" | "h
                           <button
                             onClick={() => onResendToDrive(s.studentId)}
                             disabled={resendingId !== null}
-                            title="Resend to Drive — use this if you deleted their Drive folder and need the link refreshed"
+                            title="Resend to Drive - use this if you deleted their Drive folder and need the link refreshed"
                             className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
                           >
                             {resendingId === s.studentId ? <Spinner size={13} /> : <Icon name="refresh" size={14} />}
@@ -702,7 +702,7 @@ export function AcademicReportContent({ viewerRole }: { viewerRole: "admin" | "h
             </div>
             <div className="p-[16px_18px] text-[13px] leading-[1.6] text-[var(--text)]">
               This deletes every {periodLabel(period)} monthly report PDF Drive has for{" "}
-              <span className="font-semibold">{offerings?.find((o) => o.id === offeringId)?.label ?? "this course"}</span> — one per
+              <span className="font-semibold">{offerings?.find((o) => o.id === offeringId)?.label ?? "this course"}</span> - one per
               student, wherever &quot;Send to Drive&quot; already put it. Student and assistant folders themselves are left in place;
               only that month&apos;s PDF files are removed.
             </div>
@@ -756,7 +756,7 @@ export function AcademicReportContent({ viewerRole }: { viewerRole: "admin" | "h
                 </label>
                 <p className="m-0 text-[11.5px] text-[var(--muted)]">
                   {scaleDraft.scale === "percentage"
-                    ? "Optional — leave empty to just show the raw percentage (e.g. 87%). Add bands to show a label once a student's average crosses a threshold."
+                    ? "Optional - leave empty to just show the raw percentage (e.g. 87%). Add bands to show a label once a student's average crosses a threshold."
                     : "A student's average grade shows the highest band whose minimum they meet."}
                 </p>
                 {scaleDraft.bands.map((b, i) => (

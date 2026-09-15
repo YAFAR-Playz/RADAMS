@@ -47,5 +47,5 @@ export default async function ReportPrintPage({ searchParams }: { searchParams: 
 }
 
 export function generateMetadata() {
-  return { title: "Monthly report — ZAD-AMS" };
+  return { title: "Monthly report - ZAD-AMS" };
 }

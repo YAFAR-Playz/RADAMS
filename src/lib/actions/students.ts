@@ -303,7 +303,7 @@ export async function getEnrollmentCounts(studentIds: string[]): Promise<Record<
 export type CourseLabelsByStudent = Record<string, string[]>;
 
 function offeringLabel(o: { session: string; unit: string | null; courses: { name: string } | { name: string }[] | null } | null) {
-  if (!o) return "—";
+  if (!o) return "-";
   const course = Array.isArray(o.courses) ? o.courses[0] : o.courses;
   return [course?.name, o.session, o.unit].filter(Boolean).join(" · ");
 }
@@ -571,7 +571,7 @@ export async function reassignStudentAssistant(enrollmentId: string, assistantId
   ]);
   await logActivity(
     "students",
-    `Reassigned ${student?.name ?? "a student"} in ${offeringLabel(offering ?? null)} — ${oldAssistant?.full_name ?? "Unassigned"} → ${newAssistant?.full_name ?? "Unassigned"}`
+    `Reassigned ${student?.name ?? "a student"} in ${offeringLabel(offering ?? null)} - ${oldAssistant?.full_name ?? "Unassigned"} → ${newAssistant?.full_name ?? "Unassigned"}`
   );
 }
 
@@ -622,7 +622,7 @@ export async function updateStudent(
         fieldChange("guardian phone", before.guardian_phone, patch.guardianPhone),
       ].filter((x): x is string => !!x)
     : [];
-  await logActivity("students", `Updated ${patch.name}${changes.length ? ` — ${changes.join(", ")}` : ""}`);
+  await logActivity("students", `Updated ${patch.name}${changes.length ? ` - ${changes.join(", ")}` : ""}`);
 }
 
 // "Left" is tracked per enrollment, not per student — a student can leave
@@ -649,7 +649,7 @@ export async function setEnrollmentLeftStatus(enrollmentId: string, left: boolea
     const offering = Array.isArray(before.course_offerings) ? before.course_offerings[0] : before.course_offerings;
     await logActivity(
       "students",
-      `${student?.name ?? "A student"} ${left ? "marked as left" : "restored (no longer marked as left)"} — ${offeringLabel(offering ?? null)}`
+      `${student?.name ?? "A student"} ${left ? "marked as left" : "restored (no longer marked as left)"} - ${offeringLabel(offering ?? null)}`
     );
   }
 }

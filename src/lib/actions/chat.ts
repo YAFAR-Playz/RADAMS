@@ -29,7 +29,7 @@ export type ChatMessage = {
 };
 
 function offeringLabel(o: { session: string; unit: string | null; courses: { name: string } | { name: string }[] | null } | null) {
-  if (!o) return "—";
+  if (!o) return "-";
   const course = Array.isArray(o.courses) ? o.courses[0] : o.courses;
   return [course?.name, o.session, o.unit].filter(Boolean).join(" · ");
 }
@@ -288,8 +288,8 @@ export async function listMessages(conversationId: string): Promise<ChatMessage[
     return {
       id: m.id,
       senderId: m.sender_id,
-      senderName: sender?.full_name ?? "—",
-      senderInitials: sender?.initials ?? "—",
+      senderName: sender?.full_name ?? "-",
+      senderInitials: sender?.initials ?? "-",
       body: m.body,
       createdAt: m.created_at,
       mine: m.sender_id === profile.id,

@@ -338,7 +338,7 @@ export function TourRunner({ steps }: { steps: TourStep[] }) {
             <span className="text-[11px] font-semibold uppercase tracking-[0.04em] text-[var(--subtle)]">
               Step {stepIndex + 1} of {steps.length}
             </span>
-            <button onClick={dismiss} title="Hide the tour — you'll stay in the demo" className="flex-none text-[var(--subtle)] hover:text-[var(--text)]">
+            <button onClick={dismiss} title="Hide the tour - you'll stay in the demo" className="flex-none text-[var(--subtle)] hover:text-[var(--text)]">
               <Icon name="x" size={15} />
             </button>
           </div>

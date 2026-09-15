@@ -24,7 +24,7 @@ const STAFF_REPORTS_ROOT_FOLDER_ID = process.env.STAFF_REPORTS_ROOT_FOLDER_ID ||
 
 async function callDriveBridge<T>(action: string, params: Record<string, unknown>): Promise<T> {
   if (!DRIVE_BRIDGE_URL || !DRIVE_BRIDGE_SECRET) {
-    throw new Error("Drive delivery isn't configured yet — DRIVE_BRIDGE_URL/DRIVE_BRIDGE_SECRET are missing.");
+    throw new Error("Drive delivery isn't configured yet - DRIVE_BRIDGE_URL/DRIVE_BRIDGE_SECRET are missing.");
   }
   const res = await fetch(DRIVE_BRIDGE_URL, {
     method: "POST",

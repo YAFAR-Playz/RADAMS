@@ -114,7 +114,7 @@ export function AssistantsContent() {
       await setOfferingParentWhatsappLink(offeringId, parentLinkDraft);
       setParentLinkSaved(parentLinkDraft);
     } catch {
-      setError("Couldn't save the parent group link — try again.");
+      setError("Couldn't save the parent group link - try again.");
     } finally {
       setSavingParentLink(false);
     }
@@ -131,7 +131,7 @@ export function AssistantsContent() {
       await reassignToGroup(enrollmentId, assistantId);
       await reload(offeringId);
     } catch {
-      setError("Couldn't reassign this student — try again.");
+      setError("Couldn't reassign this student - try again.");
     } finally {
       setReassigning(null);
     }
@@ -143,7 +143,7 @@ export function AssistantsContent() {
       await setAssistantWhatsappLink(assistantId, linkDrafts[assistantId] ?? "");
       setGroups((prev) => prev?.map((g) => (g.id === assistantId ? { ...g, whatsappLink: linkDrafts[assistantId] || null } : g)) ?? null);
     } catch {
-      setError("Couldn't save this WhatsApp link — try again.");
+      setError("Couldn't save this WhatsApp link - try again.");
     } finally {
       setSavingLink(null);
     }
@@ -182,7 +182,7 @@ export function AssistantsContent() {
       setModalOpen(false);
       setRequests(await listStaffingRequests());
     } catch {
-      setError("Couldn't submit this request — try again.");
+      setError("Couldn't submit this request - try again.");
     } finally {
       setSubmitting(false);
     }
@@ -193,7 +193,7 @@ export function AssistantsContent() {
       await cancelStaffingRequest(id);
       setRequests((prev) => (prev ? prev.filter((r) => r.id !== id) : prev));
     } catch {
-      setError("Couldn't withdraw this request — try again.");
+      setError("Couldn't withdraw this request - try again.");
     }
   }
 
@@ -290,7 +290,7 @@ export function AssistantsContent() {
         {offeringId && (
           <div className="mt-[12px]">
             <label className="mb-[6px] block text-[12px] font-semibold text-[var(--muted)]">
-              Parent WhatsApp group link <span className="text-[var(--subtle)]">— for this course · unit · session</span>
+              Parent WhatsApp group link <span className="text-[var(--subtle)]">- for this course · unit · session</span>
             </label>
             <div className="flex items-center gap-[8px]">
               <input
@@ -341,7 +341,7 @@ export function AssistantsContent() {
                         {r.kind === "add" ? "New assistant requested" : r.kind === "remove" ? "Removal requested" : "Replacement requested"}
                       </div>
                       <div className="text-[12px] text-[var(--subtle)]">
-                        {r.kind === "replace" ? `${r.targetName ?? "—"} → ${r.candidateName ?? "TBD"}` : r.targetName ?? r.candidateName ?? "—"} · {r.offeringLabel}
+                        {r.kind === "replace" ? `${r.targetName ?? "-"} → ${r.candidateName ?? "TBD"}` : r.targetName ?? r.candidateName ?? "-"} · {r.offeringLabel}
                       </div>
                     </div>
                     <span

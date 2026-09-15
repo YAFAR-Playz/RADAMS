@@ -109,7 +109,7 @@ export function HrRequestsContent() {
       }
       setRequests((prev) => (prev ? prev.map((r) => (r.id === id ? { ...r, status } : r)) : prev));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't update this request — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't update this request - try again.");
     } finally {
       setResolvingId(null);
     }
@@ -177,7 +177,7 @@ export function HrRequestsContent() {
                   <div className="min-w-[160px] flex-1">
                     <div className="text-[14px] font-semibold text-[var(--text)]">{meta.title}</div>
                     <div className="text-[12px] text-[var(--subtle)]">
-                      Requested by {r.requestedByName ?? "—"} · {new Date(r.createdAt).toLocaleDateString()}
+                      Requested by {r.requestedByName ?? "-"} · {new Date(r.createdAt).toLocaleDateString()}
                     </div>
                   </div>
                   <span
@@ -204,7 +204,7 @@ export function HrRequestsContent() {
                       {(r.kind === "remove" || r.kind === "replace") && (
                         <PersonCard
                           label={r.kind === "replace" ? "Outgoing" : "Staff member"}
-                          name={r.targetName ?? "—"}
+                          name={r.targetName ?? "-"}
                           dateLabel="Leave date"
                           dateValue={r.kind === "remove" ? r.proposedDate : r.leaveDate}
                           gaveNotice={r.gaveNotice}

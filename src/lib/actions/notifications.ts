@@ -53,7 +53,7 @@ async function getMissingAssignmentsAlerts(
   const nameByStudent = new Map(
     enrollments.map((e) => {
       const s = Array.isArray(e.students) ? e.students[0] : e.students;
-      return [e.student_id, s?.name ?? "—"];
+      return [e.student_id, s?.name ?? "-"];
     })
   );
 
@@ -112,7 +112,7 @@ function daysAgoIso(days: number) {
 }
 
 function offeringLabel(o: { session: string; unit: string | null; courses: { name: string } | { name: string }[] | null } | null) {
-  if (!o) return "—";
+  if (!o) return "-";
   const course = Array.isArray(o.courses) ? o.courses[0] : o.courses;
   return [course?.name, o.session, o.unit].filter(Boolean).join(" · ");
 }
@@ -170,7 +170,7 @@ async function getAssistantNotifications(orgId: string, assistantId: string): Pr
       id: `student-${e.id}`,
       icon: "grad",
       tone: "ok",
-      title: `New student: ${student?.name ?? "—"}`,
+      title: `New student: ${student?.name ?? "-"}`,
       detail: offeringLabel(o),
       href: "/students",
       createdAt: e.created_at,
@@ -205,7 +205,7 @@ async function getHeadNotifications(orgId: string, headId: string): Promise<Noti
       id: `student-${e.id}`,
       icon: "grad",
       tone: "ok",
-      title: `New student: ${student?.name ?? "—"}`,
+      title: `New student: ${student?.name ?? "-"}`,
       detail: offeringLabel(o),
       href: "/students",
       createdAt: e.created_at,
@@ -309,7 +309,7 @@ async function getHrNotifications(orgId: string): Promise<NotificationItem[]> {
       icon: "inbox" as const,
       tone: "warn" as const,
       title: kindLabel,
-      detail: `${r.candidate_name ?? "—"} · ${offeringLabel(o)}`,
+      detail: `${r.candidate_name ?? "-"} · ${offeringLabel(o)}`,
       href: "/requests",
       createdAt: r.created_at,
     };

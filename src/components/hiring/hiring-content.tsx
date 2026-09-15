@@ -93,7 +93,7 @@ export function HiringContent() {
       setModalOpen(false);
       await reload();
     } catch {
-      setError(kind === "add" ? "Couldn't add this staff member — try again." : "Couldn't remove this staff member — try again.");
+      setError(kind === "add" ? "Couldn't add this staff member - try again." : "Couldn't remove this staff member - try again.");
     } finally {
       setSubmitting(false);
     }
@@ -113,7 +113,7 @@ export function HiringContent() {
       <PageHeader
         eyebrow="HR"
         title="Hiring & staffing"
-        subtitle="Add or remove any non-admin staff member — heads, assistants, registration, finance or HR."
+        subtitle="Add or remove any non-admin staff member - heads, assistants, registration, finance or HR."
       >
         <div className="flex flex-wrap gap-2">
           <button
@@ -171,7 +171,7 @@ export function HiringContent() {
               </div>
               <div className="min-w-0 flex-1">
                 <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">{kind === "add" ? "Add staff member" : "Remove staff member"}</h3>
-                <div className="text-[12px] text-[var(--muted)]">Applied by HR — recorded with dates</div>
+                <div className="text-[12px] text-[var(--muted)]">Applied by HR - recorded with dates</div>
               </div>
               <button onClick={() => setModalOpen(false)} className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]">
                 <Icon name="x" size={18} />

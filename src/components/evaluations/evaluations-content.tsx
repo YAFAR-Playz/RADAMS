@@ -298,7 +298,7 @@ export function EvaluationsContent() {
       setAttemptedSubmit(false);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't save this evaluation — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't save this evaluation - try again.");
     } finally {
       setSaving(null);
     }
@@ -422,7 +422,7 @@ export function EvaluationsContent() {
                     <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Extra work &amp; bonuses</h3>
                     {extraIsFallback && (
                       <span
-                        title="Finance hasn't added any Extra work categories yet — showing built-in defaults."
+                        title="Finance hasn't added any Extra work categories yet - showing built-in defaults."
                         className="inline-flex items-center gap-[4px] rounded-full bg-[var(--surface2)] px-[8px] py-[2px] text-[10.5px] font-semibold text-[var(--subtle)]"
                       >
                         <Icon name="shield" size={10} />
@@ -467,7 +467,7 @@ export function EvaluationsContent() {
                     <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Deductions</h3>
                     {dedIsFallback && (
                       <span
-                        title="Finance hasn't added any Deduction categories yet — showing built-in defaults."
+                        title="Finance hasn't added any Deduction categories yet - showing built-in defaults."
                         className="inline-flex items-center gap-[4px] rounded-full bg-[var(--surface2)] px-[8px] py-[2px] text-[10.5px] font-semibold text-[var(--subtle)]"
                       >
                         <Icon name="shield" size={10} />
@@ -513,7 +513,7 @@ export function EvaluationsContent() {
                   data-tour="evaluations-notes"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Summarize the assistant's performance this month — punctuality, quality of feedback, responsiveness…"
+                  placeholder="Summarize the assistant's performance this month - punctuality, quality of feedback, responsiveness…"
                   className="h-[120px] w-full resize-y rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-3 text-[13.5px] leading-[1.5] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                 />
                 <div className="mt-[13px]">

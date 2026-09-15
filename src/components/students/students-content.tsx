@@ -315,7 +315,7 @@ export function StudentsContent({ role }: { role: Role }) {
     try {
       await reassignStudentAssistant(enrollmentId, assistantId || null);
     } catch {
-      setError("Couldn't reassign this student — try again.");
+      setError("Couldn't reassign this student - try again.");
     } finally {
       setSavingId(null);
     }
@@ -335,9 +335,9 @@ export function StudentsContent({ role }: { role: Role }) {
     try {
       const { columns, rows } = await getStudentDetailedExport(offeringId);
       const assignmentHeaders = columns.flatMap((c) => {
-        const h = [`${c.assignmentTitle} — Status`];
-        if (c.hasGrade) h.push(`${c.assignmentTitle} — Grade`);
-        if (c.hasComment) h.push(`${c.assignmentTitle} — Comment`);
+        const h = [`${c.assignmentTitle} - Status`];
+        if (c.hasGrade) h.push(`${c.assignmentTitle} - Grade`);
+        if (c.hasComment) h.push(`${c.assignmentTitle} - Comment`);
         return h;
       });
       downloadCsv(
@@ -387,7 +387,7 @@ export function StudentsContent({ role }: { role: Role }) {
       setAddStudentOpen(false);
       if (offeringId) await reloadCurrent(offeringId);
     } catch {
-      setAddStudentError("Couldn't add this student — try again.");
+      setAddStudentError("Couldn't add this student - try again.");
     } finally {
       setAddStudentBusy(false);
     }
@@ -404,7 +404,7 @@ export function StudentsContent({ role }: { role: Role }) {
       setAddStudentOpen(false);
       if (offeringId) await reloadCurrent(offeringId);
     } catch {
-      setAddStudentError(sameStudent ? "Couldn't enroll this student — try again." : "Couldn't add this student — try again.");
+      setAddStudentError(sameStudent ? "Couldn't enroll this student - try again." : "Couldn't add this student - try again.");
     } finally {
       setAddStudentBusy(false);
       setDuplicateMatch(null);
@@ -458,7 +458,7 @@ export function StudentsContent({ role }: { role: Role }) {
       setViewMoreStudent((prev) => (prev ? { ...prev, targetGrade: value } : prev));
       if (offeringId) getTrafficLightForOffering(offeringId).then(setTrafficLight);
     } catch {
-      setError("Couldn't save the target grade — try again.");
+      setError("Couldn't save the target grade - try again.");
     } finally {
       setSavingTargetGrade(false);
     }
@@ -471,7 +471,7 @@ export function StudentsContent({ role }: { role: Role }) {
       await setStudentDriveFolderLink(viewMoreStudent.studentId, folderLinkDraft);
       setFolderLink(folderLinkDraft.trim() || null);
     } catch {
-      setError("Couldn't save that folder link — try again.");
+      setError("Couldn't save that folder link - try again.");
     } finally {
       setSavingFolderLink(false);
     }
@@ -482,12 +482,12 @@ export function StudentsContent({ role }: { role: Role }) {
     setEnrollmentBusy(true);
     try {
       const { enrollmentId } = await addStudentEnrollment(studentId, addOfferingId);
-      const label = allOfferings?.find((o) => o.id === addOfferingId)?.label ?? "—";
+      const label = allOfferings?.find((o) => o.id === addOfferingId)?.label ?? "-";
       setEditEnrollments((prev) => (prev ? [...prev, { enrollmentId, offeringId: addOfferingId, label, left: false }] : prev));
       setAddOfferingId("");
       if (offeringId) await reloadCurrent(offeringId);
     } catch {
-      setError("Couldn't enroll this student — try again.");
+      setError("Couldn't enroll this student - try again.");
     } finally {
       setEnrollmentBusy(false);
     }
@@ -504,7 +504,7 @@ export function StudentsContent({ role }: { role: Role }) {
       setEditEnrollments((prev) => (prev ? prev.filter((e) => e.enrollmentId !== enrollmentId) : prev));
       if (offeringId) await reloadCurrent(offeringId);
     } catch {
-      setError("Couldn't remove this enrollment — try again.");
+      setError("Couldn't remove this enrollment - try again.");
     } finally {
       setEnrollmentBusy(false);
     }
@@ -532,7 +532,7 @@ export function StudentsContent({ role }: { role: Role }) {
       setEditDraft(null);
       await reloadCurrent(offeringId);
     } catch {
-      setError("Couldn't save changes — try again.");
+      setError("Couldn't save changes - try again.");
     } finally {
       setSavingEdit(false);
     }
@@ -548,8 +548,8 @@ export function StudentsContent({ role }: { role: Role }) {
           id: welcomeStudent.studentCode,
           course: current?.label ?? "this course",
           assistant_name: welcomeStudent.assistantName ?? "your assistant",
-          student_group_link: welcomeStudent.assistantWhatsappLink ?? "(not set yet — ask your head)",
-          parent_group_link: parentWhatsappLink ?? "(not set yet — ask your admin)",
+          student_group_link: welcomeStudent.assistantWhatsappLink ?? "(not set yet - ask your head)",
+          parent_group_link: parentWhatsappLink ?? "(not set yet - ask your admin)",
         })
       : "";
   const welcomePhone = welcomeRecipient === "student" ? welcomeStudent?.phone : welcomeStudent?.guardianPhone;
@@ -584,9 +584,9 @@ export function StudentsContent({ role }: { role: Role }) {
         title={role === "registration" ? "Enrollment & payments" : "Student progress"}
         subtitle={
           role === "registration"
-            ? "Every student org-wide — enrollment, contact details, and payment status."
+            ? "Every student org-wide - enrollment, contact details, and payment status."
             : isAssistant
-              ? "Your assigned students — performance to date and contact details."
+              ? "Your assigned students - performance to date and contact details."
               : "Every student's status across recent assignments. Reassign or edit as needed."
         }
         actions={
@@ -860,7 +860,7 @@ export function StudentsContent({ role }: { role: Role }) {
                         <div className="overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-[var(--subtle)]">{st.email}</div>
                       )}
                       <div className="overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[11px] text-[var(--subtle)]">
-                        {st.phone ?? "—"} · G {st.guardianPhone ?? "—"}
+                        {st.phone ?? "-"} · G {st.guardianPhone ?? "-"}
                         {st.leftAt && <span className="ml-1 font-semibold text-[var(--danger)]"> · Left</span>}
                       </div>
                     </div>
@@ -980,7 +980,7 @@ export function StudentsContent({ role }: { role: Role }) {
                           );
                         })()}
                       <span className="w-[54px] flex-none text-right font-mono text-[13px] font-bold text-[var(--text)]">
-                        {st.leftAt ? "—" : formatGrade(st.avgGrade)}
+                        {st.leftAt ? "-" : formatGrade(st.avgGrade)}
                       </span>
                     </>
                   )}
@@ -1215,7 +1215,7 @@ export function StudentsContent({ role }: { role: Role }) {
                           onClick={() => onToggleEnrollmentLeft(e.enrollmentId)}
                           role="switch"
                           aria-checked={e.left}
-                          title={e.left ? "Marked as left in this course — click to restore" : "Mark as left in this course"}
+                          title={e.left ? "Marked as left in this course - click to restore" : "Mark as left in this course"}
                           className="relative h-5 w-9 flex-none rounded-full transition-colors"
                           style={{ background: e.left ? "var(--danger)" : "var(--border)" }}
                         >
@@ -1466,7 +1466,7 @@ export function StudentsContent({ role }: { role: Role }) {
                             data-tour="mystudents-target-grade"
                             value={targetGradeDraft}
                             onChange={(e) => setTargetGradeDraft(e.target.value.replace(/[^0-9]/g, ""))}
-                            placeholder="—"
+                            placeholder="-"
                             inputMode="numeric"
                             className="w-full border-none bg-transparent font-mono text-[12.5px] font-bold text-[var(--text)] outline-none"
                           />
@@ -1552,7 +1552,7 @@ export function StudentsContent({ role }: { role: Role }) {
                       return (
                         <div key={i} className="flex items-center justify-between gap-[8px] rounded-[7px] bg-[var(--surface2)] px-[10px] py-[6px] text-[12px]">
                           <span className="min-w-0 flex-1 truncate text-[var(--text)]">{a.title}</span>
-                          <span className="flex-none font-mono font-semibold text-[var(--text)]">{a.grade || "—"}</span>
+                          <span className="flex-none font-mono font-semibold text-[var(--text)]">{a.grade || "-"}</span>
                           <span
                             className="flex h-[20px] w-[20px] flex-none items-center justify-center rounded-[5px]"
                             style={{ background: bg, color: fg }}

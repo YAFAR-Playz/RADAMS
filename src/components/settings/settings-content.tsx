@@ -74,7 +74,7 @@ export function SettingsContent() {
       await reload();
       flashSuccess("Profile updated.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't save your details — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't save your details - try again.");
     } finally {
       setSavingDetails(false);
     }
@@ -87,7 +87,7 @@ export function SettingsContent() {
       await updateMyEmail(email);
       flashSuccess("Check your new email for a confirmation link.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't update your email — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't update your email - try again.");
     } finally {
       setSavingEmail(false);
     }
@@ -106,7 +106,7 @@ export function SettingsContent() {
       setConfirmPassword("");
       flashSuccess("Password updated.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't update your password — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't update your password - try again.");
     } finally {
       setSavingPassword(false);
     }
@@ -121,7 +121,7 @@ export function SettingsContent() {
       const { url } = await uploadMyAvatar(formData);
       setProfile((p) => p && { ...p, avatarUrl: url });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't upload your profile picture — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't upload your profile picture - try again.");
     } finally {
       setAvatarUploading(false);
     }
@@ -134,7 +134,7 @@ export function SettingsContent() {
       await startOnboardingDemo();
       window.location.href = "/dashboard";
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't start the tour — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't start the tour - try again.");
       setStartingTour(false);
     }
   }
@@ -146,7 +146,7 @@ export function SettingsContent() {
       await removeMyAvatar();
       setProfile((p) => p && { ...p, avatarUrl: null });
     } catch {
-      setError("Couldn't remove your profile picture — try again.");
+      setError("Couldn't remove your profile picture - try again.");
     } finally {
       setAvatarUploading(false);
     }
@@ -317,7 +317,7 @@ export function SettingsContent() {
         <section className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
           <h3 className="m-0 mb-[5px] text-[14px] font-semibold text-[var(--text)]">Product tour</h3>
           <p className="m-0 mb-[14px] text-[12px] text-[var(--muted)]">
-            A guided, step-by-step walkthrough in a throwaway demo — nothing you do there touches your real data.
+            A guided, step-by-step walkthrough in a throwaway demo - nothing you do there touches your real data.
           </p>
           <button
             onClick={onStartTour}

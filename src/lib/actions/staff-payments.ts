@@ -244,7 +244,7 @@ export async function getAssistantOfferings(profileId: string): Promise<Assistan
   type JoinedOffering = { session: string; unit: string | null; courses: { name: string } | { name: string }[] | null };
   function label(o: JoinedOffering | JoinedOffering[] | null): string {
     const offering = Array.isArray(o) ? o[0] : o;
-    if (!offering) return "—";
+    if (!offering) return "-";
     const course = Array.isArray(offering.courses) ? offering.courses[0] : offering.courses;
     return [course?.name, offering.session, offering.unit].filter(Boolean).join(" · ");
   }

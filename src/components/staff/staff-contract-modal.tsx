@@ -41,7 +41,7 @@ export function StaffContractModal({ staffId, staffName, onClose }: { staffId: s
       setFile(null);
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't upload the contract — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't upload the contract - try again.");
     } finally {
       setUploading(false);
     }
@@ -52,9 +52,9 @@ export function StaffContractModal({ staffId, staffName, onClose }: { staffId: s
     try {
       const url = await getStaffContractUrl(id);
       if (url) window.open(url, "_blank", "noopener,noreferrer");
-      else setError("Couldn't open this contract — try again.");
+      else setError("Couldn't open this contract - try again.");
     } catch {
-      setError("Couldn't open this contract — try again.");
+      setError("Couldn't open this contract - try again.");
     } finally {
       setOpeningId(null);
     }
@@ -66,7 +66,7 @@ export function StaffContractModal({ staffId, staffName, onClose }: { staffId: s
       await deleteStaffContract(id);
       await reload();
     } catch {
-      setError("Couldn't remove this version — try again.");
+      setError("Couldn't remove this version - try again.");
     } finally {
       setDeletingId(null);
     }
@@ -82,7 +82,7 @@ export function StaffContractModal({ staffId, staffName, onClose }: { staffId: s
             <Icon name="file-up" size={19} />
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Contract — {staffName}</h3>
+            <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Contract - {staffName}</h3>
             <div className="text-[12px] text-[var(--muted)]">PDF, Word doc, or a photo of the signed pages</div>
           </div>
           <button onClick={onClose} className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]">
@@ -120,7 +120,7 @@ export function StaffContractModal({ staffId, staffName, onClose }: { staffId: s
             </div>
             {current && (
               <div className="mt-[10px] text-[12px] text-[var(--muted)]">
-                Current: <span className="font-semibold text-[var(--text)]">{current.fileName}</span> — uploaded{" "}
+                Current: <span className="font-semibold text-[var(--text)]">{current.fileName}</span> - uploaded{" "}
                 {new Date(current.uploadedAt).toLocaleDateString()}
                 {current.uploadedByName ? ` by ${current.uploadedByName}` : ""}
               </div>

@@ -223,7 +223,7 @@ export function AssignmentsContent() {
       await setStatus(assignmentId, studentId, status || null);
       patchLocal(studentId, { status: status || null });
     } catch {
-      setError("Couldn't save status — try again.");
+      setError("Couldn't save status - try again.");
     } finally {
       setSavingId(null);
     }
@@ -244,7 +244,7 @@ export function AssignmentsContent() {
       await setGrade(assignmentId, studentId, value);
       patchLocal(studentId, { grade: value || null });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't save grade — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't save grade - try again.");
     } finally {
       setSavingId(null);
     }
@@ -257,7 +257,7 @@ export function AssignmentsContent() {
       await setComment(assignmentId, studentId, value);
       patchLocal(studentId, { comment: value });
     } catch {
-      setError("Couldn't save comment — try again.");
+      setError("Couldn't save comment - try again.");
     } finally {
       setSavingId(null);
     }
@@ -484,7 +484,7 @@ export function AssignmentsContent() {
                       data-tour={rowIndex === 0 ? "myassignments-grade" : undefined}
                       defaultValue={st.grade ?? ""}
                       onBlur={(e) => onGradeBlur(st.studentId, e.target.value, e.target)}
-                      placeholder="—"
+                      placeholder="-"
                       className="h-[36px] w-[66px] flex-none rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-center text-[13px] font-semibold text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                     />
                   )}

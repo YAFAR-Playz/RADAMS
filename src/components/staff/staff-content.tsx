@@ -98,7 +98,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
         setLoading(false);
       });
     } catch {
-      setError("Couldn't load staff — try again.");
+      setError("Couldn't load staff - try again.");
       setLoading(false);
     }
   }
@@ -177,12 +177,12 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
       } else {
         const { id, merged } = await createStaffMember(form);
         if (showCourses && form.courseIds.length) await assignStaffToCourses(id, form.role as "head" | "assistant", form.courseIds);
-        if (merged) setNotice(`${form.name.trim()} already has an account — added them to the selected course(s) instead of creating a new one.`);
+        if (merged) setNotice(`${form.name.trim()} already has an account - added them to the selected course(s) instead of creating a new one.`);
       }
       setModalOpen(false);
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : editId ? "Couldn't save changes — try again." : "Couldn't create this user — try again.");
+      setError(e instanceof Error ? e.message : editId ? "Couldn't save changes - try again." : "Couldn't create this user - try again.");
     } finally {
       setSaving(false);
     }
@@ -203,7 +203,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
       setStaff((prev) => (prev ? prev.filter((u) => u.id !== id) : prev));
       setRemoveTarget(null);
     } catch {
-      setError("Couldn't remove this user — try again.");
+      setError("Couldn't remove this user - try again.");
     } finally {
       setRemovingId(null);
     }
@@ -239,10 +239,10 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
       setBulkResult(
         failures.length === 0
           ? `Generated ${candidates.length} report${candidates.length === 1 ? "" : "s"} and sent them to Drive.`
-          : `Generated ${candidates.length - failures.length}/${candidates.length} — ${failures.length} failed: ${failures.join("; ")}`
+          : `Generated ${candidates.length - failures.length}/${candidates.length} - ${failures.length} failed: ${failures.join("; ")}`
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't generate reports — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't generate reports - try again.");
     } finally {
       setBulkRunning(false);
       setBulkProgress(null);
@@ -256,7 +256,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
       const { url } = await getLoginAsLink(id, redirectTo);
       window.location.href = url;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't sign in as this user — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't sign in as this user - try again.");
       setLoginAsId(null);
     }
   }
@@ -271,7 +271,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
       }
       setRequests((prev) => (prev ? prev.map((r) => (r.id === id ? { ...r, status } : r)) : prev));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't update this request — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't update this request - try again.");
     } finally {
       setResolvingId(null);
     }
@@ -391,7 +391,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
           <div className="p-[7px_8px]">
             {pendingRequests.map((r, requestIndex) => {
               const title = r.kind === "add" ? "New assistant requested" : r.kind === "remove" ? "Removal requested" : "Replacement requested";
-              const who = r.kind === "replace" ? `${r.targetName ?? "—"} → ${r.candidateName ?? "TBD"}` : r.candidateName ?? r.targetName ?? "—";
+              const who = r.kind === "replace" ? `${r.targetName ?? "-"} → ${r.candidateName ?? "TBD"}` : r.candidateName ?? r.targetName ?? "-";
               return (
                 <div key={r.id} className="flex flex-wrap items-center gap-3 rounded-[10px] p-[10px_11px] hover:bg-[var(--surface2)]">
                   <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] bg-[var(--surface2)] text-[var(--text)]">
@@ -522,7 +522,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
                   </span>
                   {u.isMainAdmin && (
                     <span
-                      title="Assigned by the platform owner — can't be removed"
+                      title="Assigned by the platform owner - can't be removed"
                       className="inline-flex flex-none items-center gap-[5px] rounded-full px-[9px] py-[4px] text-[11px] font-semibold"
                       style={{ background: "var(--brands)", color: "var(--brand)" }}
                     >
@@ -591,11 +591,11 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
                   <div className="grid grid-cols-1 gap-[10px] border-t border-[var(--border2)] bg-[var(--surface2)] p-[12px_16px] sm:grid-cols-2 lg:grid-cols-4">
                     <div>
                       <div className="text-[10.5px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Phone</div>
-                      <div className="mt-[2px] text-[13px] font-semibold text-[var(--text)]">{u.phone ?? "—"}</div>
+                      <div className="mt-[2px] text-[13px] font-semibold text-[var(--text)]">{u.phone ?? "-"}</div>
                     </div>
                     <div>
                       <div className="text-[10.5px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Courses</div>
-                      <div className="mt-[2px] text-[13px] font-semibold text-[var(--text)]">{u.courses.length ? u.courses.join(", ") : "—"}</div>
+                      <div className="mt-[2px] text-[13px] font-semibold text-[var(--text)]">{u.courses.length ? u.courses.join(", ") : "-"}</div>
                     </div>
                     <div>
                       <div className="text-[10.5px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)]">Joined</div>
@@ -813,7 +813,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
               <div className="min-w-0 flex-1">
                 <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Request details</h3>
                 <div className="text-[12px] text-[var(--muted)]">
-                  Requested by {viewingRequest.requestedByName ?? "—"} · {new Date(viewingRequest.createdAt).toLocaleDateString()}
+                  Requested by {viewingRequest.requestedByName ?? "-"} · {new Date(viewingRequest.createdAt).toLocaleDateString()}
                 </div>
               </div>
               <button onClick={() => setViewingRequest(null)} className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]">
@@ -831,7 +831,7 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
                     {viewingRequest.kind === "replace" ? "Outgoing" : "Staff member"}
                   </div>
                   <div className="flex flex-col gap-[9px]">
-                    <div className="text-[13.5px] font-semibold text-[var(--text)]">{viewingRequest.targetName ?? "—"}</div>
+                    <div className="text-[13.5px] font-semibold text-[var(--text)]">{viewingRequest.targetName ?? "-"}</div>
                     <div className="grid grid-cols-2 gap-[9px]">
                       {(viewingRequest.kind === "remove" ? viewingRequest.proposedDate : viewingRequest.leaveDate) && (
                         <div>

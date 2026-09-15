@@ -66,7 +66,7 @@ function DepartedRow({ person }: { person: DepartedStaffMember }) {
           </div>
         </div>
         <div className="flex-none text-right text-[12px] text-[var(--muted)]">
-          <div>Joined {person.hiredAt ?? "—"}</div>
+          <div>Joined {person.hiredAt ?? "-"}</div>
           <div>Left {person.leftAt}</div>
         </div>
         <span
@@ -116,7 +116,7 @@ function DepartedRow({ person }: { person: DepartedStaffMember }) {
             <div className="text-[12.5px] text-[var(--muted)]">Couldn&apos;t determine their final month.</div>
           ) : detail.offerings.length === 0 ? (
             <div className="text-[12.5px] text-[var(--muted)]">
-              No courses found with logged work for {periodLabel(detail.finalPeriod)} — they may not have checked any papers before leaving.
+              No courses found with logged work for {periodLabel(detail.finalPeriod)} - they may not have checked any papers before leaving.
             </div>
           ) : (
             <div className="flex flex-col gap-[8px]">

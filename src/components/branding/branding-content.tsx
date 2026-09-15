@@ -51,7 +51,7 @@ export function BrandingContent() {
       await setStaffReportBrandingPreference(usePlatform);
       setStaffReportUsesPlatform(usePlatform);
     } catch {
-      setError("Couldn't save this preference — try again.");
+      setError("Couldn't save this preference - try again.");
     } finally {
       setStaffReportPrefSaving(false);
     }
@@ -64,7 +64,7 @@ export function BrandingContent() {
       await saveBranding(draft);
       setSaved(draft);
     } catch {
-      setError("Couldn't save branding — try again.");
+      setError("Couldn't save branding - try again.");
     } finally {
       setSaving(false);
     }
@@ -84,7 +84,7 @@ export function BrandingContent() {
       setDraft((d) => d && { ...d, logoUrl: url });
       setSaved((s) => s && { ...s, logoUrl: url });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't upload this logo — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't upload this logo - try again.");
     } finally {
       setLogoUploading(false);
     }
@@ -98,7 +98,7 @@ export function BrandingContent() {
       setDraft((d) => d && { ...d, logoUrl: null });
       setSaved((s) => s && { ...s, logoUrl: null });
     } catch {
-      setError("Couldn't remove this logo — try again.");
+      setError("Couldn't remove this logo - try again.");
     } finally {
       setLogoUploading(false);
     }
@@ -134,7 +134,7 @@ export function BrandingContent() {
       <PageHeader
         eyebrow="Organization branding"
         title="Customize your organization"
-        subtitle="Adjust your brand name, colors, font and shape — every screen in your organization updates automatically."
+        subtitle="Adjust your brand name, colors, font and shape - every screen in your organization updates automatically."
       >
         <div className="flex items-start gap-[10px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--infos)] p-[11px_13px]">
           <Icon name="building" size={17} className="mt-[1px] flex-none text-[var(--info)]" />
@@ -210,7 +210,7 @@ export function BrandingContent() {
           {/* COLORS */}
           <section className="rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[17px_18px] shadow-[var(--shadow)]">
             <h3 className="m-0 mb-1 text-[14px] font-semibold text-[var(--text)]">Colors</h3>
-            <p className="m-0 mb-[15px] text-[12px] text-[var(--subtle)]">Stored as tokens — every screen updates automatically.</p>
+            <p className="m-0 mb-[15px] text-[12px] text-[var(--subtle)]">Stored as tokens - every screen updates automatically.</p>
             <div className="flex flex-col gap-4">
               <div>
                 <div className="mb-[9px] flex items-center justify-between">

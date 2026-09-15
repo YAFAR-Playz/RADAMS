@@ -23,7 +23,7 @@ export type StaffingRequestDetail = {
 };
 
 function offeringLabel(o: { session: string; unit: string | null; courses: { name: string } | { name: string }[] | null } | null) {
-  if (!o) return "—";
+  if (!o) return "-";
   const course = Array.isArray(o.courses) ? o.courses[0] : o.courses;
   return [course?.name, o.session, o.unit].filter(Boolean).join(" · ");
 }
@@ -45,8 +45,8 @@ export async function listRecentStaffJoins(): Promise<StaffingLogRow[]> {
     if (r.kind === "add") {
       return {
         id: r.id,
-        title: `Added ${roleLabel} — ${r.target_name}`,
-        detail: `hired ${r.hire_date ? new Date(r.hire_date).toLocaleDateString() : "—"}`,
+        title: `Added ${roleLabel} - ${r.target_name}`,
+        detail: `hired ${r.hire_date ? new Date(r.hire_date).toLocaleDateString() : "-"}`,
         createdAt: r.created_at,
         icon: "user-plus" as const,
         color: "var(--brand)",
@@ -54,8 +54,8 @@ export async function listRecentStaffJoins(): Promise<StaffingLogRow[]> {
     }
     return {
       id: r.id,
-      title: `Removed ${roleLabel} — ${r.target_name}`,
-      detail: `left ${r.leave_date ? new Date(r.leave_date).toLocaleDateString() : "—"}`,
+      title: `Removed ${roleLabel} - ${r.target_name}`,
+      detail: `left ${r.leave_date ? new Date(r.leave_date).toLocaleDateString() : "-"}`,
       createdAt: r.created_at,
       icon: "x" as const,
       color: "var(--danger)",

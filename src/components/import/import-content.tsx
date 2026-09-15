@@ -16,7 +16,7 @@ const FIELD_OPTIONS: { value: FieldKey; label: string }[] = [
   { value: "email", label: "Email" },
   { value: "guardianName", label: "Guardian name" },
   { value: "guardianPhone", label: "Guardian phone" },
-  { value: "ignore", label: "— Ignore —" },
+  { value: "ignore", label: "- Ignore -" },
 ];
 
 function guessField(header: string): FieldKey {
@@ -102,7 +102,7 @@ export function ImportContent() {
     reader.onload = () => {
       const text = String(reader.result ?? "");
       if (looksLikeGarbledText(text)) {
-        setError("This file couldn't be read as text — it may be corrupted or not actually a CSV. Please re-export it as a plain CSV file and try again.");
+        setError("This file couldn't be read as text - it may be corrupted or not actually a CSV. Please re-export it as a plain CSV file and try again.");
         removeFile();
         if (fileInputRef.current) fileInputRef.current.value = "";
         return;
@@ -182,7 +182,7 @@ export function ImportContent() {
         setResult({ imported, merged, errors: errorRows.length });
         setStep(3);
       } catch {
-        setError("Couldn't import students — try again.");
+        setError("Couldn't import students - try again.");
       } finally {
         setImporting(false);
       }
@@ -362,7 +362,7 @@ export function ImportContent() {
               {headers.map((h, i) => (
                 <div key={h} className="flex items-center gap-[14px] border-b border-[var(--border2)] p-[12px_18px]">
                   <span className="w-[170px] flex-none truncate font-mono text-[13.5px] font-semibold text-[var(--text)]">{h}</span>
-                  <span className="w-[160px] flex-none truncate text-[12.5px] text-[var(--muted)]">{rawRows[0]?.[i] ?? "—"}</span>
+                  <span className="w-[160px] flex-none truncate text-[12.5px] text-[var(--muted)]">{rawRows[0]?.[i] ?? "-"}</span>
                   <div className="flex h-[38px] max-w-[240px] flex-1 items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[11px]">
                     <select
                       value={mapping[h] ?? "ignore"}
@@ -438,9 +438,9 @@ export function ImportContent() {
                     style={{ background: r.error ? "var(--dangers)" : "transparent" }}
                   >
                     <span className="w-[26px] flex-none font-mono text-[12.5px] text-[var(--subtle)]">{r.n}</span>
-                    <span className="min-w-0 flex-[1.4_1_140px] truncate text-[13.5px] font-semibold text-[var(--text)]">{r.name || "—"}</span>
-                    <span className="min-w-0 flex-[1_1_110px] font-mono text-[13px] text-[var(--muted)]">{r.phone || "—"}</span>
-                    <span className="min-w-0 flex-[1_1_130px] font-mono text-[13px] text-[var(--muted)]">{r.guardianPhone || "—"}</span>
+                    <span className="min-w-0 flex-[1.4_1_140px] truncate text-[13.5px] font-semibold text-[var(--text)]">{r.name || "-"}</span>
+                    <span className="min-w-0 flex-[1_1_110px] font-mono text-[13px] text-[var(--muted)]">{r.phone || "-"}</span>
+                    <span className="min-w-0 flex-[1_1_130px] font-mono text-[13px] text-[var(--muted)]">{r.guardianPhone || "-"}</span>
                     {r.error ? (
                       <span className="flex min-w-0 flex-[1.3_1_160px] items-center gap-[6px] truncate text-[12.5px] font-semibold" style={{ color: "var(--danger)" }}>
                         <Icon name="alert" size={14} />

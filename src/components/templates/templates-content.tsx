@@ -23,10 +23,10 @@ const SAMPLE: Record<string, string> = {
   org: "Cambridge Prep Center",
   course: "Physics · June · U1",
   assistant_name: "Aisha Rahman",
-  assignment: "Paper 3 — Mechanics",
+  assignment: "Paper 3 - Mechanics",
   status: "Submitted",
   grade: " (85/100)",
-  session: "Week 7 — Lecture",
+  session: "Week 7 - Lecture",
   date: "18 Jun",
   comment: "Strong on kinematics.",
   student_group_link: "https://chat.whatsapp.com/student-group",
@@ -96,7 +96,7 @@ export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform"
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch {
-      setError("Couldn't save this template — try again.");
+      setError("Couldn't save this template - try again.");
     } finally {
       setSaving(false);
     }
@@ -109,7 +109,7 @@ export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform"
       setOverrides((prev) => (prev ? { ...prev, [sel]: null } : prev));
       setDraft(fallbackFor(sel, effectiveDefaults));
     } catch {
-      setError("Couldn't reset this template — try again.");
+      setError("Couldn't reset this template - try again.");
     } finally {
       setSaving(false);
     }
@@ -241,7 +241,7 @@ export function TemplatesContent({ scope = "org" }: { scope?: "org" | "platform"
           <header className="flex flex-wrap items-center justify-between gap-[10px] border-b border-[var(--border2)] p-[14px_18px]">
             <div>
               <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">
-                {current.label} <span className="font-normal text-[var(--muted)]">— {current.recipient === "student" ? "to student" : "to parent"}</span>
+                {current.label} <span className="font-normal text-[var(--muted)]">- {current.recipient === "student" ? "to student" : "to parent"}</span>
               </h3>
               <p className="m-0 mt-[2px] text-[12px] text-[var(--subtle)]">{customized ? "Customized for your organization" : "Using built-in default"}</p>
             </div>

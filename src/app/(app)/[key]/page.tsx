@@ -219,7 +219,7 @@ export default async function AppPage({ params }: { params: Promise<{ key: strin
       <div>
         <h2 className="m-0 mb-[6px] text-[20px] font-semibold tracking-[-0.01em] text-[var(--text)]">{item.label}</h2>
         <p className="m-0 max-w-[360px] text-[14px] leading-[1.55] text-[var(--muted)]">
-          This section is part of the next design round — the navigation, shell and theming are wired and ready for it.
+          This section is part of the next design round - the navigation, shell and theming are wired and ready for it.
         </p>
       </div>
     </div>

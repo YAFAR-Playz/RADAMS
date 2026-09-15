@@ -142,7 +142,7 @@ function MessagingVisual({ brand }: { brand: string }) {
         <div className="text-[12px] font-semibold text-[var(--text)]">Message parent</div>
       </div>
       <div className="rounded-[10px] border border-[var(--border2)] bg-[var(--surface2)] p-[10px] text-[10.5px] leading-[1.5] text-[var(--muted)]">
-        &ldquo;Hi! Yara scored 92% on today&apos;s quiz — great progress this week 🎉&rdquo;
+        &ldquo;Hi! Yara scored 92% on today&apos;s quiz - great progress this week 🎉&rdquo;
       </div>
       <div className="mt-[10px] flex items-center gap-[6px] self-start rounded-[8px] border border-[#25D366] px-[10px] py-[6px] text-[10.5px] font-semibold text-[#1ea952]">
         <Icon name="send" size={11} />

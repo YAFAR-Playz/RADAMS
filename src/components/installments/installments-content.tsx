@@ -72,7 +72,7 @@ export function InstallmentsContent() {
       await setPlanDiscount(planId, pct);
       await reload();
     } catch {
-      setError("Couldn't update discount — try again.");
+      setError("Couldn't update discount - try again.");
     } finally {
       setSavingPlanId(null);
     }
@@ -112,7 +112,7 @@ export function InstallmentsContent() {
       await markInstallmentPaid(installmentId, paid);
       await reload();
     } catch {
-      setError("Couldn't update this installment — try again.");
+      setError("Couldn't update this installment - try again.");
     } finally {
       setTogglingId(null);
     }
@@ -216,7 +216,7 @@ export function InstallmentsContent() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="p-10 text-center text-[13.5px] text-[var(--muted)]">
-            {search ? "No students match this search." : "No payment plans yet — they're created when Registration enrolls a student."}
+            {search ? "No students match this search." : "No payment plans yet - they're created when Registration enrolls a student."}
           </div>
         ) : (
           filtered.map((p, planIndex) => {
@@ -297,7 +297,7 @@ export function InstallmentsContent() {
                         <div key={inst.id} className="flex flex-wrap items-center gap-[10px] rounded-[9px] bg-[var(--surface)] p-[9px_12px]">
                           <span className="w-[90px] flex-none text-[12.5px] font-semibold text-[var(--text)]">Payment {inst.seq}</span>
                           <span className="flex-1 font-mono text-[13px] font-bold text-[var(--text)]">{fmt(inst.amount)}</span>
-                          <span className="flex-none text-[12px] text-[var(--subtle)]">{inst.dueDate ? `Due ${inst.dueDate}` : "—"}</span>
+                          <span className="flex-none text-[12px] text-[var(--subtle)]">{inst.dueDate ? `Due ${inst.dueDate}` : "-"}</span>
                           {togglingId === inst.id && <Spinner size={13} className="flex-none text-[var(--subtle)]" />}
                           <button
                             data-tour={planIndex === 0 && instIndex === 0 ? "installments-mark-paid" : undefined}

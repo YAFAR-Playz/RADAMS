@@ -133,7 +133,7 @@ export function ChatContent({ role }: { role: Role }) {
       setMessages(data);
       await reloadConversations();
     } catch {
-      setError("Couldn't send message — try again.");
+      setError("Couldn't send message - try again.");
       setDraft(body);
     } finally {
       setSending(false);
@@ -238,7 +238,7 @@ export function ChatContent({ role }: { role: Role }) {
               {messages === null ? (
                 <Spinner size={20} />
               ) : messages.length === 0 ? (
-                <div className="py-8 text-center text-[13px] text-[var(--muted)]">No messages yet — say hello.</div>
+                <div className="py-8 text-center text-[13px] text-[var(--muted)]">No messages yet - say hello.</div>
               ) : (
                 <div className="flex flex-col gap-[10px]">
                   {messages.map((m) => (

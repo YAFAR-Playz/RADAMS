@@ -197,7 +197,7 @@ function AssistantRow({
                     <Icon name={def ? def.icon : "clock"} size={12} />
                     {def ? def.label : "Not logged"}
                   </span>
-                  <span className="w-[38px] flex-none text-[12.5px] font-bold text-[var(--text)]">{c.grade || "—"}</span>
+                  <span className="w-[38px] flex-none text-[12.5px] font-bold text-[var(--text)]">{c.grade || "-"}</span>
                   <span className="min-w-[150px] flex-1 text-[12.5px] leading-[1.4] text-[var(--muted)]">
                     {c.comment || "No comment yet"}
                   </span>

@@ -76,7 +76,7 @@ export function EvaluationSubmissionsContent() {
         });
         if (!cancelled) startTransition(() => setRows(data));
       } catch {
-        if (!cancelled) setError("Couldn't load evaluation submissions — try again.");
+        if (!cancelled) setError("Couldn't load evaluation submissions - try again.");
       }
     })();
     return () => {
@@ -91,7 +91,7 @@ export function EvaluationSubmissionsContent() {
       <PageHeader
         eyebrow="Read-only"
         title="Evaluation submissions"
-        subtitle="Every evaluation a Head has submitted, by month, course and assistant — extras, deductions, rating and notes exactly as submitted. To edit a payable amount, use Salaries instead."
+        subtitle="Every evaluation a Head has submitted, by month, course and assistant - extras, deductions, rating and notes exactly as submitted. To edit a payable amount, use Salaries instead."
       />
 
       <div className="flex flex-wrap gap-[10px] rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] p-[13px] shadow-[var(--shadow)]">
@@ -173,10 +173,10 @@ export function EvaluationSubmissionsContent() {
                   <span className="w-[110px] flex-none text-[12px] text-[var(--muted)]">by {r.headName}</span>
                   <RatingBadge rating={r.rating} />
                   <span className="w-[70px] flex-none text-right font-mono text-[12.5px] font-bold text-[var(--ok)]">
-                    {r.extraTotal > 0 ? `+${currencySym}${Math.round(r.extraTotal).toLocaleString()}` : "—"}
+                    {r.extraTotal > 0 ? `+${currencySym}${Math.round(r.extraTotal).toLocaleString()}` : "-"}
                   </span>
                   <span className="w-[70px] flex-none text-right font-mono text-[12.5px] font-bold text-[var(--danger)]">
-                    {r.deductionTotal > 0 ? `-${currencySym}${Math.round(r.deductionTotal).toLocaleString()}` : "—"}
+                    {r.deductionTotal > 0 ? `-${currencySym}${Math.round(r.deductionTotal).toLocaleString()}` : "-"}
                   </span>
                   <Icon name="chevron-down" size={16} className="flex-none text-[var(--subtle)]" style={{ transform: isOpen ? "rotate(180deg)" : "none" }} />
                 </button>

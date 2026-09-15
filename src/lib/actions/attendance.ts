@@ -297,7 +297,7 @@ export async function updateSession(id: string, input: { title: string; date: st
         before.session_time !== input.time ? `time ${before.session_time} → ${input.time}` : null,
       ].filter((x): x is string => !!x)
     : [];
-  await logActivity("attendance", `Updated session "${newTitle}"${changes.length ? ` — ${changes.join(", ")}` : ""}`);
+  await logActivity("attendance", `Updated session "${newTitle}"${changes.length ? ` - ${changes.join(", ")}` : ""}`);
 }
 
 export async function deleteSession(id: string) {

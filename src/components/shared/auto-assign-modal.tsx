@@ -40,7 +40,7 @@ export function AutoAssignModal({
       await setAssistantMaxStudents(offeringId, assistantId, parsed);
       setWorkloads((prev) => prev?.map((w) => (w.id === assistantId ? { ...w, maxStudents: parsed } : w)) ?? null);
     } catch {
-      setError("Couldn't save that cap — try again.");
+      setError("Couldn't save that cap - try again.");
     } finally {
       setSavingMax(null);
     }
@@ -55,7 +55,7 @@ export function AutoAssignModal({
       await autoAssignUnassigned(offeringId, strategy, includeIds);
       onDone();
     } catch {
-      setError("Couldn't auto-assign students — try again.");
+      setError("Couldn't auto-assign students - try again.");
     } finally {
       setRunning(false);
     }

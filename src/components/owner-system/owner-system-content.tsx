@@ -59,7 +59,7 @@ export function OwnerSystemContent() {
       <PageHeader
         eyebrow="Owner · Platform"
         title="System"
-        subtitle="Platform-wide composition — who's on ZAD-AMS and how organizations are doing."
+        subtitle="Platform-wide composition - who's on ZAD-AMS and how organizations are doing."
       />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

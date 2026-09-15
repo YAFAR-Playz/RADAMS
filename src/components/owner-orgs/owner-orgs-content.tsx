@@ -91,7 +91,7 @@ export function OwnerOrgsContent() {
       setModalOpen(false);
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't save this organization — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't save this organization - try again.");
     } finally {
       setSaving(false);
     }
@@ -104,7 +104,7 @@ export function OwnerOrgsContent() {
       await deleteOrganization(id);
       setOrgs((prev) => (prev ? prev.filter((o) => o.id !== id) : prev));
     } catch {
-      setError("Couldn't delete this organization — try again.");
+      setError("Couldn't delete this organization - try again.");
     } finally {
       setBusyId(null);
     }
@@ -121,7 +121,7 @@ export function OwnerOrgsContent() {
       const { url } = await getOwnerLoginAsLink(o.adminId, redirectTo);
       window.location.assign(url);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't sign in as this admin — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't sign in as this admin - try again.");
       setLoginAsId(null);
     }
   }

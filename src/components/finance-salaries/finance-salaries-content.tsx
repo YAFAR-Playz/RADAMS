@@ -146,7 +146,7 @@ function EvaluationPanel({ payeeId, offeringId, period, sym }: { payeeId: string
                         defaultValue={l.qty}
                         onBlur={(e) => onUpdate(l.id, { qty: e.target.value.replace(/[^0-9]/g, "") })}
                         placeholder="0"
-                        title="Quantity — required, this is what the amount is calculated from. A blank qty means this line pays $0."
+                        title="Quantity - required, this is what the amount is calculated from. A blank qty means this line pays $0."
                         className="h-full w-[36px] rounded-[6px] bg-transparent px-2 text-center font-mono text-[12px] text-[var(--text)] outline-none"
                       />
                       <span className="text-[10px] font-semibold uppercase tracking-[0.03em] text-[var(--subtle)]">qty · required</span>
@@ -450,7 +450,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
       await updateSalaryLine(id, patch);
       if (period) await reload(period);
     } catch {
-      setError("Couldn't save this change — try again.");
+      setError("Couldn't save this change - try again.");
     } finally {
       setBusyId(null);
     }
@@ -463,7 +463,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
       await setAssistantOfficeHours(payeeId, period, hours, offeringId);
       await reload(period);
     } catch {
-      setError("Couldn't save office hours — try again.");
+      setError("Couldn't save office hours - try again.");
     } finally {
       setBusyId(null);
     }
@@ -571,7 +571,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
       await setLineCalcMethod(lineId, method);
       if (period) await reload(period);
     } catch {
-      setError("Couldn't change the calc method — try again.");
+      setError("Couldn't change the calc method - try again.");
     } finally {
       setBusyId(null);
     }
@@ -591,7 +591,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
       await setPayeeReleased(a.payeeId, period, true);
       await reload(period);
     } catch {
-      setError("Couldn't release this payee's pay — try again.");
+      setError("Couldn't release this payee's pay - try again.");
     } finally {
       setBusyId(null);
     }
@@ -605,7 +605,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
       setUnreleaseTarget(null);
       await reload(period);
     } catch {
-      setError("Couldn't unrelease this payee's pay — try again.");
+      setError("Couldn't unrelease this payee's pay - try again.");
     } finally {
       setUnreleasing(false);
     }
@@ -619,7 +619,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
       setRemoveTarget(null);
       await reload(period);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't remove this payee — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't remove this payee - try again.");
     } finally {
       setRemoving(false);
     }
@@ -645,7 +645,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
       setAddOpen(false);
       await reload(period);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't add this payee — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't add this payee - try again.");
     } finally {
       setAdding(false);
     }
@@ -659,7 +659,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
       await releaseAllForPeriod(period);
       await reload(period);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't release this period's pay — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't release this period's pay - try again.");
     } finally {
       setReleasingAll(false);
     }
@@ -677,7 +677,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
       await setPayeeStatus(a.payeeId, period, "pending");
       await reload(period);
     } catch {
-      setError("Couldn't update payment status — try again.");
+      setError("Couldn't update payment status - try again.");
     } finally {
       setBusyId(null);
     }
@@ -696,7 +696,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
       await reload(period);
       setReceiptTarget(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't mark as paid — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't mark as paid - try again.");
     } finally {
       setReceiptSaving(false);
     }
@@ -710,7 +710,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
       if (url) window.open(url, "_blank", "noopener,noreferrer");
       else setError("No receipt was attached for this period.");
     } catch {
-      setError("Couldn't open the receipt — try again.");
+      setError("Couldn't open the receipt - try again.");
     } finally {
       setViewingReceiptId(null);
     }
@@ -791,7 +791,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
               data-tour="salaries-release-all"
               onClick={onReleaseAll}
               disabled={releasingAll || !period || unreleasedCount === 0}
-              title="Make this period's breakdown visible to everyone in My Pay — separate from marking paid"
+              title="Make this period's breakdown visible to everyone in My Pay - separate from marking paid"
               className="flex h-10 flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-[14px] text-[13px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
             >
               {releasingAll ? <Spinner size={14} /> : <Icon name="send" size={16} />}
@@ -859,9 +859,9 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
         <div className="flex items-start gap-[10px] border-b border-[var(--border2)] bg-[var(--infos)] p-[11px_18px]">
           <Icon name="trend" size={16} className="mt-[1px] flex-none text-[var(--info)]" />
           <span className="text-[12px] leading-[1.45] text-[var(--text)]">
-            Nobody sees anything in My Pay until you release it — edit freely, then hit Release (per person, or &quot;Release all&quot; above) when
+            Nobody sees anything in My Pay until you release it - edit freely, then hit Release (per person, or &quot;Release all&quot; above) when
             ready. Bonus/deduction reasons show up on their view too once released. Covers both assistants and heads. Someone appears if they have a
-            checked paper due this month, a &quot;Fixed + per paper&quot; course (owed its fixed base regardless), or a head-logged bonus/deduction —
+            checked paper due this month, a &quot;Fixed + per paper&quot; course (owed its fixed base regardless), or a head-logged bonus/deduction -
             someone missing usually just has none of those yet this period.
           </span>
         </div>
@@ -929,7 +929,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
                           e.stopPropagation();
                           setUnreleaseTarget(a);
                         }}
-                        title="Unrelease — hide their pay again until you re-release it"
+                        title="Unrelease - hide their pay again until you re-release it"
                         className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] text-[var(--subtle)] hover:border-[var(--danger)] hover:bg-[var(--dangers)] hover:text-[var(--danger)]"
                       >
                         <Icon name="eye-off" size={13} />
@@ -943,7 +943,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
                         onRelease(a);
                       }}
                       disabled={busyId === a.payeeId}
-                      title="Not visible to them yet — click to release"
+                      title="Not visible to them yet - click to release"
                       className="flex flex-none items-center gap-[6px] rounded-[8px] border border-[var(--brand)] bg-[var(--brand)] px-3 py-[7px] text-[12px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
                     >
                       {busyId === a.payeeId ? <Spinner size={13} /> : <Icon name="send" size={13} />}
@@ -1033,7 +1033,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
                                 )
                               }
                               disabled={!l.offeringId || busyId === l.id}
-                              title={l.offeringId ? "Calc method" : "No course linked — manual only"}
+                              title={l.offeringId ? "Calc method" : "No course linked - manual only"}
                               className="cursor-pointer appearance-none border-none bg-transparent text-[11px] font-semibold text-[var(--info)] outline-none disabled:cursor-not-allowed"
                             >
                               <option value="per_paper">Per paper</option>
@@ -1255,7 +1255,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
               </button>
             </div>
             <div className="p-[16px_18px] text-[13.5px] leading-[1.5] text-[var(--text)]">
-              They&apos;ll stop seeing this breakdown in My Pay until you release it again — nothing about the amounts, status, or payment
+              They&apos;ll stop seeing this breakdown in My Pay until you release it again - nothing about the amounts, status, or payment
               record changes.
             </div>
             <div className="flex gap-[10px] border-t border-[var(--border2)] p-[14px_18px]">
@@ -1297,7 +1297,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
               </button>
             </div>
             <div className="p-[16px_18px] text-[13.5px] leading-[1.5] text-[var(--text)]">
-              Deletes every one of their salary lines for {period ? periodLabel(period) : "this period"} — they&apos;ll show up in &quot;Add&quot;
+              Deletes every one of their salary lines for {period ? periodLabel(period) : "this period"} - they&apos;ll show up in &quot;Add&quot;
               again if regenerated or added back later. Blocked if any of their lines are already paid or released.
             </div>
             <div className="flex gap-[10px] border-t border-[var(--border2)] p-[14px_18px]">
@@ -1374,7 +1374,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
                         onChange={(e) => setAddOfferingId(e.target.value)}
                         className="h-10 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13.5px] text-[var(--text)] outline-none"
                       >
-                        <option value="">No course — flat line</option>
+                        <option value="">No course - flat line</option>
                         {addCandidate.offerings.map((o) => (
                           <option key={o.id} value={o.id}>
                             {o.label}
@@ -1384,7 +1384,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
                     </label>
                   )}
                   <p className="m-0 text-[12px] leading-[1.5] text-[var(--muted)]">
-                    Adds a blank line starting at {sym}0 — edit the base/bonus/deduction afterward like any other line.
+                    Adds a blank line starting at {sym}0 - edit the base/bonus/deduction afterward like any other line.
                   </p>
                 </>
               )}

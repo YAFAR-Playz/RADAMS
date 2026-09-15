@@ -275,7 +275,7 @@ function CatalogPanel({ offeringId, setError }: { offeringId: string; setError: 
       setMaterials([]);
       reload();
     } catch {
-      setError("Couldn't create that topic — try again.");
+      setError("Couldn't create that topic - try again.");
     } finally {
       setBusy(false);
     }
@@ -287,7 +287,7 @@ function CatalogPanel({ offeringId, setError }: { offeringId: string; setError: 
       await deleteTopic(id);
       reload();
     } catch {
-      setError("Couldn't delete that topic — try again.");
+      setError("Couldn't delete that topic - try again.");
     } finally {
       setBusy(false);
     }
@@ -325,7 +325,7 @@ function CatalogPanel({ offeringId, setError }: { offeringId: string; setError: 
             <SkeletonRow className="h-[40px]" />
           </div>
         ) : topics.length === 0 ? (
-          <div className="p-[30px] text-center text-[13px] text-[var(--muted)]">No topics yet — add one above.</div>
+          <div className="p-[30px] text-center text-[13px] text-[var(--muted)]">No topics yet - add one above.</div>
         ) : (
           <div className="divide-y divide-[var(--border)]">
             {topics.map((t) => (
@@ -341,7 +341,7 @@ function CatalogPanel({ offeringId, setError }: { offeringId: string; setError: 
                         setEditingId(null);
                         reload();
                       } catch {
-                        setError("Couldn't update that topic — try again.");
+                        setError("Couldn't update that topic - try again.");
                       } finally {
                         setBusy(false);
                       }
@@ -454,7 +454,7 @@ function AssistantSubmitPanel({ offeringId, period, setError }: { offeringId: st
       await setStudentMonthlyComment(studentId, offeringId, period, comments[studentId] ?? "");
       setSavedComments((c) => ({ ...c, [studentId]: comments[studentId] ?? "" }));
     } catch {
-      setError("Couldn't save that comment — try again.");
+      setError("Couldn't save that comment - try again.");
     } finally {
       setSavingComment(null);
     }
@@ -469,7 +469,7 @@ function AssistantSubmitPanel({ offeringId, period, setError }: { offeringId: st
       setPicks((p) => ({ ...p, [studentId]: "" }));
       reload();
     } catch {
-      setError("Couldn't submit that topic — it may already be tagged for this student this month.");
+      setError("Couldn't submit that topic - it may already be tagged for this student this month.");
     } finally {
       setBusyId(null);
     }
@@ -481,7 +481,7 @@ function AssistantSubmitPanel({ offeringId, period, setError }: { offeringId: st
       await removeStudentTopicSubmission(id);
       reload();
     } catch {
-      setError("Couldn't remove that submission — try again.");
+      setError("Couldn't remove that submission - try again.");
     } finally {
       setBusyId(null);
     }
@@ -550,7 +550,7 @@ function AssistantSubmitPanel({ offeringId, period, setError }: { offeringId: st
                   data-tour={rowIndex === 0 ? "weaktopics-comment" : undefined}
                   value={comments[s.studentId] ?? ""}
                   onChange={(e) => setComments((c) => ({ ...c, [s.studentId]: e.target.value }))}
-                  placeholder="Overall comment for this student this month — shown in the head's monthly report…"
+                  placeholder="Overall comment for this student this month - shown in the head's monthly report…"
                   className="h-[54px] flex-1 resize-none rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] py-[7px] text-[12px] leading-[1.4] text-[var(--text)] outline-none focus:border-[var(--brand)]"
                 />
                 <button
@@ -615,7 +615,7 @@ function ManagePanel({ offeringId, period, setError }: { offeringId: string; per
       await setStudentMonthlyCommentAsHead(studentId, offeringId, period, comments[studentId] ?? "");
       setSavedComments((c) => ({ ...c, [studentId]: comments[studentId] ?? "" }));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't save that comment — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't save that comment - try again.");
     } finally {
       setSavingComment(null);
     }
@@ -630,7 +630,7 @@ function ManagePanel({ offeringId, period, setError }: { offeringId: string; per
       setPicks((p) => ({ ...p, [studentId]: "" }));
       reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't add that topic — it may already be tagged for this student this month.");
+      setError(e instanceof Error ? e.message : "Couldn't add that topic - it may already be tagged for this student this month.");
     } finally {
       setBusyId(null);
     }
@@ -643,7 +643,7 @@ function ManagePanel({ offeringId, period, setError }: { offeringId: string; per
       await updateStudentTopicSubmission(submissionId, topicId);
       reload();
     } catch {
-      setError("Couldn't change that topic — try again.");
+      setError("Couldn't change that topic - try again.");
     } finally {
       setBusyId(null);
     }
@@ -655,7 +655,7 @@ function ManagePanel({ offeringId, period, setError }: { offeringId: string; per
       await removeStudentTopicSubmission(id);
       reload();
     } catch {
-      setError("Couldn't remove that submission — try again.");
+      setError("Couldn't remove that submission - try again.");
     } finally {
       setBusyId(null);
     }
@@ -738,7 +738,7 @@ function ManagePanel({ offeringId, period, setError }: { offeringId: string; per
                   data-tour={rowIndex === 0 ? "weaktopics-comment" : undefined}
                   value={comments[s.studentId] ?? ""}
                   onChange={(e) => setComments((c) => ({ ...c, [s.studentId]: e.target.value }))}
-                  placeholder="Overall comment for this student this month — shown in the monthly report…"
+                  placeholder="Overall comment for this student this month - shown in the monthly report…"
                   className="h-[54px] flex-1 resize-none rounded-[8px] border border-[var(--border)] bg-[var(--surface2)] px-[10px] py-[7px] text-[12px] leading-[1.4] text-[var(--text)] outline-none focus:border-[var(--brand)]"
                 />
                 <button
