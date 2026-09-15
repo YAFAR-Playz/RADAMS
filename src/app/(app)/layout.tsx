@@ -15,25 +15,19 @@ import { TourRunner } from "@/components/onboarding/tour-runner";
 // The tab title otherwise falls back to the root layout's static "ZAD-AMS" —
 // once inside an org, show that org's own name instead.
 //
-// The icon href also needs an explicit per-org query string here rather
-// than relying on src/app/icon.tsx's file-convention URL alone — that URL's
-// hash is static regardless of who's signed in, so a browser that already
-// cached it for one org (or the signed-out platform default) keeps reusing
-// that cached image after switching accounts (e.g. Login As) instead of
-// re-fetching; browsers cache favicons stickily and largely ignore normal
-// Cache-Control for this. Keying the href on the org id gives each org (and
-// the signed-out/no-org case) its own distinct, correctly-cached URL.
+// Deliberately does NOT also set `icons` here anymore — it used to, with its
+// own separately-computed `/icon?org=<id>` href, alongside the root layout's
+// own icon handling. Two different layouts each emitting their own
+// `<link rel="icon">` (from the old file-convention icon.tsx AND this
+// layout's metadata) meant two competing tags in the same document, and
+// which one a browser actually kept using once cached was unpredictable —
+// a likely contributor to the exact "shows a stale org's icon" reports this
+// was meant to fix in the first place. The root layout (src/app/layout.tsx)
+// is now the single source of truth for the favicon, computed the same way
+// for every page including these — see src/app/org-icon/route.tsx.
 export async function generateMetadata() {
   const profile = await getCurrentProfile();
-  return {
-    title: profile?.org?.name ?? "ZAD-AMS",
-    // No `type` here — icon.tsx proxies whatever format the org actually
-    // uploaded (png/jpeg/svg/webp), so a hardcoded type could mismatch the
-    // real Content-Type header and cause Safari specifically to reject it
-    // (it's stricter about this than Chrome). `sizes` alone is enough to
-    // satisfy Safari's pickier <link rel="icon"> parsing.
-    icons: { icon: { url: `/icon?org=${profile?.org?.id ?? "none"}`, sizes: "64x64" } },
-  };
+  return { title: profile?.org?.name ?? "ZAD-AMS" };
 }
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {

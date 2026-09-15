@@ -62,9 +62,9 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // /icon is the dynamic branded favicon (src/app/icon.tsx) — it must be
-  // fetchable by every browser tab regardless of auth state, same as the
-  // static favicon.ico it sits alongside, or the login page's tab loses
-  // its icon entirely (redirected to /login instead of the image).
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon).*)"],
+  // /org-icon is the dynamic branded favicon (src/app/org-icon/route.tsx) —
+  // it must be fetchable by every browser tab regardless of auth state,
+  // same as the static favicon.ico it sits alongside, or the login page's
+  // tab loses its icon entirely (redirected to /login instead of the image).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|org-icon).*)"],
 };
