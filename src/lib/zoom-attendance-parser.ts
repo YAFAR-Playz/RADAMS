@@ -143,10 +143,14 @@ export type AttendanceStatusGuess = "present" | "late" | "absent";
 // definition of "counts as late" varies. The review step before committing
 // always shows the computed status as an editable dropdown regardless, so a
 // borderline call is never silently locked in.
-export function guessAttendanceStatus(minutesAttended: number, durationMinutes: number, presentPct: number, latePct: number): AttendanceStatusGuess {
+//
+// latePct is optional — an org that doesn't track a separate "late" cutoff
+// leaves it unset, collapsing this to a binary present/absent call instead
+// of the three-way present/late/absent split.
+export function guessAttendanceStatus(minutesAttended: number, durationMinutes: number, presentPct: number, latePct: number | null): AttendanceStatusGuess {
   if (durationMinutes <= 0) return "absent";
   const pct = (minutesAttended / durationMinutes) * 100;
   if (pct >= presentPct) return "present";
-  if (pct >= latePct) return "late";
+  if (latePct !== null && pct >= latePct) return "late";
   return "absent";
 }

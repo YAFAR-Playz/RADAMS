@@ -23,6 +23,7 @@ import {
   listMessagesForPayee,
   replyToPayee,
   listInquiriesForPeriod,
+  getUnresolvedFinanceInquiryCount,
   removePayeeFromPeriod,
   listMissingPayeesForPeriod,
   addManualSalaryLine,
@@ -488,6 +489,10 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
   const [receiptTarget, setReceiptTarget] = useState<AssistantSalary | null>(null);
   const [messagesTarget, setMessagesTarget] = useState<AssistantSalary | null>(null);
   const [inquiriesOpen, setInquiriesOpen] = useState(false);
+  // Org-wide (not period-scoped, same query as the Salaries nav dot) so the
+  // button's dot also catches an unresolved inquiry left over from a
+  // previous period, not just the one currently being viewed.
+  const [unresolvedInquiryCount, setUnresolvedInquiryCount] = useState(0);
   const [unreleaseTarget, setUnreleaseTarget] = useState<AssistantSalary | null>(null);
   const [unreleasing, setUnreleasing] = useState(false);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
@@ -537,6 +542,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
         setLoading(false);
       }
     })();
+    getUnresolvedFinanceInquiryCount().then(setUnresolvedInquiryCount);
   }, []);
 
   async function reload(p: string) {
@@ -929,10 +935,13 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
               onClick={() => setInquiriesOpen(true)}
               disabled={!period}
               title="View this month's staff salary inquiries and reply without leaving this page"
-              className="flex h-10 flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-[14px] text-[13px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
+              className="relative flex h-10 flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-[14px] text-[13px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
             >
               <Icon name="message" size={16} />
               Inquiries
+              {unresolvedInquiryCount > 0 && (
+                <span className="absolute -top-[3px] -right-[3px] h-[9px] w-[9px] rounded-full bg-[var(--danger)] ring-2 ring-[var(--surface)]" />
+              )}
             </button>
             <button
               data-tour="salaries-release-all"
@@ -1386,8 +1395,18 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
       {inquiriesOpen && period && (
         // Replying here doesn't navigate anywhere, but it can clear the
         // Salaries nav dot (computed server-side in the layout) — refresh
-        // so that updates without a full client-side transition.
-        <InquiriesModal period={period} onClose={() => setInquiriesOpen(false)} onReplied={() => router.refresh()} />
+        // so that updates without a full client-side transition. Also
+        // re-fetches this page's own Inquiries-button dot for the same
+        // reason (org-wide, so a reply in this period can clear a dot that
+        // was set by another period's thread too).
+        <InquiriesModal
+          period={period}
+          onClose={() => setInquiriesOpen(false)}
+          onReplied={() => {
+            router.refresh();
+            getUnresolvedFinanceInquiryCount().then(setUnresolvedInquiryCount);
+          }}
+        />
       )}
 
       {unreleaseTarget && (

@@ -1,6 +1,7 @@
 "use client";
 
 import { startTransition, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
@@ -52,6 +53,7 @@ const ROLE_LABEL: Record<Role, string> = {
 const emptyForm = { name: "", email: "", phone: "", role: "assistant" as Role, courseIds: [] as string[] };
 
 export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | "hr" }) {
+  const router = useRouter();
   const isHr = viewerRole === "hr";
   const roleOptions = isHr ? HR_ROLE_OPTIONS : ADMIN_ROLE_OPTIONS;
   const [staff, setStaff] = useState<StaffMember[] | null>(null);
@@ -270,6 +272,14 @@ export function StaffContent({ viewerRole = "admin" }: { viewerRole?: "admin" | 
         return;
       }
       setRequests((prev) => (prev ? prev.map((r) => (r.id === id ? { ...r, status } : r)) : prev));
+      // The "Staff" nav item's red dot is computed server-side in the
+      // surrounding layout from the live pending count — a plain client
+      // state update here (above) fixes this page's own "Pending requests"
+      // KPI, but leaves that server-rendered layout segment cached with
+      // whatever pending count it had at the last full navigation. Without
+      // this, the dot stays stuck on even after resolving every request,
+      // clearing only on a hard reload or unrelated navigation.
+      router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't update this request - try again.");
     } finally {

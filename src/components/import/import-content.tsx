@@ -180,6 +180,8 @@ export function ImportContent() {
     setConfirmedMerges(new Set());
   }
 
+  const attendanceIdMapped = attendanceIdEnabled && Object.values(mapping).includes("attendanceId");
+
   const mappedRows = useMemo(() => {
     const idxByField: Partial<Record<FieldKey, number>> = {};
     headers.forEach((h, i) => {
@@ -487,6 +489,7 @@ export function ImportContent() {
                 <span className="min-w-0 flex-[1.4_1_140px]">Student</span>
                 <span className="min-w-0 flex-[1_1_110px]">Phone</span>
                 <span className="min-w-0 flex-[1_1_130px]">Guardian phone</span>
+                {attendanceIdMapped && <span className="min-w-0 flex-[1_1_130px]">Attendance ID</span>}
                 <span className="min-w-0 flex-[1.3_1_160px]">Status</span>
               </div>
               {visibleRows.map((r) => {
@@ -502,6 +505,26 @@ export function ImportContent() {
                     <span className="min-w-0 flex-[1.4_1_140px] truncate text-[13.5px] font-semibold text-[var(--text)]">{r.name || "-"}</span>
                     <span className="min-w-0 flex-[1_1_110px] font-mono text-[13px] text-[var(--muted)]">{r.phone || "-"}</span>
                     <span className="min-w-0 flex-[1_1_130px] font-mono text-[13px] text-[var(--muted)]">{r.guardianPhone || "-"}</span>
+                    {attendanceIdMapped && (
+                      <div className="min-w-0 flex-[1_1_130px]">
+                        <div className="font-mono text-[13px] text-[var(--muted)]">{r.attendanceId || "-"}</div>
+                        {r.attendanceId &&
+                          match &&
+                          (match.existingAttendanceId === r.attendanceId.trim() ? (
+                            <div className="text-[11px] font-semibold" style={{ color: "var(--ok)" }}>
+                              Matches existing
+                            </div>
+                          ) : !match.existingAttendanceId ? (
+                            <div className="text-[11px] font-semibold" style={{ color: "var(--brand)" }}>
+                              Will be added
+                            </div>
+                          ) : (
+                            <div className="text-[11px] font-semibold" style={{ color: "var(--warn)" }} title={`This student already has attendance ID ${match.existingAttendanceId} - the sheet's value won't overwrite it`}>
+                              Differs (has {match.existingAttendanceId})
+                            </div>
+                          ))}
+                      </div>
+                    )}
                     {r.error ? (
                       <span className="flex min-w-0 flex-[1.3_1_160px] items-center gap-[6px] truncate text-[12.5px] font-semibold" style={{ color: "var(--danger)" }}>
                         <Icon name="alert" size={14} />

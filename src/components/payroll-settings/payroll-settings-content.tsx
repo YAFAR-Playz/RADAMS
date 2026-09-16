@@ -181,7 +181,9 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
   const [savingNotifyEmails, setSavingNotifyEmails] = useState(false);
 
   const [presentPctDraft, setPresentPctDraft] = useState(75);
-  const [latePctDraft, setLatePctDraft] = useState(40);
+  // Empty string is the "unset" input state, distinct from 0 — cleared and
+  // saved as null, collapsing the import guess to binary present/absent.
+  const [latePctDraft, setLatePctDraft] = useState<string>("40");
   const [savingThresholds, setSavingThresholds] = useState(false);
 
   useEffect(() => {
@@ -194,7 +196,7 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
           if (s) {
             setOrgDefaultMethod(s.defaultAssistantCalcMethod as CalcMethod);
             setPresentPctDraft(s.attendancePresentThresholdPct);
-            setLatePctDraft(s.attendanceLateThresholdPct);
+            setLatePctDraft(s.attendanceLateThresholdPct === null ? "" : String(s.attendanceLateThresholdPct));
           }
           setLoading(false);
         });
@@ -385,10 +387,11 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
   }
 
   async function onSaveThresholds() {
+    const latePct = latePctDraft.trim() === "" ? null : Number(latePctDraft);
     setSavingThresholds(true);
     try {
-      await setAttendanceThresholds(presentPctDraft, latePctDraft);
-      setSettings((prev) => (prev ? { ...prev, attendancePresentThresholdPct: presentPctDraft, attendanceLateThresholdPct: latePctDraft } : prev));
+      await setAttendanceThresholds(presentPctDraft, latePct);
+      setSettings((prev) => (prev ? { ...prev, attendancePresentThresholdPct: presentPctDraft, attendanceLateThresholdPct: latePct } : prev));
       setNotice("Attendance thresholds saved.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't save these thresholds - try again.");
@@ -532,7 +535,8 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                       <div className="mb-[10px] text-[13px] font-semibold text-[var(--text)]">Attendance import thresholds</div>
                       <p className="m-0 mb-[11px] text-[11.5px] leading-[1.4] text-[var(--muted)]">
                         When importing attendance from a CSV, a student is marked Present at or above the first percentage of the
-                        session&apos;s length, Late at or above the second, and Absent below that.
+                        session&apos;s length, and Absent below that. Set a late threshold too to split that below range into a
+                        separate Late state instead - leave it blank to keep it a plain present/absent call.
                       </p>
                       <div className="flex flex-wrap items-end gap-[12px]">
                         <div>
@@ -550,14 +554,15 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                           </div>
                         </div>
                         <div>
-                          <label className="mb-[6px] block text-[11.5px] font-semibold text-[var(--text)]">Late at ≥</label>
+                          <label className="mb-[6px] block text-[11.5px] font-semibold text-[var(--text)]">Late at ≥ (optional)</label>
                           <div className="flex h-9 w-[100px] items-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-[10px]">
                             <input
                               type="number"
                               min={0}
                               max={100}
+                              placeholder="None"
                               value={latePctDraft}
-                              onChange={(e) => setLatePctDraft(Number(e.target.value))}
+                              onChange={(e) => setLatePctDraft(e.target.value)}
                               className="w-full border-none bg-transparent text-[13px] font-medium text-[var(--text)] outline-none"
                             />
                             <span className="text-[12px] text-[var(--subtle)]">%</span>
@@ -567,7 +572,8 @@ export function PayrollSettingsContent({ viewerRole }: { viewerRole?: "admin" | 
                           onClick={onSaveThresholds}
                           disabled={
                             savingThresholds ||
-                            (presentPctDraft === settings.attendancePresentThresholdPct && latePctDraft === settings.attendanceLateThresholdPct)
+                            (presentPctDraft === settings.attendancePresentThresholdPct &&
+                              latePctDraft === (settings.attendanceLateThresholdPct === null ? "" : String(settings.attendanceLateThresholdPct)))
                           }
                           className="flex h-9 items-center gap-[6px] rounded-[8px] bg-[var(--brand)] px-[13px] text-[12.5px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
                         >

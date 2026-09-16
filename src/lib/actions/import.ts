@@ -39,7 +39,10 @@ type ExistingStudent = { id: string; name: string; phone: string | null; email: 
 // unrelated families) is common enough that this must NOT auto-merge; it's
 // surfaced to the user in the preview step and only merged if they confirm it.
 export type MatchConfidence = "strong" | "weak";
-export type MatchInfo = { id: string; name: string; confidence: MatchConfidence };
+// existingAttendanceId lets the preview step tell the user, per row, whether
+// this student already has an attendance id on file (and whether it matches
+// what's in the sheet) versus one that will be freshly backfilled on import.
+export type MatchInfo = { id: string; name: string; confidence: MatchConfidence; existingAttendanceId: string | null };
 
 // Attendance id is never a match key here — matching still works exactly
 // like it did before this field existed (name + email/phone/guardian
@@ -59,8 +62,8 @@ function findMatch(row: ImportRow, existing: ExistingStudent[]): MatchInfo | nul
     const emailMatch = !!email && !!s.email && s.email.toLowerCase() === email;
     const phoneMatch = !!phone && !!s.phone && s.phone === phone;
     const guardianMatch = !!guardianPhone && !!s.guardian_phone && s.guardian_phone === guardianPhone;
-    if (emailMatch || phoneMatch) return { id: s.id, name: s.name, confidence: "strong" };
-    if (guardianMatch) return { id: s.id, name: s.name, confidence: "weak" };
+    if (emailMatch || phoneMatch) return { id: s.id, name: s.name, confidence: "strong", existingAttendanceId: s.attendance_id };
+    if (guardianMatch) return { id: s.id, name: s.name, confidence: "weak", existingAttendanceId: s.attendance_id };
   }
   return null;
 }
