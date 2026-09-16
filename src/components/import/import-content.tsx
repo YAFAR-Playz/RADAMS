@@ -36,13 +36,54 @@ function guessField(header: string, attendanceIdEnabled: boolean): FieldKey {
   return "ignore";
 }
 
+// Splitting on "," and on newlines independently (the previous approach)
+// silently breaks on any quoted field containing the delimiter it's meant to
+// protect against — a comma inside a name ("Smith, John") or, worse, a
+// newline pasted into a cell (seen in a real customer's export: an email
+// field with a trailing newline before the closing quote) splits one row
+// into two ragged, misaligned ones with no error raised anywhere. This
+// walks the text character-by-character tracking quote state, so a
+// delimiter inside an open quote is just data, and "" inside a quoted field
+// is the standard CSV escape for a literal quote.
 function parseCsv(text: string): { headers: string[]; rows: string[][] } {
-  const lines = text.split(/\r\n|\n/).filter((l) => l.trim().length > 0);
-  const parseLine = (line: string) =>
-    line.split(",").map((cell) => cell.trim().replace(/^"|"$/g, ""));
-  const headers = lines.length ? parseLine(lines[0]) : [];
-  const rows = lines.slice(1).map(parseLine);
-  return { headers, rows };
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          cell += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        cell += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      row.push(cell.trim());
+      cell = "";
+    } else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      row.push(cell.trim());
+      cell = "";
+      if (row.some((c) => c.length > 0)) rows.push(row);
+      row = [];
+    } else {
+      cell += ch;
+    }
+  }
+  if (cell.length > 0 || row.length > 0) {
+    row.push(cell.trim());
+    if (row.some((c) => c.length > 0)) rows.push(row);
+  }
+  const [headers = [], ...dataRows] = rows;
+  return { headers, rows: dataRows };
 }
 
 const EXCEL_EXTENSIONS = [".xlsx", ".xls", ".xlsm"];
@@ -169,11 +210,17 @@ export function ImportContent() {
   useEffect(() => {
     if (step !== 2 || !readyRows.length) return;
     let cancelled = false;
-    previewExistingMatches(readyRows.map((r) => ({ name: r.name, phone: r.phone, email: r.email, guardianName: r.guardianName, guardianPhone: r.guardianPhone, attendanceId: r.attendanceId }))).then(
-      (found) => {
+    previewExistingMatches(readyRows.map((r) => ({ name: r.name, phone: r.phone, email: r.email, guardianName: r.guardianName, guardianPhone: r.guardianPhone, attendanceId: r.attendanceId })))
+      .then((found) => {
         if (!cancelled) setMatches(found);
-      }
-    );
+      })
+      .catch(() => {
+        // Best-effort: existing-student matching is a preview enhancement,
+        // not a precondition for importing — if it fails (e.g. a slow
+        // request for a very large org), the import can still proceed
+        // treating every row as new rather than crashing the whole page
+        // with an unhandled rejection.
+      });
     return () => {
       cancelled = true;
     };
