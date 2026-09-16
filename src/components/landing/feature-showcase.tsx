@@ -9,6 +9,18 @@ import type { FeatureKey, LandingCopy } from "@/lib/landing-copy";
 const ORDER: FeatureKey[] = ["attendance", "assignments", "payroll", "weakTopics", "messaging", "reports"];
 const CARD_GAP = 190;
 
+// How much of each item's scroll range (in units of `offset`, where 1 unit
+// = the gap between two adjacent items) holds the card perfectly still,
+// sharp and fully opaque before it starts sliding/fading toward its
+// neighbor. Previously there was no plateau at all — opacity/scale started
+// falling away from the very first pixel of scroll past dead-center, so the
+// "fully clear" moment was a single infinitesimal scroll position, forcing
+// very slow, precise scrolling to land on it. Widening this to a real
+// plateau (applied to every derived value below via `settle`) keeps the
+// same continuous, smooth interpolation everywhere else — it just gives
+// the reader room to stop before the transition begins.
+const SETTLE_ZONE = 0.22;
+
 // Each card's position is a pure function of continuous scroll progress via
 // useTransform chains — Framer Motion applies these directly without going
 // through React state/re-renders, so the wheel moves smoothly every scroll
@@ -20,12 +32,23 @@ function useOffset(scrollYProgress: MotionValue<number>, index: number) {
   return useTransform(scrollYProgress, (v) => index - v * ORDER.length);
 }
 
+// Clamps the plateau: holds at exactly 0 within SETTLE_ZONE of center, then
+// continues as the same linear ramp beyond it (shifted so it's continuous,
+// no jump at the boundary) — this is what every offset-driven value below
+// is derived from, so the whole card (position/tilt/opacity/scale) freezes
+// in its clearest pose for a real range of scroll instead of a single point.
+function settle(offset: number) {
+  const abs = Math.abs(offset);
+  return abs <= SETTLE_ZONE ? 0 : Math.sign(offset) * (abs - SETTLE_ZONE);
+}
+
 // The front/active card (offset ≈ 0) stays sharp, full-size and fully
 // opaque; neighbors recede clearly — smaller, dimmer, and tilted away on
 // the X axis like they're rolling around a wheel behind the front card,
 // not just fading in place next to it at equal weight.
 function VisualCard({ scrollYProgress, index, brand, featureKey }: { scrollYProgress: MotionValue<number>; index: number; brand: string; featureKey: FeatureKey }) {
-  const offset = useOffset(scrollYProgress, index);
+  const rawOffset = useOffset(scrollYProgress, index);
+  const offset = useTransform(rawOffset, settle);
   const y = useTransform(offset, (o) => o * CARD_GAP);
   const rotateX = useTransform(offset, (o) => Math.max(-48, Math.min(48, o * -34)));
   const opacity = useTransform(offset, (o) => Math.max(0, 1 - Math.abs(o) * 0.62));
@@ -43,7 +66,8 @@ function VisualCard({ scrollYProgress, index, brand, featureKey }: { scrollYProg
 }
 
 function TextBlock({ scrollYProgress, index, title, body, brand }: { scrollYProgress: MotionValue<number>; index: number; title: string; body: string; brand: string }) {
-  const offset = useOffset(scrollYProgress, index);
+  const rawOffset = useOffset(scrollYProgress, index);
+  const offset = useTransform(rawOffset, settle);
   const y = useTransform(offset, (o) => o * 22);
   const opacity = useTransform(offset, (o) => Math.max(0, 1 - Math.abs(o) * 2.4));
   const pointerEvents = useTransform(offset, (o) => (Math.abs(o) < 0.5 ? "auto" : "none"));
@@ -82,8 +106,22 @@ export function FeatureShowcase({ copy, brand }: { copy: LandingCopy; brand: str
   function jumpTo(i: number) {
     const el = containerRef.current;
     if (!el) return;
-    const progress = (i + 0.5) / ORDER.length;
-    const top = el.offsetTop + progress * (el.offsetHeight - window.innerHeight);
+    // `offset` (see useOffset above) is exactly 0 — the card's single
+    // sharpest, most-settled position — when scrollYProgress === i / ORDER.length,
+    // not the midpoint of the item's "slot". The previous `(i + 0.5) / ORDER.length`
+    // landed exactly halfway between two cards' settled points, which is why a
+    // dot click always dropped the reader mid-transition instead of on a clear,
+    // fully-formed card.
+    const progress = i / ORDER.length;
+    // `el.offsetTop` is relative to the nearest *positioned* ancestor (here,
+    // the enclosing `<section className="relative ...">`), not the document
+    // — using it directly as an absolute scroll target was off by however
+    // far that section itself sits from the page top, which in practice
+    // landed close to a full card's worth of scroll away from intended.
+    // getBoundingClientRect().top + the current scroll position gives the
+    // real document-relative top regardless of any positioned ancestors.
+    const absoluteTop = el.getBoundingClientRect().top + window.scrollY;
+    const top = absoluteTop + progress * (el.offsetHeight - window.innerHeight);
     window.scrollTo({ top, behavior: "smooth" });
   }
 

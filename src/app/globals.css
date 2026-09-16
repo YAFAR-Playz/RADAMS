@@ -128,6 +128,45 @@ body {
   }
 }
 
+/* Landing page hero background — slow-drifting gradient blobs + a gently
+   panning dot grid, purely CSS/transform-driven (no canvas/WebGL) so it
+   costs nothing on the main thread and stays cheap on low-end phones. */
+@keyframes heroBlobFloatA {
+  0%,
+  100% {
+    transform: translate(-50%, 0) scale(1);
+  }
+  50% {
+    transform: translate(-46%, -26px) scale(1.08);
+  }
+}
+@keyframes heroBlobFloatB {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(22px, 30px) scale(1.1);
+  }
+}
+@keyframes heroBlobFloatC {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-24px, -18px) scale(0.94);
+  }
+}
+@keyframes heroGridDrift {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 26px 26px;
+  }
+}
+
 /* View transitions — page navigation, and in-page tab/step swaps */
 ::view-transition-old(page-content) {
   animation: 120ms ease-in both vt-fade-out;
@@ -174,5 +213,9 @@ body {
   ::view-transition-new(*) {
     animation-duration: 0s !important;
     animation-delay: 0s !important;
+  }
+  [class*="heroBlobFloat"],
+  [class*="heroGridDrift"] {
+    animation: none !important;
   }
 }
