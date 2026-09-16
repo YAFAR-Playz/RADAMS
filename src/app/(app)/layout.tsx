@@ -3,6 +3,7 @@ import { getCurrentProfile } from "@/lib/current-profile";
 import { navForRole, ROLE_LABELS } from "@/lib/roles";
 import { AppShell } from "@/components/shell/app-shell";
 import { getPendingStaffingRequestCount } from "@/lib/actions/hr";
+import { getUnresolvedFinanceInquiryCount } from "@/lib/actions/finance-salaries";
 import { getAssistantPendingLogCount } from "@/lib/actions/dashboard";
 import { getPlatformDefaultBranding } from "@/lib/actions/branding";
 import { hasUnviewedReleasedPay } from "@/lib/actions/pay";
@@ -46,6 +47,23 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (profile.role === "assistant" || profile.role === "head") {
     const unviewedPay = await hasUnviewedReleasedPay();
     navItems = navItems.map((n) => (n.key === "mypay" ? { ...n, dot: unviewedPay } : n));
+  }
+  // Admin has no separate "Requests" tab (that's HR-only) — staffing
+  // requests are reviewed straight from the Staff tab, so a pending one
+  // otherwise only ever showed up in the notification bell. Dot clears
+  // itself once every request is accepted/declined, since it re-reads the
+  // live pending count on every navigation.
+  if (profile.role === "admin") {
+    const pendingStaffing = await getPendingStaffingRequestCount();
+    navItems = navItems.map((n) => (n.key === "staff" ? { ...n, dot: pendingStaffing > 0 } : n));
+  }
+  // Finance inquiries (payee -> Finance/Admin messages on a salary line)
+  // previously only surfaced in the notification bell, easy to miss — a dot
+  // on Salaries (where the reply panel actually lives) clears once someone
+  // replies to every open thread.
+  if (profile.role === "admin" || profile.role === "finance") {
+    const unresolvedInquiries = await getUnresolvedFinanceInquiryCount();
+    navItems = navItems.map((n) => (n.key === "salaries" ? { ...n, dot: unresolvedInquiries > 0 } : n));
   }
 
   // Owner has no org, so there's nothing for getCurrentProfile() to resolve

@@ -134,14 +134,26 @@ export function LandingPage({
       {/* Hero */}
       <section id="top" className="relative overflow-hidden px-5 pb-[90px] pt-[86px] sm:pb-[120px] sm:pt-[120px]">
         <div
-          className="pointer-events-none absolute inset-0 opacity-60"
+          className="pointer-events-none absolute inset-0 animate-[heroGridDrift_16s_linear_infinite] opacity-60"
           style={{
             backgroundImage:
               "radial-gradient(circle, color-mix(in srgb, var(--text) 6%, transparent) 1px, transparent 1.4px) 0 0/26px 26px",
           }}
         />
+        {/* Three independently-drifting blurred blobs (brand + two
+            complementary hues) instead of one static one — slow, subtle,
+            transform-only motion so the hero doesn't read as a flat, static
+            slab while staying calm enough for a B2B tool, not a game. */}
         <div
-          className="pointer-events-none absolute -top-[220px] left-1/2 h-[520px] w-[720px] -translate-x-1/2 rounded-full opacity-[0.16] blur-[60px]"
+          className="pointer-events-none absolute -top-[220px] left-1/2 h-[520px] w-[720px] animate-[heroBlobFloatA_15s_ease-in-out_infinite] rounded-full opacity-[0.16] blur-[60px]"
+          style={{ background: `radial-gradient(circle, ${brand} 0%, transparent 70%)` }}
+        />
+        <div
+          className="pointer-events-none absolute top-[60px] right-[6%] h-[340px] w-[340px] animate-[heroBlobFloatB_12s_ease-in-out_infinite] rounded-full opacity-[0.13] blur-[70px]"
+          style={{ background: "radial-gradient(circle, #f59e0b 0%, transparent 70%)" }}
+        />
+        <div
+          className="pointer-events-none absolute bottom-[-80px] left-[8%] h-[300px] w-[300px] animate-[heroBlobFloatC_18s_ease-in-out_infinite] rounded-full opacity-[0.12] blur-[65px]"
           style={{ background: `radial-gradient(circle, ${brand} 0%, transparent 70%)` }}
         />
         <div className="relative mx-auto flex max-w-[760px] flex-col items-center text-center">

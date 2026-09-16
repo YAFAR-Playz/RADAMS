@@ -252,7 +252,7 @@ function HeaderSearch() {
 
   return (
     <div className="relative" ref={ref}>
-      <div className="flex h-10 w-[320px] max-w-[42%] items-center gap-[9px] rounded-[10px] border border-[var(--border)] bg-[var(--surface2)] px-[13px] focus-within:border-[var(--brand)]">
+      <div className="flex h-10 w-[320px] min-w-[120px] max-w-[42%] items-center gap-[9px] rounded-[10px] border border-[var(--border)] bg-[var(--surface2)] px-[13px] focus-within:border-[var(--brand)]">
         <Icon name="search" size={17} className="flex-none text-[var(--subtle)]" />
         <input
           value={query}
@@ -261,8 +261,9 @@ function HeaderSearch() {
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
-          placeholder="Search students, assistants, courses…"
-          className="h-full w-full border-none bg-transparent text-[13.5px] text-[var(--text)] outline-none placeholder:text-[var(--subtle)]"
+          placeholder="Search…"
+          title="Search students, assistants, courses"
+          className="h-full min-w-0 flex-1 border-none bg-transparent text-[13.5px] text-[var(--text)] outline-none placeholder:text-[var(--subtle)]"
         />
         {loading && <Spinner size={14} className="flex-none text-[var(--subtle)]" />}
       </div>

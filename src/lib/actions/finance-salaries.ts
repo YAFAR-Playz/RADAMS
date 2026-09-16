@@ -180,6 +180,35 @@ export async function listMessagesForPayee(payeeId: string): Promise<SalaryMessa
   });
 }
 
+// Count of payee threads whose most recent message is still from the payee
+// (i.e. nobody from Finance/Admin has replied yet) — used for the Salaries
+// nav dot, since inquiries otherwise only surfaced in the notification bell
+// and were easy to miss. A thread clears itself the moment someone replies,
+// without needing a separate read/unread column.
+export async function getUnresolvedFinanceInquiryCount(): Promise<number> {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) return 0;
+  const supabase = await createClient();
+  const lastMessageByPayee = new Map<string, { fromId: string; createdAt: string }>();
+  const PAGE_SIZE = 1000;
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data } = await supabase
+      .from("finance_messages")
+      .select("payee_id, from_id, created_at")
+      .eq("org_id", profile.org.id)
+      .order("created_at", { ascending: true })
+      .range(from, from + PAGE_SIZE - 1);
+    if (!data || data.length === 0) break;
+    for (const m of data) lastMessageByPayee.set(m.payee_id, { fromId: m.from_id, createdAt: m.created_at });
+    if (data.length < PAGE_SIZE) break;
+  }
+  let unresolved = 0;
+  for (const [payeeId, last] of lastMessageByPayee) {
+    if (last.fromId === payeeId) unresolved++;
+  }
+  return unresolved;
+}
+
 export async function replyToPayee(payeeId: string, body: string, period: string | null) {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");
