@@ -250,7 +250,12 @@ async function regenerateInstallments(
 
 export async function setPlanDiscount(planId: string, discountPct: number) {
   const supabase = await createClient();
-  const { data: plan } = await supabase.from("payment_plans").select("offering_id, plan_type").eq("id", planId).single();
+  // Both only need `planId` (known up front) — fetched together instead of
+  // one after another.
+  const [{ data: plan }, { data: installments }] = await Promise.all([
+    supabase.from("payment_plans").select("offering_id, plan_type").eq("id", planId).single(),
+    supabase.from("payment_installments").select("amount, status").eq("plan_id", planId),
+  ]);
   if (!plan) throw new Error("Plan not found");
 
   const fees = await getOfferingFees(plan.offering_id);
@@ -258,7 +263,6 @@ export async function setPlanDiscount(planId: string, discountPct: number) {
   const clampedPct = Math.max(0, Math.min(100, discountPct));
   const totalAmount = Math.round(baseFee * (1 - clampedPct / 100) * 100) / 100;
 
-  const { data: installments } = await supabase.from("payment_installments").select("amount, status").eq("plan_id", planId);
   const alreadyPaid = (installments ?? []).filter((i) => i.status === "paid").reduce((s, i) => s + Number(i.amount), 0);
 
   const { error } = await supabase.from("payment_plans").update({ total_amount: totalAmount, discount_pct: clampedPct }).eq("id", planId);
@@ -269,10 +273,13 @@ export async function setPlanDiscount(planId: string, discountPct: number) {
 
 export async function setPlanType(planId: string, planType: PlanType) {
   const supabase = await createClient();
-  const { data: plan } = await supabase.from("payment_plans").select("offering_id, discount_pct").eq("id", planId).single();
+  // Both only need `planId` — fetched together instead of one after another.
+  const [{ data: plan }, { data: installments }] = await Promise.all([
+    supabase.from("payment_plans").select("offering_id, discount_pct").eq("id", planId).single(),
+    supabase.from("payment_installments").select("amount, status").eq("plan_id", planId),
+  ]);
   if (!plan) throw new Error("Plan not found");
 
-  const { data: installments } = await supabase.from("payment_installments").select("amount, status").eq("plan_id", planId);
   const alreadyPaid = (installments ?? []).filter((i) => i.status === "paid").reduce((s, i) => s + Number(i.amount), 0);
   if (alreadyPaid > 0) throw new Error("Can't change plan type after a payment has been made");
 

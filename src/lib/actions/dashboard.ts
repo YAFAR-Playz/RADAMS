@@ -157,11 +157,23 @@ export async function getAssistantDashboard(): Promise<AssistantDashboard> {
   const profile = await getCurrentProfile();
   if (!profile) return { kpis: [], pendingStudents: [], myOfferings: [] };
   const supabase = await createClient();
+  const today = new Date().toISOString().slice(0, 10);
 
-  const { data: offeringLinks } = await supabase
-    .from("offering_assistants")
-    .select("course_offerings(id, session, unit, courses(name))")
-    .eq("assistant_id", profile.id);
+  // `loggedTodayCount` only needs `profile.id` (known from the start) but
+  // was previously fetched dead last, after every other query in this
+  // function had already resolved — fetched alongside `offeringLinks`
+  // instead so it doesn't sit on the critical path unnecessarily. The rest
+  // of this function's pagination loops are untouched (same `.range()`
+  // bounds/page sizes throughout) — only this one independent count moved.
+  const [{ data: offeringLinks }, loggedTodayCountResult] = await Promise.all([
+    supabase.from("offering_assistants").select("course_offerings(id, session, unit, courses(name))").eq("assistant_id", profile.id),
+    supabase
+      .from("assignment_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("logged_by", profile.id)
+      .gte("updated_at", `${today}T00:00:00.000Z`),
+  ]);
+  const loggedTodayCount = loggedTodayCountResult.count;
 
   const offerings = (offeringLinks ?? [])
     .map((row) => {
@@ -267,13 +279,6 @@ export async function getAssistantDashboard(): Promise<AssistantDashboard> {
       }
     }
   }
-
-  const today = new Date().toISOString().slice(0, 10);
-  const { count: loggedTodayCount } = await supabase
-    .from("assignment_logs")
-    .select("id", { count: "exact", head: true })
-    .eq("logged_by", profile.id)
-    .gte("updated_at", `${today}T00:00:00.000Z`);
 
   const myOfferings: OfferingSummary[] = offerings.map((o) => ({
     id: o.id,

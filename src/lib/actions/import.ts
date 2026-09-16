@@ -258,8 +258,18 @@ export async function importStudents(offeringId: string, rows: ImportRow[], conf
       .insert(toEnroll.map((studentId) => ({ student_id: studentId, offering_id: offeringId })));
     if (enrollError) throw new Error(enrollError.message);
 
-    for (const studentId of toEnroll) {
-      await createPaymentPlan({ studentId, offeringId, planType: "full" });
+    // Each payment plan is independent (its own insert, no shared state or
+    // ordering dependency between students) — created concurrently instead
+    // of one at a time, which was one full round trip per newly-enrolled
+    // student on every import. Chunked at the same ID_BATCH_SIZE as the
+    // .in() batches above rather than fired all at once: createPaymentPlan
+    // is itself 3-4 sequential queries, so an all-new-student import (every
+    // row in `toEnroll`) would otherwise open hundreds of chains of queries
+    // simultaneously — batching keeps the concurrency bounded while still
+    // running every batch's students in parallel.
+    for (let i = 0; i < toEnroll.length; i += ID_BATCH_SIZE) {
+      const idBatch = toEnroll.slice(i, i + ID_BATCH_SIZE);
+      await Promise.all(idBatch.map((studentId) => createPaymentPlan({ studentId, offeringId, planType: "full" })));
     }
   }
 

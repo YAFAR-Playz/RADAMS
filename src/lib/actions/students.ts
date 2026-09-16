@@ -440,6 +440,7 @@ export type StudentDuplicateMatch = {
   studentCode: string;
   guardianName: string | null;
   guardianPhone: string | null;
+  attendanceId: string | null;
 };
 
 // Phone-only match, scoped to the org — deliberately simple (no fuzzy name
@@ -452,12 +453,19 @@ export async function findStudentByPhone(phone: string): Promise<StudentDuplicat
   const supabase = await createClient();
   const { data } = await supabase
     .from("students")
-    .select("id, name, student_code, guardian_name, guardian_phone")
+    .select("id, name, student_code, guardian_name, guardian_phone, attendance_id")
     .eq("org_id", orgId)
     .eq("phone", phone.trim())
     .maybeSingle();
   if (!data) return null;
-  return { id: data.id, name: data.name, studentCode: data.student_code, guardianName: data.guardian_name, guardianPhone: data.guardian_phone };
+  return {
+    id: data.id,
+    name: data.name,
+    studentCode: data.student_code,
+    guardianName: data.guardian_name,
+    guardianPhone: data.guardian_phone,
+    attendanceId: data.attendance_id,
+  };
 }
 
 export type HeadAddStudentInput = {
@@ -772,25 +780,27 @@ export async function getStudentDetailedExport(offeringId: string): Promise<Stud
       | null;
     profiles: { full_name: string } | { full_name: string }[] | null;
   };
-  const enrollments: ExportEnrollmentRow[] = [];
+  // Independent of each other (both only need `offeringId`) — fetched
+  // concurrently instead of one after another.
   const ENROLLMENT_PAGE_SIZE = 1000;
-  for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
-    const { data: page } = await supabase
-      .from("enrollments")
-      .select("student_id, created_at, left_at, students(name, initials, student_code, email, phone, guardian_name, guardian_phone), profiles(full_name)")
-      .eq("offering_id", offeringId)
-      .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
-    if (!page || page.length === 0) break;
-    enrollments.push(...page);
-    if (page.length < ENROLLMENT_PAGE_SIZE) break;
-  }
+  const [enrollments, { data: assignmentRows }] = await Promise.all([
+    (async () => {
+      const rows: ExportEnrollmentRow[] = [];
+      for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
+        const { data: page } = await supabase
+          .from("enrollments")
+          .select("student_id, created_at, left_at, students(name, initials, student_code, email, phone, guardian_name, guardian_phone), profiles(full_name)")
+          .eq("offering_id", offeringId)
+          .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
+        if (!page || page.length === 0) break;
+        rows.push(...page);
+        if (page.length < ENROLLMENT_PAGE_SIZE) break;
+      }
+      return rows;
+    })(),
+    supabase.from("assignments").select("id, title, template, assignment_templates(has_grade, has_comment)").eq("offering_id", offeringId).order("created_at", { ascending: true }),
+  ]);
   if (!enrollments.length) return { columns: [], rows: [] };
-
-  const { data: assignmentRows } = await supabase
-    .from("assignments")
-    .select("id, title, template, assignment_templates(has_grade, has_comment)")
-    .eq("offering_id", offeringId)
-    .order("created_at", { ascending: true });
   const assignments = (assignmentRows ?? []).map((a) => {
     const joined = Array.isArray(a.assignment_templates) ? a.assignment_templates[0] : a.assignment_templates;
     const { hasGrade, hasComment } = resolveTemplateFlags(a.template, joined);

@@ -110,11 +110,13 @@ export async function listConversations(): Promise<ConversationSummary[]> {
 
   const convIds = rows.map((r) => r.conv.id);
 
-  const { data: otherMembers } = await supabase
-    .from("chat_conversation_members")
-    .select("conversation_id, profiles(id, full_name, initials)")
-    .in("conversation_id", convIds)
-    .neq("profile_id", profile.id);
+  // Three independent reads, all scoped only by `convIds` (none needs
+  // another's result) — fetched concurrently instead of one after another.
+  const [{ data: otherMembers }, { data: lastMessages }, { data: unreadRows }] = await Promise.all([
+    supabase.from("chat_conversation_members").select("conversation_id, profiles(id, full_name, initials)").in("conversation_id", convIds).neq("profile_id", profile.id),
+    supabase.from("chat_messages").select("conversation_id, body, created_at").in("conversation_id", convIds).order("created_at", { ascending: false }),
+    supabase.from("chat_messages").select("conversation_id, created_at, sender_id").in("conversation_id", convIds),
+  ]);
 
   const otherByConv = new Map<string, { name: string; initials: string }>();
   for (const row of otherMembers ?? []) {
@@ -122,17 +124,11 @@ export async function listConversations(): Promise<ConversationSummary[]> {
     if (p) otherByConv.set(row.conversation_id, { name: p.full_name, initials: p.initials });
   }
 
-  const { data: lastMessages } = await supabase
-    .from("chat_messages")
-    .select("conversation_id, body, created_at")
-    .in("conversation_id", convIds)
-    .order("created_at", { ascending: false });
   const lastMessageByConv = new Map<string, { body: string; created_at: string }>();
   for (const m of lastMessages ?? []) {
     if (!lastMessageByConv.has(m.conversation_id)) lastMessageByConv.set(m.conversation_id, m);
   }
 
-  const { data: unreadRows } = await supabase.from("chat_messages").select("conversation_id, created_at, sender_id").in("conversation_id", convIds);
   const unreadByConv = new Map<string, number>();
   for (const m of unreadRows ?? []) {
     if (m.sender_id === profile.id) continue;

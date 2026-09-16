@@ -13,6 +13,10 @@ export type RegistrationFields = {
   guardianName: string;
   guardianPhone: string;
   planType: PlanType;
+  // Only ever shown in the UI when the org's "Attendance ID matching"
+  // toggle is on (see getAttendanceIdMatchingEnabled) — stored regardless
+  // if present, same as the bulk import path.
+  attendanceId?: string;
 };
 
 export type RegistrationRow = {
@@ -43,7 +47,25 @@ export async function registerStudent(offeringId: string, fields: RegistrationFi
   if (!profile || !profile.org) throw new Error("Not authenticated");
   const supabase = await createClient();
 
+  const attendanceId = fields.attendanceId?.trim() || null;
+
   if (existingStudentId) {
+    // Same dedupe rule as the bulk import path: the id is never used to
+    // decide the match (that already happened — the caller confirmed this
+    // is the same person) and only ever backfilled onto an existing
+    // student who doesn't already have one, never overwriting a real value.
+    // Done BEFORE the enrollment/payment-plan writes below, and never
+    // thrown on failure — this is enrichment on an already-confirmed
+    // registration, not a precondition for it. Throwing after those writes
+    // already committed would report total failure for a registration that
+    // actually succeeded, and a retry would then hit createPaymentPlan a
+    // second time (payment_plans has a unique (student_id, offering_id)).
+    if (attendanceId) {
+      const { data: existing } = await supabase.from("students").select("attendance_id").eq("id", existingStudentId).maybeSingle();
+      if (existing && !existing.attendance_id) {
+        await supabase.from("students").update({ attendance_id: attendanceId }).eq("id", existingStudentId);
+      }
+    }
     await addStudentEnrollment(existingStudentId, offeringId);
     await createPaymentPlan({ studentId: existingStudentId, offeringId, planType: fields.planType });
     return { studentId: existingStudentId };
@@ -68,9 +90,11 @@ export async function registerStudent(offeringId: string, fields: RegistrationFi
       email: fields.email || null,
       guardian_name: fields.guardianName || null,
       guardian_phone: fields.guardianPhone || null,
+      attendance_id: attendanceId,
     })
     .select("id")
     .single();
+  if (attendanceId && error?.code === "23505") throw new Error("That attendance ID is already used by another student in this org.");
   if (error || !student) throw new Error(error?.message ?? "Failed to register student");
 
   const { error: enrollError } = await supabase.from("enrollments").insert({ student_id: student.id, offering_id: offeringId });

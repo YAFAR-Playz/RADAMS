@@ -209,6 +209,59 @@ export async function getUnresolvedFinanceInquiryCount(): Promise<number> {
   return unresolved;
 }
 
+export type FinanceInquiry = {
+  payeeId: string;
+  payeeName: string;
+  lastMessage: string;
+  lastAt: string;
+  // True when the payee's own message is the most recent one in the
+  // thread — i.e. nobody from Finance/Admin has replied yet this period.
+  unresolved: boolean;
+};
+
+// One row per payee who exchanged a finance_messages with this org during
+// `period` — the org-wide "Inquiries" popup on the Salaries tab, since
+// per-payee threads (listMessagesForPayee/MessagesModal) require already
+// knowing which payee to open and previously only surfaced via the
+// notification bell one at a time.
+export async function listInquiriesForPeriod(period: string): Promise<FinanceInquiry[]> {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) return [];
+  const supabase = await createClient();
+  // Paginated like the sibling getUnresolvedFinanceInquiryCount above —
+  // an unpaginated select here would silently cap at Postgrest's default
+  // 1000-row limit, and since rows are ordered oldest-first, a period with
+  // more than 1000 messages would keep only each payee's EARLIEST rows,
+  // showing a stale lastMessage/unresolved state for anyone whose later
+  // messages sorted past the cutoff.
+  const byPayee = new Map<string, { name: string; body: string; fromId: string; at: string }>();
+  const PAGE_SIZE = 1000;
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data } = await supabase
+      .from("finance_messages")
+      .select("payee_id, from_id, body, created_at, profiles!finance_messages_payee_id_fkey(full_name)")
+      .eq("org_id", profile.org.id)
+      .eq("period", period)
+      .order("created_at", { ascending: true })
+      .range(from, from + PAGE_SIZE - 1);
+    if (!data || data.length === 0) break;
+    for (const m of data) {
+      const payee = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
+      // Last write wins — rows arrive oldest-first, so this naturally ends
+      // up holding each payee's most recent message in the thread.
+      byPayee.set(m.payee_id, { name: payee?.full_name ?? "Staff", body: m.body, fromId: m.from_id, at: m.created_at });
+    }
+    if (data.length < PAGE_SIZE) break;
+  }
+
+  return Array.from(byPayee.entries())
+    .map(([payeeId, v]) => ({ payeeId, payeeName: v.name, lastMessage: v.body, lastAt: v.at, unresolved: v.fromId === payeeId }))
+    .sort((a, b) => {
+      if (a.unresolved !== b.unresolved) return a.unresolved ? -1 : 1;
+      return a.lastAt < b.lastAt ? 1 : -1;
+    });
+}
+
 export async function replyToPayee(payeeId: string, body: string, period: string | null) {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");

@@ -17,6 +17,7 @@ import {
   type StaffDirectoryEntry,
   type ChatMessage,
 } from "@/lib/actions/chat";
+import { consumeChatHandoff } from "@/lib/chat-handoff";
 import type { Role } from "@/lib/roles";
 
 // Polling, not push — kept deliberately unaggressive since every open tab
@@ -91,6 +92,15 @@ export function ChatContent({ role }: { role: Role }) {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages]);
+
+  useEffect(() => {
+    // One-shot: a "Continue in chat" action elsewhere (e.g. the Salaries
+    // inquiries popup) drops a target profile id here before navigating so
+    // this page opens straight into that DM instead of the plain list.
+    const target = consumeChatHandoff();
+    if (target) startDm(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const active = conversations?.find((c) => c.id === activeId) ?? null;
 

@@ -118,11 +118,33 @@ export async function getRoster(assignmentId: string): Promise<RosterStudent[]> 
   if (!profile) return [];
   const supabase = await createClient();
 
-  const { data: assignment } = await supabase
-    .from("assignments")
-    .select("offering_id")
-    .eq("id", assignmentId)
-    .single();
+  // `logs` only needs `assignmentId` (already known) — not `assignment` or
+  // `enrollments` — so it's fetched concurrently with the `assignment`
+  // lookup instead of waiting for both of those first.
+  const LOGS_PAGE_SIZE = 1000;
+  const [{ data: assignment }, logs] = await Promise.all([
+    supabase.from("assignments").select("offering_id").eq("id", assignmentId).single(),
+    // Scoping to assignment_id alone is already exact — the map below only
+    // ever looks up students present in `enrollments`, so a
+    // `.in("student_id", studentIds)` on top risked a URL-length failure
+    // for this course's size (same class of bug fixed in attendance.ts).
+    // Paginated as a backstop since a large course's log rows can also
+    // clear the 1000-row cap on their own.
+    (async () => {
+      const rows: { student_id: string; status: string | null; grade: string | null; comment: string | null; sent_at: string | null; recipient: string | null }[] = [];
+      for (let from = 0; ; from += LOGS_PAGE_SIZE) {
+        const { data: page } = await supabase
+          .from("assignment_logs")
+          .select("student_id, status, grade, comment, sent_at, recipient")
+          .eq("assignment_id", assignmentId)
+          .range(from, from + LOGS_PAGE_SIZE - 1);
+        if (!page || page.length === 0) break;
+        rows.push(...page);
+        if (page.length < LOGS_PAGE_SIZE) break;
+      }
+      return rows;
+    })(),
+  ]);
   if (!assignment) return [];
 
   // A student marked as "left" should stop appearing anywhere an assistant
@@ -158,25 +180,6 @@ export async function getRoster(assignmentId: string): Promise<RosterStudent[]> 
     if (data.length < ENROLLMENT_PAGE_SIZE) break;
   }
   if (!enrollments.length) return [];
-
-  // Scoping to assignment_id alone is already exact — the map below only
-  // ever looks up students present in `enrollments`, so a
-  // `.in("student_id", studentIds)` on top risked a URL-length failure for
-  // this course's size (same class of bug fixed in attendance.ts).
-  // Paginated as a backstop since a large course's log rows can also clear
-  // the 1000-row cap on their own.
-  const logs: { student_id: string; status: string | null; grade: string | null; comment: string | null; sent_at: string | null; recipient: string | null }[] = [];
-  const LOGS_PAGE_SIZE = 1000;
-  for (let from = 0; ; from += LOGS_PAGE_SIZE) {
-    const { data: page } = await supabase
-      .from("assignment_logs")
-      .select("student_id, status, grade, comment, sent_at, recipient")
-      .eq("assignment_id", assignmentId)
-      .range(from, from + LOGS_PAGE_SIZE - 1);
-    if (!page || page.length === 0) break;
-    logs.push(...page);
-    if (page.length < LOGS_PAGE_SIZE) break;
-  }
 
   const logByStudent = new Map(logs.map((l) => [l.student_id, l]));
 

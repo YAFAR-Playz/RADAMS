@@ -882,10 +882,15 @@ export async function generateStaffReport(staffId: string, offeringIds: string[]
   requireHrOrAdmin(profile.role);
 
   const admin = createAdminClient();
-  const [data, usePlatformBranding, { data: orgRow }] = await Promise.all([
+  // `adminRows` (used near the end, for notification emails) only needs
+  // `profile.org.id` — known from the start, and independent of the report
+  // data/branding/PDF work — so it's fetched here instead of after
+  // everything else (PDF generation + storage upload) had already finished.
+  const [data, usePlatformBranding, { data: orgRow }, { data: adminRows }] = await Promise.all([
     getStaffReportData(staffId, offeringIds),
     getStaffReportBrandingPreference(),
     admin.from("organizations").select("currency").eq("id", profile.org.id).single(),
+    admin.from("profiles").select("email").eq("org_id", profile.org.id).eq("role", "admin").is("left_at", null),
   ]);
   const branding = usePlatformBranding ? await getPlatformDefaultBranding() : await getBranding();
   const orgName = branding?.name ?? profile.org.name ?? "RadAMS";
@@ -901,7 +906,6 @@ export async function generateStaffReport(staffId: string, offeringIds: string[]
 
   const fileName = `${data.name} - Staff Report.pdf`;
   const monthYearFolder = MONTH_YEAR_FOLDER_LABEL();
-  const { data: adminRows } = await admin.from("profiles").select("email").eq("org_id", profile.org.id).eq("role", "admin").is("left_at", null);
   const adminEmails = (adminRows ?? []).map((r) => r.email).filter((e): e is string => !!e);
 
   const driveResult = await uploadStaffReportToDrive({
