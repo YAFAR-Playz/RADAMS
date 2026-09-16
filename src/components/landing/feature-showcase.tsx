@@ -98,8 +98,17 @@ export function FeatureShowcase({ copy, brand }: { copy: LandingCopy; brand: str
   const [active, setActive] = useState(0);
   const { scrollYProgress } = useScroll({ target: containerRef, offset: ["start start", "end end"] });
 
+  // A card is "settled"/sharp (offset ≈ 0, see useOffset above) exactly when
+  // scrollYProgress === k / ORDER.length for its index k — i.e. exactly the
+  // boundary Math.floor rounds down at. Floating-point arithmetic on scroll
+  // position routinely lands a hair below that exact ratio (e.g.
+  // 2.999999994 instead of 3), so floor() reported the PREVIOUS card as
+  // active for the entire time a card sat fully sharp on screen — the dot
+  // rail looked permanently one behind, only "catching up" once the reader
+  // scrolled well into the next card. Math.round is immune to that
+  // sub-pixel floating-point noise since it isn't sitting on a knife edge.
   useMotionValueEvent(scrollYProgress, "change", (v) => {
-    const idx = Math.min(ORDER.length - 1, Math.max(0, Math.floor(v * ORDER.length)));
+    const idx = Math.min(ORDER.length - 1, Math.max(0, Math.round(v * ORDER.length)));
     setActive(idx);
   });
 

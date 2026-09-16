@@ -47,6 +47,45 @@ function offeringLabelOf(o: { session: string; unit: string | null; courses: { n
   return [course?.name, o.session, o.unit].filter(Boolean).join(" · ");
 }
 
+// Fetches every page of a large, RLS-filtered table in bounded concurrent
+// batches rather than firing every page's request at once. Firing dozens of
+// OFFSET-paginated requests simultaneously looks strictly faster than
+// sequential, but two things compound badly once a table needs many pages:
+// (1) OFFSET pagination gets progressively more expensive per page — RLS's
+// per-row correlated-subquery policies make Postgres re-evaluate the policy
+// for every row it skips before reaching the requested offset (measured:
+// ~53ms at offset 0 vs ~200ms at offset 34,000 for the same query shape) —
+// and (2) firing them all at once can exceed Supabase's connection pool,
+// queuing requests behind each other anyway but now also paying connection
+// setup overhead. A real head account managing many offerings with 35,000+
+// historical assignment_logs rows needed 36 pages; firing all 36 at once
+// measured 30-40s wall-clock in production despite each page's own query
+// costing under 200ms. Bounded batches keep the win from parallelizing
+// without the pool-exhaustion cliff.
+const DASH_PAGE_SIZE = 1000;
+const DASH_PAGE_CONCURRENCY = 6;
+async function fetchAllRowsFast<T>(
+  countQuery: PromiseLike<{ count: number | null }>,
+  fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null }>
+): Promise<T[]> {
+  const { count } = await countQuery;
+  const total = count ?? 0;
+  if (total === 0) return [];
+  const pageCount = Math.ceil(total / DASH_PAGE_SIZE);
+  const rows: T[] = [];
+  for (let batchStart = 0; batchStart < pageCount; batchStart += DASH_PAGE_CONCURRENCY) {
+    const batchEnd = Math.min(batchStart + DASH_PAGE_CONCURRENCY, pageCount);
+    const pages = await Promise.all(
+      Array.from({ length: batchEnd - batchStart }, (_, j) => {
+        const i = batchStart + j;
+        return fetchPage(i * DASH_PAGE_SIZE, i * DASH_PAGE_SIZE + DASH_PAGE_SIZE - 1);
+      })
+    );
+    for (const p of pages) rows.push(...(p.data ?? []));
+  }
+  return rows;
+}
+
 export async function getAdminDashboard(): Promise<AdminDashboard> {
   const profile = await getCurrentProfile();
   const orgId = profile?.org?.id;
@@ -74,27 +113,6 @@ export async function getAdminDashboard(): Promise<AdminDashboard> {
   const sym = currencySymbol(org?.currency);
 
   const offeringIds = (offeringRows ?? []).map((o) => o.id);
-
-  // Count-first, then fetch every page concurrently instead of one at a
-  // time — same pattern as getAssistantCheckRates below. A sequential
-  // from/to loop is correct but slow for an org with several thousand
-  // enrollments (several pages, each a full round trip waiting on the
-  // last); getting the row count first (near-instant: head:true never
-  // transfers rows) lets every page after that fire in parallel.
-  const DASH_PAGE_SIZE = 1000;
-  async function fetchAllRowsFast<T>(
-    countQuery: PromiseLike<{ count: number | null }>,
-    fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null }>
-  ): Promise<T[]> {
-    const { count } = await countQuery;
-    const total = count ?? 0;
-    if (total === 0) return [];
-    const pageCount = Math.ceil(total / DASH_PAGE_SIZE);
-    const pages = await Promise.all(
-      Array.from({ length: pageCount }, (_, i) => fetchPage(i * DASH_PAGE_SIZE, i * DASH_PAGE_SIZE + DASH_PAGE_SIZE - 1))
-    );
-    return pages.flatMap((p) => p.data ?? []);
-  }
 
   // These two scans are both scoped only by `offeringIds` — independent of
   // each other — fetched concurrently instead of one after another.
@@ -196,25 +214,6 @@ export async function getAssistantDashboard(): Promise<AssistantDashboard> {
     })
     .filter((x): x is { id: string; label: string } => !!x);
   const offeringIds = offerings.map((o) => o.id);
-
-  // Count-first, then fetch every page concurrently instead of one at a
-  // time — same pattern as the admin/head dashboards above. A sequential
-  // from/to loop is correct but slow for an assistant who has taught many
-  // students over several terms/years.
-  const DASH_PAGE_SIZE = 1000;
-  async function fetchAllRowsFast<T>(
-    countQuery: PromiseLike<{ count: number | null }>,
-    fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null }>
-  ): Promise<T[]> {
-    const { count } = await countQuery;
-    const total = count ?? 0;
-    if (total === 0) return [];
-    const pageCount = Math.ceil(total / DASH_PAGE_SIZE);
-    const pages = await Promise.all(
-      Array.from({ length: pageCount }, (_, i) => fetchPage(i * DASH_PAGE_SIZE, i * DASH_PAGE_SIZE + DASH_PAGE_SIZE - 1))
-    );
-    return pages.flatMap((p) => p.data ?? []);
-  }
 
   // `enrollments` and `assignments` are both scoped only by `offeringIds`/
   // `profile.id` — independent of each other — fetched concurrently instead
@@ -321,21 +320,6 @@ export async function getAssistantPendingLogCount(): Promise<number> {
   const offeringIds = (offeringLinks ?? []).map((r) => r.offering_id);
   if (!offeringIds.length) return 0;
 
-  // Count-first, then fetch every page concurrently instead of one at a
-  // time — same pattern as the full dashboard version of this query above.
-  const PAGE_SIZE = 1000;
-  async function fetchAllRowsFast<T>(
-    countQuery: PromiseLike<{ count: number | null }>,
-    fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null }>
-  ): Promise<T[]> {
-    const { count } = await countQuery;
-    const total = count ?? 0;
-    if (total === 0) return [];
-    const pageCount = Math.ceil(total / PAGE_SIZE);
-    const pages = await Promise.all(Array.from({ length: pageCount }, (_, i) => fetchPage(i * PAGE_SIZE, i * PAGE_SIZE + PAGE_SIZE - 1)));
-    return pages.flatMap((p) => p.data ?? []);
-  }
-
   // `assignments` (scoped by offeringIds) and `enrollments` (scoped by
   // profile.id) are independent of each other — fetched concurrently instead
   // of one after another.
@@ -402,26 +386,6 @@ export async function getHeadDashboard(): Promise<HeadDashboard> {
       statusBreakdown: [],
       completionPct: 0,
     };
-  }
-
-  // Count-first, then fetch every page concurrently instead of one at a
-  // time (same pattern as getAssistantCheckRates/getAdminDashboard) — a
-  // sequential from/to loop is correct but slow once a fetch needs several
-  // pages, which this org's largest single course (1,000+ active
-  // enrollments) hits on its own.
-  const DASH_PAGE_SIZE = 1000;
-  async function fetchAllRowsFast<T>(
-    countQuery: PromiseLike<{ count: number | null }>,
-    fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null }>
-  ): Promise<T[]> {
-    const { count } = await countQuery;
-    const total = count ?? 0;
-    if (total === 0) return [];
-    const pageCount = Math.ceil(total / DASH_PAGE_SIZE);
-    const pages = await Promise.all(
-      Array.from({ length: pageCount }, (_, i) => fetchPage(i * DASH_PAGE_SIZE, i * DASH_PAGE_SIZE + DASH_PAGE_SIZE - 1))
-    );
-    return pages.flatMap((p) => p.data ?? []);
   }
 
   // A student who left THAT course must not count toward the tracking
@@ -622,21 +586,6 @@ export async function getRegistrationDashboard(): Promise<RegistrationDashboard>
   // row cap (Supabase's default 1000) overrides any larger client-requested
   // limit, so it silently capped at 1000 anyway for an org with more
   // unassigned students than that.
-  const UNASSIGNED_PAGE_SIZE = 1000;
-  async function fetchAllRowsFast<T>(
-    countQuery: PromiseLike<{ count: number | null }>,
-    fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null }>
-  ): Promise<T[]> {
-    const { count } = await countQuery;
-    const total = count ?? 0;
-    if (total === 0) return [];
-    const pageCount = Math.ceil(total / UNASSIGNED_PAGE_SIZE);
-    const pages = await Promise.all(
-      Array.from({ length: pageCount }, (_, i) => fetchPage(i * UNASSIGNED_PAGE_SIZE, i * UNASSIGNED_PAGE_SIZE + UNASSIGNED_PAGE_SIZE - 1))
-    );
-    return pages.flatMap((p) => p.data ?? []);
-  }
-
   const [{ count: newThisWeek }, unassignedRows, { data: recentRows }] = await Promise.all([
     supabase
       .from("enrollments")
@@ -913,21 +862,8 @@ export async function getAssistantCheckRates(): Promise<AssistantCheckRateRow[]>
   // do) is correct but slow here — a large org's assignment_logs alone can be
   // a dozen+ pages, and awaiting them one at a time serializes that many
   // round trips. Getting the row count first (near-instant: head:true never
-  // transfers rows) lets every page after that fire in parallel instead.
-  const CHECK_RATE_PAGE_SIZE = 1000;
-  async function fetchAllRowsFast<T>(
-    countQuery: PromiseLike<{ count: number | null }>,
-    fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null }>
-  ): Promise<T[]> {
-    const { count } = await countQuery;
-    const total = count ?? 0;
-    if (total === 0) return [];
-    const pageCount = Math.ceil(total / CHECK_RATE_PAGE_SIZE);
-    const pages = await Promise.all(
-      Array.from({ length: pageCount }, (_, i) => fetchPage(i * CHECK_RATE_PAGE_SIZE, i * CHECK_RATE_PAGE_SIZE + CHECK_RATE_PAGE_SIZE - 1))
-    );
-    return pages.flatMap((p) => p.data ?? []);
-  }
+  // transfers rows) lets every page after that fire concurrently (in bounded
+  // batches — see fetchAllRowsFast above) instead.
 
   const [{ data: offeringRows }, { data: assistantLinks }, assignmentRows, enrollments] = await Promise.all([
     supabase.from("course_offerings").select("id, session, unit, courses(name)").in("id", offeringIds),

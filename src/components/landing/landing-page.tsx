@@ -25,12 +25,22 @@ const fadeUp = {
   show: { opacity: 1, y: 0 },
 };
 
-function Reveal({ children, className, delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
+// `margin` shrinks the viewport IntersectionObserver checks against — the
+// default "-60px" is plenty for sections that sit thousands of pixels down
+// the page (Roles/Stats/Contact), but the Hero is short enough on common
+// laptop-height screens (~900px) that the Features heading right below it
+// already sits inside a -60px-shrunk viewport at scroll position 0. That
+// made whileInView fire on mount instead of on an actual scroll — the
+// fade-up played out before the reader had scrolled far enough to see it,
+// looking like it was "just there" with no transition. A much larger margin
+// for that one Reveal defers the trigger until the reader has genuinely
+// scrolled past the hero.
+function Reveal({ children, className, delay = 0, margin = "-60px" }: { children: React.ReactNode; className?: string; delay?: number; margin?: string }) {
   return (
     <motion.div
       initial="hidden"
       whileInView="show"
-      viewport={{ once: true, margin: "-60px" }}
+      viewport={{ once: true, margin }}
       variants={fadeUp}
       transition={{ duration: 0.55, ease: "easeOut", delay }}
       className={className}
@@ -208,7 +218,7 @@ export function LandingPage({
 
       {/* Features */}
       <section id="features" className="relative py-[70px] sm:py-[90px]">
-        <Reveal className="mx-auto mb-[50px] max-w-[640px] px-5 text-center">
+        <Reveal className="mx-auto mb-[50px] max-w-[640px] px-5 text-center" margin="-260px">
           <span className="mb-[10px] inline-block text-[12.5px] font-bold uppercase tracking-[0.06em]" style={{ color: brand }}>
             {copy.features.eyebrow}
           </span>
