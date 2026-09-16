@@ -34,7 +34,12 @@ const fadeUp = {
 // fade-up played out before the reader had scrolled far enough to see it,
 // looking like it was "just there" with no transition. A much larger margin
 // for that one Reveal defers the trigger until the reader has genuinely
-// scrolled past the hero.
+// scrolled past the hero. Two values, not one: rootMargin applies a bare
+// value to all four sides, and -260px on the left/right too collapses the
+// observed region to negative width on any viewport under ~520px wide —
+// the element could then never register as "in view" at all, leaving it
+// permanently invisible on phones (invisible, not just un-animated, since
+// the initial state is opacity 0). "-260px 0px" keeps this vertical-only.
 function Reveal({ children, className, delay = 0, margin = "-60px" }: { children: React.ReactNode; className?: string; delay?: number; margin?: string }) {
   return (
     <motion.div
@@ -218,7 +223,7 @@ export function LandingPage({
 
       {/* Features */}
       <section id="features" className="relative py-[70px] sm:py-[90px]">
-        <Reveal className="mx-auto mb-[50px] max-w-[640px] px-5 text-center" margin="-260px">
+        <Reveal className="mx-auto mb-[50px] max-w-[640px] px-5 text-center" margin="-260px 0px">
           <span className="mb-[10px] inline-block text-[12.5px] font-bold uppercase tracking-[0.06em]" style={{ color: brand }}>
             {copy.features.eyebrow}
           </span>
