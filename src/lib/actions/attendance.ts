@@ -120,7 +120,40 @@ export async function getSessionRoster(sessionId: string): Promise<AttendanceRos
   if (!profile) return [];
   const supabase = await createClient();
 
-  const { data: session } = await supabase.from("attendance_sessions").select("offering_id").eq("id", sessionId).single();
+  // `records` only needs `sessionId` (already known) — not `session` or
+  // `enrollments` — so it's fetched concurrently with the `session` lookup
+  // instead of waiting for both of those first. Every pagination loop's
+  // `.range()` bounds/page sizes below are unchanged, only reordered.
+  const ATTENDANCE_PAGE_SIZE = 1000;
+  const [{ data: session }, records] = await Promise.all([
+    supabase.from("attendance_sessions").select("offering_id").eq("id", sessionId).single(),
+    // Scoping to session_id alone is already exact — the .map() below only
+    // ever looks up students present in `enrollments`, so records for
+    // anyone else are simply never read. Adding `.in("student_id",
+    // studentIds)` on top used to build a URL filter with one UUID per
+    // enrolled student — for a large course (900+ students here) that's
+    // tens of thousands of characters, well past what a GET request's URL
+    // can carry, so the query silently failed and came back empty. Every
+    // student then fell through to the "absent" default below, making a
+    // session that already had real attendance recorded look completely
+    // reset. Paginated in batches since a single unbounded select silently
+    // truncates at PostgREST's default 1000-row cap once a course passes
+    // that size.
+    (async () => {
+      const rows: { student_id: string; status: AttendanceStatus }[] = [];
+      for (let from = 0; ; from += ATTENDANCE_PAGE_SIZE) {
+        const { data: page } = await supabase
+          .from("attendance_records")
+          .select("student_id, status")
+          .eq("session_id", sessionId)
+          .range(from, from + ATTENDANCE_PAGE_SIZE - 1);
+        if (!page || page.length === 0) break;
+        rows.push(...page);
+        if (page.length < ATTENDANCE_PAGE_SIZE) break;
+      }
+      return rows;
+    })(),
+  ]);
   if (!session) return [];
 
   // A student who left THIS course shouldn't show up to take attendance
@@ -156,29 +189,6 @@ export async function getSessionRoster(sessionId: string): Promise<AttendanceRos
   }
   if (!enrollments.length) return [];
 
-  // Scoping to session_id alone is already exact — the .map() below only
-  // ever looks up students present in `enrollments`, so records for anyone
-  // else are simply never read. Adding `.in("student_id", studentIds)` on
-  // top used to build a URL filter with one UUID per enrolled student —
-  // for a large course (900+ students here) that's tens of thousands of
-  // characters, well past what a GET request's URL can carry, so the
-  // query silently failed and came back empty. Every student then fell
-  // through to the "absent" default below, making a session that already
-  // had real attendance recorded look completely reset. Paginated in
-  // batches since a single unbounded select silently truncates at
-  // PostgREST's default 1000-row cap once a course passes that size.
-  const records: { student_id: string; status: AttendanceStatus }[] = [];
-  const ATTENDANCE_PAGE_SIZE = 1000;
-  for (let from = 0; ; from += ATTENDANCE_PAGE_SIZE) {
-    const { data: page } = await supabase
-      .from("attendance_records")
-      .select("student_id, status")
-      .eq("session_id", sessionId)
-      .range(from, from + ATTENDANCE_PAGE_SIZE - 1);
-    if (!page || page.length === 0) break;
-    records.push(...page);
-    if (page.length < ATTENDANCE_PAGE_SIZE) break;
-  }
   const statusByStudent = new Map(records.map((r) => [r.student_id, r.status]));
 
   return enrollments
@@ -233,40 +243,47 @@ export async function createSession(input: { offeringId: string; title: string; 
   if (!profile) throw new Error("Not authenticated");
   const supabase = await createClient();
 
-  const { data: session, error } = await supabase
-    .from("attendance_sessions")
-    .insert({
-      offering_id: input.offeringId,
-      title: input.title || "New session",
-      session_date: input.date,
-      session_time: input.time,
-      created_by: profile.id,
-    })
-    .select("id")
-    .single();
-  if (error || !session) throw new Error(error?.message ?? "Failed to create session");
-
-  // A student who already left this course shouldn't get a fresh record
-  // seeded for a brand-new session — same rule as the roster and export.
-  // Paginated: an unbounded select here silently truncated at Postgrest's
-  // default 1000-row cap for a 1,000+ student course, seeding records for
-  // only the first 1000 enrolled students and silently skipping the rest
-  // (harmless for the roster/export today, since both fall back to
-  // enrollments directly and default a missing record to absent — but the
-  // gap is still real and worth not having).
-  const enrollments: { student_id: string }[] = [];
+  // The enrollments fetch only needs `input.offeringId` — not the
+  // newly-created session's id — so it's fetched concurrently with the
+  // session insert instead of only starting after it completes.
   const ENROLLMENT_PAGE_SIZE = 1000;
-  for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
-    const { data: page } = await supabase
-      .from("enrollments")
-      .select("student_id")
-      .eq("offering_id", input.offeringId)
-      .is("left_at", null)
-      .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
-    if (!page || page.length === 0) break;
-    enrollments.push(...page);
-    if (page.length < ENROLLMENT_PAGE_SIZE) break;
-  }
+  const [{ data: session, error }, enrollments] = await Promise.all([
+    supabase
+      .from("attendance_sessions")
+      .insert({
+        offering_id: input.offeringId,
+        title: input.title || "New session",
+        session_date: input.date,
+        session_time: input.time,
+        created_by: profile.id,
+      })
+      .select("id")
+      .single(),
+    // A student who already left this course shouldn't get a fresh record
+    // seeded for a brand-new session — same rule as the roster and export.
+    // Paginated: an unbounded select here silently truncated at
+    // Postgrest's default 1000-row cap for a 1,000+ student course,
+    // seeding records for only the first 1000 enrolled students and
+    // silently skipping the rest (harmless for the roster/export today,
+    // since both fall back to enrollments directly and default a missing
+    // record to absent — but the gap is still real and worth not having).
+    (async () => {
+      const rows: { student_id: string }[] = [];
+      for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
+        const { data: page } = await supabase
+          .from("enrollments")
+          .select("student_id")
+          .eq("offering_id", input.offeringId)
+          .is("left_at", null)
+          .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
+        if (!page || page.length === 0) break;
+        rows.push(...page);
+        if (page.length < ENROLLMENT_PAGE_SIZE) break;
+      }
+      return rows;
+    })(),
+  ]);
+  if (error || !session) throw new Error(error?.message ?? "Failed to create session");
   if (enrollments.length) {
     const { error: recError } = await supabase
       .from("attendance_records")

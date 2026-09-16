@@ -20,41 +20,57 @@ export async function getCourseExport(offeringId: string): Promise<CourseExportD
   if (!profile || !profile.org || profile.role !== "admin") throw new Error("Not authorized");
   const supabase = await createClient();
 
-  const { data: offering } = await supabase.from("course_offerings").select("session, unit, courses(name)").eq("id", offeringId).maybeSingle();
-  const course = offering ? (Array.isArray(offering.courses) ? offering.courses[0] : offering.courses) : null;
-  const courseLabel = offering ? [course?.name, offering.session, offering.unit].filter(Boolean).join(" · ") : "Course";
+  const period = new Date().toISOString().slice(0, 7);
 
-  const { data: assignmentRows } = await supabase
-    .from("assignments")
-    .select("id, title, max_marks, template, assignment_templates(has_grade, has_comment)")
-    .eq("offering_id", offeringId)
-    .order("created_at", { ascending: true });
-  const assignments = (assignmentRows ?? []).map((a) => {
-    const joined = Array.isArray(a.assignment_templates) ? a.assignment_templates[0] : a.assignment_templates;
-    const { hasGrade } = resolveTemplateFlags(a.template, joined);
-    return { id: a.id, title: a.title, hasGrade, maxMarks: a.max_marks };
-  });
-
-  // Paginated: a course's enrollments can clear Postgrest's default
-  // 1000-row cap on their own (one offering in this org has 1,039 active
-  // enrollments), which a single unpaginated select silently truncated.
+  // `offering`, `assignmentRows`, the paginated `enrollments` fetch,
+  // `notes` and `topics` are all independent of each other (each only
+  // needs `offeringId` and/or `period`, known from the start) — fetched
+  // concurrently instead of one after another. Only `logs` below genuinely
+  // depends on `assignmentIds` (from `assignmentRows`), so it stays
+  // sequential after this. Every pagination loop's `.range()` bounds/page
+  // sizes are unchanged — only reordered relative to the other queries.
+  const ENROLLMENT_PAGE_SIZE = 1000;
   type EnrollmentRow = {
     student_id: string;
     students: { name: string; student_code: string } | { name: string; student_code: string }[] | null;
     profiles: { full_name: string } | { full_name: string }[] | null;
   };
-  const enrollments: EnrollmentRow[] = [];
-  const ENROLLMENT_PAGE_SIZE = 1000;
-  for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
-    const { data: page } = await supabase
-      .from("enrollments")
-      .select("student_id, students(name, student_code), profiles(full_name)")
-      .eq("offering_id", offeringId)
-      .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
-    if (!page || page.length === 0) break;
-    enrollments.push(...page);
-    if (page.length < ENROLLMENT_PAGE_SIZE) break;
-  }
+  const [{ data: offering }, { data: assignmentRows }, enrollments, { data: notes }, { data: topics }] = await Promise.all([
+    supabase.from("course_offerings").select("session, unit, courses(name)").eq("id", offeringId).maybeSingle(),
+    supabase.from("assignments").select("id, title, max_marks, template, assignment_templates(has_grade, has_comment)").eq("offering_id", offeringId).order("created_at", { ascending: true }),
+    // Paginated: a course's enrollments can clear Postgrest's default
+    // 1000-row cap on their own (one offering in this org has 1,039 active
+    // enrollments), which a single unpaginated select silently truncated.
+    (async () => {
+      const rows: EnrollmentRow[] = [];
+      for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
+        const { data: page } = await supabase
+          .from("enrollments")
+          .select("student_id, students(name, student_code), profiles(full_name)")
+          .eq("offering_id", offeringId)
+          .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
+        if (!page || page.length === 0) break;
+        rows.push(...page);
+        if (page.length < ENROLLMENT_PAGE_SIZE) break;
+      }
+      return rows;
+    })(),
+    // Scoping to offering_id + period is already exact for this offering's
+    // roster — `commentMap`/`topicsMap` below are only ever read by student
+    // ids drawn from `enrollments`, so a `.in("student_id", studentIds)` on
+    // top was both redundant and, for a large course, a URL-length risk
+    // (same class of bug as getSessionRoster in attendance.ts).
+    supabase.from("student_monthly_notes").select("student_id, comment").eq("offering_id", offeringId).eq("period", period),
+    supabase.from("student_topic_submissions").select("student_id, topic_catalog(label)").eq("offering_id", offeringId).eq("period", period).eq("status", "approved"),
+  ]);
+
+  const course = offering ? (Array.isArray(offering.courses) ? offering.courses[0] : offering.courses) : null;
+  const courseLabel = offering ? [course?.name, offering.session, offering.unit].filter(Boolean).join(" · ") : "Course";
+  const assignments = (assignmentRows ?? []).map((a) => {
+    const joined = Array.isArray(a.assignment_templates) ? a.assignment_templates[0] : a.assignment_templates;
+    const { hasGrade } = resolveTemplateFlags(a.template, joined);
+    return { id: a.id, title: a.title, hasGrade, maxMarks: a.max_marks };
+  });
 
   const assignmentIds = assignments.map((a) => a.id);
   const safeAssignmentIds = assignmentIds.length ? assignmentIds : ["00000000-0000-0000-0000-000000000000"];
@@ -79,22 +95,6 @@ export async function getCourseExport(offeringId: string): Promise<CourseExportD
     logs.push(...page);
     if (page.length < LOGS_PAGE_SIZE) break;
   }
-
-  const period = new Date().toISOString().slice(0, 7);
-
-  // Scoping to offering_id + period is already exact for this offering's
-  // roster — `commentMap`/`topicsMap` below are only ever read by student
-  // ids drawn from `enrollments`, so a `.in("student_id", studentIds)` on
-  // top was both redundant and, for a large course, a URL-length risk
-  // (same class of bug as getSessionRoster in attendance.ts).
-  const { data: notes } = await supabase.from("student_monthly_notes").select("student_id, comment").eq("offering_id", offeringId).eq("period", period);
-
-  const { data: topics } = await supabase
-    .from("student_topic_submissions")
-    .select("student_id, topic_catalog(label)")
-    .eq("offering_id", offeringId)
-    .eq("period", period)
-    .eq("status", "approved");
 
   const logMap = new Map<string, { status: string | null; grade: string | null }>();
   for (const l of logs) logMap.set(`${l.assignment_id}:${l.student_id}`, { status: l.status, grade: l.grade });

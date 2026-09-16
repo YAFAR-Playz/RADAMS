@@ -426,18 +426,17 @@ export async function listCategoryRatesByOffering(offeringIds: string[]): Promis
   if (!orgId) return [];
   const supabase = await createClient();
 
-  const base = await listPayCategories();
+  // Three independent reads (none uses another's result — `offerings` and
+  // `overrides` both only need `offeringIds`/`orgId`, already known) —
+  // fetched concurrently instead of one after another.
+  const [base, { data: offerings }, { data: overrides }] = await Promise.all([
+    listPayCategories(),
+    supabase.from("course_offerings").select("id, session, unit, courses(name)").in("id", offeringIds),
+    supabase.from("pay_categories").select("id, kind, label, rate, offering_id").eq("org_id", orgId).in("offering_id", offeringIds),
+  ]);
   if (!base.length) return [];
-
-  const { data: offerings } = await supabase.from("course_offerings").select("id, session, unit, courses(name)").in("id", offeringIds);
   if (!offerings) return [];
   const offeringById = new Map(offerings.map((o) => [o.id, o]));
-
-  const { data: overrides } = await supabase
-    .from("pay_categories")
-    .select("id, kind, label, rate, offering_id")
-    .eq("org_id", orgId)
-    .in("offering_id", offeringIds);
   const overrideIds = (overrides ?? []).map((o) => o.id);
   const { data: overrideOptions } = overrideIds.length
     ? await supabase.from("pay_category_options").select("category_id, label, amount").in("category_id", overrideIds).order("sort_order", { ascending: true })

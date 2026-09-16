@@ -63,67 +63,84 @@ export async function getFullExport(offeringId: string): Promise<FullExportRow[]
     students: { student_code: string; name: string } | { student_code: string; name: string }[] | null;
     profiles: { full_name: string } | { full_name: string }[] | null;
   };
-  const enrollments: FullExportEnrollmentRow[] = [];
+  // `enrollments`, `assignments` and `sessions` are all scoped only by
+  // `offeringId` and don't depend on each other — fetched concurrently
+  // instead of one after another.
   const ENROLLMENT_PAGE_SIZE = 1000;
-  for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
-    const { data: page } = await supabase
-      .from("enrollments")
-      .select("student_id, created_at, left_at, students(student_code, name), profiles(full_name)")
-      .eq("offering_id", offeringId)
-      .order("student_id", { ascending: true })
-      .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
-    if (!page || page.length === 0) break;
-    enrollments.push(...page);
-    if (page.length < ENROLLMENT_PAGE_SIZE) break;
-  }
+  const [enrollments, { data: assignments }, { data: sessions }] = await Promise.all([
+    (async () => {
+      const rows: FullExportEnrollmentRow[] = [];
+      for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
+        const { data: page } = await supabase
+          .from("enrollments")
+          .select("student_id, created_at, left_at, students(student_code, name), profiles(full_name)")
+          .eq("offering_id", offeringId)
+          .order("student_id", { ascending: true })
+          .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
+        if (!page || page.length === 0) break;
+        rows.push(...page);
+        if (page.length < ENROLLMENT_PAGE_SIZE) break;
+      }
+      return rows;
+    })(),
+    supabase.from("assignments").select("id").eq("offering_id", offeringId),
+    supabase.from("attendance_sessions").select("id").eq("offering_id", offeringId),
+  ]);
   if (!enrollments.length) return [];
 
-  const { data: assignments } = await supabase.from("assignments").select("id").eq("offering_id", offeringId);
   const assignmentIds = (assignments ?? []).map((a) => a.id);
-  // Scoping to assignment_id alone is already exact — the map below only
-  // ever looks up students present in `enrollments`, so a redundant
-  // `.in("student_id", studentIds)` on top risked a URL-length failure for
-  // this course's size (same class of bug fixed in attendance.ts). Paginated
-  // since assignments × students for a large course can also clear the
-  // 1000-row cap on its own.
-  const logs: { student_id: string; status: string | null }[] = [];
+  const sessionIds = (sessions ?? []).map((s) => s.id);
+
+  // Independent of each other (logs need `assignmentIds`, attendance needs
+  // `sessionIds`) — fetched concurrently instead of one after another.
   const LOGS_PAGE_SIZE = 1000;
-  if (assignmentIds.length) {
-    for (let from = 0; ; from += LOGS_PAGE_SIZE) {
-      const { data: page } = await supabase
-        .from("assignment_logs")
-        .select("student_id, status")
-        .in("assignment_id", assignmentIds)
-        .order("student_id", { ascending: true })
-        .range(from, from + LOGS_PAGE_SIZE - 1);
-      if (!page || page.length === 0) break;
-      logs.push(...page);
-      if (page.length < LOGS_PAGE_SIZE) break;
-    }
-  }
+  const ATTENDANCE_PAGE_SIZE = 1000;
+  const [logs, attendance] = await Promise.all([
+    // Scoping to assignment_id alone is already exact — the map below only
+    // ever looks up students present in `enrollments`, so a redundant
+    // `.in("student_id", studentIds)` on top risked a URL-length failure
+    // for this course's size (same class of bug fixed in attendance.ts).
+    // Paginated since assignments × students for a large course can also
+    // clear the 1000-row cap on its own.
+    (async () => {
+      const rows: { student_id: string; status: string | null }[] = [];
+      if (!assignmentIds.length) return rows;
+      for (let from = 0; ; from += LOGS_PAGE_SIZE) {
+        const { data: page } = await supabase
+          .from("assignment_logs")
+          .select("student_id, status")
+          .in("assignment_id", assignmentIds)
+          .order("student_id", { ascending: true })
+          .range(from, from + LOGS_PAGE_SIZE - 1);
+        if (!page || page.length === 0) break;
+        rows.push(...page);
+        if (page.length < LOGS_PAGE_SIZE) break;
+      }
+      return rows;
+    })(),
+    // Same reasoning as the logs fetch above — session_id alone is exact.
+    (async () => {
+      const rows: { student_id: string; status: string }[] = [];
+      if (!sessionIds.length) return rows;
+      for (let from = 0; ; from += ATTENDANCE_PAGE_SIZE) {
+        const { data: page } = await supabase
+          .from("attendance_records")
+          .select("student_id, status")
+          .in("session_id", sessionIds)
+          .order("student_id", { ascending: true })
+          .range(from, from + ATTENDANCE_PAGE_SIZE - 1);
+        if (!page || page.length === 0) break;
+        rows.push(...page);
+        if (page.length < ATTENDANCE_PAGE_SIZE) break;
+      }
+      return rows;
+    })(),
+  ]);
   const checkedByStudent = new Map<string, number>();
   for (const l of logs) {
     if (l.status === "checked") checkedByStudent.set(l.student_id, (checkedByStudent.get(l.student_id) ?? 0) + 1);
   }
 
-  const { data: sessions } = await supabase.from("attendance_sessions").select("id").eq("offering_id", offeringId);
-  const sessionIds = (sessions ?? []).map((s) => s.id);
-  // Same reasoning as the logs fetch above — session_id alone is exact.
-  const attendance: { student_id: string; status: string }[] = [];
-  const ATTENDANCE_PAGE_SIZE = 1000;
-  if (sessionIds.length) {
-    for (let from = 0; ; from += ATTENDANCE_PAGE_SIZE) {
-      const { data: page } = await supabase
-        .from("attendance_records")
-        .select("student_id, status")
-        .in("session_id", sessionIds)
-        .order("student_id", { ascending: true })
-        .range(from, from + ATTENDANCE_PAGE_SIZE - 1);
-      if (!page || page.length === 0) break;
-      attendance.push(...page);
-      if (page.length < ATTENDANCE_PAGE_SIZE) break;
-    }
-  }
   const attendanceTotal = new Map<string, number>();
   const attendancePresent = new Map<string, number>();
   for (const a of attendance) {
@@ -201,33 +218,37 @@ export async function getOversightSummary(
 ): Promise<{ stats: OversightStats; assistants: AssistantSummary[] }> {
   const supabase = await createClient();
 
-  const { data: assistantLinks } = await supabase
-    .from("offering_assistants")
-    .select("profiles(id, full_name, initials)")
-    .eq("offering_id", offeringId);
-
-  const { data: assignmentRows } = await supabase.from("assignments").select("id").eq("offering_id", offeringId);
-  const assignmentIds = (assignmentRows ?? []).map((a) => a.id);
-
-  // A student who left THIS course must not count toward its tracking
-  // totals — same rule as the Students/Assistants tabs. "Left" is tracked
-  // per enrollment (see setEnrollmentLeftStatus in students.ts), so this
-  // filters straight on the enrollment row rather than needing a join.
-  // Paginated: this offering's own active enrollments can clear Postgrest's
-  // default 1000-row cap on their own (one offering in this org has 1,039).
-  const enrollments: { student_id: string; assistant_id: string | null }[] = [];
+  // `assistantLinks`, `assignmentRows` and the paginated `enrollments` fetch
+  // are all scoped only by `offeringId` — independent of each other —
+  // fetched concurrently instead of one after another.
   const ENROLLMENT_PAGE_SIZE = 1000;
-  for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
-    const { data: page } = await supabase
-      .from("enrollments")
-      .select("student_id, assistant_id")
-      .eq("offering_id", offeringId)
-      .is("left_at", null)
-      .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
-    if (!page || page.length === 0) break;
-    enrollments.push(...page);
-    if (page.length < ENROLLMENT_PAGE_SIZE) break;
-  }
+  const [{ data: assistantLinks }, { data: assignmentRows }, enrollments] = await Promise.all([
+    supabase.from("offering_assistants").select("profiles(id, full_name, initials)").eq("offering_id", offeringId),
+    supabase.from("assignments").select("id").eq("offering_id", offeringId),
+    // A student who left THIS course must not count toward its tracking
+    // totals — same rule as the Students/Assistants tabs. "Left" is
+    // tracked per enrollment (see setEnrollmentLeftStatus in students.ts),
+    // so this filters straight on the enrollment row rather than needing a
+    // join. Paginated: this offering's own active enrollments can clear
+    // Postgrest's default 1000-row cap on their own (one offering in this
+    // org has 1,039).
+    (async () => {
+      const rows: { student_id: string; assistant_id: string | null }[] = [];
+      for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
+        const { data: page } = await supabase
+          .from("enrollments")
+          .select("student_id, assistant_id")
+          .eq("offering_id", offeringId)
+          .is("left_at", null)
+          .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
+        if (!page || page.length === 0) break;
+        rows.push(...page);
+        if (page.length < ENROLLMENT_PAGE_SIZE) break;
+      }
+      return rows;
+    })(),
+  ]);
+  const assignmentIds = (assignmentRows ?? []).map((a) => a.id);
 
   // Scoping to assignment_id alone is already exact for this offering.
   // Paginated since assignments × students for a large course can clear

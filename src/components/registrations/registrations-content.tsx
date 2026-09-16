@@ -9,13 +9,13 @@ import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments"
 import { registerStudent, listRegistrations, type RegistrationRow } from "@/lib/actions/registrations";
 import { findStudentByPhone, type StudentDuplicateMatch } from "@/lib/actions/students";
 import { getOfferingFees, type OfferingFees, type PlanType } from "@/lib/actions/payments";
-import { getPayrollSettings } from "@/lib/actions/payroll-settings";
+import { getPayrollSettings, getAttendanceIdMatchingEnabled } from "@/lib/actions/payroll-settings";
 import { currencySymbol } from "@/lib/currency";
 import { matchesStudentQuery } from "@/lib/student-search";
 
 const PAGE_SIZE = 15;
 
-const emptyForm = { name: "", phone: "", email: "", guardianName: "", guardianPhone: "", planType: "full" as PlanType };
+const emptyForm = { name: "", phone: "", email: "", guardianName: "", guardianPhone: "", planType: "full" as PlanType, attendanceId: "" };
 
 export function RegistrationsContent() {
   const [offerings, setOfferings] = useState<OfferingOption[] | null>(null);
@@ -35,6 +35,7 @@ export function RegistrationsContent() {
 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
+  const [attendanceIdEnabled, setAttendanceIdEnabled] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -51,6 +52,7 @@ export function RegistrationsContent() {
       const settings = await getPayrollSettings();
       setSym(currencySymbol(settings?.currency));
     })();
+    getAttendanceIdMatchingEnabled().then(setAttendanceIdEnabled);
   }, []);
 
   useEffect(() => {
@@ -213,6 +215,20 @@ export function RegistrationsContent() {
                 className="h-[42px] w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 text-[13.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
               />
             </div>
+            {attendanceIdEnabled && (
+              <div>
+                <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Attendance ID</label>
+                <input
+                  value={form.attendanceId}
+                  onChange={(e) => updateForm({ attendanceId: e.target.value })}
+                  placeholder="e.g. 6723"
+                  className="h-[42px] w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 font-mono text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                />
+                <p className="m-0 mt-[6px] text-[11.5px] leading-[1.4] text-[var(--subtle)]">
+                  From Zoom/attendance exports - matches this student in attendance imports.
+                </p>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-[10px]">
               <div>
                 <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Phone</label>

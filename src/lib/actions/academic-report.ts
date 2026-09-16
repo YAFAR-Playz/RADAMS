@@ -330,17 +330,23 @@ export async function getAcademicMonthlyReport(offeringId: string, period: strin
   const includedAssignments = (await getReportAssignments(offeringId, period)).filter((a) => a.includeInReport);
   const assignmentIds = includedAssignments.map((a) => a.id);
 
-  const { data: assignmentMeta } = assignmentIds.length
-    ? await supabase.from("assignments").select("id, title, max_marks, template, assignment_templates(report_group, has_grade, has_comment)").in("id", assignmentIds)
-    : {
-        data: [] as {
-          id: string;
-          title: string;
-          max_marks: number | null;
-          template: string | null;
-          assignment_templates: { report_group: string; has_grade: boolean; has_comment: boolean } | { report_group: string; has_grade: boolean; has_comment: boolean }[] | null;
-        }[],
-      };
+  // `assignmentMeta` (keyed by assignmentIds) and `enrollments` (keyed only
+  // by offeringId) don't depend on each other — fetched concurrently
+  // instead of one after another.
+  const [{ data: assignmentMeta }, enrollments] = await Promise.all([
+    assignmentIds.length
+      ? supabase.from("assignments").select("id, title, max_marks, template, assignment_templates(report_group, has_grade, has_comment)").in("id", assignmentIds)
+      : Promise.resolve({
+          data: [] as {
+            id: string;
+            title: string;
+            max_marks: number | null;
+            template: string | null;
+            assignment_templates: { report_group: string; has_grade: boolean; has_comment: boolean } | { report_group: string; has_grade: boolean; has_comment: boolean }[] | null;
+          }[],
+        }),
+    fetchAllActiveEnrollments(supabase, offeringId),
+  ]);
   const maxMarksByAssignment = new Map((assignmentMeta ?? []).map((a) => [a.id, a.max_marks]));
   const reportGroupByAssignment = new Map(
     (assignmentMeta ?? []).map((a) => {
@@ -355,27 +361,23 @@ export async function getAcademicMonthlyReport(offeringId: string, period: strin
     })
   );
 
-  const enrollments = await fetchAllActiveEnrollments(supabase, offeringId);
   if (enrollments.length === 0) return [];
 
   const studentIds = enrollments.map((e) => e.student_id);
 
-  const logs = await fetchAllAssignmentLogs(supabase, assignmentIds, studentIds);
-
-  const { data: topics } = await supabase
-    .from("student_topic_submissions")
-    .select("student_id, topic_catalog(label, topic_materials(kind, label, link, duration, sort_order))")
-    .eq("offering_id", offeringId)
-    .eq("period", period)
-    .eq("status", "approved")
-    .in("student_id", studentIds);
-
-  const { data: notes } = await supabase
-    .from("student_monthly_notes")
-    .select("student_id, comment")
-    .eq("offering_id", offeringId)
-    .eq("period", period)
-    .in("student_id", studentIds);
+  // Independent of each other (all only need `studentIds`/`offeringId`/
+  // `period`) — fetched concurrently instead of one after another.
+  const [logs, { data: topics }, { data: notes }] = await Promise.all([
+    fetchAllAssignmentLogs(supabase, assignmentIds, studentIds),
+    supabase
+      .from("student_topic_submissions")
+      .select("student_id, topic_catalog(label, topic_materials(kind, label, link, duration, sort_order))")
+      .eq("offering_id", offeringId)
+      .eq("period", period)
+      .eq("status", "approved")
+      .in("student_id", studentIds),
+    supabase.from("student_monthly_notes").select("student_id, comment").eq("offering_id", offeringId).eq("period", period).in("student_id", studentIds),
+  ]);
   const noteByStudent = new Map((notes ?? []).map((n) => [n.student_id, n.comment]));
 
   return enrollments
@@ -478,21 +480,24 @@ export async function generateMonthlyAcademicReport(
   requireHeadOrAdminForReports(profile.role);
   const supabase = await createClient();
 
-  const gradeScale = await getGradeScale(offeringId);
-
-  const enrollments = await fetchAllActiveEnrollments(supabase, offeringId);
-  if (enrollments.length === 0) throw new Error("No students enrolled in this course.");
-
-  const studentIds = enrollments.map((e) => e.student_id);
   const assignmentIds = selection.map((s) => s.assignmentId);
   const modeByAssignment = new Map(selection.map((s) => [s.assignmentId, s.mode]));
 
-  const { data: assignmentRows } = assignmentIds.length
-    ? await supabase
-        .from("assignments")
-        .select("id, title, max_marks, assignment_templates(report_group)")
-        .in("id", assignmentIds)
-    : { data: [] as { id: string; title: string; max_marks: number | null; assignment_templates: { report_group: string } | { report_group: string }[] | null }[] };
+  // Four fully independent reads (gradeScale/enrollments need only
+  // offeringId; assignmentRows needs assignmentIds from the `selection`
+  // param, already known; existingGen needs only offeringId+period) —
+  // fetched concurrently instead of one after another.
+  const [gradeScale, enrollments, { data: assignmentRows }, { data: existingGen }] = await Promise.all([
+    getGradeScale(offeringId),
+    fetchAllActiveEnrollments(supabase, offeringId),
+    assignmentIds.length
+      ? supabase.from("assignments").select("id, title, max_marks, assignment_templates(report_group)").in("id", assignmentIds)
+      : Promise.resolve({ data: [] as { id: string; title: string; max_marks: number | null; assignment_templates: { report_group: string } | { report_group: string }[] | null }[] }),
+    supabase.from("monthly_report_generations").select("id").eq("offering_id", offeringId).eq("period", period).maybeSingle(),
+  ]);
+  if (enrollments.length === 0) throw new Error("No students enrolled in this course.");
+
+  const studentIds = enrollments.map((e) => e.student_id);
   const titleByAssignment = new Map((assignmentRows ?? []).map((a) => [a.id, a.title]));
   const maxMarksByAssignment = new Map((assignmentRows ?? []).map((a) => [a.id, a.max_marks]));
   const reportGroupByAssignment = new Map(
@@ -502,30 +507,21 @@ export async function generateMonthlyAcademicReport(
     })
   );
 
-  const logs = await fetchAllAssignmentLogs(supabase, assignmentIds, studentIds);
-
-  const { data: topics } = await supabase
-    .from("student_topic_submissions")
-    .select("student_id, topic_catalog(label, topic_materials(kind, label, link, duration, sort_order))")
-    .eq("offering_id", offeringId)
-    .eq("period", period)
-    .eq("status", "approved")
-    .in("student_id", studentIds);
-
-  const { data: notes } = await supabase
-    .from("student_monthly_notes")
-    .select("student_id, comment")
-    .eq("offering_id", offeringId)
-    .eq("period", period)
-    .in("student_id", studentIds);
+  // Independent of each other (all only need `studentIds`/`offeringId`/
+  // `period`/`assignmentIds`) — fetched concurrently instead of one after
+  // another.
+  const [logs, { data: topics }, { data: notes }] = await Promise.all([
+    fetchAllAssignmentLogs(supabase, assignmentIds, studentIds),
+    supabase
+      .from("student_topic_submissions")
+      .select("student_id, topic_catalog(label, topic_materials(kind, label, link, duration, sort_order))")
+      .eq("offering_id", offeringId)
+      .eq("period", period)
+      .eq("status", "approved")
+      .in("student_id", studentIds),
+    supabase.from("student_monthly_notes").select("student_id, comment").eq("offering_id", offeringId).eq("period", period).in("student_id", studentIds),
+  ]);
   const noteByStudent = new Map((notes ?? []).map((n) => [n.student_id, n.comment]));
-
-  const { data: existingGen } = await supabase
-    .from("monthly_report_generations")
-    .select("id")
-    .eq("offering_id", offeringId)
-    .eq("period", period)
-    .maybeSingle();
 
   const payload = {
     org_id: profile.org.id,

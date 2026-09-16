@@ -66,67 +66,78 @@ export async function listOfferingAssistants(offeringId: string): Promise<Assist
 export async function listAssignmentsWithProgress(offeringId: string): Promise<AssignmentProgress[]> {
   const supabase = await createClient();
 
-  const { data: assignments } = await supabase
-    .from("assignments")
-    .select("id, title, max_marks, grade_scheme, template, counts_salary, mock_exam, due_date, closed_at, default_comment, assignment_templates(label, has_grade, has_comment)")
-    .eq("offering_id", offeringId)
-    .order("created_at", { ascending: false });
+  // `assignments` and the paginated `enrollments` fetch are both scoped
+  // only by `offeringId` — independent of each other — fetched concurrently
+  // instead of one after another.
+  const ENROLLMENT_PAGE_SIZE = 1000;
+  const [{ data: assignments }, enrollments] = await Promise.all([
+    supabase
+      .from("assignments")
+      .select("id, title, max_marks, grade_scheme, template, counts_salary, mock_exam, due_date, closed_at, default_comment, assignment_templates(label, has_grade, has_comment)")
+      .eq("offering_id", offeringId)
+      .order("created_at", { ascending: false }),
+    // Exclude students who left THIS course — they shouldn't count toward
+    // expected/logged totals for assignment progress once they're gone.
+    // "Left" is tracked per enrollment (setEnrollmentLeftStatus in
+    // students.ts), so this filters directly on the enrollment row.
+    //
+    // Paginated: this offering's own active enrollments can clear
+    // Postgrest's default 1000-row cap on their own (one offering has 1,151
+    // active enrollments) — an unpaginated select here silently truncated
+    // the roster, so whichever assistant's students happened to sort past
+    // the cutoff showed a wrong, much-too-low "total" (and correspondingly
+    // wrong "logged") for every assignment — exactly the "33 real students
+    // but shows 1/1" pattern reported live.
+    (async () => {
+      const rows: { student_id: string; assistant_id: string | null }[] = [];
+      for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
+        const { data: page } = await supabase
+          .from("enrollments")
+          .select("student_id, assistant_id")
+          .eq("offering_id", offeringId)
+          .is("left_at", null)
+          .order("student_id")
+          .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
+        if (!page || page.length === 0) break;
+        rows.push(...page);
+        if (page.length < ENROLLMENT_PAGE_SIZE) break;
+      }
+      return rows;
+    })(),
+  ]);
   if (!assignments || assignments.length === 0) return [];
 
   const assignmentIds = assignments.map((a) => a.id);
 
-  const { data: assignedRows } = await supabase
-    .from("assignment_assistants")
-    .select("assignment_id, profiles(id, full_name, initials)")
-    .in("assignment_id", assignmentIds);
-
-  // Exclude students who left THIS course — they shouldn't count toward
-  // expected/logged totals for assignment progress once they're gone.
-  // "Left" is tracked per enrollment (setEnrollmentLeftStatus in
-  // students.ts), so this filters directly on the enrollment row.
-  //
-  // Paginated: this offering's own active enrollments can clear Postgrest's
-  // default 1000-row cap on their own (one offering has 1,151 active
-  // enrollments) — an unpaginated select here silently truncated the
-  // roster, so whichever assistant's students happened to sort past the
-  // cutoff showed a wrong, much-too-low "total" (and correspondingly wrong
-  // "logged") for every assignment — exactly the "33 real students but
-  // shows 1/1" pattern reported live.
-  const enrollments: { student_id: string; assistant_id: string | null }[] = [];
-  const ENROLLMENT_PAGE_SIZE = 1000;
-  for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
-    const { data: page } = await supabase
-      .from("enrollments")
-      .select("student_id, assistant_id")
-      .eq("offering_id", offeringId)
-      .is("left_at", null)
-      .order("student_id")
-      .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
-    if (!page || page.length === 0) break;
-    enrollments.push(...page);
-    if (page.length < ENROLLMENT_PAGE_SIZE) break;
-  }
-
-  // A course with several assignment categories easily logs assignments ×
-  // roster-size rows across the whole offering — comfortably past
-  // PostgREST's default 1000-row cap on a single unbounded select. That cap
-  // was already found (and paginated around) for the admin dashboard's
-  // enrollment counts; this query had the same shape and needed the same
-  // fix — an un-paginated fetch here silently truncated to whichever
-  // assignment's logs happened to sort first, leaving every other
-  // assignment's progress reading 0 logged despite real data existing.
-  const logs: { assignment_id: string; student_id: string; status: string | null }[] = [];
+  // Independent of each other (both only need `assignmentIds`) — fetched
+  // concurrently instead of one after another.
   const LOGS_PAGE_SIZE = 1000;
-  for (let from = 0; ; from += LOGS_PAGE_SIZE) {
-    const { data: page } = await supabase
-      .from("assignment_logs")
-      .select("assignment_id, student_id, status")
-      .in("assignment_id", assignmentIds)
-      .range(from, from + LOGS_PAGE_SIZE - 1);
-    if (!page || page.length === 0) break;
-    logs.push(...page);
-    if (page.length < LOGS_PAGE_SIZE) break;
-  }
+  const [{ data: assignedRows }, logs] = await Promise.all([
+    supabase.from("assignment_assistants").select("assignment_id, profiles(id, full_name, initials)").in("assignment_id", assignmentIds),
+    // A course with several assignment categories easily logs assignments ×
+    // roster-size rows across the whole offering — comfortably past
+    // PostgREST's default 1000-row cap on a single unbounded select. That
+    // cap was already found (and paginated around) for the admin
+    // dashboard's enrollment counts; this query had the same shape and
+    // needed the same fix — an un-paginated fetch here silently truncated
+    // to whichever assignment's logs happened to sort first, leaving every
+    // other assignment's progress reading 0 logged despite real data
+    // existing.
+    (async () => {
+      const rows: { assignment_id: string; student_id: string; status: string | null }[] = [];
+      for (let from = 0; ; from += LOGS_PAGE_SIZE) {
+        const { data: page } = await supabase
+          .from("assignment_logs")
+          .select("assignment_id, student_id, status")
+          .in("assignment_id", assignmentIds)
+          .range(from, from + LOGS_PAGE_SIZE - 1);
+        if (!page || page.length === 0) break;
+        rows.push(...page);
+        if (page.length < LOGS_PAGE_SIZE) break;
+      }
+      return rows;
+    })(),
+  ]);
 
   const studentsByAssistant = new Map<string, string[]>();
   for (const e of enrollments ?? []) {

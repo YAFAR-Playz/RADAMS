@@ -284,40 +284,51 @@ function monthEndsPlatform(months: number): Date[] {
 const monthLabelPlatform = (d: Date) => d.toLocaleDateString("en-US", { month: "short" });
 
 export async function getOwnerDashboard(): Promise<OwnerDashboard> {
-  const orgs = await listOrgsOverview();
-  const totalStudents = orgs.reduce((s, o) => s + o.metrics.students, 0);
-  const totalCourses = orgs.reduce((s, o) => s + o.metrics.courses, 0);
-  const activeOrgs = orgs.filter((o) => o.status === "active").length;
+  // Must resolve before anything below fires — listOrgsOverview() checks
+  // this too, but only after it's already been called; running it
+  // concurrently with the trend queries in a Promise.all would let those
+  // queries execute even if this rejects for an unauthorized caller.
+  await requireOwner();
 
   const supabase = await createClient();
   const months = 6;
   const ends = monthEndsPlatform(months);
   const labels = ends.map(monthLabelPlatform);
 
-  // Point-in-time headcounts reconstructed from created_at/left_at across
-  // the WHOLE platform — one count-only (head: true) query per month-end
-  // per metric rather than fetching every row and filtering in JS. A
-  // platform-wide unbounded select here (thousands of students/staff/
-  // offerings across every org combined) would silently truncate at
-  // Postgrest's default 1000-row cap; a head:true count never transfers
-  // rows at all, so it's both correct and fast regardless of platform size.
-  const [orgTrend, studentTrend, courseTrend, staffTrend] = await Promise.all([
-    Promise.all(ends.map((end) => supabase.from("organizations").select("id", { count: "exact", head: true }).lte("created_at", end.toISOString()))),
-    Promise.all(ends.map((end) => supabase.from("students").select("id", { count: "exact", head: true }).lte("created_at", end.toISOString()))),
-    Promise.all(
-      ends.map((end) => supabase.from("course_offerings").select("id", { count: "exact", head: true }).lte("created_at", end.toISOString()))
-    ),
-    Promise.all(
-      ends.map((end) =>
-        supabase
-          .from("profiles")
-          .select("id", { count: "exact", head: true })
-          .neq("role", "owner")
-          .lte("created_at", end.toISOString())
-          .or(`left_at.is.null,left_at.gt.${end.toISOString()}`)
-      )
-    ),
+  // `listOrgsOverview()` and the trend counts below are fully independent
+  // (the trends only use `ends`/`supabase`, never `orgs`) but used to run
+  // one after another — `listOrgsOverview` alone is a multi-query call, so
+  // this doubled this dashboard's load time for nothing.
+  const [orgs, [orgTrend, studentTrend, courseTrend, staffTrend]] = await Promise.all([
+    listOrgsOverview(),
+    // Point-in-time headcounts reconstructed from created_at/left_at across
+    // the WHOLE platform — one count-only (head: true) query per month-end
+    // per metric rather than fetching every row and filtering in JS. A
+    // platform-wide unbounded select here (thousands of students/staff/
+    // offerings across every org combined) would silently truncate at
+    // Postgrest's default 1000-row cap; a head:true count never transfers
+    // rows at all, so it's both correct and fast regardless of platform size.
+    Promise.all([
+      Promise.all(ends.map((end) => supabase.from("organizations").select("id", { count: "exact", head: true }).lte("created_at", end.toISOString()))),
+      Promise.all(ends.map((end) => supabase.from("students").select("id", { count: "exact", head: true }).lte("created_at", end.toISOString()))),
+      Promise.all(
+        ends.map((end) => supabase.from("course_offerings").select("id", { count: "exact", head: true }).lte("created_at", end.toISOString()))
+      ),
+      Promise.all(
+        ends.map((end) =>
+          supabase
+            .from("profiles")
+            .select("id", { count: "exact", head: true })
+            .neq("role", "owner")
+            .lte("created_at", end.toISOString())
+            .or(`left_at.is.null,left_at.gt.${end.toISOString()}`)
+        )
+      ),
+    ]),
   ]);
+  const totalStudents = orgs.reduce((s, o) => s + o.metrics.students, 0);
+  const totalCourses = orgs.reduce((s, o) => s + o.metrics.courses, 0);
+  const activeOrgs = orgs.filter((o) => o.status === "active").length;
 
   const studentPoints = labels.map((label, i) => ({ label, value: studentTrend[i].count ?? 0 }));
   const staffPoints = labels.map((label, i) => ({ label, value: staffTrend[i].count ?? 0 }));
@@ -430,11 +441,10 @@ export async function getSystemOverview(): Promise<SystemOverview> {
   await requireOwner();
   const supabase = await createClient();
 
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("full_name, role, created_at, organizations!profiles_org_id_fkey(name)")
-    .order("created_at", { ascending: false });
-  const { data: orgs } = await supabase.from("organizations").select("status");
+  const [{ data: profiles }, { data: orgs }] = await Promise.all([
+    supabase.from("profiles").select("full_name, role, created_at, organizations!profiles_org_id_fkey(name)").order("created_at", { ascending: false }),
+    supabase.from("organizations").select("status"),
+  ]);
 
   const roleCounts = new Map<string, number>();
   for (const p of profiles ?? []) {

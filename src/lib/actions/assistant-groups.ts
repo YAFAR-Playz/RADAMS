@@ -23,23 +23,9 @@ export type StaffingRequest = {
 export async function getAssistantGroups(offeringId: string): Promise<{ groups: AssistantGroup[]; unassigned: UnassignedStudent[] }> {
   const supabase = await createClient();
 
-  const { data: assistantLinks } = await supabase
-    .from("offering_assistants")
-    .select("profiles(id, full_name, initials, student_whatsapp_link)")
-    .eq("offering_id", offeringId);
-
-  // This view (the head's Assistants tab) is a working roster, not a
-  // management/history view — a student who left THIS course shouldn't
-  // linger under their old assistant's group, and definitely shouldn't be
-  // counted as "unassigned" waiting to be auto-assigned. Filtering left_at
-  // in the query itself (rather than after) keeps both lists consistent and
-  // shrinks the paginated fetch below.
-  //
-  // Paginated: a single unbounded select here silently truncates at
-  // Postgrest's default 1000-row cap for an offering with more active
-  // enrollments than that, undercounting every assistant whose rows sort
-  // past the cutoff (confirmed on a 1,116-enrollment offering — an assistant
-  // with 31 real students showed as 1).
+  // `assistantLinks` and the paginated `enrollments` fetch are both scoped
+  // only by `offeringId` — independent of each other — fetched concurrently
+  // instead of one after another.
   type EnrollmentRow = {
     id: string;
     student_id: string;
@@ -47,19 +33,37 @@ export async function getAssistantGroups(offeringId: string): Promise<{ groups: 
     left_at: string | null;
     students: { id: string; name: string; initials: string } | { id: string; name: string; initials: string }[] | null;
   };
-  const enrollments: EnrollmentRow[] = [];
   const ENROLLMENT_PAGE_SIZE = 1000;
-  for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
-    const { data: page } = await supabase
-      .from("enrollments")
-      .select("id, student_id, assistant_id, left_at, students(id, name, initials)")
-      .eq("offering_id", offeringId)
-      .is("left_at", null)
-      .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
-    if (!page || page.length === 0) break;
-    enrollments.push(...page);
-    if (page.length < ENROLLMENT_PAGE_SIZE) break;
-  }
+  const [{ data: assistantLinks }, enrollments] = await Promise.all([
+    supabase.from("offering_assistants").select("profiles(id, full_name, initials, student_whatsapp_link)").eq("offering_id", offeringId),
+    // This view (the head's Assistants tab) is a working roster, not a
+    // management/history view — a student who left THIS course shouldn't
+    // linger under their old assistant's group, and definitely shouldn't
+    // be counted as "unassigned" waiting to be auto-assigned. Filtering
+    // left_at in the query itself (rather than after) keeps both lists
+    // consistent and shrinks the paginated fetch below.
+    //
+    // Paginated: a single unbounded select here silently truncates at
+    // Postgrest's default 1000-row cap for an offering with more active
+    // enrollments than that, undercounting every assistant whose rows sort
+    // past the cutoff (confirmed on a 1,116-enrollment offering — an
+    // assistant with 31 real students showed as 1).
+    (async () => {
+      const rows: EnrollmentRow[] = [];
+      for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
+        const { data: page } = await supabase
+          .from("enrollments")
+          .select("id, student_id, assistant_id, left_at, students(id, name, initials)")
+          .eq("offering_id", offeringId)
+          .is("left_at", null)
+          .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
+        if (!page || page.length === 0) break;
+        rows.push(...page);
+        if (page.length < ENROLLMENT_PAGE_SIZE) break;
+      }
+      return rows;
+    })(),
+  ]);
 
   const groups: AssistantGroup[] = (assistantLinks ?? [])
     .map((row) => {
@@ -135,31 +139,37 @@ export type AssistantWorkload = { id: string; name: string; initials: string; cu
 // before picking who to include in an auto-assign run.
 export async function getAssistantWorkloads(offeringId: string): Promise<AssistantWorkload[]> {
   const supabase = await createClient();
-  const { data: links } = await supabase
-    .from("offering_assistants")
-    .select("max_students, profiles(id, full_name, initials)")
-    .eq("offering_id", offeringId);
 
-  // Paginated for the same reason as getAssistantGroups above — an
-  // unbounded select silently truncates at Postgrest's 1000-row cap on
-  // large offerings, undercounting capacity for assistants past the cutoff
-  // (this feeds autoAssignUnassigned's remaining-capacity math too).
-  const counts = new Map<string, number>();
+  // `links` and the paginated enrollment-count fetch are both scoped only
+  // by `offeringId` — independent of each other — fetched concurrently
+  // instead of one after another.
   const WORKLOAD_PAGE_SIZE = 1000;
-  for (let from = 0; ; from += WORKLOAD_PAGE_SIZE) {
-    const { data: page } = await supabase
-      .from("enrollments")
-      .select("assistant_id")
-      .eq("offering_id", offeringId)
-      .is("left_at", null)
-      .not("assistant_id", "is", null)
-      .range(from, from + WORKLOAD_PAGE_SIZE - 1);
-    if (!page || page.length === 0) break;
-    for (const e of page) {
-      counts.set(e.assistant_id as string, (counts.get(e.assistant_id as string) ?? 0) + 1);
-    }
-    if (page.length < WORKLOAD_PAGE_SIZE) break;
-  }
+  const [{ data: links }, counts] = await Promise.all([
+    supabase.from("offering_assistants").select("max_students, profiles(id, full_name, initials)").eq("offering_id", offeringId),
+    // Paginated for the same reason as getAssistantGroups above — an
+    // unbounded select silently truncates at Postgrest's 1000-row cap on
+    // large offerings, undercounting capacity for assistants past the
+    // cutoff (this feeds autoAssignUnassigned's remaining-capacity math
+    // too).
+    (async () => {
+      const map = new Map<string, number>();
+      for (let from = 0; ; from += WORKLOAD_PAGE_SIZE) {
+        const { data: page } = await supabase
+          .from("enrollments")
+          .select("assistant_id")
+          .eq("offering_id", offeringId)
+          .is("left_at", null)
+          .not("assistant_id", "is", null)
+          .range(from, from + WORKLOAD_PAGE_SIZE - 1);
+        if (!page || page.length === 0) break;
+        for (const e of page) {
+          map.set(e.assistant_id as string, (map.get(e.assistant_id as string) ?? 0) + 1);
+        }
+        if (page.length < WORKLOAD_PAGE_SIZE) break;
+      }
+      return map;
+    })(),
+  ]);
 
   return (links ?? [])
     .map((row) => {
@@ -185,8 +195,9 @@ export async function setAssistantMaxStudents(offeringId: string, assistantId: s
 
 export async function autoAssignUnassigned(offeringId: string, strategy: "equal" | "alpha", includeAssistantIds?: string[]) {
   const supabase = await createClient();
-  const { groups, unassigned } = await getAssistantGroups(offeringId);
-  const workloads = await getAssistantWorkloads(offeringId);
+  // Both only need `offeringId` — fetched together instead of one after
+  // another.
+  const [{ groups, unassigned }, workloads] = await Promise.all([getAssistantGroups(offeringId), getAssistantWorkloads(offeringId)]);
   if (!groups.length || !unassigned.length) return;
 
   const eligible = includeAssistantIds ? groups.filter((g) => includeAssistantIds.includes(g.id)) : groups;
@@ -236,10 +247,41 @@ export async function autoAssignUnassigned(offeringId: string, strategy: "equal"
     }
   }
 
+  // Batched by target assistant instead of one .update() per enrollment —
+  // this algorithm typically spreads dozens/hundreds of unassigned students
+  // across a handful of assistants, so grouping first turns what was one
+  // round trip per student into one per distinct assistant. Can't use a
+  // single .upsert() across all of `updates` instead: enrollments has other
+  // required (NOT NULL, no default) columns like offering_id/student_id
+  // that a partial-row upsert wouldn't supply, and Postgres validates those
+  // on the proposed insert row even when ON CONFLICT DO UPDATE will always
+  // fire.
+  const enrollmentIdsByAssistant = new Map<string, string[]>();
   for (const u of updates) {
-    const { error } = await supabase.from("enrollments").update({ assistant_id: u.assistant_id }).eq("id", u.id);
-    if (error) throw new Error(error.message);
+    const list = enrollmentIdsByAssistant.get(u.assistant_id) ?? [];
+    list.push(u.id);
+    enrollmentIdsByAssistant.set(u.assistant_id, list);
   }
+  // Chunked the same way as the other .in(<uuid list>) batches in this
+  // codebase (see import.ts's ID_BATCH_SIZE) — a single assistant can pick
+  // up several hundred enrollment ids in one auto-assign run on a large
+  // offering, and one UUID per id in an unchunked .in() risks the same
+  // URL-length failure already hit (and fixed) elsewhere for exactly this
+  // shape of query.
+  const ID_BATCH_SIZE = 200;
+  const writes: Promise<void>[] = [];
+  for (const [assistantId, enrollmentIds] of enrollmentIdsByAssistant) {
+    for (let i = 0; i < enrollmentIds.length; i += ID_BATCH_SIZE) {
+      const idBatch = enrollmentIds.slice(i, i + ID_BATCH_SIZE);
+      writes.push(
+        (async () => {
+          const { error } = await supabase.from("enrollments").update({ assistant_id: assistantId }).in("id", idBatch);
+          if (error) throw new Error(error.message);
+        })()
+      );
+    }
+  }
+  await Promise.all(writes);
 }
 
 export async function listStaffingRequests(): Promise<StaffingRequest[]> {

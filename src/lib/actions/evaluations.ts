@@ -274,9 +274,8 @@ export async function addFinanceEvaluationLine(assistantId: string, offeringId: 
   const profile = await getCurrentProfile();
   requireFinanceOrAdmin(profile?.role);
   const supabase = await createClient();
-  const evalId = await ensureEvaluationForFinance(assistantId, offeringId, period);
-
-  const payCategories = await listPayCategories(offeringId);
+  // Independent of each other — `listPayCategories` only needs `offeringId`.
+  const [evalId, payCategories] = await Promise.all([ensureEvaluationForFinance(assistantId, offeringId, period), listPayCategories(offeringId)]);
   const cfg = resolveCategoryDefs(payCategories, kind)[0];
   const sub = cfg.subs?.[0]?.[0] ?? "";
   const { data, error } = await supabase
@@ -297,7 +296,13 @@ export async function updateFinanceEvaluationLine(
   requireFinanceOrAdmin(profile?.role);
   const supabase = await createClient();
 
-  const { data: line } = await supabase.from("evaluation_lines").select("kind, category, qty, sub, note").eq("id", lineId).single();
+  // `line` (keyed by lineId) and `payCategories` (keyed by offeringId) don't
+  // depend on each other — only the resolveCategoryDefs() call below needs
+  // both — so they're fetched together instead of one after another.
+  const [{ data: line }, payCategories] = await Promise.all([
+    supabase.from("evaluation_lines").select("kind, category, qty, sub, note").eq("id", lineId).single(),
+    listPayCategories(offeringId),
+  ]);
   if (!line) throw new Error("Line not found");
 
   const kind = patch.kind ?? (line.kind as "extra" | "deduction");
@@ -306,7 +311,6 @@ export async function updateFinanceEvaluationLine(
   const sub = patch.sub ?? line.sub ?? "";
   const note = patch.note ?? line.note;
 
-  const payCategories = await listPayCategories(offeringId);
   const cfg = resolveCategoryDefs(payCategories, kind).find((c) => c.label === category) ?? resolveCategoryDefs(payCategories, kind)[0];
   const amount = categoryAmount(cfg, qty, sub);
 

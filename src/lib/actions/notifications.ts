@@ -134,35 +134,43 @@ async function getAssistantNotifications(orgId: string, assistantId: string): Pr
   const { data: myOfferings } = await supabase.from("offering_assistants").select("offering_id").eq("assistant_id", assistantId);
   const offeringIds = (myOfferings ?? []).map((o) => o.offering_id);
 
-  if (offeringIds.length) {
-    const { data: assignments } = await supabase
-      .from("assignments")
-      .select("id, title, created_at, course_offerings(session, unit, courses(name))")
-      .in("offering_id", offeringIds)
+  // These three reads are independent of each other (none needs another's
+  // result) but used to run one-after-another — firing them together cuts
+  // this function's latency to the slowest single query instead of the sum
+  // of all three, on every assistant's dashboard load.
+  const [assignmentsResult, { data: newStudents }, missingAlerts] = await Promise.all([
+    offeringIds.length
+      ? supabase
+          .from("assignments")
+          .select("id, title, created_at, course_offerings(session, unit, courses(name))")
+          .in("offering_id", offeringIds)
+          .gte("created_at", since)
+          .order("created_at", { ascending: false })
+          .limit(5)
+      : Promise.resolve({ data: null }),
+    supabase
+      .from("enrollments")
+      .select("id, created_at, students(name), course_offerings(session, unit, courses(name))")
+      .eq("assistant_id", assistantId)
       .gte("created_at", since)
       .order("created_at", { ascending: false })
-      .limit(5);
-    for (const a of assignments ?? []) {
-      const o = Array.isArray(a.course_offerings) ? a.course_offerings[0] : a.course_offerings;
-      items.push({
-        id: `assignment-${a.id}`,
-        icon: "clipboard-list",
-        tone: "brand",
-        title: `New assignment: ${a.title}`,
-        detail: offeringLabel(o),
-        href: "/assignments",
-        createdAt: a.created_at,
-      });
-    }
+      .limit(5),
+    getMissingAssignmentsAlerts(supabase, offeringIds, assistantId),
+  ]);
+
+  for (const a of assignmentsResult.data ?? []) {
+    const o = Array.isArray(a.course_offerings) ? a.course_offerings[0] : a.course_offerings;
+    items.push({
+      id: `assignment-${a.id}`,
+      icon: "clipboard-list",
+      tone: "brand",
+      title: `New assignment: ${a.title}`,
+      detail: offeringLabel(o),
+      href: "/assignments",
+      createdAt: a.created_at,
+    });
   }
 
-  const { data: newStudents } = await supabase
-    .from("enrollments")
-    .select("id, created_at, students(name), course_offerings(session, unit, courses(name))")
-    .eq("assistant_id", assistantId)
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(5);
   for (const e of newStudents ?? []) {
     const student = Array.isArray(e.students) ? e.students[0] : e.students;
     const o = Array.isArray(e.course_offerings) ? e.course_offerings[0] : e.course_offerings;
@@ -177,7 +185,7 @@ async function getAssistantNotifications(orgId: string, assistantId: string): Pr
     });
   }
 
-  items.push(...(await getMissingAssignmentsAlerts(supabase, offeringIds, assistantId)));
+  items.push(...missingAlerts);
 
   return items;
 }
@@ -191,13 +199,19 @@ async function getHeadNotifications(orgId: string, headId: string): Promise<Noti
   const offeringIds = (myOfferings ?? []).map((o) => o.offering_id);
   if (!offeringIds.length) return items;
 
-  const { data: newStudents } = await supabase
-    .from("enrollments")
-    .select("id, created_at, students(name), course_offerings(session, unit, courses(name))")
-    .in("offering_id", offeringIds)
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(5);
+  // Independent of each other (both only need `offeringIds`) — fetched
+  // together instead of one-after-another, on every head's dashboard load.
+  const [{ data: newStudents }, { data: assignments }, missingAlerts] = await Promise.all([
+    supabase
+      .from("enrollments")
+      .select("id, created_at, students(name), course_offerings(session, unit, courses(name))")
+      .in("offering_id", offeringIds)
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(5),
+    supabase.from("assignments").select("id, title, offering_id").in("offering_id", offeringIds),
+    getMissingAssignmentsAlerts(supabase, offeringIds),
+  ]);
   for (const e of newStudents ?? []) {
     const student = Array.isArray(e.students) ? e.students[0] : e.students;
     const o = Array.isArray(e.course_offerings) ? e.course_offerings[0] : e.course_offerings;
@@ -212,7 +226,6 @@ async function getHeadNotifications(orgId: string, headId: string): Promise<Noti
     });
   }
 
-  const { data: assignments } = await supabase.from("assignments").select("id, title, offering_id").in("offering_id", offeringIds);
   const assignmentIds = (assignments ?? []).map((a) => a.id);
   const assignmentById = new Map((assignments ?? []).map((a) => [a.id, a]));
 
@@ -286,7 +299,7 @@ async function getHeadNotifications(orgId: string, headId: string): Promise<Noti
     }
   }
 
-  items.push(...(await getMissingAssignmentsAlerts(supabase, offeringIds)));
+  items.push(...missingAlerts);
 
   return items;
 }
@@ -321,11 +334,24 @@ async function getFinanceNotifications(orgId: string): Promise<NotificationItem[
   const period = currentPeriod();
   const items: NotificationItem[] = [];
 
-  const { count: linesThisPeriod } = await supabase
-    .from("salary_lines")
-    .select("id", { count: "exact", head: true })
-    .eq("org_id", orgId)
-    .eq("period", period);
+  // Three independent reads (two counts + a message list) were previously
+  // awaited one after another — each a separate network round trip to
+  // Supabase — tripling this function's latency for no reason, since none
+  // of them depends on another's result. Firing them together cuts this to
+  // the slowest single query instead of the sum of all three.
+  const since = daysAgoIso(RECENT_MESSAGE_DAYS);
+  const [{ count: linesThisPeriod }, { count: pendingCount }, { data: messages }] = await Promise.all([
+    supabase.from("salary_lines").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("period", period),
+    supabase.from("salary_lines").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("period", period).eq("status", "pending"),
+    supabase
+      .from("finance_messages")
+      .select("id, from_id, payee_id, body, created_at, profiles!finance_messages_from_id_fkey(full_name)")
+      .eq("org_id", orgId)
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(8),
+  ]);
+
   if (!linesThisPeriod) {
     items.push({
       id: "new-month",
@@ -338,12 +364,6 @@ async function getFinanceNotifications(orgId: string): Promise<NotificationItem[
     });
   }
 
-  const { count: pendingCount } = await supabase
-    .from("salary_lines")
-    .select("id", { count: "exact", head: true })
-    .eq("org_id", orgId)
-    .eq("period", period)
-    .eq("status", "pending");
   if (pendingCount) {
     items.push({
       id: "pending-payments",
@@ -356,14 +376,6 @@ async function getFinanceNotifications(orgId: string): Promise<NotificationItem[
     });
   }
 
-  const since = daysAgoIso(RECENT_MESSAGE_DAYS);
-  const { data: messages } = await supabase
-    .from("finance_messages")
-    .select("id, from_id, payee_id, body, created_at, profiles!finance_messages_from_id_fkey(full_name)")
-    .eq("org_id", orgId)
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(8);
   for (const m of messages ?? []) {
     // Only the original inquiry (sent by the payee themselves) is
     // notification-worthy here — otherwise Finance/Admin's own replies would
@@ -490,28 +502,48 @@ export async function getNotifications(): Promise<NotificationItem[]> {
   const orgId = profile.org?.id;
   if (!orgId) return [];
 
-  const chat = await getChatNotifications(profile.id);
+  // `chat` used to be awaited up front, before any role-specific fetch even
+  // started, serializing two independent round trips on every dashboard
+  // load. Left as an unawaited promise here so every branch below can run
+  // it concurrently with its own fetch via Promise.all instead.
+  const chatPromise = getChatNotifications(profile.id);
 
-  if (profile.role === "assistant") return [...(await getAssistantNotifications(orgId, profile.id)), ...chat];
-  if (profile.role === "head") return [...(await getHeadNotifications(orgId, profile.id)), ...chat];
-  if (profile.role === "hr") return [...(await getHrNotifications(orgId)), ...chat];
-  if (profile.role === "finance") return [...(await getFinanceNotifications(orgId)), ...chat];
-  if (profile.role === "registration") return [...(await getRegistrationNotifications(orgId)), ...chat];
+  if (profile.role === "assistant") {
+    const [own, chat] = await Promise.all([getAssistantNotifications(orgId, profile.id), chatPromise]);
+    return [...own, ...chat];
+  }
+  if (profile.role === "head") {
+    const [own, chat] = await Promise.all([getHeadNotifications(orgId, profile.id), chatPromise]);
+    return [...own, ...chat];
+  }
+  if (profile.role === "hr") {
+    const [own, chat] = await Promise.all([getHrNotifications(orgId), chatPromise]);
+    return [...own, ...chat];
+  }
+  if (profile.role === "finance") {
+    const [own, chat] = await Promise.all([getFinanceNotifications(orgId), chatPromise]);
+    return [...own, ...chat];
+  }
+  if (profile.role === "registration") {
+    const [own, chat] = await Promise.all([getRegistrationNotifications(orgId), chatPromise]);
+    return [...own, ...chat];
+  }
 
   if (profile.role === "admin") {
     const supabase = await createClient();
-    const [hr, finance, registration] = await Promise.all([
+    const [hr, finance, registration, chat, { count: unassigned }] = await Promise.all([
       getHrNotifications(orgId),
       getFinanceNotifications(orgId),
       getRegistrationNotifications(orgId),
+      chatPromise,
+      supabase
+        .from("enrollments")
+        .select("id, course_offerings!inner(org_id)", { count: "exact", head: true })
+        .is("assistant_id", null)
+        .eq("course_offerings.org_id", orgId),
     ]);
     const items = [...hr, ...finance, ...registration, ...chat];
 
-    const { count: unassigned } = await supabase
-      .from("enrollments")
-      .select("id, course_offerings!inner(org_id)", { count: "exact", head: true })
-      .is("assistant_id", null)
-      .eq("course_offerings.org_id", orgId);
     if (unassigned) {
       items.push({
         id: "system-unassigned",

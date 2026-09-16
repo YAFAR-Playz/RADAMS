@@ -1,6 +1,7 @@
 "use client";
 
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
@@ -21,13 +22,16 @@ import {
   setAssistantOfficeHours,
   listMessagesForPayee,
   replyToPayee,
+  listInquiriesForPeriod,
   removePayeeFromPeriod,
   listMissingPayeesForPeriod,
   addManualSalaryLine,
   type AssistantSalary,
   type SalaryMessage,
+  type FinanceInquiry,
   type MissingPayee,
 } from "@/lib/actions/finance-salaries";
+import { setChatHandoff } from "@/lib/chat-handoff";
 import {
   getEvaluationForFinance,
   addFinanceEvaluationLine,
@@ -313,6 +317,138 @@ function MessagesModal({ payeeId, payeeName, defaultPeriod, onClose }: { payeeId
   );
 }
 
+// Org-wide inbox of every payee's inquiry for the currently-viewed period —
+// one row per thread, unresolved ones first, each with its own inline quick-
+// reply (no need to know which payee to look at first, unlike MessagesModal
+// above) plus a way to jump into the full Chat conversation with that person
+// without ever leaving this popup for a different page.
+function InquiriesModal({ period, onClose, onReplied }: { period: string; onClose: () => void; onReplied: () => void }) {
+  const router = useRouter();
+  const [inquiries, setInquiries] = useState<FinanceInquiry[] | null>(null);
+  const [replyBody, setReplyBody] = useState<Record<string, string>>({});
+  const [sendingId, setSendingId] = useState<string | null>(null);
+
+  async function reload() {
+    setInquiries(await listInquiriesForPeriod(period));
+  }
+
+  useEffect(() => {
+    listInquiriesForPeriod(period).then(setInquiries);
+  }, [period]);
+
+  async function onQuickReply(payeeId: string) {
+    // The Reply button disables itself while sendingId is set, but the
+    // input's Enter-key handler calls this directly — guard here too, or a
+    // fast double-Enter fires this twice before the first send updates
+    // sendingId and re-renders the disabled button.
+    if (sendingId) return;
+    const body = (replyBody[payeeId] ?? "").trim();
+    if (!body) return;
+    setSendingId(payeeId);
+    try {
+      await replyToPayee(payeeId, body, period);
+      setReplyBody((prev) => ({ ...prev, [payeeId]: "" }));
+      await reload();
+      onReplied();
+    } finally {
+      setSendingId(null);
+    }
+  }
+
+  function onContinueInChat(payeeId: string) {
+    setChatHandoff(payeeId);
+    router.push("/chat");
+  }
+
+  const unresolvedCount = inquiries?.filter((i) => i.unresolved).length ?? 0;
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(8,12,22,0.5)] p-5">
+      <div className="flex max-h-[85vh] w-full max-w-[560px] flex-col overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(8,12,22,.34)]">
+        <div className="flex flex-none items-center gap-[11px] border-b border-[var(--border2)] p-[16px_18px]">
+          <div className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-[10px] bg-[var(--brands)] text-[var(--brand)]">
+            <Icon name="message" size={19} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Staff inquiries</h3>
+            <div className="text-[12px] text-[var(--muted)]">
+              {periodLabel(period)}
+              {unresolvedCount > 0 ? ` · ${unresolvedCount} awaiting reply` : ""}
+            </div>
+          </div>
+          <button onClick={onClose} className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]">
+            <Icon name="x" size={18} />
+          </button>
+        </div>
+        {inquiries === null ? (
+          <div className="flex flex-col gap-2 p-[18px]">
+            <SkeletonRow className="h-[70px]" />
+            <SkeletonRow className="h-[70px]" />
+          </div>
+        ) : inquiries.length === 0 ? (
+          <div className="p-[26px] text-center text-[12.5px] text-[var(--muted)]">No inquiries for {periodLabel(period)}.</div>
+        ) : (
+          <div className="flex flex-1 flex-col gap-[10px] overflow-y-auto p-[18px]">
+            {inquiries.map((inq) => (
+              <div key={inq.payeeId} className="rounded-[var(--rad-sm)] border border-[var(--border2)] bg-[var(--surface2)] p-[13px]">
+                <div className="mb-[7px] flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-[7px]">
+                      <span className="truncate text-[13.5px] font-semibold text-[var(--text)]">{inq.payeeName}</span>
+                      {inq.unresolved && (
+                        <span className="flex-none rounded-full bg-[var(--warns)] px-[7px] py-[1px] text-[10px] font-bold text-[var(--warn)]">Awaiting reply</span>
+                      )}
+                    </div>
+                    <div className="text-[10.5px] text-[var(--subtle)]">
+                      {new Date(inq.lastAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => onContinueInChat(inq.payeeId)}
+                    title="Continue this conversation in Chat"
+                    className="flex flex-none items-center gap-[5px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[9px] py-[5px] text-[11.5px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)]"
+                  >
+                    <Icon name="message" size={12} />
+                    Continue in chat
+                  </button>
+                </div>
+                <p className="m-0 mb-[9px] text-[13px] leading-[1.5] text-[var(--text)]">{inq.lastMessage}</p>
+                <div className="flex items-center gap-[8px]">
+                  <input
+                    value={replyBody[inq.payeeId] ?? ""}
+                    onChange={(e) => setReplyBody((prev) => ({ ...prev, [inq.payeeId]: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") onQuickReply(inq.payeeId);
+                    }}
+                    placeholder="Quick reply…"
+                    className="h-9 flex-1 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[10px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
+                  />
+                  <button
+                    onClick={() => onQuickReply(inq.payeeId)}
+                    disabled={sendingId === inq.payeeId || !(replyBody[inq.payeeId] ?? "").trim()}
+                    className="flex h-9 flex-none items-center justify-center gap-[5px] rounded-[7px] bg-[var(--brand)] px-[11px] text-[12px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
+                  >
+                    {sendingId === inq.payeeId ? <Spinner size={13} /> : <Icon name="send" size={13} />}
+                    Reply
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex-none p-[16px_18px]">
+          <button
+            onClick={onClose}
+            className="h-11 w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function periodLabel(period: string) {
   const [y, m] = period.split("-").map(Number);
   return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
@@ -329,6 +465,7 @@ function total(a: AssistantSalary) {
 }
 
 export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) {
+  const router = useRouter();
   const isAdmin = role === "admin";
   const [periods, setPeriods] = useState<string[] | null>(null);
   const [period, setPeriod] = useState<string | null>(null);
@@ -350,6 +487,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
   const [generating, setGenerating] = useState(false);
   const [receiptTarget, setReceiptTarget] = useState<AssistantSalary | null>(null);
   const [messagesTarget, setMessagesTarget] = useState<AssistantSalary | null>(null);
+  const [inquiriesOpen, setInquiriesOpen] = useState(false);
   const [unreleaseTarget, setUnreleaseTarget] = useState<AssistantSalary | null>(null);
   const [unreleasing, setUnreleasing] = useState(false);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
@@ -787,6 +925,15 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
                 Generate
               </button>
             </div>
+            <button
+              onClick={() => setInquiriesOpen(true)}
+              disabled={!period}
+              title="View this month's staff salary inquiries and reply without leaving this page"
+              className="flex h-10 flex-none items-center gap-[7px] rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-[14px] text-[13px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
+            >
+              <Icon name="message" size={16} />
+              Inquiries
+            </button>
             <button
               data-tour="salaries-release-all"
               onClick={onReleaseAll}
@@ -1234,6 +1381,13 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
           defaultPeriod={period}
           onClose={() => setMessagesTarget(null)}
         />
+      )}
+
+      {inquiriesOpen && period && (
+        // Replying here doesn't navigate anywhere, but it can clear the
+        // Salaries nav dot (computed server-side in the layout) — refresh
+        // so that updates without a full client-side transition.
+        <InquiriesModal period={period} onClose={() => setInquiriesOpen(false)} onReplied={() => router.refresh()} />
       )}
 
       {unreleaseTarget && (
