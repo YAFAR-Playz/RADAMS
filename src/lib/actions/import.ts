@@ -253,9 +253,19 @@ export async function importStudents(offeringId: string, rows: ImportRow[], conf
   const toReactivate = uniqueIds.filter((id) => existingByStudent.get(id)?.left_at);
 
   if (toEnroll.length) {
+    // Upsert with ignoreDuplicates rather than a plain insert: a bulk insert
+    // is one statement, so if a slow request gets retried (e.g. the user
+    // re-submits after the page seemed to hang) and a second, concurrent
+    // importStudents call computes the same toEnroll set, a single
+    // conflicting row would abort this entire batch and enroll nobody. This
+    // lets rows genuinely already enrolled by a concurrent run silently no-op
+    // instead of failing every other row alongside them.
     const { error: enrollError } = await supabase
       .from("enrollments")
-      .insert(toEnroll.map((studentId) => ({ student_id: studentId, offering_id: offeringId })));
+      .upsert(
+        toEnroll.map((studentId) => ({ student_id: studentId, offering_id: offeringId })),
+        { onConflict: "student_id,offering_id", ignoreDuplicates: true }
+      );
     if (enrollError) throw new Error(enrollError.message);
 
     // Each payment plan is independent (its own insert, no shared state or
@@ -267,9 +277,28 @@ export async function importStudents(offeringId: string, rows: ImportRow[], conf
     // row in `toEnroll`) would otherwise open hundreds of chains of queries
     // simultaneously — batching keeps the concurrency bounded while still
     // running every batch's students in parallel.
+    //
+    // The same concurrent-retry race as above can reach here too — the
+    // enrollments upsert above no-ops for a row a concurrent run already
+    // enrolled, but createPaymentPlan doesn't know that and tries to create
+    // a plan anyway, hitting payment_plans' own (student_id, offering_id)
+    // unique constraint. That's a real production crash this surfaced
+    // (a hard 500 with no user-facing message beyond a generic error
+    // screen) rather than a hypothetical: a plan already existing for this
+    // pair means a concurrent run is handling (or already handled) it, so
+    // it's safe to skip here rather than treat it as a failure.
     for (let i = 0; i < toEnroll.length; i += ID_BATCH_SIZE) {
       const idBatch = toEnroll.slice(i, i + ID_BATCH_SIZE);
-      await Promise.all(idBatch.map((studentId) => createPaymentPlan({ studentId, offeringId, planType: "full" })));
+      await Promise.all(
+        idBatch.map(async (studentId) => {
+          try {
+            await createPaymentPlan({ studentId, offeringId, planType: "full" });
+          } catch (err) {
+            const message = err instanceof Error ? err.message : "";
+            if (!message.includes("payment_plans_student_id_offering_id_key")) throw err;
+          }
+        })
+      );
     }
   }
 
