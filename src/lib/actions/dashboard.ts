@@ -104,7 +104,10 @@ export async function getAdminDashboard(): Promise<AdminDashboard> {
     await Promise.all([
       supabase.from("students").select("id", { count: "exact", head: true }).eq("org_id", orgId),
       supabase.from("profiles").select("role").eq("org_id", orgId).is("left_at", null),
-      supabase.from("course_offerings").select("id, session, unit, courses(name)").eq("org_id", orgId),
+      // Deactivated courses must not count toward "Active courses", nor
+      // pull their students/assignments into "Pending tasks" below — same
+      // active-only scoping getAssistantCheckRates already used.
+      supabase.from("course_offerings").select("id, session, unit, courses(name)").eq("org_id", orgId).eq("active", true),
       supabase.from("organizations").select("currency").eq("id", orgId).single(),
       getStudentCountTrend(),
       getStaffCountTrend(),
@@ -554,9 +557,12 @@ export async function getRegistrationDashboard(): Promise<RegistrationDashboard>
 
   // All three only need `orgId` — independent of each other — fetched
   // concurrently instead of fetching offeringRows first and the other two
-  // afterward.
+  // afterward. offeringRows is scoped to active courses only — a
+  // deactivated course's students otherwise still counted toward
+  // "Unassigned students" and "Active courses" below even though the
+  // course itself is no longer selectable/manageable anywhere else.
   const [{ data: offeringRows }, { count: studentsCount }, studentTrend] = await Promise.all([
-    supabase.from("course_offerings").select("id, session, unit, courses(name)").eq("org_id", orgId),
+    supabase.from("course_offerings").select("id, session, unit, courses(name)").eq("org_id", orgId).eq("active", true),
     supabase.from("students").select("id", { count: "exact", head: true }).eq("org_id", orgId),
     getStudentCountTrend(),
   ]);
