@@ -55,58 +55,77 @@ export async function getAdminDashboard(): Promise<AdminDashboard> {
   }
   const supabase = await createClient();
 
-  const [{ count: studentsCount }, { data: staff }, { data: offeringRows }, { data: org }] = await Promise.all([
-    supabase.from("students").select("id", { count: "exact", head: true }).eq("org_id", orgId),
-    supabase.from("profiles").select("role").eq("org_id", orgId).is("left_at", null),
-    supabase.from("course_offerings").select("id, session, unit, courses(name)").eq("org_id", orgId),
-    supabase.from("organizations").select("currency").eq("id", orgId).single(),
-  ]);
+  // `studentTrend`/`staffTrend`/`salaryStats` (previously fetched in a
+  // separate, later Promise.all near the end of this function) only need
+  // `orgId` — already known here — not `offeringIds`, so they're folded
+  // into this same round of concurrent queries instead of waiting behind
+  // the offering-dependent fetches below. That cuts this function from
+  // three sequential round-trip stages down to two.
+  const [{ count: studentsCount }, { data: staff }, { data: offeringRows }, { data: org }, studentTrend, staffTrend, salaryStats] =
+    await Promise.all([
+      supabase.from("students").select("id", { count: "exact", head: true }).eq("org_id", orgId),
+      supabase.from("profiles").select("role").eq("org_id", orgId).is("left_at", null),
+      supabase.from("course_offerings").select("id, session, unit, courses(name)").eq("org_id", orgId),
+      supabase.from("organizations").select("currency").eq("id", orgId).single(),
+      getStudentCountTrend(),
+      getStaffCountTrend(),
+      getSalaryStatsForPeriod(supabase, orgId),
+    ]);
   const sym = currencySymbol(org?.currency);
 
   const offeringIds = (offeringRows ?? []).map((o) => o.id);
-  // Every assignment across every offering in the org — unbounded, this can
-  // clear Postgrest's default 1000-row cap for an org running many courses
-  // over time, silently undercounting "pending tasks" below.
-  const assignmentRows: { id: string; due_date: string | null; closed_at: string | null; offering_id: string }[] = [];
-  const ASSIGNMENT_PAGE_SIZE = 1000;
-  if (offeringIds.length) {
-    for (let from = 0; ; from += ASSIGNMENT_PAGE_SIZE) {
-      const { data: page } = await supabase
-        .from("assignments")
-        .select("id, due_date, closed_at, offering_id")
-        .in("offering_id", offeringIds)
-        .range(from, from + ASSIGNMENT_PAGE_SIZE - 1);
-      if (!page || page.length === 0) break;
-      assignmentRows.push(...page);
-      if (page.length < ASSIGNMENT_PAGE_SIZE) break;
-    }
+
+  // Count-first, then fetch every page concurrently instead of one at a
+  // time — same pattern as getAssistantCheckRates below. A sequential
+  // from/to loop is correct but slow for an org with several thousand
+  // enrollments (several pages, each a full round trip waiting on the
+  // last); getting the row count first (near-instant: head:true never
+  // transfers rows) lets every page after that fire in parallel.
+  const DASH_PAGE_SIZE = 1000;
+  async function fetchAllRowsFast<T>(
+    countQuery: PromiseLike<{ count: number | null }>,
+    fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null }>
+  ): Promise<T[]> {
+    const { count } = await countQuery;
+    const total = count ?? 0;
+    if (total === 0) return [];
+    const pageCount = Math.ceil(total / DASH_PAGE_SIZE);
+    const pages = await Promise.all(
+      Array.from({ length: pageCount }, (_, i) => fetchPage(i * DASH_PAGE_SIZE, i * DASH_PAGE_SIZE + DASH_PAGE_SIZE - 1))
+    );
+    return pages.flatMap((p) => p.data ?? []);
+  }
+
+  // These two scans are both scoped only by `offeringIds` — independent of
+  // each other — fetched concurrently instead of one after another.
+  type AssignmentRow = { id: string; due_date: string | null; closed_at: string | null; offering_id: string };
+  const [assignmentRows, enrollmentOfferingRows]: [AssignmentRow[], { offering_id: string }[]] = offeringIds.length
+    ? await Promise.all([
+        // Every assignment across every offering in the org — unbounded,
+        // this can clear Postgrest's default 1000-row cap for an org
+        // running many courses over time, silently undercounting "pending
+        // tasks" below.
+        fetchAllRowsFast<AssignmentRow>(
+          supabase.from("assignments").select("*", { count: "exact", head: true }).in("offering_id", offeringIds),
+          (from, to) => supabase.from("assignments").select("id, due_date, closed_at, offering_id").in("offering_id", offeringIds).range(from, to)
+        ),
+        // One bulk fetch instead of one round trip per offering — an org
+        // running many courses used to pay a full network round trip per
+        // offering just to count enrollments, which is the slowest part
+        // of this dashboard for exactly the orgs with the most courses.
+        fetchAllRowsFast<{ offering_id: string }>(
+          supabase.from("enrollments").select("*", { count: "exact", head: true }).in("offering_id", offeringIds),
+          (from, to) => supabase.from("enrollments").select("offering_id").in("offering_id", offeringIds).range(from, to)
+        ),
+      ])
+    : [[], []];
+  const studentsByOffering = new Map<string, number>();
+  for (const row of enrollmentOfferingRows) {
+    studentsByOffering.set(row.offering_id, (studentsByOffering.get(row.offering_id) ?? 0) + 1);
   }
 
   const today = new Date().toISOString().slice(0, 10);
   const pendingTasks = assignmentRows.filter((a) => !a.closed_at && a.due_date && a.due_date < today).length;
-
-  // One paginated bulk fetch instead of one round trip per offering — an org
-  // running many courses used to pay a full network round trip per offering
-  // just to count enrollments, which is the slowest part of this dashboard
-  // for exactly the orgs with the most courses. Paginating (rather than a
-  // single unbounded select) still avoids Postgrest's default 1000-row cap,
-  // which is what the old per-offering counts were written to work around.
-  const studentsByOffering = new Map<string, number>();
-  const ENROLLMENT_COUNT_PAGE_SIZE = 1000;
-  if (offeringIds.length) {
-    for (let from = 0; ; from += ENROLLMENT_COUNT_PAGE_SIZE) {
-      const { data: page } = await supabase
-        .from("enrollments")
-        .select("offering_id")
-        .in("offering_id", offeringIds)
-        .range(from, from + ENROLLMENT_COUNT_PAGE_SIZE - 1);
-      if (!page || page.length === 0) break;
-      for (const row of page) {
-        studentsByOffering.set(row.offering_id, (studentsByOffering.get(row.offering_id) ?? 0) + 1);
-      }
-      if (page.length < ENROLLMENT_COUNT_PAGE_SIZE) break;
-    }
-  }
 
   const roleCount = new Map<string, number>();
   for (const s of staff ?? []) {
@@ -133,11 +152,6 @@ export async function getAdminDashboard(): Promise<AdminDashboard> {
     pending: (assignmentRows ?? []).filter((a) => a.offering_id === o.id && !a.closed_at).length,
   }));
 
-  const [studentTrend, staffTrend, salaryStats] = await Promise.all([
-    getStudentCountTrend(),
-    getStaffCountTrend(),
-    getSalaryStatsForPeriod(supabase, orgId),
-  ]);
   const salaryPeriodLabel = salaryStats.period ? periodLabel(salaryStats.period) : "-";
 
   const kpis: Kpi[] = [
@@ -183,50 +197,56 @@ export async function getAssistantDashboard(): Promise<AssistantDashboard> {
     .filter((x): x is { id: string; label: string } => !!x);
   const offeringIds = offerings.map((o) => o.id);
 
-  // Paginated: one assistant's own enrollments across every course they've
-  // ever taught can still clear Postgrest's default 1000-row cap over
-  // several terms/years.
-  type MyEnrollmentRow = { id: string; offering_id: string; student_id: string; students: { name: string; initials: string } | { name: string; initials: string }[] | null };
-  const enrollments: MyEnrollmentRow[] = [];
-  const ENROLLMENT_PAGE_SIZE = 1000;
-  if (offeringIds.length) {
-    for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
-      const { data: page } = await supabase
-        .from("enrollments")
-        .select("id, offering_id, student_id, students(name, initials)")
-        .eq("assistant_id", profile.id)
-        .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
-      if (!page || page.length === 0) break;
-      enrollments.push(...page);
-      if (page.length < ENROLLMENT_PAGE_SIZE) break;
-    }
+  // Count-first, then fetch every page concurrently instead of one at a
+  // time — same pattern as the admin/head dashboards above. A sequential
+  // from/to loop is correct but slow for an assistant who has taught many
+  // students over several terms/years.
+  const DASH_PAGE_SIZE = 1000;
+  async function fetchAllRowsFast<T>(
+    countQuery: PromiseLike<{ count: number | null }>,
+    fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null }>
+  ): Promise<T[]> {
+    const { count } = await countQuery;
+    const total = count ?? 0;
+    if (total === 0) return [];
+    const pageCount = Math.ceil(total / DASH_PAGE_SIZE);
+    const pages = await Promise.all(
+      Array.from({ length: pageCount }, (_, i) => fetchPage(i * DASH_PAGE_SIZE, i * DASH_PAGE_SIZE + DASH_PAGE_SIZE - 1))
+    );
+    return pages.flatMap((p) => p.data ?? []);
   }
+
+  // `enrollments` and `assignments` are both scoped only by `offeringIds`/
+  // `profile.id` — independent of each other — fetched concurrently instead
+  // of one after another. `assignments` is scoped by offering, not
+  // assignment_assistants — that join table is only populated when a head
+  // explicitly picks assistants while creating an assignment (optional), but
+  // the actual logging page (listAssignmentsForOffering + getRoster) shows
+  // every assignment in every offering this assistant is linked to,
+  // regardless of that table. Scoping "pending" by it silently undercounted
+  // any assignment created without explicit assistant picks.
+  type MyEnrollmentRow = { id: string; offering_id: string; student_id: string; students: { name: string; initials: string } | { name: string; initials: string }[] | null };
+  type MyAssignmentRow = { id: string; title: string; offering_id: string; closed_at: string | null };
+  const [enrollments, assignments]: [MyEnrollmentRow[], MyAssignmentRow[]] = offeringIds.length
+    ? await Promise.all([
+        fetchAllRowsFast<MyEnrollmentRow>(
+          supabase.from("enrollments").select("*", { count: "exact", head: true }).eq("assistant_id", profile.id),
+          (from, to) =>
+            supabase
+              .from("enrollments")
+              .select("id, offering_id, student_id, students(name, initials)")
+              .eq("assistant_id", profile.id)
+              .range(from, to)
+        ),
+        fetchAllRowsFast<MyAssignmentRow>(
+          supabase.from("assignments").select("*", { count: "exact", head: true }).in("offering_id", offeringIds),
+          (from, to) => supabase.from("assignments").select("id, title, offering_id, closed_at").in("offering_id", offeringIds).range(from, to)
+        ),
+      ])
+    : [[], []];
 
   const myEnrollments = enrollments.filter((e) => offeringIds.includes(e.offering_id));
   const studentsCount = new Set(myEnrollments.map((e) => e.student_id)).size;
-
-  // Scope by offering, not assignment_assistants — that join table is only
-  // populated when a head explicitly picks assistants while creating an
-  // assignment (optional), but the actual logging page (listAssignmentsForOffering
-  // + getRoster) shows every assignment in every offering this assistant is
-  // linked to, regardless of that table. Scoping "pending" by it silently
-  // undercounted any assignment created without explicit assistant picks.
-  // Paginated for the same reason as elsewhere in this file — assignments
-  // across every one of an assistant's offerings can clear the 1000-row cap.
-  const assignments: { id: string; title: string; offering_id: string; closed_at: string | null }[] = [];
-  const ASSIGNMENT_PAGE_SIZE = 1000;
-  if (offeringIds.length) {
-    for (let from = 0; ; from += ASSIGNMENT_PAGE_SIZE) {
-      const { data: page } = await supabase
-        .from("assignments")
-        .select("id, title, offering_id, closed_at")
-        .in("offering_id", offeringIds)
-        .range(from, from + ASSIGNMENT_PAGE_SIZE - 1);
-      if (!page || page.length === 0) break;
-      assignments.push(...page);
-      if (page.length < ASSIGNMENT_PAGE_SIZE) break;
-    }
-  }
 
   const openAssignments = assignments.filter((a) => !a.closed_at);
   const assignmentIds = assignments.map((a) => a.id);
@@ -235,20 +255,12 @@ export async function getAssistantDashboard(): Promise<AssistantDashboard> {
   // assignments × students easily clears the 1000-row cap for an active
   // assistant, which silently dropped some students' logged status and
   // undercounted/overcounted "pending" and "open assignments" above.
-  const logs: { assignment_id: string; student_id: string; status: string | null }[] = [];
-  const LOGS_PAGE_SIZE = 1000;
-  if (assignmentIds.length) {
-    for (let from = 0; ; from += LOGS_PAGE_SIZE) {
-      const { data: page } = await supabase
-        .from("assignment_logs")
-        .select("assignment_id, student_id, status")
-        .in("assignment_id", assignmentIds)
-        .range(from, from + LOGS_PAGE_SIZE - 1);
-      if (!page || page.length === 0) break;
-      logs.push(...page);
-      if (page.length < LOGS_PAGE_SIZE) break;
-    }
-  }
+  const logs = assignmentIds.length
+    ? await fetchAllRowsFast<{ assignment_id: string; student_id: string; status: string | null }>(
+        supabase.from("assignment_logs").select("*", { count: "exact", head: true }).in("assignment_id", assignmentIds),
+        (from, to) => supabase.from("assignment_logs").select("assignment_id, student_id, status").in("assignment_id", assignmentIds).range(from, to)
+      )
+    : [];
 
   const loggedSet = new Set(logs.filter((l) => l.status).map((l) => `${l.assignment_id}:${l.student_id}`));
 
@@ -309,47 +321,42 @@ export async function getAssistantPendingLogCount(): Promise<number> {
   const offeringIds = (offeringLinks ?? []).map((r) => r.offering_id);
   if (!offeringIds.length) return 0;
 
-  // Paginated: same 1000-row cap risk as the full dashboard version of this
-  // query above (assignments/enrollments/logs across every offering an
-  // active assistant teaches).
+  // Count-first, then fetch every page concurrently instead of one at a
+  // time — same pattern as the full dashboard version of this query above.
   const PAGE_SIZE = 1000;
-  const assignments: { id: string; offering_id: string; closed_at: string | null }[] = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data: page } = await supabase
-      .from("assignments")
-      .select("id, offering_id, closed_at")
-      .in("offering_id", offeringIds)
-      .range(from, from + PAGE_SIZE - 1);
-    if (!page || page.length === 0) break;
-    assignments.push(...page);
-    if (page.length < PAGE_SIZE) break;
+  async function fetchAllRowsFast<T>(
+    countQuery: PromiseLike<{ count: number | null }>,
+    fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null }>
+  ): Promise<T[]> {
+    const { count } = await countQuery;
+    const total = count ?? 0;
+    if (total === 0) return [];
+    const pageCount = Math.ceil(total / PAGE_SIZE);
+    const pages = await Promise.all(Array.from({ length: pageCount }, (_, i) => fetchPage(i * PAGE_SIZE, i * PAGE_SIZE + PAGE_SIZE - 1)));
+    return pages.flatMap((p) => p.data ?? []);
   }
+
+  // `assignments` (scoped by offeringIds) and `enrollments` (scoped by
+  // profile.id) are independent of each other — fetched concurrently instead
+  // of one after another.
+  const [assignments, enrollments] = await Promise.all([
+    fetchAllRowsFast<{ id: string; offering_id: string; closed_at: string | null }>(
+      supabase.from("assignments").select("*", { count: "exact", head: true }).in("offering_id", offeringIds),
+      (from, to) => supabase.from("assignments").select("id, offering_id, closed_at").in("offering_id", offeringIds).range(from, to)
+    ),
+    fetchAllRowsFast<{ offering_id: string; student_id: string }>(
+      supabase.from("enrollments").select("*", { count: "exact", head: true }).eq("assistant_id", profile.id),
+      (from, to) => supabase.from("enrollments").select("offering_id, student_id").eq("assistant_id", profile.id).range(from, to)
+    ),
+  ]);
   const openAssignments = assignments.filter((a) => !a.closed_at);
   if (!openAssignments.length) return 0;
   const assignmentIds = openAssignments.map((a) => a.id);
 
-  const enrollments: { offering_id: string; student_id: string }[] = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data: page } = await supabase
-      .from("enrollments")
-      .select("offering_id, student_id")
-      .eq("assistant_id", profile.id)
-      .range(from, from + PAGE_SIZE - 1);
-    if (!page || page.length === 0) break;
-    enrollments.push(...page);
-    if (page.length < PAGE_SIZE) break;
-  }
-  const logs: { assignment_id: string; student_id: string; status: string | null }[] = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data: page } = await supabase
-      .from("assignment_logs")
-      .select("assignment_id, student_id, status")
-      .in("assignment_id", assignmentIds)
-      .range(from, from + PAGE_SIZE - 1);
-    if (!page || page.length === 0) break;
-    logs.push(...page);
-    if (page.length < PAGE_SIZE) break;
-  }
+  const logs = await fetchAllRowsFast<{ assignment_id: string; student_id: string; status: string | null }>(
+    supabase.from("assignment_logs").select("*", { count: "exact", head: true }).in("assignment_id", assignmentIds),
+    (from, to) => supabase.from("assignment_logs").select("assignment_id, student_id, status").in("assignment_id", assignmentIds).range(from, to)
+  );
   const loggedSet = new Set(logs.filter((l) => l.status).map((l) => `${l.assignment_id}:${l.student_id}`));
 
   let pendingCount = 0;
@@ -397,16 +404,24 @@ export async function getHeadDashboard(): Promise<HeadDashboard> {
     };
   }
 
-  async function fetchAllRows<T>(fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null }>): Promise<T[]> {
-    const PAGE_SIZE = 1000;
-    const rows: T[] = [];
-    for (let from = 0; ; from += PAGE_SIZE) {
-      const { data } = await fetchPage(from, from + PAGE_SIZE - 1);
-      if (!data || data.length === 0) break;
-      rows.push(...data);
-      if (data.length < PAGE_SIZE) break;
-    }
-    return rows;
+  // Count-first, then fetch every page concurrently instead of one at a
+  // time (same pattern as getAssistantCheckRates/getAdminDashboard) — a
+  // sequential from/to loop is correct but slow once a fetch needs several
+  // pages, which this org's largest single course (1,000+ active
+  // enrollments) hits on its own.
+  const DASH_PAGE_SIZE = 1000;
+  async function fetchAllRowsFast<T>(
+    countQuery: PromiseLike<{ count: number | null }>,
+    fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null }>
+  ): Promise<T[]> {
+    const { count } = await countQuery;
+    const total = count ?? 0;
+    if (total === 0) return [];
+    const pageCount = Math.ceil(total / DASH_PAGE_SIZE);
+    const pages = await Promise.all(
+      Array.from({ length: pageCount }, (_, i) => fetchPage(i * DASH_PAGE_SIZE, i * DASH_PAGE_SIZE + DASH_PAGE_SIZE - 1))
+    );
+    return pages.flatMap((p) => p.data ?? []);
   }
 
   // A student who left THAT course must not count toward the tracking
@@ -418,21 +433,26 @@ export async function getHeadDashboard(): Promise<HeadDashboard> {
   // assignments combined, previously had these silently truncate at
   // Postgrest's default 1000-row cap.
   const [enrollments, assistantLinksRaw, assignmentRows] = await Promise.all([
-    fetchAllRows<{ offering_id: string; student_id: string; assistant_id: string | null }>((from, to) =>
-      supabase.from("enrollments").select("offering_id, student_id, assistant_id").in("offering_id", offeringIds).is("left_at", null).range(from, to)
+    fetchAllRowsFast<{ offering_id: string; student_id: string; assistant_id: string | null }>(
+      supabase.from("enrollments").select("*", { count: "exact", head: true }).in("offering_id", offeringIds).is("left_at", null),
+      (from, to) =>
+        supabase.from("enrollments").select("offering_id, student_id, assistant_id").in("offering_id", offeringIds).is("left_at", null).range(from, to)
     ),
-    fetchAllRows<{ offering_id: string; profiles: { id: string; full_name: string; initials: string } | { id: string; full_name: string; initials: string }[] | null }>(
+    fetchAllRowsFast<{ offering_id: string; profiles: { id: string; full_name: string; initials: string } | { id: string; full_name: string; initials: string }[] | null }>(
+      supabase.from("offering_assistants").select("*", { count: "exact", head: true }).in("offering_id", offeringIds),
       (from, to) => supabase.from("offering_assistants").select("offering_id, profiles(id, full_name, initials)").in("offering_id", offeringIds).range(from, to)
     ),
-    fetchAllRows<{ id: string; offering_id: string }>((from, to) =>
-      supabase.from("assignments").select("id, offering_id").in("offering_id", offeringIds).range(from, to)
+    fetchAllRowsFast<{ id: string; offering_id: string }>(
+      supabase.from("assignments").select("*", { count: "exact", head: true }).in("offering_id", offeringIds),
+      (from, to) => supabase.from("assignments").select("id, offering_id").in("offering_id", offeringIds).range(from, to)
     ),
   ]);
 
   const assignmentIds = assignmentRows.map((a) => a.id);
   const logs = assignmentIds.length
-    ? await fetchAllRows<{ assignment_id: string; student_id: string; sent_at: string | null }>((from, to) =>
-        supabase.from("assignment_logs").select("assignment_id, student_id, sent_at").in("assignment_id", assignmentIds).range(from, to)
+    ? await fetchAllRowsFast<{ assignment_id: string; student_id: string; sent_at: string | null }>(
+        supabase.from("assignment_logs").select("*", { count: "exact", head: true }).in("assignment_id", assignmentIds),
+        (from, to) => supabase.from("assignment_logs").select("assignment_id, student_id, sent_at").in("assignment_id", assignmentIds).range(from, to)
       )
     : [];
 
@@ -568,17 +588,16 @@ export async function getRegistrationDashboard(): Promise<RegistrationDashboard>
   if (!orgId) return { kpis: [], recentEnrollments: [], unassigned: [] };
   const supabase = await createClient();
 
-  const { data: offeringRows } = await supabase
-    .from("course_offerings")
-    .select("id, session, unit, courses(name)")
-    .eq("org_id", orgId);
-  const offeringIds = (offeringRows ?? []).map((o) => o.id);
-  const labelById = new Map((offeringRows ?? []).map((o) => [o.id, offeringLabelOf(o)]));
-
-  const [{ count: studentsCount }, studentTrend] = await Promise.all([
+  // All three only need `orgId` — independent of each other — fetched
+  // concurrently instead of fetching offeringRows first and the other two
+  // afterward.
+  const [{ data: offeringRows }, { count: studentsCount }, studentTrend] = await Promise.all([
+    supabase.from("course_offerings").select("id, session, unit, courses(name)").eq("org_id", orgId),
     supabase.from("students").select("id", { count: "exact", head: true }).eq("org_id", orgId),
     getStudentCountTrend(),
   ]);
+  const offeringIds = (offeringRows ?? []).map((o) => o.id);
+  const labelById = new Map((offeringRows ?? []).map((o) => [o.id, offeringLabelOf(o)]));
 
   if (!offeringIds.length) {
     return {
@@ -597,32 +616,38 @@ export async function getRegistrationDashboard(): Promise<RegistrationDashboard>
 
   // newThisWeek is count-only (head: true never transfers rows, so it's
   // exact regardless of org size). unassignedRows needs actual rows for the
-  // per-offering breakdown below, so it's paginated via .range() instead —
-  // the .limit(2000) this used to have was misleading: Postgrest's server-
-  // side row cap (Supabase's default 1000) overrides any larger client-
-  // requested limit, so it silently capped at 1000 anyway for an org with
-  // more unassigned students than that.
-  const unassignedRows: { offering_id: string }[] = [];
+  // per-offering breakdown below — count the rows first (near-instant), then
+  // fetch every page concurrently instead of one round trip at a time; the
+  // .limit(2000) this used to have was misleading: Postgrest's server-side
+  // row cap (Supabase's default 1000) overrides any larger client-requested
+  // limit, so it silently capped at 1000 anyway for an org with more
+  // unassigned students than that.
   const UNASSIGNED_PAGE_SIZE = 1000;
-  const [{ count: newThisWeek }, , { data: recentRows }] = await Promise.all([
+  async function fetchAllRowsFast<T>(
+    countQuery: PromiseLike<{ count: number | null }>,
+    fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null }>
+  ): Promise<T[]> {
+    const { count } = await countQuery;
+    const total = count ?? 0;
+    if (total === 0) return [];
+    const pageCount = Math.ceil(total / UNASSIGNED_PAGE_SIZE);
+    const pages = await Promise.all(
+      Array.from({ length: pageCount }, (_, i) => fetchPage(i * UNASSIGNED_PAGE_SIZE, i * UNASSIGNED_PAGE_SIZE + UNASSIGNED_PAGE_SIZE - 1))
+    );
+    return pages.flatMap((p) => p.data ?? []);
+  }
+
+  const [{ count: newThisWeek }, unassignedRows, { data: recentRows }] = await Promise.all([
     supabase
       .from("enrollments")
       .select("id", { count: "exact", head: true })
       .in("offering_id", offeringIds)
       .gte("created_at", weekAgo),
-    (async () => {
-      for (let from = 0; ; from += UNASSIGNED_PAGE_SIZE) {
-        const { data: page } = await supabase
-          .from("enrollments")
-          .select("offering_id")
-          .in("offering_id", offeringIds)
-          .is("assistant_id", null)
-          .range(from, from + UNASSIGNED_PAGE_SIZE - 1);
-        if (!page || page.length === 0) break;
-        unassignedRows.push(...page);
-        if (page.length < UNASSIGNED_PAGE_SIZE) break;
-      }
-    })(),
+    fetchAllRowsFast<{ offering_id: string }>(
+      supabase.from("enrollments").select("*", { count: "exact", head: true }).in("offering_id", offeringIds).is("assistant_id", null),
+      (from, to) =>
+        supabase.from("enrollments").select("offering_id").in("offering_id", offeringIds).is("assistant_id", null).range(from, to)
+    ),
     supabase
       .from("enrollments")
       .select("offering_id, created_at, students(name, initials)")
@@ -760,7 +785,10 @@ export async function getFinanceDashboard(): Promise<FinanceDashboard> {
   const supabase = await createClient();
   const period = currentPeriod();
 
-  const [{ data: org }, { data: lines }] = await Promise.all([
+  // pendingEvaluations/payrollTrend/salaryStats only need `orgId` — independent
+  // of `org`/`lines` — fetched concurrently instead of in a second sequential
+  // stage after them.
+  const [{ data: org }, { data: lines }, { count: pendingEvaluations }, payrollTrend, salaryStats] = await Promise.all([
     supabase.from("organizations").select("currency").eq("id", orgId).single(),
     supabase
       .from("salary_lines")
@@ -769,6 +797,9 @@ export async function getFinanceDashboard(): Promise<FinanceDashboard> {
       )
       .eq("org_id", orgId)
       .eq("period", period),
+    supabase.from("evaluations").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("status", "submitted"),
+    getFinancePayrollTrend(),
+    getSalaryStatsForPeriod(supabase, orgId),
   ]);
   const sym = currencySymbol(org?.currency);
 
@@ -804,12 +835,6 @@ export async function getFinanceDashboard(): Promise<FinanceDashboard> {
 
   const assistants = Array.from(byPayee.values());
   const paidCount = assistants.filter((a) => a.status === "paid").length;
-
-  const [{ count: pendingEvaluations }, payrollTrend, salaryStats] = await Promise.all([
-    supabase.from("evaluations").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("status", "submitted"),
-    getFinancePayrollTrend(),
-    getSalaryStatsForPeriod(supabase, orgId),
-  ]);
   const salaryPeriodLabel = salaryStats.period ? periodLabel(salaryStats.period) : "-";
 
   const totalMethodCount = Array.from(methodCounts.values()).reduce((s, n) => s + n, 0);
