@@ -27,7 +27,8 @@ export type PayrollSettings = PayrollFlags &
     currency: string;
     defaultAssistantCalcMethod: string;
     attendancePresentThresholdPct: number;
-    attendanceLateThresholdPct: number;
+    // Optional — see setAttendanceThresholds/guessAttendanceStatus.
+    attendanceLateThresholdPct: number | null;
   };
 
 export async function getPayrollSettings(): Promise<PayrollSettings | null> {
@@ -135,7 +136,13 @@ export async function getAttendanceIdMatchingEnabled(): Promise<boolean> {
 
 // Cheap standalone read for the "Import attendance" modal — same reasoning
 // as getAttendanceIdMatchingEnabled above.
-export async function getAttendanceThresholds(): Promise<{ presentPct: number; latePct: number }> {
+//
+// latePct is nullable: the late threshold is optional. Left unset, imported
+// attendance is binary — present at/above the present threshold, absent
+// otherwise, with no "late" middle state — since not every org tracks a
+// separate "counts as late" cutoff. Set it, and the existing three-way
+// present/late/absent logic applies exactly as before.
+export async function getAttendanceThresholds(): Promise<{ presentPct: number; latePct: number | null }> {
   const profile = await getCurrentProfile();
   const orgId = profile?.org?.id;
   if (!orgId) return { presentPct: 75, latePct: 40 };
@@ -147,15 +154,15 @@ export async function getAttendanceThresholds(): Promise<{ presentPct: number; l
     .single();
   return {
     presentPct: data?.attendance_present_threshold_pct ?? 75,
-    latePct: data?.attendance_late_threshold_pct ?? 40,
+    latePct: data?.attendance_late_threshold_pct ?? null,
   };
 }
 
-export async function setAttendanceThresholds(presentPct: number, latePct: number) {
+export async function setAttendanceThresholds(presentPct: number, latePct: number | null) {
   const profile = await getCurrentProfile();
   if (!profile?.org) throw new Error("Not authenticated");
   if (profile.role !== "admin") throw new Error("Not authorized");
-  if (!(presentPct >= 0 && presentPct <= 100) || !(latePct >= 0 && latePct <= 100) || latePct > presentPct) {
+  if (!(presentPct >= 0 && presentPct <= 100) || (latePct !== null && !(latePct >= 0 && latePct <= 100)) || (latePct !== null && latePct > presentPct)) {
     throw new Error("Enter valid percentages, with the late threshold at or below the present threshold.");
   }
   const supabase = await createClient();

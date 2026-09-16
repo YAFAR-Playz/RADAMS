@@ -1,6 +1,7 @@
 "use client";
 
 import { startTransition, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
@@ -77,6 +78,7 @@ function PersonCard({
 }
 
 export function HrRequestsContent() {
+  const router = useRouter();
   const [requests, setRequests] = useState<StaffingRequestDetail[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +110,9 @@ export function HrRequestsContent() {
         return;
       }
       setRequests((prev) => (prev ? prev.map((r) => (r.id === id ? { ...r, status } : r)) : prev));
+      // The "Requests" nav badge count is computed server-side in the
+      // surrounding layout — see the same fix in staff-content.tsx.
+      router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't update this request - try again.");
     } finally {

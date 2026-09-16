@@ -43,7 +43,20 @@ function MatchPicker({
     const q = query.trim().toLowerCase();
     const results = (q ? available.filter((x) => x.name.toLowerCase().includes(q)) : available).slice(0, 6);
     return (
-      <div className="relative w-full max-w-[220px]">
+      <div
+        className="relative w-full max-w-[220px]"
+        // Closes the dropdown when focus leaves the whole widget (input or
+        // result list), not just on picking a result or hitting Cancel —
+        // checking relatedTarget against the container (rather than acting
+        // on the input's own onBlur directly) means clicking a result still
+        // fires its onClick before this closes it out from under the click.
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+            setMode("choice");
+            setQuery("");
+          }
+        }}
+      >
         <input
           autoFocus
           value={query}
@@ -124,7 +137,7 @@ export function ImportAttendanceModal({
   onClose: () => void;
   onImported: () => void;
 }) {
-  const [step, setStep] = useState<"upload" | "review" | "done">("upload");
+  const [step, setStep] = useState<"upload" | "summary" | "review" | "done">("upload");
   const [fileName, setFileName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [durationMinutes, setDurationMinutes] = useState(0);
@@ -172,7 +185,7 @@ export function ImportAttendanceModal({
       });
       setDurationMinutes(parsed.durationMinutes);
       setRows(reviewRows);
-      setStep("review");
+      setStep("summary");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't read this file - try again.");
     }
@@ -264,6 +277,50 @@ export function ImportAttendanceModal({
           </div>
         )}
 
+        {step === "summary" && (
+          <div className="p-[18px]">
+            <p className="m-0 mb-[16px] text-[13px] leading-[1.5] text-[var(--muted)]">
+              Here&apos;s what was detected in <span className="font-semibold text-[var(--text)]">{fileName}</span> before you review
+              each attendee.
+            </p>
+            <div className="grid grid-cols-3 gap-[10px]">
+              <div className="rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[14px] text-center">
+                <div className="text-[22px] font-bold text-[var(--text)]">{rows.length}</div>
+                <div className="mt-[2px] text-[11.5px] text-[var(--muted)]">Attendees detected</div>
+              </div>
+              <div className="rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[14px] text-center">
+                <div className="text-[22px] font-bold" style={{ color: "var(--ok)" }}>{matchedCount}</div>
+                <div className="mt-[2px] text-[11.5px] text-[var(--muted)]">Auto-matched by ID</div>
+              </div>
+              <div className="rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[14px] text-center">
+                <div className="text-[22px] font-bold" style={{ color: rows.length - matchedCount > 0 ? "var(--warn)" : "var(--ok)" }}>
+                  {rows.length - matchedCount}
+                </div>
+                <div className="mt-[2px] text-[11.5px] text-[var(--muted)]">Need a manual match</div>
+              </div>
+            </div>
+            <div className="mt-[18px] flex gap-[10px]">
+              <button
+                onClick={() => {
+                  setStep("upload");
+                  setFileName("");
+                  setRows([]);
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }}
+                className="h-11 flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]"
+              >
+                Back
+              </button>
+              <button
+                onClick={() => setStep("review")}
+                className="h-11 flex-[1.3] rounded-[var(--rad-sm)] bg-[var(--brand)] text-[13.5px] font-semibold text-[var(--brandfg)]"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        )}
+
         {step === "review" && (
           <>
             <div className="flex flex-wrap items-center gap-[10px_18px] border-b border-[var(--border2)] p-[12px_18px] text-[12.5px] text-[var(--muted)]">
@@ -293,10 +350,19 @@ export function ImportAttendanceModal({
                   <span className="w-[80px] flex-none font-mono text-[13px] text-[var(--muted)]">{r.minutesAttended}</span>
                   <div className="min-w-0 flex-[1.2_1_160px]">
                     {r.studentId && roster?.find((x) => x.studentId === r.studentId) ? (
-                      <span className="flex items-center gap-[6px] truncate text-[12.5px] font-semibold" style={{ color: "var(--brand)" }}>
-                        <Icon name="user-check" size={14} />
-                        {roster.find((x) => x.studentId === r.studentId)?.name}
-                      </span>
+                      <div className="flex items-center gap-[8px]">
+                        <span className="flex min-w-0 items-center gap-[6px] truncate text-[12.5px] font-semibold" style={{ color: "var(--brand)" }}>
+                          <Icon name="user-check" size={14} />
+                          {roster.find((x) => x.studentId === r.studentId)?.name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setRowStudent(r.key, "")}
+                          className="flex-none text-[11.5px] font-semibold text-[var(--subtle)] underline hover:text-[var(--text)]"
+                        >
+                          Undo
+                        </button>
+                      </div>
                     ) : (
                       <MatchPicker roster={roster ?? []} usedStudentIds={usedStudentIds} onPick={(studentId) => setRowStudent(r.key, studentId)} />
                     )}
@@ -317,8 +383,14 @@ export function ImportAttendanceModal({
               ))}
             </div>
             <div className="flex gap-[10px] border-t border-[var(--border2)] p-[14px_18px]">
-              <button onClick={onClose} className="h-11 flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]">
+              <button onClick={onClose} className="h-11 flex-none rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] px-[16px] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]">
                 Cancel
+              </button>
+              <button
+                onClick={() => setStep("summary")}
+                className="h-11 flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]"
+              >
+                Back
               </button>
               <button
                 onClick={onCommit}
