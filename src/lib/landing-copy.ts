@@ -41,12 +41,11 @@ export type LandingCopy = {
     title: string;
     subtitle: string;
     fields: {
-      name: string;
+      firstName: string;
+      lastName: string;
       organization: string;
       email: string;
       phone: string;
-      country: string;
-      countryPlaceholder: string;
       studentRange: string;
       studentRangePlaceholder: string;
       message: string;
@@ -109,12 +108,11 @@ const en: LandingCopy = {
     title: "Tell us about your tutoring center",
     subtitle: "We'll follow up to set up a walkthrough tailored to your team.",
     fields: {
-      name: "Your name",
+      firstName: "First name",
+      lastName: "Last name",
       organization: "Tutoring center name",
       email: "Email",
-      phone: "Phone (with country code)",
-      country: "Country",
-      countryPlaceholder: "e.g. Egypt",
+      phone: "Phone number",
       studentRange: "How many students?",
       studentRangePlaceholder: "Select a range",
       message: "Anything else? (optional)",
@@ -175,12 +173,11 @@ const ar: LandingCopy = {
     title: "أخبرنا عن سنترك التعليمي",
     subtitle: "سنتواصل معك لترتيب عرض توضيحي مخصص لفريقك.",
     fields: {
-      name: "اسمك",
+      firstName: "الاسم الأول",
+      lastName: "اسم العائلة",
       organization: "اسم السنتر التعليمي",
       email: "البريد الإلكتروني",
-      phone: "الهاتف (مع كود الدولة)",
-      country: "الدولة",
-      countryPlaceholder: "مثال: مصر",
+      phone: "رقم الهاتف",
       studentRange: "كم عدد الطلاب؟",
       studentRangePlaceholder: "اختر نطاقًا",
       message: "أي شيء آخر؟ (اختياري)",

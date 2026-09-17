@@ -1,10 +1,29 @@
 "use server";
 
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { getPlatformDefaultBranding } from "@/lib/actions/branding";
 import { sendEmail, renderBrandedEmail } from "@/lib/email";
+
+// Public, unauthenticated endpoint (the landing page's contact form) - the
+// only real anti-abuse lever available is capping how often the same
+// visitor can hit it, since there's no session/account to rate-limit
+// against. 3 per hour comfortably covers a real visitor fixing a typo and
+// resubmitting, while blocking a scripted flood.
+const RATE_LIMIT_MAX = 3;
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+
+async function getClientIp(): Promise<string | null> {
+  const h = await headers();
+  // x-forwarded-for can carry a proxy chain ("client, proxy1, proxy2") -
+  // the first entry is the original client, which is what Vercel documents
+  // for identifying the actual requester behind its edge network.
+  const forwardedFor = h.get("x-forwarded-for");
+  if (forwardedFor) return forwardedFor.split(",")[0].trim();
+  return h.get("x-real-ip");
+}
 
 export type Lead = {
   id: string;
@@ -56,6 +75,18 @@ export async function submitLead(input: LeadSubmission): Promise<void> {
   }
 
   const admin = createAdminClient();
+  const ip = await getClientIp();
+  if (ip) {
+    const { count } = await admin
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .eq("ip_address", ip)
+      .gte("created_at", new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString());
+    if ((count ?? 0) >= RATE_LIMIT_MAX) {
+      throw new Error("Too many submissions from this connection - please try again in a bit.");
+    }
+  }
+
   const { error } = await admin.from("leads").insert({
     name,
     organization,
@@ -64,6 +95,7 @@ export async function submitLead(input: LeadSubmission): Promise<void> {
     country,
     student_range: studentRange,
     message: input.message.trim() || null,
+    ip_address: ip,
   });
   if (error) throw new Error(error.message);
 

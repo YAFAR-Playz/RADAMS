@@ -5,25 +5,53 @@ import { Icon } from "@/components/icons";
 import { Spinner } from "@/components/ui/spinner";
 import { submitLead } from "@/lib/actions/leads";
 import { STUDENT_RANGES, type LandingCopy } from "@/lib/landing-copy";
+import { COUNTRY_CODES, flagEmoji } from "@/lib/country-codes";
 
-const emptyForm = { name: "", organization: "", email: "", phone: "", country: "", studentRange: "", message: "" };
+// Egypt first (this product's primary market) as the sane default, rather
+// than forcing every visitor to hunt for their country in the dropdown.
+const DEFAULT_DIAL = COUNTRY_CODES[0].dial;
+
+const emptyForm = { firstName: "", lastName: "", organization: "", email: "", dial: DEFAULT_DIAL, phone: "", studentRange: "", message: "" };
+// A field real visitors never see or fill (moved off-screen, not just
+// display:none — some bots specifically skip hidden-via-display fields) but
+// a scripted bot filling every input on the page will. Non-empty on submit
+// means don't insert anything, but still show success so the bot can't tell
+// it was caught and adjust.
+const HONEYPOT_FIELD = "website";
 
 export function ContactForm({ copy, brand }: { copy: LandingCopy; brand: string }) {
   const [form, setForm] = useState(emptyForm);
+  const [honeypot, setHoneypot] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const canSubmit =
-    form.name.trim() && form.organization.trim() && form.email.trim() && form.phone.trim() && form.country.trim() && form.studentRange;
+    form.firstName.trim() && form.lastName.trim() && form.organization.trim() && form.email.trim() && form.phone.trim() && form.studentRange;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit || status === "sending") return;
-    setStatus("sending");
-    try {
-      await submitLead(form);
+    if (honeypot.trim()) {
       setStatus("sent");
       setForm(emptyForm);
-    } catch {
+      return;
+    }
+    setStatus("sending");
+    try {
+      const dialEntry = COUNTRY_CODES.find((c) => c.dial === form.dial);
+      await submitLead({
+        name: `${form.firstName.trim()} ${form.lastName.trim()}`.trim(),
+        organization: form.organization,
+        email: form.email,
+        phone: `+${form.dial} ${form.phone.trim()}`,
+        country: dialEntry?.name ?? "",
+        studentRange: form.studentRange,
+        message: form.message,
+      });
+      setStatus("sent");
+      setForm(emptyForm);
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : null);
       setStatus("error");
     }
   }
@@ -48,10 +76,22 @@ export function ContactForm({ copy, brand }: { copy: LandingCopy; brand: string 
       onSubmit={onSubmit}
       className="flex flex-col gap-[14px] rounded-[18px] border border-[var(--border)] bg-[var(--surface)] p-[24px] shadow-[0_1px_2px_rgba(16,23,41,0.04),0_18px_40px_rgba(16,23,41,0.08)] sm:p-[32px]"
     >
+      {/* Off-screen, not display:none — a scripted bot that blindly fills
+          every input still fills this one, but display:none/hidden inputs
+          are commonly skipped by name/attribute heuristics. Untranslated and
+          unlabeled on purpose - no real visitor should ever see or need it. */}
+      <div className="absolute -left-[9999px] h-0 w-0 overflow-hidden" aria-hidden="true">
+        <label htmlFor={HONEYPOT_FIELD}>Website</label>
+        <input id={HONEYPOT_FIELD} name={HONEYPOT_FIELD} type="text" tabIndex={-1} autoComplete="off" value={honeypot} onChange={(e) => setHoneypot(e.target.value)} />
+      </div>
       <div className="grid grid-cols-1 gap-[14px] sm:grid-cols-2">
         <div>
-          <label className={labelClass}>{copy.contact.fields.name}</label>
-          <input className={inputClass} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
+          <label className={labelClass}>{copy.contact.fields.firstName}</label>
+          <input className={inputClass} value={form.firstName} onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))} required />
+        </div>
+        <div>
+          <label className={labelClass}>{copy.contact.fields.lastName}</label>
+          <input className={inputClass} value={form.lastName} onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))} required />
         </div>
         <div>
           <label className={labelClass}>{copy.contact.fields.organization}</label>
@@ -61,19 +101,36 @@ export function ContactForm({ copy, brand }: { copy: LandingCopy; brand: string 
           <label className={labelClass}>{copy.contact.fields.email}</label>
           <input type="email" className={inputClass} value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} required />
         </div>
-        <div>
+        <div className="sm:col-span-2">
           <label className={labelClass}>{copy.contact.fields.phone}</label>
-          <input className={inputClass} value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} required />
-        </div>
-        <div>
-          <label className={labelClass}>{copy.contact.fields.country}</label>
-          <input
-            className={inputClass}
-            placeholder={copy.contact.fields.countryPlaceholder}
-            value={form.country}
-            onChange={(e) => setForm((f) => ({ ...f, country: e.target.value }))}
-            required
-          />
+          {/* dir="ltr" on the row itself, not just each input's own text —
+              a dial code always precedes the number it prefixes ("+20 ...")
+              as one unit, so the pair shouldn't visually flip under RTL the
+              way independent fields correctly do. */}
+          <div className="flex gap-[8px]" dir="ltr">
+            <select
+              // !w-[...] (important) since inputClass already bakes in
+              // w-full — Tailwind resolves same-specificity conflicts by
+              // stylesheet order, not by where each class sits in this
+              // string, so a plain w-[128px] here silently lost to w-full.
+              className={`${inputClass} !w-[128px] flex-none px-[8px]`}
+              value={form.dial}
+              onChange={(e) => setForm((f) => ({ ...f, dial: e.target.value }))}
+            >
+              {COUNTRY_CODES.map((c) => (
+                <option key={c.iso2} value={c.dial}>
+                  {flagEmoji(c.iso2)} +{c.dial}
+                </option>
+              ))}
+            </select>
+            <input
+              className={inputClass}
+              type="tel"
+              value={form.phone}
+              onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+              required
+            />
+          </div>
         </div>
         <div>
           <label className={labelClass}>{copy.contact.fields.studentRange}</label>
@@ -106,7 +163,7 @@ export function ContactForm({ copy, brand }: { copy: LandingCopy; brand: string 
 
       {status === "error" && (
         <div className="rounded-[10px] border border-[var(--danger)] bg-[var(--dangers)] px-[12px] py-[10px] text-[12.5px] font-medium text-[var(--danger)]">
-          {copy.contact.error}
+          {errorMessage || copy.contact.error}
         </div>
       )}
 
