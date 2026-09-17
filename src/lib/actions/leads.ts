@@ -29,6 +29,17 @@ export type LeadSubmission = {
   message: string;
 };
 
+// Falls back to whoever actually holds the owner role right now, rather
+// than a hardcoded address — the fallback needs to keep working even if
+// LEADS_NOTIFY_EMAIL is never set in Vercel, and especially if ownership of
+// the account ever changes. Sends to every owner profile found, in case
+// there's ever more than one.
+async function getOwnerNotifyEmails(): Promise<string[]> {
+  const admin = createAdminClient();
+  const { data } = await admin.from("profiles").select("email").eq("role", "owner");
+  return (data ?? []).map((p) => p.email).filter((e): e is string => !!e);
+}
+
 // Submitted from the public landing page by a signed-out visitor, so there
 // is no session for RLS to scope against — the service-role client is the
 // only way to write this row, matching the pattern already used elsewhere
@@ -57,9 +68,10 @@ export async function submitLead(input: LeadSubmission): Promise<void> {
   if (error) throw new Error(error.message);
 
   const branding = await getPlatformDefaultBranding();
-  const notifyTo = process.env.LEADS_NOTIFY_EMAIL || "yokyrady@gmail.com";
+  const notifyTo = process.env.LEADS_NOTIFY_EMAIL ? [process.env.LEADS_NOTIFY_EMAIL] : await getOwnerNotifyEmails();
+  if (!notifyTo.length) return;
   await sendEmail({
-    to: [notifyTo],
+    to: notifyTo,
     subject: `New lead: ${organization}`,
     fromName: branding.name,
     html: renderBrandedEmail({
@@ -125,5 +137,12 @@ export async function updateLeadStatus(id: string, status: Lead["status"]): Prom
   await requireOwner();
   const supabase = await createClient();
   const { error } = await supabase.from("leads").update({ status }).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteLead(id: string): Promise<void> {
+  await requireOwner();
+  const supabase = await createClient();
+  const { error } = await supabase.from("leads").delete().eq("id", id);
   if (error) throw new Error(error.message);
 }

@@ -5,7 +5,7 @@ import { Icon } from "@/components/icons";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
 import { PageHeader } from "@/components/ui/page-header";
-import { listLeads, updateLeadStatus, type Lead } from "@/lib/actions/leads";
+import { listLeads, updateLeadStatus, deleteLead, type Lead } from "@/lib/actions/leads";
 import { getPlatformDefaultBranding } from "@/lib/actions/branding";
 
 const STATUS_BADGE: Record<Lead["status"], { text: string; bg: string; fg: string }> = {
@@ -37,6 +37,8 @@ export function OwnerLeadsContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Lead | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   async function reload() {
     setLoading(true);
@@ -67,6 +69,20 @@ export function OwnerLeadsContent() {
       setError("Couldn't update this lead's status - try again.");
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function onConfirmDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteLead(deleteTarget.id);
+      setLeads((prev) => (prev ? prev.filter((l) => l.id !== deleteTarget.id) : prev));
+      setDeleteTarget(null);
+    } catch {
+      setError("Couldn't delete this lead - try again.");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -153,6 +169,13 @@ export function OwnerLeadsContent() {
                     <Icon name="message" size={13} />
                     Quick send
                   </a>
+                  <button
+                    onClick={() => setDeleteTarget(lead)}
+                    title="Delete this lead"
+                    className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-[8px] border border-[var(--border)] text-[var(--muted)] hover:border-[var(--danger)] hover:text-[var(--danger)]"
+                  >
+                    <Icon name="trash" size={14} />
+                  </button>
                 </header>
                 <div className="grid grid-cols-2 gap-[10px] p-[14px_16px] sm:grid-cols-4">
                   <div className="rounded-[var(--rad-sm)] border border-[var(--border2)] bg-[var(--surface2)] p-[10px_11px]">
@@ -179,6 +202,38 @@ export function OwnerLeadsContent() {
           })
         )}
       </div>
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(8,12,22,0.5)] p-5">
+          <div className="flex w-full max-w-[420px] flex-col rounded-[var(--rad)] bg-[var(--surface)] shadow-[var(--shadow-lg)]">
+            <div className="flex items-center gap-3 border-b border-[var(--border2)] p-[16px_18px]">
+              <div className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] bg-[var(--dangers)] text-[var(--danger)]">
+                <Icon name="trash" size={16} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Delete lead from {deleteTarget.organization}?</h3>
+                <div className="text-[12px] text-[var(--muted)]">This permanently removes it - there&apos;s no undo.</div>
+              </div>
+              <button onClick={() => setDeleteTarget(null)} className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]">
+                <Icon name="x" size={18} />
+              </button>
+            </div>
+            <div className="flex gap-[10px] p-[16px_18px]">
+              <button onClick={() => setDeleteTarget(null)} className="h-11 flex-1 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface)] text-[13.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface2)]">
+                Cancel
+              </button>
+              <button
+                onClick={onConfirmDelete}
+                disabled={deleting}
+                className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-[var(--rad-sm)] bg-[var(--danger)] text-[13.5px] font-semibold text-white disabled:opacity-60"
+              >
+                {deleting ? <Spinner size={15} /> : <Icon name="trash" size={15} />}
+                Delete lead
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
