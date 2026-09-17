@@ -155,7 +155,22 @@ export async function previewExistingMatches(rows: ImportRow[]): Promise<Record<
 // `confirmedRowIndices` are rows the user explicitly confirmed are the same
 // person despite only a weak (guardian-phone-only) match; every other weak
 // match is treated as a distinct student to avoid merging unrelated siblings.
-export async function importStudents(offeringId: string, rows: ImportRow[], confirmedRowIndices: number[] = []): Promise<ImportOutcome> {
+//
+// `attendanceIdOnlyRowIndices` are rows with no guardian phone in the sheet
+// at all — normally a hard error, since a brand-new student record needs it
+// — that the UI let through anyway *because* the row strong-matches (own
+// phone/email, not just a shared guardian phone) an existing student and is
+// only there to backfill that student's attendance ID. These rows must
+// never create a new student or touch enrollments; re-verified below rather
+// than trusted from the client, since this is the one bypass of the
+// guardian-phone requirement and it must not be exploitable to create an
+// incomplete record.
+export async function importStudents(
+  offeringId: string,
+  rows: ImportRow[],
+  confirmedRowIndices: number[] = [],
+  attendanceIdOnlyRowIndices: number[] = []
+): Promise<ImportOutcome> {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org) throw new Error("Not authenticated");
   const orgId = profile.org.id;
@@ -165,12 +180,17 @@ export async function importStudents(offeringId: string, rows: ImportRow[], conf
   if (!valid.length) return { imported: 0, merged: 0 };
 
   const confirmed = new Set(confirmedRowIndices);
+  const attendanceIdOnly = new Set(attendanceIdOnlyRowIndices);
 
   const existing = await fetchDedupCandidates(supabase, orgId);
 
   const rawMatches = valid.map((r) => findMatch(r, existing));
   const matches = rawMatches.map((m, i) => (m && (m.confidence === "strong" || confirmed.has(i)) ? m : null));
-  const toCreate = valid.filter((_, i) => !matches[i]);
+  // A row marked attendanceIdOnly with no real (re-verified) match here is a
+  // stale/tampered request, not a new student to create — guardian phone is
+  // missing, so silently creating one would be exactly the incomplete
+  // record this whole mechanism exists to prevent. Drop it instead.
+  const toCreate = valid.filter((_, i) => !matches[i] && !attendanceIdOnly.has(i));
 
   let created: { id: string }[] = [];
   if (toCreate.length) {
@@ -196,14 +216,20 @@ export async function importStudents(offeringId: string, rows: ImportRow[], conf
   // Walk the rows again in order, resolving each to its final student id —
   // either the existing match, or the next freshly-created row — and
   // backfill any contact fields the matched student was missing.
+  // attendanceIdOnly rows resolve to their matched student's id too (for the
+  // patch below) but are never pushed into studentIds, since that array
+  // feeds the enrollment step further down and these rows must not enroll.
   const studentIds: string[] = [];
   let createdIdx = 0;
   let mergedCount = 0;
   for (let i = 0; i < valid.length; i++) {
     const match = matches[i];
+    const isAttendanceIdOnly = attendanceIdOnly.has(i);
     if (match) {
-      studentIds.push(match.id);
-      mergedCount++;
+      if (!isAttendanceIdOnly) {
+        studentIds.push(match.id);
+        mergedCount++;
+      }
       const r = valid[i];
       const existingStudent = existing.find((s) => s.id === match.id);
       const patch: Record<string, string> = {};
@@ -214,7 +240,7 @@ export async function importStudents(offeringId: string, rows: ImportRow[], conf
       if (Object.keys(patch).length) {
         await supabase.from("students").update(patch).eq("id", match.id);
       }
-    } else {
+    } else if (!isAttendanceIdOnly) {
       studentIds.push(created[createdIdx].id);
       createdIdx++;
     }

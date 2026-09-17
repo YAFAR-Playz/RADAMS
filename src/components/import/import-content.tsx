@@ -196,23 +196,51 @@ export function ImportContent() {
       const guardianName = idxByField.guardianName != null ? row[idxByField.guardianName] ?? "" : "";
       const guardianPhone = idxByField.guardianPhone != null ? row[idxByField.guardianPhone] ?? "" : "";
       const attendanceId = idxByField.attendanceId != null ? row[idxByField.attendanceId] ?? "" : "";
-      const errorReason = !name.trim() ? "Missing student name" : !guardianPhone.trim() ? "Missing guardian phone" : null;
-      // readyIndex mirrors the position this row will have in `readyRows`, which is
-      // the exact index `importStudents` uses internally — this keeps match lookups
-      // and confirmed-merge selections aligned with what actually gets imported.
+      // Missing guardian phone is only a hard error here (before matching is
+      // known) when it's genuinely missing name — the guardian-phone check
+      // itself is deferred to the finalization step below, since whether it's
+      // actually required depends on whether this row turns out to match an
+      // existing student *and* is backfilling an attendance ID onto them
+      // (see finalRows). readyIndex indexes into matchCandidateRows (every
+      // named row, sent to previewExistingMatches below), not the final
+      // readyRows — those can differ once guardian-phone rows are resolved.
+      const errorReason = !name.trim() ? "Missing student name" : null;
       const readyIndex = errorReason ? null : readyCounter++;
-      return { n: i + 1, name, phone, email, guardianName, guardianPhone, attendanceId, error: errorReason, readyIndex };
+      const missingGuardianPhone = !guardianPhone.trim();
+      const hasAttendanceIdToBackfill = attendanceIdMapped && !!attendanceId.trim();
+      return { n: i + 1, name, phone, email, guardianName, guardianPhone, attendanceId, error: errorReason, readyIndex, missingGuardianPhone, hasAttendanceIdToBackfill };
     });
-  }, [headers, rawRows, mapping]);
+  }, [headers, rawRows, mapping, attendanceIdMapped]);
 
-  const readyRows = useMemo(() => mappedRows.filter((r) => !r.error), [mappedRows]);
-  const errorRows = useMemo(() => mappedRows.filter((r) => r.error), [mappedRows]);
-  const visibleRows = onlyErrors ? errorRows : mappedRows;
+  const matchCandidateRows = useMemo(() => mappedRows.filter((r) => !r.error), [mappedRows]);
+
+  // Resolves the deferred guardian-phone check once matches are known: a row
+  // missing a guardian phone is only let through when it strong-matches an
+  // existing student (own phone/email, not just a shared guardian phone) AND
+  // is backfilling an attendance ID onto them — never to create a new,
+  // incomplete student record. Every other missing-guardian-phone row is
+  // still a hard error, exactly as before.
+  const finalRows = useMemo(
+    () =>
+      mappedRows.map((r) => {
+        if (r.error || !r.missingGuardianPhone) return { ...r, attendanceIdOnly: false };
+        const match = r.readyIndex != null ? matches[r.readyIndex] : undefined;
+        if (r.hasAttendanceIdToBackfill && match?.confidence === "strong") {
+          return { ...r, attendanceIdOnly: true };
+        }
+        return { ...r, error: "Missing guardian phone", attendanceIdOnly: false };
+      }),
+    [mappedRows, matches]
+  );
+
+  const readyRows = useMemo(() => finalRows.filter((r) => !r.error), [finalRows]);
+  const errorRows = useMemo(() => finalRows.filter((r) => r.error), [finalRows]);
+  const visibleRows = onlyErrors ? errorRows : finalRows;
 
   useEffect(() => {
-    if (step !== 2 || !readyRows.length) return;
+    if (step !== 2 || !matchCandidateRows.length) return;
     let cancelled = false;
-    previewExistingMatches(readyRows.map((r) => ({ name: r.name, phone: r.phone, email: r.email, guardianName: r.guardianName, guardianPhone: r.guardianPhone, attendanceId: r.attendanceId })))
+    previewExistingMatches(matchCandidateRows.map((r) => ({ name: r.name, phone: r.phone, email: r.email, guardianName: r.guardianName, guardianPhone: r.guardianPhone, attendanceId: r.attendanceId })))
       .then((found) => {
         if (!cancelled) setMatches(found);
       })
@@ -226,7 +254,7 @@ export function ImportContent() {
     return () => {
       cancelled = true;
     };
-  }, [step, readyRows]);
+  }, [step, matchCandidateRows]);
 
   const STEPS = ["Upload", "Map columns", "Preview", "Done"];
   const hasFile = !!fileName;
@@ -237,10 +265,22 @@ export function ImportContent() {
       if (!offeringId) return;
       setImporting(true);
       try {
+        // confirmedMerges/attendanceIdOnly are tracked by readyIndex (position
+        // in matchCandidateRows), but importStudents indexes into whatever
+        // array it's actually given — readyRows here, which can have gaps
+        // relative to matchCandidateRows wherever a missing-guardian-phone row
+        // got blocked. Remap both to readyRows' own positions.
+        const confirmedRowIndices: number[] = [];
+        const attendanceIdOnlyRowIndices: number[] = [];
+        readyRows.forEach((r, i) => {
+          if (r.readyIndex != null && confirmedMerges.has(r.readyIndex)) confirmedRowIndices.push(i);
+          if (r.attendanceIdOnly) attendanceIdOnlyRowIndices.push(i);
+        });
         const { imported, merged } = await importStudents(
           offeringId,
           readyRows.map((r) => ({ name: r.name, phone: r.phone, email: r.email, guardianName: r.guardianName, guardianPhone: r.guardianPhone, attendanceId: r.attendanceId })),
-          Array.from(confirmedMerges)
+          confirmedRowIndices,
+          attendanceIdOnlyRowIndices
         );
         setResult({ imported, merged, errors: errorRows.length });
         setStep(3);
@@ -534,10 +574,14 @@ export function ImportContent() {
                       <span
                         className="flex min-w-0 flex-[1.3_1_160px] items-center gap-[6px] truncate text-[12.5px] font-semibold"
                         style={{ color: "var(--brand)" }}
-                        title={`Matches existing student: ${match.name}`}
+                        title={
+                          r.attendanceIdOnly
+                            ? `No guardian phone in the sheet, but ${match.name} already exists (matched by phone/email) - only their attendance ID will be backfilled, they won't be enrolled in this course`
+                            : `Matches existing student: ${match.name}`
+                        }
                       >
                         <Icon name="user-check" size={14} />
-                        Matches: {match.name}
+                        {r.attendanceIdOnly ? `ID only: ${match.name}` : `Matches: ${match.name}`}
                       </span>
                     ) : match ? (
                       <div className="flex min-w-0 flex-[1.3_1_160px] flex-col gap-[3px]">
