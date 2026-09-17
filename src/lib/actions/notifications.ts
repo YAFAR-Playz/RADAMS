@@ -536,11 +536,14 @@ export async function getNotifications(): Promise<NotificationItem[]> {
       getFinanceNotifications(orgId),
       getRegistrationNotifications(orgId),
       chatPromise,
+      // Deactivated courses must not count here either - same fix as the
+      // Registration/Admin dashboard KPIs (dashboard.ts).
       supabase
         .from("enrollments")
-        .select("id, course_offerings!inner(org_id)", { count: "exact", head: true })
+        .select("id, course_offerings!inner(org_id, active)", { count: "exact", head: true })
         .is("assistant_id", null)
-        .eq("course_offerings.org_id", orgId),
+        .eq("course_offerings.org_id", orgId)
+        .eq("course_offerings.active", true),
     ]);
     const items = [...hr, ...finance, ...registration, ...chat];
 
