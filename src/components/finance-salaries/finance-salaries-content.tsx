@@ -1001,7 +1001,7 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
           </>
         }
       >
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {loading
             ? Array.from({ length: 3 }, (_, i) => <SkeletonRow key={i} className="h-[58px]" />)
             : [
@@ -1009,8 +1009,8 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
                 { value: fmt(paidAmt), label: "Paid out", color: "var(--ok)" },
                 { value: String(pendingCount), label: "Pending payment", color: "var(--warn)" },
               ].map((s) => (
-                <div key={s.label} className="rounded-[var(--rad-sm)] border border-[var(--border2)] bg-[var(--surface2)] p-[12px_14px]">
-                  <div className="font-mono text-[21px] font-bold leading-[1.1] tracking-[-0.02em]" style={{ color: s.color }}>
+                <div key={s.label} className="min-w-0 rounded-[var(--rad-sm)] border border-[var(--border2)] bg-[var(--surface2)] p-[12px_14px]">
+                  <div className="truncate font-mono text-[21px] font-bold leading-[1.1] tracking-[-0.02em]" style={{ color: s.color }}>
                     {s.value}
                   </div>
                   <div className="mt-[2px] text-[12px] font-medium text-[var(--muted)]">{s.label}</div>
