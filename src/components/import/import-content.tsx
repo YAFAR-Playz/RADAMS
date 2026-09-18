@@ -284,8 +284,8 @@ export function ImportContent() {
         );
         setResult({ imported, merged, errors: errorRows.length });
         setStep(3);
-      } catch {
-        setError("Couldn't import students - try again.");
+      } catch (e) {
+        setError(e instanceof Error && e.message ? e.message : "Couldn't import students - try again.");
       } finally {
         setImporting(false);
       }

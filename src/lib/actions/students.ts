@@ -24,6 +24,7 @@ export type StudentRow = {
   phone: string | null;
   guardianName: string | null;
   guardianPhone: string | null;
+  attendanceId: string | null;
   assistantId: string | null;
   assistantName: string | null;
   assistantWhatsappLink: string | null;
@@ -44,8 +45,18 @@ type OfferingEnrollmentRow = {
   target_grade: number | null;
   left_at: string | null;
   students:
-    | { id: string; name: string; initials: string; student_code: string; email: string | null; phone: string | null; guardian_name: string | null; guardian_phone: string | null }
-    | { id: string; name: string; initials: string; student_code: string; email: string | null; phone: string | null; guardian_name: string | null; guardian_phone: string | null }[]
+    | { id: string; name: string; initials: string; student_code: string; email: string | null; phone: string | null; guardian_name: string | null; guardian_phone: string | null; attendance_id: string | null }
+    | {
+        id: string;
+        name: string;
+        initials: string;
+        student_code: string;
+        email: string | null;
+        phone: string | null;
+        guardian_name: string | null;
+        guardian_phone: string | null;
+        attendance_id: string | null;
+      }[]
     | null;
   profiles: { id: string; full_name: string; student_whatsapp_link: string | null } | { id: string; full_name: string; student_whatsapp_link: string | null }[] | null;
 };
@@ -65,7 +76,7 @@ export async function getStudentsForOffering(offeringId: string, options?: { lef
     let query = supabase
       .from("enrollments")
       .select(
-        "id, student_id, assistant_id, created_at, target_grade, left_at, students!inner(id, name, initials, student_code, email, phone, guardian_name, guardian_phone), profiles(id, full_name, student_whatsapp_link)"
+        "id, student_id, assistant_id, created_at, target_grade, left_at, students!inner(id, name, initials, student_code, email, phone, guardian_name, guardian_phone, attendance_id), profiles(id, full_name, student_whatsapp_link)"
       )
       .eq("offering_id", offeringId);
 
@@ -171,6 +182,7 @@ export async function getStudentsForOffering(offeringId: string, options?: { lef
         phone: student.phone,
         guardianName: student.guardian_name,
         guardianPhone: student.guardian_phone,
+        attendanceId: student.attendance_id,
         assistantId: e.assistant_id,
         assistantName: assistant?.full_name ?? null,
         assistantWhatsappLink: assistant?.student_whatsapp_link ?? null,
@@ -232,6 +244,7 @@ export type StudentsTabBootstrap = {
   offerings: OfferingOption[];
   orgName: string;
   currency: string | null;
+  attendanceIdMatchingEnabled: boolean;
   welcomeTemplateStudent: string;
   welcomeTemplateParent: string;
   tierTemplates: {
@@ -262,6 +275,7 @@ export async function getStudentsTabBootstrap(): Promise<StudentsTabBootstrap> {
     offerings,
     orgName,
     currency: payrollSettings?.currency ?? null,
+    attendanceIdMatchingEnabled: !!payrollSettings?.attendanceIdMatchingEnabled,
     welcomeTemplateStudent: templates.welcome_student,
     welcomeTemplateParent: templates.welcome_parent,
     tierTemplates: {
@@ -600,26 +614,39 @@ export async function updateStudent(
     phone: string;
     guardianName: string;
     guardianPhone: string;
+    // Only orgs with "Attendance ID matching" enabled surface this field in
+    // the edit UI. `undefined` means "leave attendance_id untouched" (the
+    // field wasn't shown) - an empty string means "clear it".
+    attendanceId?: string;
   }
 ) {
   const supabase = await createClient();
   const { data: before } = await supabase
     .from("students")
-    .select("name, email, phone, guardian_name, guardian_phone")
+    .select("name, email, phone, guardian_name, guardian_phone, attendance_id")
     .eq("id", studentId)
     .maybeSingle();
 
-  const { error } = await supabase
-    .from("students")
-    .update({
-      name: patch.name,
-      email: patch.email || null,
-      phone: patch.phone || null,
-      guardian_name: patch.guardianName || null,
-      guardian_phone: patch.guardianPhone || null,
-    })
-    .eq("id", studentId);
-  if (error) throw new Error(error.message);
+  const updatePayload: Record<string, string | null> = {
+    name: patch.name,
+    email: patch.email || null,
+    phone: patch.phone || null,
+    guardian_name: patch.guardianName || null,
+    guardian_phone: patch.guardianPhone || null,
+  };
+  if (patch.attendanceId !== undefined) updatePayload.attendance_id = patch.attendanceId.trim() || null;
+
+  const { error } = await supabase.from("students").update(updatePayload).eq("id", studentId);
+  if (error) {
+    // Same org-scoped unique index the bulk import respects (students_org_
+    // attendance_id_idx) - a manual edit can collide with it just as easily
+    // as an import row can, and deserves the same clear message instead of
+    // a raw constraint-violation string.
+    if (patch.attendanceId !== undefined && error.code === "23505") {
+      throw new Error("That attendance ID is already used by another student in this org.");
+    }
+    throw new Error(error.message);
+  }
 
   const changes = before
     ? [
@@ -628,6 +655,7 @@ export async function updateStudent(
         fieldChange("phone", before.phone, patch.phone),
         fieldChange("guardian name", before.guardian_name, patch.guardianName),
         fieldChange("guardian phone", before.guardian_phone, patch.guardianPhone),
+        patch.attendanceId !== undefined ? fieldChange("attendance id", before.attendance_id, patch.attendanceId) : null,
       ].filter((x): x is string => !!x)
     : [];
   await logActivity("students", `Updated ${patch.name}${changes.length ? ` - ${changes.join(", ")}` : ""}`);

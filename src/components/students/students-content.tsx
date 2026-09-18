@@ -34,7 +34,7 @@ import {
   type StudentDetailPanel,
   type StudentDuplicateMatch,
 } from "@/lib/actions/students";
-import { getPayrollSettings } from "@/lib/actions/payroll-settings";
+import { getPayrollSettings, getAttendanceIdMatchingEnabled } from "@/lib/actions/payroll-settings";
 import { type GradeScaleSetting } from "@/lib/actions/oversight";
 import { formatGradeByScale } from "@/lib/grade-scale";
 import { getTrafficLightForOffering, setStudentTargetGrade, type StudentTrafficLight } from "@/lib/actions/traffic-light";
@@ -58,6 +58,7 @@ type EditDraft = {
   phone: string;
   guardianName: string;
   guardianPhone: string;
+  attendanceId: string;
 };
 
 export function StudentsContent({ role }: { role: Role }) {
@@ -98,7 +99,13 @@ export function StudentsContent({ role }: { role: Role }) {
   const [studentAttendance, setStudentAttendance] = useState<StudentAttendanceSummary | null>(null);
   const [enrollmentBusy, setEnrollmentBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [attendanceIdEnabled, setAttendanceIdEnabled] = useState(false);
   const isRegistration = role === "registration";
+  // The Edit student modal's Attendance ID field is only meaningful for the
+  // two roles that manage rosters directly (Head has its own, simpler edit
+  // needs; Assistant can't edit at all) - and only when the org actually
+  // uses attendance-id matching.
+  const showAttendanceIdField = (isAdmin || isRegistration) && attendanceIdEnabled;
   const canEditCourses = role === "admin" || role === "registration";
   // Admin doesn't otherwise have a "View more" panel — added narrowly for
   // the "Left students" view only, so a left student's assignments/
@@ -152,6 +159,7 @@ export function StudentsContent({ role }: { role: Role }) {
       setOrgName(data.orgName);
       setTierTemplates(data.tierTemplates);
       setSym(currencySymbol(data.currency));
+      setAttendanceIdEnabled(data.attendanceIdMatchingEnabled);
     });
     if (isHead) getPayrollSettings().then((s) => setHeadsCanAddStudents(!!s?.headsCanAddStudents));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -420,6 +428,7 @@ export function StudentsContent({ role }: { role: Role }) {
       phone: s.phone ?? "",
       guardianName: s.guardianName ?? "",
       guardianPhone: s.guardianPhone ?? "",
+      attendanceId: s.attendanceId ?? "",
     });
     // Fetched for everyone who can edit (not just canEditCourses) — a Head
     // can't add/remove courses but still needs to see and toggle "left" for
@@ -521,6 +530,7 @@ export function StudentsContent({ role }: { role: Role }) {
           phone: editDraft.phone,
           guardianName: editDraft.guardianName,
           guardianPhone: editDraft.guardianPhone,
+          attendanceId: showAttendanceIdField ? editDraft.attendanceId : undefined,
         }),
         // "Left" belongs to each course's own enrollment, not the student
         // record — one toggle per course shown, so every course visible in
@@ -531,8 +541,8 @@ export function StudentsContent({ role }: { role: Role }) {
       ]);
       setEditDraft(null);
       await reloadCurrent(offeringId);
-    } catch {
-      setError("Couldn't save changes - try again.");
+    } catch (e) {
+      setError(e instanceof Error && e.message ? e.message : "Couldn't save changes - try again.");
     } finally {
       setSavingEdit(false);
     }
@@ -1196,6 +1206,20 @@ export function StudentsContent({ role }: { role: Role }) {
                   className="h-[42px] w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[13px] text-[13.5px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
                 />
               </div>
+              {showAttendanceIdField && (
+                <div>
+                  <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Attendance ID</label>
+                  <input
+                    value={editDraft.attendanceId}
+                    onChange={(e) => setEditDraft((d) => d && { ...d, attendanceId: e.target.value })}
+                    placeholder="e.g. 6723"
+                    className="h-[42px] w-full rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-[13px] font-mono text-[13px] text-[var(--text)] outline-none focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brands)]"
+                  />
+                  <p className="m-0 mt-[6px] text-[11.5px] leading-[1.4] text-[var(--subtle)]">
+                    From Zoom/attendance exports - matches this student in attendance imports.
+                  </p>
+                </div>
+              )}
               <div>
                 <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Courses enrolled</label>
                 {editEnrollments === null ? (
