@@ -202,25 +202,6 @@ export function MyPayContent() {
         <section data-tour="mypay-breakdown" className="overflow-hidden rounded-[var(--rad)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
           <header className="flex items-center justify-between border-b border-[var(--border2)] p-[15px_18px]">
             <h3 className="m-0 text-[14px] font-semibold text-[var(--text)]">Breakdown · {periodLabel(data.period)}</h3>
-            <div className="flex items-center gap-[8px]">
-              {data.paid && (
-                <button
-                  onClick={onViewReceipt}
-                  disabled={receiptLoading}
-                  className="flex items-center gap-[6px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 py-[7px] text-[12px] font-semibold text-[var(--muted)] disabled:opacity-60"
-                >
-                  {receiptLoading ? <Spinner size={13} /> : <Icon name="file-up" size={13} />}
-                  Receipt
-                </button>
-              )}
-              <span
-                className="inline-flex items-center gap-[5px] rounded-full px-[10px] py-[4px] text-[11.5px] font-semibold"
-                style={data.paid ? { background: "var(--oks)", color: "var(--ok)" } : { background: "var(--warns)", color: "var(--warn)" }}
-              >
-                <Icon name={data.paid ? "check2" : "clock"} size={12} />
-                {data.paid ? "Paid" : "Pending"}
-              </span>
-            </div>
           </header>
           <div className="hidden items-center gap-3 border-b border-[var(--border2)] px-[18px] py-[9px] text-[10.5px] font-bold uppercase tracking-[0.04em] text-[var(--subtle)] md:flex">
             <span className="w-[150px] flex-none">Course</span>
