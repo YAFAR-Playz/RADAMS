@@ -119,11 +119,15 @@ export async function getStudentsForOffering(offeringId: string, options?: { lef
         if (data.length < ENROLLMENT_PAGE_SIZE) break;
       }
     })(),
-    supabase.from("assignments").select("id, title, created_at").eq("offering_id", offeringId).order("created_at", { ascending: true }).limit(5),
+    supabase.from("assignments").select("id, title, created_at").eq("offering_id", offeringId).order("created_at", { ascending: false }).limit(5),
   ]);
   if (!enrollments.length) return [];
 
-  const assignments = assignmentRows ?? [];
+  // Fetched newest-first to get the most recent 5 (not the oldest 5, which
+  // is what a plain ascending-order limit would silently freeze on once a
+  // course passes 5 assignments) — re-sorted back to chronological order so
+  // the Progress cells still read left-to-right oldest-to-newest.
+  const assignments = (assignmentRows ?? []).slice().reverse();
   const assignmentIds = assignments.map((a) => a.id);
 
   // Scoping to assignment_id alone is already exact — the map below only
