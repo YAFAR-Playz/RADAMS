@@ -84,7 +84,7 @@ export function RegistrationsContent() {
     }
   }
 
-  const canSubmit = form.name.trim().length > 0 && !!offeringId;
+  const canSubmit = form.name.trim().length > 0 && form.phone.trim().length > 0 && form.guardianPhone.trim().length > 0 && !!offeringId;
 
   function updateForm(patch: Partial<typeof form>) {
     setForm((f) => ({ ...f, ...patch }));
@@ -231,7 +231,9 @@ export function RegistrationsContent() {
             )}
             <div className="grid grid-cols-2 gap-[10px]">
               <div>
-                <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Phone</label>
+                <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">
+                  Phone <span className="text-[var(--danger)]">*</span>
+                </label>
                 <input
                   data-tour="registrations-phone"
                   value={form.phone}
@@ -261,7 +263,9 @@ export function RegistrationsContent() {
                 />
               </div>
               <div>
-                <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">Guardian phone</label>
+                <label className="mb-[7px] block text-[12.5px] font-semibold text-[var(--text)]">
+                  Guardian phone <span className="text-[var(--danger)]">*</span>
+                </label>
                 <input
                   value={form.guardianPhone}
                   onChange={(e) => updateForm({ guardianPhone: e.target.value })}
