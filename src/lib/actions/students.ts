@@ -24,6 +24,7 @@ export type StudentRow = {
   phone: string | null;
   guardianName: string | null;
   guardianPhone: string | null;
+  attendanceId: string | null;
   assistantId: string | null;
   assistantName: string | null;
   assistantWhatsappLink: string | null;
@@ -44,8 +45,18 @@ type OfferingEnrollmentRow = {
   target_grade: number | null;
   left_at: string | null;
   students:
-    | { id: string; name: string; initials: string; student_code: string; email: string | null; phone: string | null; guardian_name: string | null; guardian_phone: string | null }
-    | { id: string; name: string; initials: string; student_code: string; email: string | null; phone: string | null; guardian_name: string | null; guardian_phone: string | null }[]
+    | { id: string; name: string; initials: string; student_code: string; email: string | null; phone: string | null; guardian_name: string | null; guardian_phone: string | null; attendance_id: string | null }
+    | {
+        id: string;
+        name: string;
+        initials: string;
+        student_code: string;
+        email: string | null;
+        phone: string | null;
+        guardian_name: string | null;
+        guardian_phone: string | null;
+        attendance_id: string | null;
+      }[]
     | null;
   profiles: { id: string; full_name: string; student_whatsapp_link: string | null } | { id: string; full_name: string; student_whatsapp_link: string | null }[] | null;
 };
@@ -65,7 +76,7 @@ export async function getStudentsForOffering(offeringId: string, options?: { lef
     let query = supabase
       .from("enrollments")
       .select(
-        "id, student_id, assistant_id, created_at, target_grade, left_at, students!inner(id, name, initials, student_code, email, phone, guardian_name, guardian_phone), profiles(id, full_name, student_whatsapp_link)"
+        "id, student_id, assistant_id, created_at, target_grade, left_at, students!inner(id, name, initials, student_code, email, phone, guardian_name, guardian_phone, attendance_id), profiles(id, full_name, student_whatsapp_link)"
       )
       .eq("offering_id", offeringId);
 
@@ -171,6 +182,7 @@ export async function getStudentsForOffering(offeringId: string, options?: { lef
         phone: student.phone,
         guardianName: student.guardian_name,
         guardianPhone: student.guardian_phone,
+        attendanceId: student.attendance_id,
         assistantId: e.assistant_id,
         assistantName: assistant?.full_name ?? null,
         assistantWhatsappLink: assistant?.student_whatsapp_link ?? null,
@@ -232,6 +244,7 @@ export type StudentsTabBootstrap = {
   offerings: OfferingOption[];
   orgName: string;
   currency: string | null;
+  attendanceIdMatchingEnabled: boolean;
   welcomeTemplateStudent: string;
   welcomeTemplateParent: string;
   tierTemplates: {
@@ -262,6 +275,7 @@ export async function getStudentsTabBootstrap(): Promise<StudentsTabBootstrap> {
     offerings,
     orgName,
     currency: payrollSettings?.currency ?? null,
+    attendanceIdMatchingEnabled: !!payrollSettings?.attendanceIdMatchingEnabled,
     welcomeTemplateStudent: templates.welcome_student,
     welcomeTemplateParent: templates.welcome_parent,
     tierTemplates: {
@@ -443,20 +457,39 @@ export type StudentDuplicateMatch = {
   attendanceId: string | null;
 };
 
-// Phone-only match, scoped to the org — deliberately simple (no fuzzy name
-// matching) so a Head gets a clear, unambiguous "is this them?" rather than
-// a list of maybe-matches to sift through.
-export async function findStudentByPhone(phone: string): Promise<StudentDuplicateMatch | null> {
+// Checks name, then phone, then email — first match wins, scoped to the
+// org. Used to be phone-only, which missed real duplicates whenever a
+// re-registration filled in a phone number the original record never had
+// (an exact phone match can never fire against a null), or used a
+// re-typed/differently-formatted phone — confirmed in production the same
+// student got recorded three times this way. Guardian phone is deliberately
+// NOT a match key here: it's the one signal that reliably produces false
+// positives (two different siblings sharing a guardian's number) rather
+// than confirming the same student — see the parallel fix in importStudents'
+// findMatch. This never auto-merges anything itself; callers always show
+// the match to the user for an explicit yes/no before touching data.
+export async function findDuplicateStudent(input: { name: string; phone: string; email: string }): Promise<StudentDuplicateMatch | null> {
   const profile = await getCurrentProfile();
   const orgId = profile?.org?.id;
-  if (!orgId || !phone.trim()) return null;
+  if (!orgId) return null;
+  const name = input.name.trim();
+  const phone = input.phone.trim();
+  const email = input.email.trim();
+  if (!name && !phone && !email) return null;
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("students")
-    .select("id, name, student_code, guardian_name, guardian_phone, attendance_id")
-    .eq("org_id", orgId)
-    .eq("phone", phone.trim())
-    .maybeSingle();
+  const columns = "id, name, student_code, guardian_name, guardian_phone, attendance_id";
+
+  const byName = name
+    ? (await supabase.from("students").select(columns).eq("org_id", orgId).ilike("name", name).limit(1)).data?.[0]
+    : null;
+  const byPhone = !byName && phone
+    ? (await supabase.from("students").select(columns).eq("org_id", orgId).eq("phone", phone).limit(1)).data?.[0]
+    : null;
+  const byEmail = !byName && !byPhone && email
+    ? (await supabase.from("students").select(columns).eq("org_id", orgId).ilike("email", email).limit(1)).data?.[0]
+    : null;
+
+  const data = byName ?? byPhone ?? byEmail;
   if (!data) return null;
   return {
     id: data.id,
@@ -475,7 +508,7 @@ export type HeadAddStudentInput = {
   guardianName?: string;
   guardianPhone?: string;
   offeringId: string;
-  // Set once the Head has confirmed a phone match found by findStudentByPhone
+  // Set once the Head has confirmed a match found by findDuplicateStudent
   // really is the same person — skips creating a new student row entirely
   // and just enrolls the existing one, so the org doesn't accumulate a
   // second disconnected record for someone already in the system.
@@ -600,26 +633,39 @@ export async function updateStudent(
     phone: string;
     guardianName: string;
     guardianPhone: string;
+    // Only orgs with "Attendance ID matching" enabled surface this field in
+    // the edit UI. `undefined` means "leave attendance_id untouched" (the
+    // field wasn't shown) - an empty string means "clear it".
+    attendanceId?: string;
   }
 ) {
   const supabase = await createClient();
   const { data: before } = await supabase
     .from("students")
-    .select("name, email, phone, guardian_name, guardian_phone")
+    .select("name, email, phone, guardian_name, guardian_phone, attendance_id")
     .eq("id", studentId)
     .maybeSingle();
 
-  const { error } = await supabase
-    .from("students")
-    .update({
-      name: patch.name,
-      email: patch.email || null,
-      phone: patch.phone || null,
-      guardian_name: patch.guardianName || null,
-      guardian_phone: patch.guardianPhone || null,
-    })
-    .eq("id", studentId);
-  if (error) throw new Error(error.message);
+  const updatePayload: Record<string, string | null> = {
+    name: patch.name,
+    email: patch.email || null,
+    phone: patch.phone || null,
+    guardian_name: patch.guardianName || null,
+    guardian_phone: patch.guardianPhone || null,
+  };
+  if (patch.attendanceId !== undefined) updatePayload.attendance_id = patch.attendanceId.trim() || null;
+
+  const { error } = await supabase.from("students").update(updatePayload).eq("id", studentId);
+  if (error) {
+    // Same org-scoped unique index the bulk import respects (students_org_
+    // attendance_id_idx) - a manual edit can collide with it just as easily
+    // as an import row can, and deserves the same clear message instead of
+    // a raw constraint-violation string.
+    if (patch.attendanceId !== undefined && error.code === "23505") {
+      throw new Error("That attendance ID is already used by another student in this org.");
+    }
+    throw new Error(error.message);
+  }
 
   const changes = before
     ? [
@@ -628,6 +674,7 @@ export async function updateStudent(
         fieldChange("phone", before.phone, patch.phone),
         fieldChange("guardian name", before.guardian_name, patch.guardianName),
         fieldChange("guardian phone", before.guardian_phone, patch.guardianPhone),
+        patch.attendanceId !== undefined ? fieldChange("attendance id", before.attendance_id, patch.attendanceId) : null,
       ].filter((x): x is string => !!x)
     : [];
   await logActivity("students", `Updated ${patch.name}${changes.length ? ` - ${changes.join(", ")}` : ""}`);

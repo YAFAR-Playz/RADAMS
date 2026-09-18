@@ -37,8 +37,8 @@ function offeringLabel(o: { session: string; unit: string | null; courses: { nam
   return [course?.name, o.session, o.unit].filter(Boolean).join(" · ");
 }
 
-// `existingStudentId` is set once the caller has confirmed a phone match
-// found by `findStudentByPhone` really is the same person — skips creating
+// `existingStudentId` is set once the caller has confirmed a match found by
+// `findDuplicateStudent` really is the same person — skips creating
 // a new student row and just enrolls the existing one instead, so re-running
 // this form for someone already in the system doesn't leave a duplicate
 // record behind (mirrors `headAddStudent`'s pattern in students.ts).

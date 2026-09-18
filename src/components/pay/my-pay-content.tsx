@@ -121,12 +121,6 @@ export function MyPayContent() {
     );
   }
 
-  const stats = [
-    { value: data.released ? fmt(data.total, data.currency) : "-", label: "Total this month" },
-    { value: String(data.courses.length), label: "Courses" },
-    { value: data.paid ? "Paid" : "Pending", label: "Payment status" },
-  ];
-
   return (
     <div className="flex flex-col gap-4">
       {error && (
@@ -139,45 +133,68 @@ export function MyPayContent() {
       )}
 
       {/* HEADER */}
-      <PageHeader
-        eyebrow="My pay"
-        title="My salary breakdown"
-        subtitle="How your pay was calculated this month."
-        actions={
-          <>
-            <div className="flex h-10 items-center gap-2 rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3">
-              <Icon name="cal-check" size={15} className="text-[var(--subtle)]" />
-              <select
-                value={data.period}
-                onChange={(e) => onChangePeriod(e.target.value)}
-                className="cursor-pointer appearance-none border-none bg-transparent text-[13.5px] font-semibold text-[var(--text)] outline-none"
-              >
-                {data.periods.map((p) => (
-                  <option key={p} value={p}>
-                    {periodLabel(p)}
-                  </option>
-                ))}
-              </select>
+      <PageHeader eyebrow="My pay" title="My salary breakdown" subtitle="How your pay was calculated this month." />
+
+      {/* HERO — prototype: gradient "balance card" treatment, styled after
+          a fintech balance-card pattern (big number, member/course chips,
+          pill actions on a gradient panel) rather than this app's usual
+          flat stat tiles. Local design exploration only. */}
+      <div
+        className="relative overflow-hidden rounded-[20px] p-[22px_24px] text-white shadow-[0_16px_40px_rgba(37,99,235,0.25)]"
+        style={{ background: `linear-gradient(135deg, var(--brand) 0%, var(--brandh) 100%)` }}
+      >
+        <div className="pointer-events-none absolute -right-16 -top-16 h-[220px] w-[220px] rounded-full bg-white/10" />
+        <div className="pointer-events-none absolute -bottom-20 -left-10 h-[180px] w-[180px] rounded-full bg-white/5" />
+
+        <div className="relative flex items-start justify-between gap-3">
+          <div>
+            <div className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-white/70">Total this month</div>
+            <div className="mt-[6px] font-mono text-[34px] font-bold leading-none tracking-[-0.02em]">
+              {data.released ? fmt(data.total, data.currency) : "—"}
             </div>
+          </div>
+          <div className="flex h-9 flex-none items-center gap-[6px] rounded-full bg-white/15 px-3 backdrop-blur-sm">
+            <Icon name="cal-check" size={14} />
+            <select
+              value={data.period}
+              onChange={(e) => onChangePeriod(e.target.value)}
+              className="cursor-pointer appearance-none border-none bg-transparent text-[12.5px] font-semibold text-white outline-none [&>option]:text-[var(--text)]"
+            >
+              {data.periods.map((p) => (
+                <option key={p} value={p}>
+                  {periodLabel(p)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="relative mt-[20px] flex items-center gap-[10px]">
+          <span className="inline-flex items-center gap-[5px] rounded-full bg-white/18 px-[10px] py-[5px] text-[11.5px] font-semibold">
+            <Icon name={data.paid ? "check2" : "clock"} size={12} />
+            {data.paid ? "Paid" : "Pending"}
+          </span>
+          <div className="ml-auto flex items-center gap-[8px]">
+            {data.paid && (
+              <button
+                onClick={onViewReceipt}
+                disabled={receiptLoading}
+                className="flex items-center gap-[6px] rounded-full bg-white/15 px-[14px] py-[9px] text-[12.5px] font-semibold text-white backdrop-blur-sm hover:bg-white/25 disabled:opacity-70"
+              >
+                {receiptLoading ? <Spinner size={13} /> : <Icon name="file-up" size={13} />}
+                Receipt
+              </button>
+            )}
             <button
               onClick={openMessages}
-              className="flex items-center gap-[7px] rounded-[var(--rad-sm)] bg-[var(--brand)] px-[14px] py-[10px] text-[13px] font-semibold text-[var(--brandfg)]"
+              className="flex items-center gap-[6px] rounded-full bg-white px-[14px] py-[9px] text-[12.5px] font-semibold text-[var(--brand)]"
             >
-              <Icon name="message" size={15} />
-              Message Finance
+              <Icon name="send" size={13} />
+              Message
             </button>
-          </>
-        }
-      >
-        <div className="grid grid-cols-3 gap-3">
-          {stats.map((s) => (
-            <div key={s.label} className="rounded-[var(--rad-sm)] border border-[var(--border2)] bg-[var(--surface2)] p-[13px_15px]">
-              <div className="text-[22px] font-bold leading-[1.1] tracking-[-0.02em] text-[var(--brand)]">{s.value}</div>
-              <div className="mt-[3px] text-[12px] font-medium text-[var(--muted)]">{s.label}</div>
-            </div>
-          ))}
+          </div>
         </div>
-      </PageHeader>
+      </div>
 
       {loading ? (
         <SkeletonRow className="h-[200px]" />

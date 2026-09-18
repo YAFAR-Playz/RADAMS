@@ -33,37 +33,57 @@ function initialsOf(name: string) {
 
 type ExistingStudent = { id: string; name: string; phone: string | null; email: string | null; guardian_phone: string | null; attendance_id: string | null };
 
-// "strong": name + the student's own email/phone match — safe to auto-merge.
-// "weak": name + only the guardian phone match — a shared guardian phone
-// (siblings' actual guardian, or an agent/relative's number reused across
-// unrelated families) is common enough that this must NOT auto-merge; it's
-// surfaced to the user in the preview step and only merged if they confirm it.
+// "strong": the student's own email/phone/attendance id matches — these are
+// unique-per-person identifiers, so it's safe to auto-merge on them
+// regardless of whether the name string matches exactly.
+// "weak": only the name matches, with no phone/email/attendance id agreement
+// — common names repeat across genuinely different students in these
+// rosters (confirmed via several real sibling pairs found in production data
+// that share a surname/guardian but are not the same person), so a bare name
+// match must NOT auto-merge; it's surfaced to the user in the preview step
+// and only merged if they confirm it.
+//
+// Guardian phone is deliberately NOT a match signal at all (dropped from the
+// weak tier it used to anchor): a shared guardian phone alone — siblings'
+// actual guardian, or an agent/relative's number reused across unrelated
+// families — produced confirmed false positives when tested against real
+// org data, and per the simpler dedup rule (name, then phone, then email;
+// no match on any of the three means no dup) it isn't one of the signals
+// that should ever flag a match.
 export type MatchConfidence = "strong" | "weak";
 // existingAttendanceId lets the preview step tell the user, per row, whether
 // this student already has an attendance id on file (and whether it matches
 // what's in the sheet) versus one that will be freshly backfilled on import.
 export type MatchInfo = { id: string; name: string; confidence: MatchConfidence; existingAttendanceId: string | null };
 
-// Attendance id is never a match key here — matching still works exactly
-// like it did before this field existed (name + email/phone/guardian
-// phone). The id only ever flows the other way: once a row is matched by
-// name as usual, and that existing student doesn't have an id yet, the
-// id from the sheet gets backfilled onto them (see the patch logic in
-// importStudents below). This is what actually lets an org backfill ids
-// onto its whole existing roster via a single admin-provided CSV.
+// Strong matches used to also require the name string to match exactly —
+// but re-typed sheets routinely spell the same real student's name
+// differently (missing a middle name, "Basem" vs "Bassem", a doubled
+// space), while their own phone/email/attendance id stays identical. That
+// name requirement was silently defeating dedup for exactly those rows:
+// confirmed in production for both orgs reporting this — matching pairs of
+// student rows with identical phone AND guardian_phone but a slightly
+// different name, created minutes/days apart by separate imports. Fixed by
+// treating the student's own phone/email/attendance id as sufficient on its
+// own; a name-only match (no phone/email/attendance id agreement) still
+// flags as a weak match rather than being ignored entirely.
 function findMatch(row: ImportRow, existing: ExistingStudent[]): MatchInfo | null {
   const name = row.name.trim().toLowerCase();
   const email = row.email.trim().toLowerCase();
   const phone = row.phone.trim();
-  const guardianPhone = row.guardianPhone.trim();
+  const attendanceId = row.attendanceId.trim();
 
   for (const s of existing) {
-    if (s.name.trim().toLowerCase() !== name) continue;
     const emailMatch = !!email && !!s.email && s.email.toLowerCase() === email;
     const phoneMatch = !!phone && !!s.phone && s.phone === phone;
-    const guardianMatch = !!guardianPhone && !!s.guardian_phone && s.guardian_phone === guardianPhone;
-    if (emailMatch || phoneMatch) return { id: s.id, name: s.name, confidence: "strong", existingAttendanceId: s.attendance_id };
-    if (guardianMatch) return { id: s.id, name: s.name, confidence: "weak", existingAttendanceId: s.attendance_id };
+    const attendanceIdMatch = !!attendanceId && !!s.attendance_id && s.attendance_id === attendanceId;
+    if (emailMatch || phoneMatch || attendanceIdMatch) {
+      return { id: s.id, name: s.name, confidence: "strong", existingAttendanceId: s.attendance_id };
+    }
+  }
+  for (const s of existing) {
+    if (!name || s.name.trim().toLowerCase() !== name) continue;
+    return { id: s.id, name: s.name, confidence: "weak", existingAttendanceId: s.attendance_id };
   }
   return null;
 }
@@ -191,6 +211,25 @@ export async function importStudents(
   // missing, so silently creating one would be exactly the incomplete
   // record this whole mechanism exists to prevent. Drop it instead.
   const toCreate = valid.filter((_, i) => !matches[i] && !attendanceIdOnly.has(i));
+
+  // Two rows in the same sheet neither of which matched an existing student
+  // (so both are about to be inserted as brand-new) can still share the same
+  // attendance id by data-entry error — a bulk insert would then hit the
+  // org's unique (org_id, attendance_id) constraint and abort with an opaque
+  // "duplicate key value" error, failing every row in the batch rather than
+  // just the offending two. Caught here with a specific, actionable message
+  // instead (this is what was crashing real imports in production).
+  const attendanceIdCounts = new Map<string, string[]>();
+  for (const r of toCreate) {
+    const id = r.attendanceId.trim();
+    if (!id) continue;
+    attendanceIdCounts.set(id, [...(attendanceIdCounts.get(id) ?? []), r.name.trim()]);
+  }
+  const collidingIds = Array.from(attendanceIdCounts.entries()).filter(([, names]) => names.length > 1);
+  if (collidingIds.length) {
+    const [id, names] = collidingIds[0];
+    throw new Error(`Attendance ID "${id}" is used by more than one row in this sheet (${names.join(", ")}) - fix the sheet and try again.`);
+  }
 
   let created: { id: string }[] = [];
   if (toCreate.length) {
