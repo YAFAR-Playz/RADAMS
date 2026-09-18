@@ -97,8 +97,15 @@ export function ChatContent({ role }: { role: Role }) {
     // One-shot: a "Continue in chat" action elsewhere (e.g. the Salaries
     // inquiries popup) drops a target profile id here before navigating so
     // this page opens straight into that DM instead of the plain list.
-    const target = consumeChatHandoff();
-    if (target) startDm(target);
+    // `draft`, when present, quotes whatever prompted the handoff (e.g. a
+    // finance inquiry's text) into the compose box — that source lives in a
+    // separate message store from Chat, so there's no real message history
+    // to open into, only this new DM to continue the conversation in.
+    const handoff = consumeChatHandoff();
+    if (handoff) {
+      startDm(handoff.profileId);
+      if (handoff.draft) setDraft(handoff.draft);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

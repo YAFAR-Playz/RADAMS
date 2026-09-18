@@ -22,7 +22,8 @@ import {
   setAssistantOfficeHours,
   listMessagesForPayee,
   replyToPayee,
-  listInquiriesForPeriod,
+  listInquiries,
+  closeFinanceInquiry,
   getUnresolvedFinanceInquiryCount,
   removePayeeFromPeriod,
   listMissingPayeesForPeriod,
@@ -318,26 +319,30 @@ function MessagesModal({ payeeId, payeeName, defaultPeriod, onClose }: { payeeId
   );
 }
 
-// Org-wide inbox of every payee's inquiry for the currently-viewed period —
+// Org-wide inbox of every payee's open inquiry thread, across every period —
 // one row per thread, unresolved ones first, each with its own inline quick-
 // reply (no need to know which payee to look at first, unlike MessagesModal
 // above) plus a way to jump into the full Chat conversation with that person
-// without ever leaving this popup for a different page.
-function InquiriesModal({ period, onClose, onReplied }: { period: string; onClose: () => void; onReplied: () => void }) {
+// without ever leaving this popup for a different page. Scoped org-wide
+// (not to whichever period the Salaries tab happens to be viewing) to match
+// the Salaries nav dot's own scope — see listInquiries' own comment.
+function InquiriesModal({ onClose, onReplied }: { onClose: () => void; onReplied: () => void }) {
   const router = useRouter();
   const [inquiries, setInquiries] = useState<FinanceInquiry[] | null>(null);
   const [replyBody, setReplyBody] = useState<Record<string, string>>({});
   const [sendingId, setSendingId] = useState<string | null>(null);
+  const [closingId, setClosingId] = useState<string | null>(null);
 
   async function reload() {
-    setInquiries(await listInquiriesForPeriod(period));
+    setInquiries(await listInquiries());
   }
 
   useEffect(() => {
-    listInquiriesForPeriod(period).then(setInquiries);
-  }, [period]);
+    reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  async function onQuickReply(payeeId: string) {
+  async function onQuickReply(payeeId: string, inquiryPeriod: string) {
     // The Reply button disables itself while sendingId is set, but the
     // input's Enter-key handler calls this directly — guard here too, or a
     // fast double-Enter fires this twice before the first send updates
@@ -347,7 +352,10 @@ function InquiriesModal({ period, onClose, onReplied }: { period: string; onClos
     if (!body) return;
     setSendingId(payeeId);
     try {
-      await replyToPayee(payeeId, body, period);
+      // Filed against the inquiry's OWN period, not whichever period the
+      // Salaries tab happens to be showing — this popup can now list
+      // inquiries from any period at once.
+      await replyToPayee(payeeId, body, inquiryPeriod);
       setReplyBody((prev) => ({ ...prev, [payeeId]: "" }));
       await reload();
       onReplied();
@@ -356,8 +364,19 @@ function InquiriesModal({ period, onClose, onReplied }: { period: string; onClos
     }
   }
 
-  function onContinueInChat(payeeId: string) {
-    setChatHandoff(payeeId);
+  async function onCloseInquiry(payeeId: string) {
+    setClosingId(payeeId);
+    try {
+      await closeFinanceInquiry(payeeId);
+      await reload();
+      onReplied();
+    } finally {
+      setClosingId(null);
+    }
+  }
+
+  function onContinueInChat(inq: FinanceInquiry) {
+    setChatHandoff(inq.payeeId, `Re your ${periodLabel(inq.period)} pay inquiry: "${inq.lastMessage}"\n\n`);
     router.push("/chat");
   }
 
@@ -372,10 +391,7 @@ function InquiriesModal({ period, onClose, onReplied }: { period: string; onClos
           </div>
           <div className="min-w-0 flex-1">
             <h3 className="m-0 text-[15px] font-semibold text-[var(--text)]">Staff inquiries</h3>
-            <div className="text-[12px] text-[var(--muted)]">
-              {periodLabel(period)}
-              {unresolvedCount > 0 ? ` · ${unresolvedCount} awaiting reply` : ""}
-            </div>
+            <div className="text-[12px] text-[var(--muted)]">{unresolvedCount > 0 ? `${unresolvedCount} awaiting reply` : "All caught up"}</div>
           </div>
           <button onClick={onClose} className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface2)]">
             <Icon name="x" size={18} />
@@ -387,7 +403,7 @@ function InquiriesModal({ period, onClose, onReplied }: { period: string; onClos
             <SkeletonRow className="h-[70px]" />
           </div>
         ) : inquiries.length === 0 ? (
-          <div className="p-[26px] text-center text-[12.5px] text-[var(--muted)]">No inquiries for {periodLabel(period)}.</div>
+          <div className="p-[26px] text-center text-[12.5px] text-[var(--muted)]">No open inquiries.</div>
         ) : (
           <div className="flex flex-1 flex-col gap-[10px] overflow-y-auto p-[18px]">
             {inquiries.map((inq) => (
@@ -401,17 +417,29 @@ function InquiriesModal({ period, onClose, onReplied }: { period: string; onClos
                       )}
                     </div>
                     <div className="text-[10.5px] text-[var(--subtle)]">
+                      {periodLabel(inq.period)} ·{" "}
                       {new Date(inq.lastAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                     </div>
                   </div>
-                  <button
-                    onClick={() => onContinueInChat(inq.payeeId)}
-                    title="Continue this conversation in Chat"
-                    className="flex flex-none items-center gap-[5px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[9px] py-[5px] text-[11.5px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)]"
-                  >
-                    <Icon name="message" size={12} />
-                    Continue in chat
-                  </button>
+                  <div className="flex flex-none items-center gap-[6px]">
+                    <button
+                      onClick={() => onContinueInChat(inq)}
+                      title="Continue this conversation in Chat"
+                      className="flex flex-none items-center gap-[5px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[9px] py-[5px] text-[11.5px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)]"
+                    >
+                      <Icon name="message" size={12} />
+                      Continue in chat
+                    </button>
+                    <button
+                      onClick={() => onCloseInquiry(inq.payeeId)}
+                      disabled={closingId === inq.payeeId}
+                      title="Close this inquiry - it'll reappear if they message again"
+                      className="flex flex-none items-center gap-[5px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[9px] py-[5px] text-[11.5px] font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] disabled:opacity-60"
+                    >
+                      {closingId === inq.payeeId ? <Spinner size={12} /> : <Icon name="check2" size={12} />}
+                      Close
+                    </button>
+                  </div>
                 </div>
                 <p className="m-0 mb-[9px] text-[13px] leading-[1.5] text-[var(--text)]">{inq.lastMessage}</p>
                 <div className="flex items-center gap-[8px]">
@@ -419,13 +447,13 @@ function InquiriesModal({ period, onClose, onReplied }: { period: string; onClos
                     value={replyBody[inq.payeeId] ?? ""}
                     onChange={(e) => setReplyBody((prev) => ({ ...prev, [inq.payeeId]: e.target.value }))}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") onQuickReply(inq.payeeId);
+                      if (e.key === "Enter") onQuickReply(inq.payeeId, inq.period);
                     }}
                     placeholder="Quick reply…"
                     className="h-9 flex-1 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] px-[10px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
                   />
                   <button
-                    onClick={() => onQuickReply(inq.payeeId)}
+                    onClick={() => onQuickReply(inq.payeeId, inq.period)}
                     disabled={sendingId === inq.payeeId || !(replyBody[inq.payeeId] ?? "").trim()}
                     className="flex h-9 flex-none items-center justify-center gap-[5px] rounded-[7px] bg-[var(--brand)] px-[11px] text-[12px] font-semibold text-[var(--brandfg)] disabled:opacity-60"
                   >
@@ -1392,15 +1420,14 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
         />
       )}
 
-      {inquiriesOpen && period && (
-        // Replying here doesn't navigate anywhere, but it can clear the
-        // Salaries nav dot (computed server-side in the layout) — refresh
-        // so that updates without a full client-side transition. Also
-        // re-fetches this page's own Inquiries-button dot for the same
-        // reason (org-wide, so a reply in this period can clear a dot that
-        // was set by another period's thread too).
+      {inquiriesOpen && (
+        // Replying or closing here doesn't navigate anywhere, but it can
+        // clear the Salaries nav dot (computed server-side in the layout) —
+        // refresh so that updates without a full client-side transition.
+        // Also re-fetches this page's own Inquiries-button dot for the same
+        // reason (org-wide, so an action on one period's thread can clear a
+        // dot that was set by another period's thread too).
         <InquiriesModal
-          period={period}
           onClose={() => setInquiriesOpen(false)}
           onReplied={() => {
             router.refresh();
