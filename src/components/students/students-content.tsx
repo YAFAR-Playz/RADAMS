@@ -350,7 +350,19 @@ export function StudentsContent({ role }: { role: Role }) {
       });
       downloadCsv(
         `students-detailed-${current?.label ?? "all"}`,
-        ["Student ID", "Name", "Email", "Phone", "Guardian name", "Guardian phone", "Assistant", "Enrolled", "Left", ...assignmentHeaders],
+        [
+          "Student ID",
+          "Name",
+          "Email",
+          "Phone",
+          "Guardian name",
+          "Guardian phone",
+          ...(showAttendanceIdField ? ["Attendance ID"] : []),
+          "Assistant",
+          "Enrolled",
+          "Left",
+          ...assignmentHeaders,
+        ],
         rows.map((r) => [
           r.studentCode,
           r.studentName,
@@ -358,6 +370,7 @@ export function StudentsContent({ role }: { role: Role }) {
           r.phone ?? "",
           r.guardianName ?? "",
           r.guardianPhone ?? "",
+          ...(showAttendanceIdField ? [r.attendanceId ?? ""] : []),
           r.assistantName ?? "",
           r.enrolledAt,
           r.leftAt ?? "",

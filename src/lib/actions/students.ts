@@ -796,6 +796,7 @@ export type StudentDetailedExportRow = {
   phone: string | null;
   guardianName: string | null;
   guardianPhone: string | null;
+  attendanceId: string | null;
   assistantName: string | null;
   enrolledAt: string;
   leftAt: string | null;
@@ -826,8 +827,8 @@ export async function getStudentDetailedExport(offeringId: string): Promise<Stud
     created_at: string;
     left_at: string | null;
     students:
-      | { name: string; initials: string; student_code: string; email: string | null; phone: string | null; guardian_name: string | null; guardian_phone: string | null }
-      | { name: string; initials: string; student_code: string; email: string | null; phone: string | null; guardian_name: string | null; guardian_phone: string | null }[]
+      | { name: string; initials: string; student_code: string; email: string | null; phone: string | null; guardian_name: string | null; guardian_phone: string | null; attendance_id: string | null }
+      | { name: string; initials: string; student_code: string; email: string | null; phone: string | null; guardian_name: string | null; guardian_phone: string | null; attendance_id: string | null }[]
       | null;
     profiles: { full_name: string } | { full_name: string }[] | null;
   };
@@ -840,7 +841,7 @@ export async function getStudentDetailedExport(offeringId: string): Promise<Stud
       for (let from = 0; ; from += ENROLLMENT_PAGE_SIZE) {
         const { data: page } = await supabase
           .from("enrollments")
-          .select("student_id, created_at, left_at, students(name, initials, student_code, email, phone, guardian_name, guardian_phone), profiles(full_name)")
+          .select("student_id, created_at, left_at, students(name, initials, student_code, email, phone, guardian_name, guardian_phone, attendance_id), profiles(full_name)")
           .eq("offering_id", offeringId)
           .range(from, from + ENROLLMENT_PAGE_SIZE - 1);
         if (!page || page.length === 0) break;
@@ -915,6 +916,7 @@ export async function getStudentDetailedExport(offeringId: string): Promise<Stud
       phone: student.phone,
       guardianName: student.guardian_name,
       guardianPhone: student.guardian_phone,
+      attendanceId: student.attendance_id,
       assistantName: assistant?.full_name ?? null,
       enrolledAt: e.created_at,
       leftAt: e.left_at,
