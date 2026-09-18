@@ -180,31 +180,65 @@ export async function listMessagesForPayee(payeeId: string): Promise<SalaryMessa
   });
 }
 
-// Count of payee threads whose most recent message is still from the payee
-// (i.e. nobody from Finance/Admin has replied yet) — used for the Salaries
-// nav dot, since inquiries otherwise only surfaced in the notification bell
-// and were easy to miss. A thread clears itself the moment someone replies,
-// without needing a separate read/unread column.
-export async function getUnresolvedFinanceInquiryCount(): Promise<number> {
-  const profile = await getCurrentProfile();
-  if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) return 0;
-  const supabase = await createClient();
-  const lastMessageByPayee = new Map<string, { fromId: string; createdAt: string }>();
+// Paginated fetch of every finance_messages row for this org, reduced to
+// each payee's single most-recent message — shared by getUnresolvedFinanceInquiryCount
+// and listInquiries below so the dot and the popup can never drift out of
+// sync with each other the way they used to (the dot used to scan every
+// period while the popup only looked at the one currently open, so a
+// stale inquiry from an older period kept the dot lit with nothing visibly
+// wrong in the popup).
+async function lastMessageByPayeeOrgWide(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  orgId: string
+): Promise<Map<string, { fromId: string; createdAt: string; body: string; period: string; payeeName: string }>> {
+  const byPayee = new Map<string, { fromId: string; createdAt: string; body: string; period: string; payeeName: string }>();
   const PAGE_SIZE = 1000;
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data } = await supabase
       .from("finance_messages")
-      .select("payee_id, from_id, created_at")
-      .eq("org_id", profile.org.id)
+      .select("payee_id, from_id, body, period, created_at, profiles!finance_messages_payee_id_fkey(full_name)")
+      .eq("org_id", orgId)
       .order("created_at", { ascending: true })
       .range(from, from + PAGE_SIZE - 1);
     if (!data || data.length === 0) break;
-    for (const m of data) lastMessageByPayee.set(m.payee_id, { fromId: m.from_id, createdAt: m.created_at });
+    for (const m of data) {
+      const payee = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
+      // Last write wins — rows arrive oldest-first, so this naturally ends
+      // up holding each payee's most recent message across every period.
+      byPayee.set(m.payee_id, { fromId: m.from_id, createdAt: m.created_at, body: m.body, period: m.period, payeeName: payee?.full_name ?? "Staff" });
+    }
     if (data.length < PAGE_SIZE) break;
   }
+  return byPayee;
+}
+
+// A payee's thread is closed only until they say something new — closing
+// doesn't delete anything, it just hides a thread that's been dealt with
+// until it's genuinely reopened by fresh activity.
+async function closedPayeeIds(supabase: Awaited<ReturnType<typeof createClient>>, orgId: string): Promise<Map<string, string>> {
+  const { data } = await supabase.from("finance_inquiry_closures").select("payee_id, closed_at").eq("org_id", orgId);
+  return new Map((data ?? []).map((c) => [c.payee_id, c.closed_at]));
+}
+
+// Count of payee threads whose most recent message is still from the payee
+// (i.e. nobody from Finance/Admin has replied yet) — used for the Salaries
+// nav dot, since inquiries otherwise only surfaced in the notification bell
+// and were easy to miss. A thread clears itself the moment someone replies,
+// or the moment Finance explicitly closes it (see closeFinanceInquiry).
+export async function getUnresolvedFinanceInquiryCount(): Promise<number> {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) return 0;
+  const supabase = await createClient();
+  const [lastByPayee, closedByPayee] = await Promise.all([
+    lastMessageByPayeeOrgWide(supabase, profile.org.id),
+    closedPayeeIds(supabase, profile.org.id),
+  ]);
   let unresolved = 0;
-  for (const [payeeId, last] of lastMessageByPayee) {
-    if (last.fromId === payeeId) unresolved++;
+  for (const [payeeId, last] of lastByPayee) {
+    if (last.fromId !== payeeId) continue;
+    const closedAt = closedByPayee.get(payeeId);
+    if (closedAt && closedAt >= last.createdAt) continue;
+    unresolved++;
   }
   return unresolved;
 }
@@ -214,52 +248,62 @@ export type FinanceInquiry = {
   payeeName: string;
   lastMessage: string;
   lastAt: string;
+  period: string;
   // True when the payee's own message is the most recent one in the
-  // thread — i.e. nobody from Finance/Admin has replied yet this period.
+  // thread — i.e. nobody from Finance/Admin has replied yet.
   unresolved: boolean;
 };
 
-// One row per payee who exchanged a finance_messages with this org during
-// `period` — the org-wide "Inquiries" popup on the Salaries tab, since
-// per-payee threads (listMessagesForPayee/MessagesModal) require already
-// knowing which payee to open and previously only surfaced via the
-// notification bell one at a time.
-export async function listInquiriesForPeriod(period: string): Promise<FinanceInquiry[]> {
+// One row per payee with an open finance_messages thread, across every
+// period — the org-wide "Inquiries" popup on the Salaries tab. Used to be
+// scoped to whichever period the Salaries tab happened to be viewing, which
+// caused exactly the confusion this comment is now explaining: the Salaries
+// nav dot has always counted org-wide (see getUnresolvedFinanceInquiryCount),
+// so a genuinely unresolved inquiry from a different period than the one
+// currently open kept the dot lit while this popup showed nothing needing a
+// reply — every visible row already answered. Matching the popup's scope to
+// the dot's fixes that; each row shows its own period since they can now
+// differ from one another.
+export async function listInquiries(): Promise<FinanceInquiry[]> {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) return [];
   const supabase = await createClient();
-  // Paginated like the sibling getUnresolvedFinanceInquiryCount above —
-  // an unpaginated select here would silently cap at Postgrest's default
-  // 1000-row limit, and since rows are ordered oldest-first, a period with
-  // more than 1000 messages would keep only each payee's EARLIEST rows,
-  // showing a stale lastMessage/unresolved state for anyone whose later
-  // messages sorted past the cutoff.
-  const byPayee = new Map<string, { name: string; body: string; fromId: string; at: string }>();
-  const PAGE_SIZE = 1000;
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data } = await supabase
-      .from("finance_messages")
-      .select("payee_id, from_id, body, created_at, profiles!finance_messages_payee_id_fkey(full_name)")
-      .eq("org_id", profile.org.id)
-      .eq("period", period)
-      .order("created_at", { ascending: true })
-      .range(from, from + PAGE_SIZE - 1);
-    if (!data || data.length === 0) break;
-    for (const m of data) {
-      const payee = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
-      // Last write wins — rows arrive oldest-first, so this naturally ends
-      // up holding each payee's most recent message in the thread.
-      byPayee.set(m.payee_id, { name: payee?.full_name ?? "Staff", body: m.body, fromId: m.from_id, at: m.created_at });
-    }
-    if (data.length < PAGE_SIZE) break;
-  }
+  const [lastByPayee, closedByPayee] = await Promise.all([
+    lastMessageByPayeeOrgWide(supabase, profile.org.id),
+    closedPayeeIds(supabase, profile.org.id),
+  ]);
 
-  return Array.from(byPayee.entries())
-    .map(([payeeId, v]) => ({ payeeId, payeeName: v.name, lastMessage: v.body, lastAt: v.at, unresolved: v.fromId === payeeId }))
+  return Array.from(lastByPayee.entries())
+    .filter(([payeeId, v]) => {
+      const closedAt = closedByPayee.get(payeeId);
+      return !closedAt || closedAt < v.createdAt;
+    })
+    .map(([payeeId, v]) => ({
+      payeeId,
+      payeeName: v.payeeName,
+      lastMessage: v.body,
+      lastAt: v.createdAt,
+      period: v.period,
+      unresolved: v.fromId === payeeId,
+    }))
     .sort((a, b) => {
       if (a.unresolved !== b.unresolved) return a.unresolved ? -1 : 1;
       return a.lastAt < b.lastAt ? 1 : -1;
     });
+}
+
+// Marks a payee's thread as dealt with, removing it from the Inquiries
+// popup — reopens itself automatically the moment that payee sends a new
+// message, since closedPayeeIds/lastMessageByPayeeOrgWide only treat a
+// thread as closed while the closure is newer than its last message.
+export async function closeFinanceInquiry(payeeId: string): Promise<void> {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.org || (profile.role !== "finance" && profile.role !== "admin")) throw new Error("Not authorized");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("finance_inquiry_closures")
+    .upsert({ org_id: profile.org.id, payee_id: payeeId, closed_at: new Date().toISOString(), closed_by: profile.id }, { onConflict: "org_id,payee_id" });
+  if (error) throw new Error(error.message);
 }
 
 export async function replyToPayee(payeeId: string, body: string, period: string | null) {
