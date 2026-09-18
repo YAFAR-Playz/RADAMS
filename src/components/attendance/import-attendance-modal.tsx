@@ -352,8 +352,8 @@ export function ImportAttendanceModal({
                     {r.studentId && roster?.find((x) => x.studentId === r.studentId) ? (
                       <div className="flex items-center gap-[8px]">
                         <span className="flex min-w-0 items-center gap-[6px] truncate text-[12.5px] font-semibold" style={{ color: "var(--brand)" }}>
-                          <Icon name="user-check" size={14} />
-                          {roster.find((x) => x.studentId === r.studentId)?.name}
+                          <Icon name="user-check" size={14} className="flex-none" />
+                          <span className="truncate">{roster.find((x) => x.studentId === r.studentId)?.name}</span>
                         </span>
                         <button
                           type="button"
