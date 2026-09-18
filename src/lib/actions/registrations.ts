@@ -45,6 +45,9 @@ function offeringLabel(o: { session: string; unit: string | null; courses: { nam
 export async function registerStudent(offeringId: string, fields: RegistrationFields, existingStudentId?: string): Promise<{ studentId: string }> {
   const profile = await getCurrentProfile();
   if (!profile || !profile.org) throw new Error("Not authenticated");
+  if (!fields.name.trim()) throw new Error("Name is required");
+  if (!fields.phone.trim()) throw new Error("Phone number is required");
+  if (!fields.guardianPhone.trim()) throw new Error("Guardian phone number is required");
   const supabase = await createClient();
 
   const attendanceId = fields.attendanceId?.trim() || null;
@@ -71,7 +74,6 @@ export async function registerStudent(offeringId: string, fields: RegistrationFi
     return { studentId: existingStudentId };
   }
 
-  if (!fields.name.trim()) throw new Error("Name is required");
   const initials = fields.name
     .trim()
     .split(/\s+/)
