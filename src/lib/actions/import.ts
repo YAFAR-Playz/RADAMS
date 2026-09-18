@@ -33,12 +33,23 @@ function initialsOf(name: string) {
 
 type ExistingStudent = { id: string; name: string; phone: string | null; email: string | null; guardian_phone: string | null; attendance_id: string | null };
 
-// "strong": the student's own email/phone/attendance id matches — safe to
-// auto-merge, regardless of whether the name string matches exactly.
-// "weak": name + only the guardian phone match — a shared guardian phone
-// (siblings' actual guardian, or an agent/relative's number reused across
-// unrelated families) is common enough that this must NOT auto-merge; it's
-// surfaced to the user in the preview step and only merged if they confirm it.
+// "strong": the student's own email/phone/attendance id matches — these are
+// unique-per-person identifiers, so it's safe to auto-merge on them
+// regardless of whether the name string matches exactly.
+// "weak": only the name matches, with no phone/email/attendance id agreement
+// — common names repeat across genuinely different students in these
+// rosters (confirmed via several real sibling pairs found in production data
+// that share a surname/guardian but are not the same person), so a bare name
+// match must NOT auto-merge; it's surfaced to the user in the preview step
+// and only merged if they confirm it.
+//
+// Guardian phone is deliberately NOT a match signal at all (dropped from the
+// weak tier it used to anchor): a shared guardian phone alone — siblings'
+// actual guardian, or an agent/relative's number reused across unrelated
+// families — produced confirmed false positives when tested against real
+// org data, and per the simpler dedup rule (name, then phone, then email;
+// no match on any of the three means no dup) it isn't one of the signals
+// that should ever flag a match.
 export type MatchConfidence = "strong" | "weak";
 // existingAttendanceId lets the preview step tell the user, per row, whether
 // this student already has an attendance id on file (and whether it matches
@@ -54,14 +65,12 @@ export type MatchInfo = { id: string; name: string; confidence: MatchConfidence;
 // student rows with identical phone AND guardian_phone but a slightly
 // different name, created minutes/days apart by separate imports. Fixed by
 // treating the student's own phone/email/attendance id as sufficient on its
-// own; only the guardian-phone-only case still requires the name to also
-// match, since a shared guardian phone alone is a much weaker signal
-// (siblings) that must not silently merge two different children.
+// own; a name-only match (no phone/email/attendance id agreement) still
+// flags as a weak match rather than being ignored entirely.
 function findMatch(row: ImportRow, existing: ExistingStudent[]): MatchInfo | null {
   const name = row.name.trim().toLowerCase();
   const email = row.email.trim().toLowerCase();
   const phone = row.phone.trim();
-  const guardianPhone = row.guardianPhone.trim();
   const attendanceId = row.attendanceId.trim();
 
   for (const s of existing) {
@@ -73,9 +82,8 @@ function findMatch(row: ImportRow, existing: ExistingStudent[]): MatchInfo | nul
     }
   }
   for (const s of existing) {
-    if (s.name.trim().toLowerCase() !== name) continue;
-    const guardianMatch = !!guardianPhone && !!s.guardian_phone && s.guardian_phone === guardianPhone;
-    if (guardianMatch) return { id: s.id, name: s.name, confidence: "weak", existingAttendanceId: s.attendance_id };
+    if (!name || s.name.trim().toLowerCase() !== name) continue;
+    return { id: s.id, name: s.name, confidence: "weak", existingAttendanceId: s.attendance_id };
   }
   return null;
 }

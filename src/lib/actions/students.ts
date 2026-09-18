@@ -457,20 +457,39 @@ export type StudentDuplicateMatch = {
   attendanceId: string | null;
 };
 
-// Phone-only match, scoped to the org — deliberately simple (no fuzzy name
-// matching) so a Head gets a clear, unambiguous "is this them?" rather than
-// a list of maybe-matches to sift through.
-export async function findStudentByPhone(phone: string): Promise<StudentDuplicateMatch | null> {
+// Checks name, then phone, then email — first match wins, scoped to the
+// org. Used to be phone-only, which missed real duplicates whenever a
+// re-registration filled in a phone number the original record never had
+// (an exact phone match can never fire against a null), or used a
+// re-typed/differently-formatted phone — confirmed in production the same
+// student got recorded three times this way. Guardian phone is deliberately
+// NOT a match key here: it's the one signal that reliably produces false
+// positives (two different siblings sharing a guardian's number) rather
+// than confirming the same student — see the parallel fix in importStudents'
+// findMatch. This never auto-merges anything itself; callers always show
+// the match to the user for an explicit yes/no before touching data.
+export async function findDuplicateStudent(input: { name: string; phone: string; email: string }): Promise<StudentDuplicateMatch | null> {
   const profile = await getCurrentProfile();
   const orgId = profile?.org?.id;
-  if (!orgId || !phone.trim()) return null;
+  if (!orgId) return null;
+  const name = input.name.trim();
+  const phone = input.phone.trim();
+  const email = input.email.trim();
+  if (!name && !phone && !email) return null;
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("students")
-    .select("id, name, student_code, guardian_name, guardian_phone, attendance_id")
-    .eq("org_id", orgId)
-    .eq("phone", phone.trim())
-    .maybeSingle();
+  const columns = "id, name, student_code, guardian_name, guardian_phone, attendance_id";
+
+  const byName = name
+    ? (await supabase.from("students").select(columns).eq("org_id", orgId).ilike("name", name).limit(1)).data?.[0]
+    : null;
+  const byPhone = !byName && phone
+    ? (await supabase.from("students").select(columns).eq("org_id", orgId).eq("phone", phone).limit(1)).data?.[0]
+    : null;
+  const byEmail = !byName && !byPhone && email
+    ? (await supabase.from("students").select(columns).eq("org_id", orgId).ilike("email", email).limit(1)).data?.[0]
+    : null;
+
+  const data = byName ?? byPhone ?? byEmail;
   if (!data) return null;
   return {
     id: data.id,
@@ -489,7 +508,7 @@ export type HeadAddStudentInput = {
   guardianName?: string;
   guardianPhone?: string;
   offeringId: string;
-  // Set once the Head has confirmed a phone match found by findStudentByPhone
+  // Set once the Head has confirmed a match found by findDuplicateStudent
   // really is the same person — skips creating a new student row entirely
   // and just enrolls the existing one, so the org doesn't accumulate a
   // second disconnected record for someone already in the system.

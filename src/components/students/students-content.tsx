@@ -26,7 +26,7 @@ import {
   getStudentDetailPanel,
   getStudentDriveFolderLink,
   setStudentDriveFolderLink,
-  findStudentByPhone,
+  findDuplicateStudent,
   headAddStudent,
   type StudentRow,
   type EnrollmentDetail,
@@ -385,7 +385,7 @@ export function StudentsContent({ role }: { role: Role }) {
       // anything, so a re-registration under the same phone doesn't spawn a
       // second disconnected student record.
       if (!duplicateMatch) {
-        const match = await findStudentByPhone(addForm.phone);
+        const match = await findDuplicateStudent({ name: addForm.name, phone: addForm.phone, email: addForm.email });
         if (match) {
           setDuplicateMatch(match);
           return;
@@ -1672,7 +1672,7 @@ export function StudentsContent({ role }: { role: Role }) {
             {duplicateMatch ? (
               <div className="p-[18px]">
                 <p className="m-0 mb-[12px] text-[13px] leading-[1.5] text-[var(--text)]">
-                  A student with this phone number already exists. Is this the same person as <strong>{addForm.name.trim() || "the one you're adding"}</strong>?
+                  A student matching this name, phone, or email already exists. Is this the same person as <strong>{addForm.name.trim() || "the one you're adding"}</strong>?
                 </p>
                 <div className="rounded-[var(--rad-sm)] border border-[var(--border)] bg-[var(--surface2)] p-[12px_13px]">
                   <div className="text-[13.5px] font-semibold text-[var(--text)]">{duplicateMatch.name}</div>

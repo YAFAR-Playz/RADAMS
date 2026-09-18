@@ -7,7 +7,7 @@ import { TabLoader } from "@/components/ui/tab-loader";
 import { PageHeader } from "@/components/ui/page-header";
 import { listMyOfferings, type OfferingOption } from "@/lib/actions/assignments";
 import { registerStudent, listRegistrations, type RegistrationRow } from "@/lib/actions/registrations";
-import { findStudentByPhone, type StudentDuplicateMatch } from "@/lib/actions/students";
+import { findDuplicateStudent, type StudentDuplicateMatch } from "@/lib/actions/students";
 import { getOfferingFees, type OfferingFees, type PlanType } from "@/lib/actions/payments";
 import { getPayrollSettings, getAttendanceIdMatchingEnabled } from "@/lib/actions/payroll-settings";
 import { currencySymbol } from "@/lib/currency";
@@ -95,12 +95,10 @@ export function RegistrationsContent() {
     if (!canSubmit || !offeringId) return;
     setSubmitting(true);
     try {
-      if (form.phone.trim()) {
-        const match = await findStudentByPhone(form.phone);
-        if (match) {
-          setDuplicateMatch(match);
-          return;
-        }
+      const match = await findDuplicateStudent({ name: form.name, phone: form.phone, email: form.email });
+      if (match) {
+        setDuplicateMatch(match);
+        return;
       }
       await registerStudent(offeringId, form);
       setForm(emptyForm);
@@ -314,7 +312,7 @@ export function RegistrationsContent() {
                   Possible duplicate
                 </div>
                 <p className="m-0 mt-[6px] text-[12.5px] leading-[1.5] text-[var(--text)]">
-                  A student with this phone number already exists:{" "}
+                  A student matching this name, phone, or email already exists:{" "}
                   <span className="font-semibold">{duplicateMatch.name}</span> ({duplicateMatch.studentCode}).
                   {duplicateMatch.guardianName ? ` Guardian: ${duplicateMatch.guardianName}.` : ""}
                 </p>
