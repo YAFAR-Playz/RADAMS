@@ -3,6 +3,7 @@
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icons";
+import { openPendingTab, resolvePendingTab } from "@/lib/popup-window";
 import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
 import { PageHeader } from "@/components/ui/page-header";
@@ -877,22 +878,13 @@ export function FinanceSalariesContent({ role }: { role: "admin" | "finance" }) 
   async function onViewReceipt(payeeId: string) {
     if (!period) return;
     setViewingReceiptId(payeeId);
-    // Opened synchronously, in direct response to the click, then pointed at
-    // the real URL once it resolves - opening the tab only after the await
-    // below let browsers silently treat it as a popup (no user gesture left
-    // to justify it by the time the fetch finished) and block it with no
-    // error surfaced, which looked exactly like the button doing nothing.
-    const win = window.open("", "_blank", "noopener,noreferrer");
+    const win = openPendingTab();
     try {
       const url = await getSalaryReceiptUrl(payeeId, period);
-      if (url && win) {
-        win.location.href = url;
-      } else {
-        win?.close();
-        setError("No receipt was attached for this period.");
-      }
+      resolvePendingTab(win, url, "No receipt was attached for this period. You can close this tab.");
+      if (!url) setError("No receipt was attached for this period.");
     } catch {
-      win?.close();
+      resolvePendingTab(win, null, "Couldn't open the receipt - try again. You can close this tab.");
       setError("Couldn't open the receipt - try again.");
     } finally {
       setViewingReceiptId(null);

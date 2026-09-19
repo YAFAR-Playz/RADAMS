@@ -10,6 +10,7 @@ import {
   deleteStaffContract,
   type StaffContractVersion,
 } from "@/lib/actions/staff-reports";
+import { openPendingTab, resolvePendingTab } from "@/lib/popup-window";
 
 export function StaffContractModal({ staffId, staffName, onClose }: { staffId: string; staffName: string; onClose: () => void }) {
   const [versions, setVersions] = useState<StaffContractVersion[] | null>(null);
@@ -49,22 +50,13 @@ export function StaffContractModal({ staffId, staffName, onClose }: { staffId: s
 
   async function onView(id: string) {
     setOpeningId(id);
-    // Opened synchronously, in direct response to the click, then pointed at
-    // the real URL once it resolves - opening the tab only after the await
-    // below let browsers silently treat it as a popup (no user gesture left
-    // to justify it by the time the fetch finished) and block it with no
-    // error surfaced, which looked exactly like the button doing nothing.
-    const win = window.open("", "_blank", "noopener,noreferrer");
+    const win = openPendingTab();
     try {
       const url = await getStaffContractUrl(id);
-      if (url && win) {
-        win.location.href = url;
-      } else {
-        win?.close();
-        setError("Couldn't open this contract - try again.");
-      }
+      resolvePendingTab(win, url, "Couldn't open this contract - try again. You can close this tab.");
+      if (!url) setError("Couldn't open this contract - try again.");
     } catch {
-      win?.close();
+      resolvePendingTab(win, null, "Couldn't open this contract - try again. You can close this tab.");
       setError("Couldn't open this contract - try again.");
     } finally {
       setOpeningId(null);

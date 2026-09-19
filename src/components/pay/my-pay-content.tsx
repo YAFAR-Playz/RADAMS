@@ -7,6 +7,7 @@ import { Spinner, SkeletonRow } from "@/components/ui/spinner";
 import { TabLoader } from "@/components/ui/tab-loader";
 import { PageHeader } from "@/components/ui/page-header";
 import { getMyPay, getMyReceiptUrl, sendFinanceMessage, markPayViewed, getMyMessages, type MyPay, type PayMessage } from "@/lib/actions/pay";
+import { openPendingTab, resolvePendingTab } from "@/lib/popup-window";
 
 function periodLabel(period: string) {
   if (!period) return "";
@@ -46,22 +47,13 @@ export function MyPayContent() {
   async function onViewReceipt() {
     if (!data) return;
     setReceiptLoading(true);
-    // Opened synchronously, in direct response to the click, then pointed at
-    // the real URL once it resolves - opening the tab only after the await
-    // below let browsers silently treat it as a popup (no user gesture left
-    // to justify it by the time the fetch finished) and block it with no
-    // error surfaced, which looked exactly like the button doing nothing.
-    const win = window.open("", "_blank", "noopener,noreferrer");
+    const win = openPendingTab();
     try {
       const url = await getMyReceiptUrl(data.period);
-      if (url && win) {
-        win.location.href = url;
-      } else {
-        win?.close();
-        setError("No receipt was attached for this period.");
-      }
+      resolvePendingTab(win, url, "No receipt was attached for this period. You can close this tab.");
+      if (!url) setError("No receipt was attached for this period.");
     } catch {
-      win?.close();
+      resolvePendingTab(win, null, "Couldn't open the receipt - try again. You can close this tab.");
       setError("Couldn't open the receipt - try again.");
     } finally {
       setReceiptLoading(false);
