@@ -46,11 +46,22 @@ export function MyPayContent() {
   async function onViewReceipt() {
     if (!data) return;
     setReceiptLoading(true);
+    // Opened synchronously, in direct response to the click, then pointed at
+    // the real URL once it resolves - opening the tab only after the await
+    // below let browsers silently treat it as a popup (no user gesture left
+    // to justify it by the time the fetch finished) and block it with no
+    // error surfaced, which looked exactly like the button doing nothing.
+    const win = window.open("", "_blank", "noopener,noreferrer");
     try {
       const url = await getMyReceiptUrl(data.period);
-      if (url) window.open(url, "_blank", "noopener,noreferrer");
-      else setError("No receipt was attached for this period.");
+      if (url && win) {
+        win.location.href = url;
+      } else {
+        win?.close();
+        setError("No receipt was attached for this period.");
+      }
     } catch {
+      win?.close();
       setError("Couldn't open the receipt - try again.");
     } finally {
       setReceiptLoading(false);
